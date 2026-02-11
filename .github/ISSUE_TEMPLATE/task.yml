@@ -1,0 +1,25 @@
+name: Project Task
+description: Define a new task for the project
+title: "[TASK]: "
+labels: ["enhancement"]
+body:
+  - type: input
+    id: objective
+    attributes:
+      label: Primary Objective
+      placeholder: e.g., Implement User Authentication
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Task Details
+      description: Describe the requirements for this task.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Acceptance Criteria
+      options:
+        - label: Code implemented
+        - label: Unit tests passed
+        - label: Documentation updated
