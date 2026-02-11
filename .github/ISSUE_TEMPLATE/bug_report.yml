@@ -21,6 +21,11 @@ body:
         2. Click on...
     validations:
       required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Any additional information or considerations.
   - type: dropdown
     id: severity
     attributes:
