@@ -1,0 +1,40 @@
+name: Feature
+description: Define a new feature for the project
+title: "[FEATURE]: "
+labels: ["enhancement"]
+body:
+  - type: input
+    id: objective
+    attributes:
+      label: Primary Objective
+      placeholder: e.g., Implement User Authentication
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Explain the reasoning and purpose behind this feature.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Define the boundaries and extent of this feature.
+  - type: textarea
+    id: details
+    attributes:
+      label: Feature Details
+      description: Describe the requirements for this feature.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Acceptance Criteria
+      options:
+        - label: Code implemented
+        - label: Unit tests passed
+        - label: Documentation updated
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Any additional information or considerations.

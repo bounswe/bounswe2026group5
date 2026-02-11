@@ -1,25 +1,40 @@
-name: Project Task
-description: Define a new task for the project
+name: Task
+description: Create a new task for the project
 title: "[TASK]: "
-labels: ["enhancement"]
+labels: []
 body:
   - type: input
-    id: objective
+    id: summary
     attributes:
-      label: Primary Objective
-      placeholder: e.g., Implement User Authentication
+      label: Summary
+      placeholder: Brief description of the task
     validations:
       required: true
   - type: textarea
-    id: details
+    id: motivation
     attributes:
-      label: Task Details
-      description: Describe the requirements for this task.
+      label: Motivation
+      description: Explain the reasoning and purpose behind this task.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Define the boundaries and extent of this task.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Provide detailed information about this task.
   - type: checkboxes
     id: checklist
     attributes:
-      label: Acceptance Criteria
+      label: Checklist
       options:
-        - label: Code implemented
-        - label: Unit tests passed
-        - label: Documentation updated
+        - label: Reviewed by team
+        - label: Solution implemented
+        - label: Tested and verified
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Any additional information or considerations.
