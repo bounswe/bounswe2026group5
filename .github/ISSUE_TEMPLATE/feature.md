@@ -1,4 +1,10 @@
-# [FEATURE]: <Title>
+---
+name: Feature
+about: Define a new feature for the project
+title: '[FEATURE]: '
+labels: 'enhancement'
+assignees: ''
+---
 
 ## Primary Objective
 
