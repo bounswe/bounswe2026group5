@@ -1,4 +1,10 @@
-# [TASK]: <Title>
+---
+name: Task
+about: Create a new task for the project
+title: '[TASK]: '
+labels: ''
+assignees: ''
+---
 
 ## Description
 
