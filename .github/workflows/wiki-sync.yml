@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   sync-wiki:
-    if: github.event_name == 'workflow_dispatch' || contains(toJson(github.event.pages), '"page_name":"_Sidebar"')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pages.*.page_name, '_Sidebar')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Main Repo
