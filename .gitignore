@@ -1,0 +1,18 @@
+# Node & Web
+web/node_modules/
+web/dist/
+web/.env*
+
+# Python & Backend
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/.env*
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+
+# OS & Editor
+.DS_Store
+.vscode/
+.idea/
