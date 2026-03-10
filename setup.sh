@@ -40,7 +40,7 @@ fi
 
 echo ""
 echo "[2/4] Veritabanı (PostgreSQL) Docker üzerinde ayağa kaldırılıyor..."
-docker-compose up -d
+sudo docker compose up -d || sudo docker-compose up -d
 
 echo ""
 echo "[3/4] Backend (Django) sanal ortamı ve bağımlılıkları kuruluyor..."
