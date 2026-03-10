@@ -5,6 +5,7 @@ web/.env*
 
 # Python & Backend
 backend/venv/
+backend/core/__pycache__/
 backend/__pycache__/
 backend/*.pyc
 backend/.env*
@@ -14,5 +15,4 @@ backend/staticfiles/
 
 # OS & Editor
 .DS_Store
-.vscode/
 .idea/
