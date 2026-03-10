@@ -32,9 +32,32 @@ Campus Neighborhood Mentorship Network is a platform designed to connect student
 - **Linting & Formatting:** ESLint, Prettier (Frontend) / Flake8, Black, Isort (Backend)
 - **Analysis:** SonarQube
 
-## 🛠 Getting Started
+## 🧰 Required Tools & Software
 
-To run this project on your local machine, ensure you have **Node.js (v18+)**, **Python (3.10+)**, and **Docker Desktop** installed and running.
+To ensure a smooth and standardized development experience across the team, please install the following tools before proceeding with the setup:
+
+**1. Core System Requirements:**
+
+- **[Git](https://git-scm.com/):** Version control system.
+- **[Node.js](https://nodejs.org/) (v18+):** Required for the React frontend.
+- **[Python](https://www.python.org/downloads/) (3.10+):** Required for the Django backend.
+- **[Docker Desktop](https://www.docker.com/products/docker-desktop/):** Must be installed and running in the background to host our PostgreSQL database container.
+
+**2. Recommended IDE & Extensions:**
+
+- **[Visual Studio Code](https://code.visualstudio.com/):** The officially supported IDE for this project.
+- _Note on Extensions:_ When you open this repository in VS Code, you will be prompted to install our recommended extensions (ESLint, Prettier, Black, Flake8, and **SonarLint**). Please install them to ensure your code aligns with our auto-formatting and quality standards.
+
+**3. Database Management:**
+
+- **[DBeaver](https://dbeaver.io/) (Community Edition):** Highly recommended for visually managing and querying our local PostgreSQL database. Alternatively, you can use JetBrains DataGrip or pgAdmin.
+
+**4. Browser Extensions (For Accessibility Testing):**
+
+- **[axe DevTools](https://www.deque.com/axe/devtools/):** Chrome/Edge extension to catch WCAG 2.1 AA accessibility issues during UI development.
+- **[WAVE](https://wave.webaim.org/extension/):** Visual tool for evaluating structural and color contrast accessibility.
+
+## 🛠 Getting Started
 
 ### Quick Setup
 
@@ -44,7 +67,6 @@ Clone the repository and run the setup script corresponding to your operating sy
 
 ```cmd
 .\setup.bat
-
 ```
 
 **Mac/Linux Users:**
@@ -52,7 +74,6 @@ Clone the repository and run the setup script corresponding to your operating sy
 ```bash
 chmod +x setup.sh
 ./setup.sh
-
 ```
 
 ### Running the Development Servers
@@ -66,7 +87,6 @@ cd backend
 # Windows: venv\Scripts\activate
 # Mac/Linux: source venv/bin/activate
 python manage.py runserver
-
 ```
 
 **2. Frontend (Vite Client):**
@@ -74,8 +94,19 @@ python manage.py runserver
 ```bash
 cd web
 npm run dev
-
 ```
+
+### 🗄️ Connecting to the Database
+
+To view, manage, and query the local PostgreSQL database, we recommend using **DBeaver** (or DataGrip/pgAdmin). Create a new PostgreSQL connection using the following credentials:
+
+- **Host:** `127.0.0.1` (or `localhost`)
+- **Port:** `5432`
+- **Database:** `mentorship`
+- **Username:** In .env file
+- **Password:** In .env file
+
+_Note: Ensure the Docker database container is running (`docker-compose up -d`) before attempting to connect._
 
 ## 📖 Documentation & Guidelines
 

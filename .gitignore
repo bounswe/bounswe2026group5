@@ -1,18 +1,86 @@
-# Node & Web
-web/node_modules/
-web/dist/
-web/.env*
+# ==========================================
+# OS & Editor
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Trashes
+Thumbs.db
+ehthumbs.db
+.idea/
+*.swp
+*.swo
+*~
 
-# Python & Backend
-backend/venv/
-backend/core/__pycache__/
-backend/__pycache__/
-backend/*.pyc
+# Ignore local VSCode caches, but keep shared settings
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# ==========================================
+# Environment Variables
+# ==========================================
+# (Note: .env.example files are intentionally NOT ignored, they must be tracked)
+.env
+.env.local
+*.local
+web/.env*
 backend/.env*
+!web/.env.example
+!backend/.env.example
+
+# ==========================================
+# Backend (Python & Django)
+# ==========================================
+# Virtual Environments
+backend/venv/
+backend/.venv/
+venv/
+
+# Compiled Python Files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database and Media (Development Environment)
 backend/db.sqlite3
+backend/db.sqlite3-journal
 backend/media/
 backend/staticfiles/
 
-# OS & Editor
-.DS_Store
-.idea/
+# Testing and Logs
+.pytest_cache/
+htmlcov/
+.coverage
+*.log
+
+# ==========================================
+# Frontend (React, Vite, TanStack)
+# ==========================================
+# Dependencies
+web/node_modules/
+node_modules/
+
+# Build Outputs
+web/dist/
+web/dist-ssr/
+web/build/
+web/.output/
+
+# Tool and Framework Caches
+web/.tanstack/
+web/.nitro/
+web/.vinxi/
+web/.wrangler/
+web/__unconfig*/
+web/.eslintcache
+web/todos.json
+
+# Package Manager Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test Coverage
+web/coverage/
