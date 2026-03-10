@@ -1,0 +1,17 @@
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | migrations
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+skip = ["venv", ".venv", "migrations"]
