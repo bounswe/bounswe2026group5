@@ -14,7 +14,7 @@ export default function Footer() {
           href="https://x.com/tan_stack"
           target="_blank"
           rel="noreferrer"
-          className="rounded-xl p-2 text-[var(--sea-ink-soft)] transition hover:bg-[var(--link-bg-hover)] hover:text-[var(--sea-ink)]"
+          className="rounded-xl p-2 text-(--sea-ink-soft) transition hover:bg-[var(--link-bg-hover)] hover:text-[var(--sea-ink)]"
         >
           <span className="sr-only">Follow TanStack on X</span>
           <svg viewBox="0 0 16 16" aria-hidden="true" width="32" height="32">
