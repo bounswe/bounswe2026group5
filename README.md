@@ -67,6 +67,7 @@ Clone the repository and run the setup script corresponding to your operating sy
 
 ```cmd
 .\setup.bat
+
 ```
 
 **Mac/Linux Users:**
@@ -74,13 +75,30 @@ Clone the repository and run the setup script corresponding to your operating sy
 ```bash
 chmod +x setup.sh
 ./setup.sh
+
 ```
 
-### Running the Development Servers
+### 💻 Daily Development Workflow
 
-Once setup is complete, open two separate terminals to start the environment:
+For your day-to-day development after the initial setup, you can start the environment using either the automated VS Code tasks or manually via the terminal.
 
-**1. Backend (Django API):**
+**Option A: The One-Click Way (VS Code)**
+If you are using Visual Studio Code, simply press `F5` or go to the "Run and Debug" panel and launch **`🚀 Start Full Stack`**. This will automatically spin up the Docker database, start the frontend, and run the backend with debuggers attached.
+
+**Option B: The Manual Way (Terminal)**
+If you prefer managing the services manually, open your terminal and follow these steps:
+
+**1. Start the Database:**
+Make sure Docker Desktop is open, then run:
+
+```bash
+docker compose up -d
+# or
+docker-compose up -d
+```
+
+**2. Start the Backend (Django):**
+Open a terminal, activate the virtual environment, and run the server:
 
 ```bash
 cd backend
@@ -89,7 +107,8 @@ cd backend
 python manage.py runserver
 ```
 
-**2. Frontend (Vite Client):**
+**3. Start the Frontend (Vite):**
+Open a new, separate terminal and start the client:
 
 ```bash
 cd web
@@ -106,7 +125,7 @@ To view, manage, and query the local PostgreSQL database, we recommend using **D
 - **Username:** In .env file
 - **Password:** In .env file
 
-_Note: Ensure the Docker database container is running (`docker-compose up -d`) before attempting to connect._
+_Note: Ensure the Docker database container is running (`docker compose up -d`) before attempting to connect._
 
 ## 📖 Documentation & Guidelines
 
