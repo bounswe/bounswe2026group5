@@ -8,11 +8,11 @@
 const NUM_BUTTONS = 7;
 
 const BUTTON_LABELS = [
-  "Button 1",
-  "Button 2",
-  "Button 3",
-  "Button 4",
-  "Button 5",
-  "Button 6",
+  "Mehmet Emin",
+  "Turgut",
+  "Kanye West Quote",
+  "Cat_Fact_API_Explorer",
+  "Barkin Akkol",
+  "JSONPlaceholder API",
   "Random Pokemon",
 ];
