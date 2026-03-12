@@ -11,7 +11,7 @@ const BUTTON_LABELS = [
   "Mehmet Emin",
   "Turgut",
   "Kanye West Quote",
-  "Göksel",
+  "Cat_Fact_API_Explorer",
   "Barkin Akkol",
   "JSONPlaceholder API",
   "Button7",
