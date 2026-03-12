@@ -14,5 +14,5 @@ const BUTTON_LABELS = [
   "Cat_Fact_API_Explorer",
   "Barkin Akkol",
   "JSONPlaceholder API",
-  "Button7",
+  "Random Pokemon",
 ];
