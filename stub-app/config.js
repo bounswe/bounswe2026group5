@@ -8,11 +8,11 @@
 const NUM_BUTTONS = 7;
 
 const BUTTON_LABELS = [
-  "Button1",
-  "Button2",
-  "Button3",
-  "Button4",
-  "Button5",
+  "Mehmet Emin",
+  "Turgut",
+  "Kanye West Quote",
+  "Göksel",
+  "Barkin Akkol",
   "JSONPlaceholder API",
   "Button7",
 ];
