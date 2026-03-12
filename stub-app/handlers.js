@@ -5,7 +5,119 @@
  * Replace the placeholder console.log with your own implementation.
  */
 function onButton1Click() {
-  console.log("Button 1 clicked -- implement me!");
+  const newTab = window.open("", "_blank");
+
+  if (!newTab) {
+    alert("Popup blocked! Please allow popups for this site.");
+    return;
+  }
+
+  newTab.document.write(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Mehmet Emin - Random Activity</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #667eea, #764ba2);
+          padding: 24px;
+        }
+        .card {
+          width: 100%;
+          max-width: 560px;
+          background: white;
+          border-radius: 16px;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+          padding: 40px;
+          text-align: center;
+        }
+        h1 { color: #1e293b; margin-bottom: 8px; }
+        .subtitle { color: #64748b; margin-bottom: 24px; font-size: 0.95em; }
+        #activity-box {
+          background: #f8fafc;
+          border-radius: 12px;
+          padding: 24px;
+          margin-bottom: 24px;
+          min-height: 80px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+        }
+        #activity-text { font-size: 1.15em; color: #334155; line-height: 1.6; }
+        #activity-type {
+          display: inline-block;
+          margin-top: 12px;
+          padding: 4px 14px;
+          border-radius: 20px;
+          background: #e0e7ff;
+          color: #4338ca;
+          font-size: 0.85em;
+          font-weight: 600;
+        }
+        #activity-participants { color: #64748b; font-size: 0.9em; margin-top: 8px; }
+        button {
+          padding: 12px 24px;
+          border: none;
+          border-radius: 12px;
+          background-color: #4f46e5;
+          color: white;
+          font-size: 1rem;
+          cursor: pointer;
+          margin: 4px;
+        }
+        button:hover { background-color: #4338ca; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h1>Mehmet Emin's Page</h1>
+        <p class="subtitle">
+          This page fetches a random activity suggestion from the Bored API.
+          The data includes the activity name, type, and number of participants.
+        </p>
+        <div id="activity-box">
+          <p id="activity-text">Loading a random activity...</p>
+        </div>
+        <button onclick="location.reload()">Get Another Activity</button>
+        <button onclick="window.close()">Close Tab</button>
+      </div>
+
+      <script>
+        fetch("https://bored-api.appbrewery.com/random")
+          .then(function (response) {
+            if (!response.ok) throw new Error("API request failed");
+            return response.json();
+          })
+          .then(function (data) {
+            document.getElementById("activity-text").textContent = data.activity;
+            var typeSpan = document.createElement("span");
+            typeSpan.id = "activity-type";
+            typeSpan.textContent = data.type;
+            document.getElementById("activity-box").appendChild(typeSpan);
+            var partP = document.createElement("p");
+            partP.id = "activity-participants";
+            partP.textContent = "Participants: " + data.participants;
+            document.getElementById("activity-box").appendChild(partP);
+          })
+          .catch(function (error) {
+            document.getElementById("activity-text").textContent =
+              "Failed to load activity. Please try again.";
+          });
+      </script>
+    </body>
+    </html>
+  `);
+
+  newTab.document.close();
 }
 
 function onButton2Click() {
