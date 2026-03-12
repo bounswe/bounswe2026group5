@@ -1,0 +1,51 @@
+name: Wiki Homepage Sync
+on:
+  gollum: # Triggers on any wiki page update
+  workflow_dispatch: # Allows manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  sync-wiki:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pages.*.page_name, '_Sidebar')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Main Repo
+        uses: actions/checkout@v4
+
+      - name: Checkout Wiki Repo
+        run: git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Install Dependencies
+        run: pip install beautifulsoup4
+
+      - name: Run Sync Script
+        run: python scripts/sync_wiki.py
+
+      - name: Detect Home.md changes
+        id: home_diff
+        run: |
+          cd wiki
+          if git diff --quiet -- Home.md; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No Home.md changes detected."
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Home.md changed after sync."
+          fi
+
+      - name: Push Changes to Wiki
+        if: steps.home_diff.outputs.changed == 'true'
+        run: |
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Home.md
+          git commit -m "Auto-sync Homepage from Sidebar"
+          git push

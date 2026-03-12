@@ -1,67 +1,140 @@
-# Project Standards & Workflow
+# Campus Neighborhood Mentorship Network
 
-## 1. Branching Strategy
+![Status](https://img.shields.io/badge/status-active-success.svg)
+![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
+![Django](https://img.shields.io/badge/Django-092E20?style=flat&logo=django&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2CA5E0?style=flat&logo=docker&logoColor=white)
 
-We use a **Feature Branch Workflow** to keep the main branch stable. Don't push directly to `main` – use a standard naming convention so everyone knows what a branch contains at a glance.
+## 📌 About The Project
 
-### Branch Naming Convention
+Campus Neighborhood Mentorship Network is a platform designed to connect students for academic and professional guidance. Built as a scalable monorepo, this repository houses both the modern, type-safe frontend client and the robust backend API services required to facilitate seamless mentor-mentee matching, communication, and scheduling within the university ecosystem.
 
-- **`main`**: Production-ready code only. No direct commits.
-- **`dev`**: The integration branch where features are combined and tested.
-- **`feat/feature-name`**: For new features (e.g., `feat/user-login`, `feat/login-page`)
-- **`fix/bug-name`**: For bug fixes (e.g., `fix/header-overlap`, `fix/header-alignment`)
-- **`docs/update-name`**: For documentation updates (e.g., `docs/update-readme`)
-- **`refactor/description`**: For code refactoring (e.g., `refactor/cleanup-logic`)
+## 🚀 Tech Stack
 
-## 2. Pull Request (PR) Process
+**Frontend (Web):**
 
-All code must enter `dev` via a Pull Request. No direct commits to `main` or `dev`.
+- **Core:** React (TypeScript), Vite
+- **Routing & State:** TanStack Router, TanStack Query
+- **Styling & UI:** TailwindCSS, Shadcn UI
+- **Validation:** Zod
+- **Testing:** Vitest
 
-### Workflow Steps
+**Backend:**
 
-1. **Sync Local**: `git checkout dev && git pull origin dev`
-2. **Create Branch**: `git checkout -b feat/your-task-name`
-3. **Commit Often**: Use descriptive commit messages (see convention below)
-4. **Open PR**: Target the `dev` branch, not `main`
-5. **Review**: At least one teammate must approve the PR before merging
-6. **Merge**: After approval, merge the PR into `dev`
+- **Core:** Python, Django
+- **API:** Django REST Framework (DRF), drf-spectacular (OpenAPI/Swagger)
+- **Database:** PostgreSQL
 
-## 3. Commit Message Convention
+**Infrastructure & Code Quality:**
 
-We follow the **Conventional Commits** standard to keep our history readable.
+- **Containerization:** Docker & Docker Compose
+- **Linting & Formatting:** ESLint, Prettier (Frontend) / Flake8, Black, Isort (Backend)
+- **Analysis:** SonarQube
 
-### Format
+## 🧰 Required Tools & Software
+
+To ensure a smooth and standardized development experience across the team, please install the following tools before proceeding with the setup:
+
+**1. Core System Requirements:**
+
+- **[Git](https://git-scm.com/):** Version control system.
+- **[Node.js](https://nodejs.org/) (v18+):** Required for the React frontend.
+- **[Python](https://www.python.org/downloads/) (3.10+):** Required for the Django backend.
+- **[Docker Desktop](https://www.docker.com/products/docker-desktop/):** Must be installed and running in the background to host our PostgreSQL database container.
+
+**2. Recommended IDE & Extensions:**
+
+- **[Visual Studio Code](https://code.visualstudio.com/):** The officially supported IDE for this project.
+- _Note on Extensions:_ When you open this repository in VS Code, you will be prompted to install our recommended extensions (ESLint, Prettier, Black, Flake8, and **SonarLint**). Please install them to ensure your code aligns with our auto-formatting and quality standards.
+
+**3. Database Management:**
+
+- **[DBeaver](https://dbeaver.io/) (Community Edition):** Highly recommended for visually managing and querying our local PostgreSQL database. Alternatively, you can use JetBrains DataGrip or pgAdmin.
+
+**4. Browser Extensions (For Accessibility Testing):**
+
+- **[axe DevTools](https://www.deque.com/axe/devtools/):** Chrome/Edge extension to catch WCAG 2.1 AA accessibility issues during UI development.
+- **[WAVE](https://wave.webaim.org/extension/):** Visual tool for evaluating structural and color contrast accessibility.
+
+## 🛠 Getting Started
+
+### Quick Setup
+
+Clone the repository and run the setup script corresponding to your operating system. This will automatically initialize the database container, install all dependencies, and run database migrations.
+
+**Windows Users:**
+
+```cmd
+.\setup.bat
 
 ```
-<type>: <description>
+
+**Mac/Linux Users:**
+
+```bash
+chmod +x setup.sh
+./setup.sh
+
 ```
 
-### Types
+### 💻 Daily Development Workflow
 
-- **`feat:`** New feature for the user (e.g., `feat: add search bar to homepage`)
-- **`fix:`** Bug fix (e.g., `fix: resolve crash on logout`)
-- **`docs:`** Changes to documentation (e.g., `docs: update installation instructions`)
-- **`style:`** Formatting, missing semi-colons, etc; no production code change
-- **`refactor:`** Refactoring production code (e.g., `refactor: rename variable for clarity`)
+For your day-to-day development after the initial setup, you can start the environment using either the automated VS Code tasks or manually via the terminal.
 
-## 4. Definition of Done (DoD)
+**Option A: The One-Click Way (VS Code)**
+If you are using Visual Studio Code, simply press `F5` or go to the "Run and Debug" panel and launch **`🚀 Start Full Stack`**. This will automatically spin up the Docker database, start the frontend, and run the backend with debuggers attached.
 
-A task is only considered "Done" when:
+**Option B: The Manual Way (Terminal)**
+If you prefer managing the services manually, open your terminal and follow these steps:
 
-- Code is pushed to a feature branch
-- Pull Request is opened and linked to the relevant Issue
-- Code has been reviewed and approved by a teammate
-- The branch is successfully merged into `dev`
+**1. Start the Database:**
+Make sure Docker Desktop is open, then run:
 
-## 5. Coding Standards
+```bash
+docker compose up -d
+# or
+docker-compose up -d
+```
 
-To avoid arguments about tabs vs. spaces or semicolon usage, we use linters and formatters:
+**2. Start the Backend (Django):**
+Open a terminal, activate the virtual environment, and run the server:
 
-- **Linters**: ESLint for JavaScript, Ruff for Python
-- **Formatters**: Prettier
+```bash
+cd backend
+# Windows: venv\Scripts\activate
+# Mac/Linux: source venv/bin/activate
+python manage.py runserver
+```
 
-This ensures that no matter who writes the code, it looks like it was written by one person and prevents "noise" in PRs where the only changes are whitespace formatting.
+**3. Start the Frontend (Vite):**
+Open a new, separate terminal and start the client:
 
-## 6. Code Quality
+```bash
+cd web
+npm run dev
+```
 
-Just for now, install SonarQube on your IDE.
+### 🗄️ Connecting to the Database
+
+To view, manage, and query the local PostgreSQL database, we recommend using **DBeaver** (or DataGrip/pgAdmin). Create a new PostgreSQL connection using the following credentials:
+
+- **Host:** `127.0.0.1` (or `localhost`)
+- **Port:** `5432`
+- **Database:** `mentorship`
+- **Username:** In .env file
+- **Password:** In .env file
+
+_Note: Ensure the Docker database container is running (`docker compose up -d`) before attempting to connect._
+
+## 📖 Documentation & Guidelines
+
+To keep this repository clean, all detailed documentation, architectural decisions, and workflows are maintained in our GitHub Wiki. Please review these carefully before opening a Pull Request.
+
+- **[Wiki Home Page](https://github.com/bounswe/bounswe2026group5/wiki):** Main page of this project's wiki.
+- **[Project Standards & Workflow](https://github.com/bounswe/bounswe2026group5/wiki/Project-Standards-&-Workflow):** Branching strategies, PR rules, Conventional Commits, and Definition of Done.
+- **[Knowledge Base](https://github.com/bounswe/bounswe2026group5/wiki/Knowledge-Base):** Useful resources, setup guides, and technical references for developers.
+
+## 👥 Team
+
+This project is developed and maintained by Boğaziçi University Software Engineering Team (Group 5).

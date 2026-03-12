@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: mentorship_db
+    restart: always
+    environment:
+      POSTGRES_DB: mentorship
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: bounswe2026group5
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
