@@ -10,9 +10,9 @@ const NUM_BUTTONS = 7;
 const BUTTON_LABELS = [
   "Mehmet Emin",
   "Turgut",
-  "MaliOz",
+  "Kanye West Quote",
   "Cat_Fact_API_Explorer",
   "Barkin Akkol",
-  "Ebubekir",
-  "Kazanci",
+  "JSONPlaceholder API",
+  "Button7",
 ];
