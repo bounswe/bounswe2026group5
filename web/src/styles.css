@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -8,8 +8,7 @@
 @plugin "@tailwindcss/typography";
 
 @theme {
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
@@ -131,6 +130,41 @@ body {
   color: var(--violet-ink);
   font-family: var(--font-sans);
   background-color: var(--bg-base);
+  background:
+          radial-gradient(1100px 620px at -8% -10%, var(--hero-a), transparent 58%),
+          radial-gradient(1050px 620px at 112% -12%, var(--hero-b), transparent 62%),
+          radial-gradient(720px 380px at 50% 115%, rgba(139, 111, 232, 0.1), transparent 68%),
+          linear-gradient(180deg, color-mix(in oklab, var(--petal) 70%, white) 0%, var(--mist) 44%, var(--bg-base) 100%);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.28;
+  background:
+          radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.8), transparent 34%),
+          radial-gradient(circle at 78% 26%, rgba(139, 111, 232, 0.18), transparent 42%),
+          radial-gradient(circle at 42% 82%, rgba(113, 88, 212, 0.12), transparent 36%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.14;
+  background-image:
+          linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(circle at 50% 30%, black, transparent 78%);
 }
 
 a {
@@ -167,7 +201,7 @@ pre code {
 }
 
 .display-title {
-  font-family: var(--font-display);
+  font-family: "Fraunces", Georgia, serif;
 }
 
 .island-shell {
@@ -257,6 +291,114 @@ a {
   animation: rise-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dark {
+  --background: oklch(0.18 0.02 300);
+  --foreground: oklch(0.96 0.01 300);
+  --card: oklch(0.23 0.02 300);
+  --card-foreground: oklch(0.96 0.01 300);
+  --popover: oklch(0.23 0.02 300);
+  --popover-foreground: oklch(0.96 0.01 300);
+  --primary: oklch(0.8 0.1 305);
+  --primary-foreground: oklch(0.2 0.02 300);
+  --secondary: oklch(0.29 0.02 300);
+  --secondary-foreground: oklch(0.96 0.01 300);
+  --muted: oklch(0.29 0.02 300);
+  --muted-foreground: oklch(0.76 0.02 300);
+  --accent: oklch(0.34 0.03 305);
+  --accent-foreground: oklch(0.96 0.01 300);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.68 0.06 305);
+  --chart-1: oklch(0.76 0.13 305);
+  --chart-2: oklch(0.68 0.15 285);
+  --chart-3: oklch(0.61 0.16 325);
+  --chart-4: oklch(0.72 0.1 270);
+  --chart-5: oklch(0.52 0.12 300);
+  --sidebar: oklch(0.23 0.02 300);
+  --sidebar-foreground: oklch(0.96 0.01 300);
+  --sidebar-primary: oklch(0.8 0.1 305);
+  --sidebar-primary-foreground: oklch(0.2 0.02 300);
+  --sidebar-accent: oklch(0.29 0.02 300);
+  --sidebar-accent-foreground: oklch(0.96 0.01 300);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.68 0.06 305);
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", sans-serif;
+
+  --color-brand-ink: var(--violet-ink);
+  --color-brand-ink-soft: var(--violet-ink-soft);
+  --color-brand: var(--violet);
+  --color-brand-deep: var(--violet-deep);
+  --color-brand-iris: var(--iris);
+  --color-brand-orchid: var(--orchid);
+  --color-brand-petal: var(--petal);
+  --color-brand-mist: var(--mist);
+  --color-brand-surface: var(--surface);
+  --color-brand-surface-strong: var(--surface-strong);
+  --color-brand-line: var(--line);
+  --color-brand-kicker: var(--kicker);
+  --color-brand-bg: var(--bg-base);
+  --color-brand-header: var(--header-bg);
+  --color-brand-chip: var(--chip-bg);
+  --color-brand-chip-line: var(--chip-line);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -276,7 +418,7 @@ a {
   h4,
   h5,
   h6 {
-    @apply tracking-tight text-foreground;
+    @apply tracking-tight text-foreground font-bold text-4xl sm:text-6xl;
   }
 
   p {
@@ -288,41 +430,3 @@ a {
   }
 }
 
-@layer components {
-  .text-display {
-    font-family: var(--font-display);
-    @apply text-5xl font-semibold leading-tight tracking-tight;
-  }
-
-  .text-page-title {
-    @apply text-3xl font-semibold tracking-tight;
-  }
-
-  .text-section-title {
-    @apply text-2xl font-semibold tracking-tight;
-  }
-
-  .text-card-title {
-    @apply text-xl font-semibold tracking-tight;
-  }
-
-  .text-lead {
-    @apply text-lg leading-8 text-muted-foreground;
-  }
-
-  .text-body {
-    @apply text-base leading-7;
-  }
-
-  .text-body-muted {
-    @apply text-sm leading-6 text-muted-foreground;
-  }
-
-  .text-label {
-    @apply text-sm font-medium leading-none;
-  }
-
-  .text-caption {
-    @apply text-xs leading-5 text-muted-foreground;
-  }
-}
