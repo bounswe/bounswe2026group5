@@ -13,6 +13,6 @@ const BUTTON_LABELS = [
   "Kanye West Quote",
   "Göksel",
   "Barkin Akkol",
-  "Ebubekir",
-  "Kazanci",
+  "JSONPlaceholder API",
+  "Button7",
 ];
