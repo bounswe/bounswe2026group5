@@ -22,5 +22,8 @@ function onButton4Click() {
 }
 
 function onButton5Click() {
-  console.log("Button 5 clicked -- implement me!");
+  console.log(
+    "Button 5 clicked -- sending analytical data to advertisement agencies...",
+  );
+  window.open("dog.html", "_blank");
 }
