@@ -115,6 +115,39 @@ cd web
 npm run dev
 ```
 
+### 🔄 Manual Database Migration
+
+If you need to manually synchronize or create migrations, use the commands below.
+
+**Apply existing migrations (recommended before `runserver`):**
+
+```bash
+cd backend
+# Windows: venv\Scripts\activate
+# Mac/Linux: source venv/bin/activate
+python manage.py migrate
+```
+
+**Create new migration files after model changes:**
+
+```bash
+cd backend
+# Windows: venv\Scripts\activate
+# Mac/Linux: source venv/bin/activate
+python manage.py makemigrations
+python manage.py migrate
+```
+
+**Create migration for a specific app only (example: accounts):**
+
+```bash
+cd backend
+# Windows: venv\Scripts\activate
+# Mac/Linux: source venv/bin/activate
+python manage.py makemigrations accounts
+python manage.py migrate
+```
+
 ### 🗄️ Connecting to the Database
 
 To view, manage, and query the local PostgreSQL database, we recommend using **DBeaver** (or DataGrip/pgAdmin). Create a new PostgreSQL connection using the following credentials:
