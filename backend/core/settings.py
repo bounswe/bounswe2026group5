@@ -48,6 +48,8 @@ INSTALLED_APPS = [
     # 3rd Party Apps
     "rest_framework",
     "drf_spectacular",
+    # Local Apps
+    "accounts",
 ]
 
 REST_FRAMEWORK = {
@@ -96,6 +98,8 @@ WSGI_APPLICATION = "core.wsgi.application"
 
 DATABASES = {"default": env.db("DATABASE_URL")}
 
+AUTH_USER_MODEL = "accounts.User"
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -132,3 +136,5 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
