@@ -1,0 +1,10 @@
+{
+  "name": "bounswe2026group5",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "web",
+    "mobile",
+    "shared"
+  ]
+}

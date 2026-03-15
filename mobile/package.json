@@ -1,0 +1,11 @@
+{
+  "name": "mobile",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "expo": "~50.0.4",
+    "expo-router": "~3.4.7",
+    "react-native": "0.73.4",
+    "@tanstack/react-query": "^5.0.0",
+    "@bounswe/shared": "*" 
+  }
+}
