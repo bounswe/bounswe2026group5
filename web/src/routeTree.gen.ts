@@ -9,18 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AboutRouteImport } from './routes/about'
-import { Route as UnauthorizedLayoutRouteImport } from './routes/_unauthorizedLayout'
+import { Route as UnauthorizedRouteRouteImport } from './routes/_unauthorized/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as UnauthorizedLayoutLoginRouteImport } from './routes/_unauthorizedLayout.Login'
+import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/login'
+import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/about'
 
-const AboutRoute = AboutRouteImport.update({
-  id: '/about',
-  path: '/about',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const UnauthorizedLayoutRoute = UnauthorizedLayoutRouteImport.update({
-  id: '/_unauthorizedLayout',
+const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
+  id: '/_unauthorized',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -28,62 +23,59 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const UnauthorizedLayoutLoginRoute = UnauthorizedLayoutLoginRouteImport.update({
-  id: '/Login',
-  path: '/Login',
-  getParentRoute: () => UnauthorizedLayoutRoute,
+const UnauthorizedLoginRoute = UnauthorizedLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => UnauthorizedRouteRoute,
+} as any)
+const UnauthorizedAboutRoute = UnauthorizedAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => UnauthorizedRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/Login': typeof UnauthorizedLayoutLoginRoute
+  '/about': typeof UnauthorizedAboutRoute
+  '/login': typeof UnauthorizedLoginRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/Login': typeof UnauthorizedLayoutLoginRoute
+  '/about': typeof UnauthorizedAboutRoute
+  '/login': typeof UnauthorizedLoginRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/_unauthorizedLayout': typeof UnauthorizedLayoutRouteWithChildren
-  '/about': typeof AboutRoute
-  '/_unauthorizedLayout/Login': typeof UnauthorizedLayoutLoginRoute
+  '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
+  '/_unauthorized/about': typeof UnauthorizedAboutRoute
+  '/_unauthorized/login': typeof UnauthorizedLoginRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/Login'
+  fullPaths: '/' | '/about' | '/login'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/Login'
+  to: '/' | '/about' | '/login'
   id:
     | '__root__'
     | '/'
-    | '/_unauthorizedLayout'
-    | '/about'
-    | '/_unauthorizedLayout/Login'
+    | '/_unauthorized'
+    | '/_unauthorized/about'
+    | '/_unauthorized/login'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  UnauthorizedLayoutRoute: typeof UnauthorizedLayoutRouteWithChildren
-  AboutRoute: typeof AboutRoute
+  UnauthorizedRouteRoute: typeof UnauthorizedRouteRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof AboutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_unauthorizedLayout': {
-      id: '/_unauthorizedLayout'
+    '/_unauthorized': {
+      id: '/_unauthorized'
       path: ''
       fullPath: '/'
-      preLoaderRoute: typeof UnauthorizedLayoutRouteImport
+      preLoaderRoute: typeof UnauthorizedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -93,31 +85,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_unauthorizedLayout/Login': {
-      id: '/_unauthorizedLayout/Login'
-      path: '/Login'
-      fullPath: '/Login'
-      preLoaderRoute: typeof UnauthorizedLayoutLoginRouteImport
-      parentRoute: typeof UnauthorizedLayoutRoute
+    '/_unauthorized/login': {
+      id: '/_unauthorized/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof UnauthorizedLoginRouteImport
+      parentRoute: typeof UnauthorizedRouteRoute
+    }
+    '/_unauthorized/about': {
+      id: '/_unauthorized/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof UnauthorizedAboutRouteImport
+      parentRoute: typeof UnauthorizedRouteRoute
     }
   }
 }
 
-interface UnauthorizedLayoutRouteChildren {
-  UnauthorizedLayoutLoginRoute: typeof UnauthorizedLayoutLoginRoute
+interface UnauthorizedRouteRouteChildren {
+  UnauthorizedAboutRoute: typeof UnauthorizedAboutRoute
+  UnauthorizedLoginRoute: typeof UnauthorizedLoginRoute
 }
 
-const UnauthorizedLayoutRouteChildren: UnauthorizedLayoutRouteChildren = {
-  UnauthorizedLayoutLoginRoute: UnauthorizedLayoutLoginRoute,
+const UnauthorizedRouteRouteChildren: UnauthorizedRouteRouteChildren = {
+  UnauthorizedAboutRoute: UnauthorizedAboutRoute,
+  UnauthorizedLoginRoute: UnauthorizedLoginRoute,
 }
 
-const UnauthorizedLayoutRouteWithChildren =
-  UnauthorizedLayoutRoute._addFileChildren(UnauthorizedLayoutRouteChildren)
+const UnauthorizedRouteRouteWithChildren =
+  UnauthorizedRouteRoute._addFileChildren(UnauthorizedRouteRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  UnauthorizedLayoutRoute: UnauthorizedLayoutRouteWithChildren,
-  AboutRoute: AboutRoute,
+  UnauthorizedRouteRoute: UnauthorizedRouteRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
