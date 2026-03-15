@@ -9,12 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AboutRouteImport } from './routes/about'
+import { Route as UnauthorizedRouteRouteImport } from './routes/_unauthorized/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/login'
+import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/about'
 
-const AboutRoute = AboutRouteImport.update({
-  id: '/about',
-  path: '/about',
+const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
+  id: '/_unauthorized',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -22,40 +23,59 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UnauthorizedLoginRoute = UnauthorizedLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => UnauthorizedRouteRoute,
+} as any)
+const UnauthorizedAboutRoute = UnauthorizedAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => UnauthorizedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
+  '/about': typeof UnauthorizedAboutRoute
+  '/login': typeof UnauthorizedLoginRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
+  '/about': typeof UnauthorizedAboutRoute
+  '/login': typeof UnauthorizedLoginRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
+  '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
+  '/_unauthorized/about': typeof UnauthorizedAboutRoute
+  '/_unauthorized/login': typeof UnauthorizedLoginRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about'
+  fullPaths: '/' | '/about' | '/login'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about'
-  id: '__root__' | '/' | '/about'
+  to: '/' | '/about' | '/login'
+  id:
+    | '__root__'
+    | '/'
+    | '/_unauthorized'
+    | '/_unauthorized/about'
+    | '/_unauthorized/login'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AboutRoute: typeof AboutRoute
+  UnauthorizedRouteRoute: typeof UnauthorizedRouteRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof AboutRouteImport
+    '/_unauthorized': {
+      id: '/_unauthorized'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof UnauthorizedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -65,12 +85,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_unauthorized/login': {
+      id: '/_unauthorized/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof UnauthorizedLoginRouteImport
+      parentRoute: typeof UnauthorizedRouteRoute
+    }
+    '/_unauthorized/about': {
+      id: '/_unauthorized/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof UnauthorizedAboutRouteImport
+      parentRoute: typeof UnauthorizedRouteRoute
+    }
   }
 }
 
+interface UnauthorizedRouteRouteChildren {
+  UnauthorizedAboutRoute: typeof UnauthorizedAboutRoute
+  UnauthorizedLoginRoute: typeof UnauthorizedLoginRoute
+}
+
+const UnauthorizedRouteRouteChildren: UnauthorizedRouteRouteChildren = {
+  UnauthorizedAboutRoute: UnauthorizedAboutRoute,
+  UnauthorizedLoginRoute: UnauthorizedLoginRoute,
+}
+
+const UnauthorizedRouteRouteWithChildren =
+  UnauthorizedRouteRoute._addFileChildren(UnauthorizedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AboutRoute: AboutRoute,
+  UnauthorizedRouteRoute: UnauthorizedRouteRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
