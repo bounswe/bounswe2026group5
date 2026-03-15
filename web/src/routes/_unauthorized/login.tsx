@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Search, CalendarDays, TrendingUp } from 'lucide-react'
 import {
     Card,
     CardContent,
@@ -11,6 +12,11 @@ import {
     CardTitle,
 } from "@/components/ui/card"
 import { Heading, Muted, Body, Display } from "@/components/Typography"
+const FEATURES = [
+    { icon: Search,      title: 'Find tutors',    desc: 'Browse verified tutors from your campus' },
+    { icon: CalendarDays, title: 'Book sessions', desc: 'Schedule around your timetable'          },
+    { icon: TrendingUp,  title: 'Track progress', desc: 'See your grade improvements over time'   },
+]
 
 export const Route = createFileRoute('/_unauthorized/login')({
     component: RouteComponent,
@@ -22,7 +28,7 @@ function RouteComponent() {
 
             <aside className="lg:flex flex-col px-14 py-12 bg-petal border-r border-line">
                 <Display className="mb-10">Campus Tutor</Display>
-                <div className="island-shell rounded-2xl px-8 py-10 space-y-4 min-h-3/4">
+                <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4">
                     <Body className="island-kicker">Peer tutoring platform</Body>
                     <Display
                         as="h2"
@@ -30,10 +36,23 @@ function RouteComponent() {
                     >
                         Study better,<br />together.
                     </Display>
-                    <Body className="text-(--color-brand-ink-soft) max-w-70">
+                    <Body className="text-(--color-brand-ink-soft) max-w-90">
                         Find tutors from your own campus, book sessions around your
                         schedule, and actually understand the material.
                     </Body>
+                    <ul className="flex flex-col gap-6">
+                        {FEATURES.map(({ icon: Icon, title, desc }) => (
+                            <li key={title} className="flex items-start gap-3">
+                              <span className="w-12 h-12 rounded-lg bg-accent-muted flex items-center justify-center shrink-0">
+                                <Icon className="w-6 h-6 text-accent" strokeWidth={2.5} />
+                              </span>
+                                <div>
+                                    <Body className=" font-medium text-ink">{title}</Body>
+                                    <Muted className=" text-ink-soft">{desc}</Muted>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
                 </div>
             </aside>
 
