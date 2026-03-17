@@ -1,3 +1,5 @@
+from typing import Any
+
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -66,7 +68,7 @@ class RegisterAPIViewTests(TestCase):
 
     def setUp(self) -> None:
         """Set up test client and seed default groups."""
-        self.client = APIClient()
+        self.api_client: Any = APIClient()
         self.register_url = "/api/auth/register/"
 
         # Ensure USER group exists (mimics migration)
@@ -80,7 +82,7 @@ class RegisterAPIViewTests(TestCase):
             "confirm_password": "SecurePass123",
         }
 
-        response = self.client.post(self.register_url, payload)
+        response = self.api_client.post(self.register_url, payload)
 
         self.assertEqual(response.status_code, 201)
         data = response.json()
@@ -102,7 +104,7 @@ class RegisterAPIViewTests(TestCase):
             "confirm_password": "SecurePass123",
         }
 
-        response = self.client.post(self.register_url, payload)
+        response = self.api_client.post(self.register_url, payload)
 
         self.assertEqual(response.status_code, 201)
         data = response.json()
@@ -121,7 +123,7 @@ class RegisterAPIViewTests(TestCase):
             "confirm_password": "SecurePass123",
         }
 
-        response = self.client.post(self.register_url, payload)
+        response = self.api_client.post(self.register_url, payload)
 
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -135,7 +137,7 @@ class RegisterAPIViewTests(TestCase):
             "confirm_password": "DifferentPass456",
         }
 
-        response = self.client.post(self.register_url, payload)
+        response = self.api_client.post(self.register_url, payload)
 
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -149,7 +151,7 @@ class RegisterAPIViewTests(TestCase):
             "confirm_password": "123",
         }
 
-        response = self.client.post(self.register_url, payload)
+        response = self.api_client.post(self.register_url, payload)
 
         self.assertEqual(response.status_code, 400)
 
@@ -161,7 +163,7 @@ class RegisterAPIViewTests(TestCase):
             "confirm_password": "password123",
         }
 
-        response = self.client.post(self.register_url, payload)
+        response = self.api_client.post(self.register_url, payload)
 
         self.assertEqual(response.status_code, 400)
 
@@ -173,7 +175,7 @@ class RegisterAPIViewTests(TestCase):
             "confirm_password": "SecurePass123",
         }
 
-        response = self.client.post(self.register_url, payload)
+        response = self.api_client.post(self.register_url, payload)
 
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -187,7 +189,7 @@ class RegisterAPIViewTests(TestCase):
             "confirm_password": "SecurePass123",
         }
 
-        response = self.client.post(self.register_url, payload)
+        response = self.api_client.post(self.register_url, payload)
 
         self.assertEqual(response.status_code, 201)
         user = User.objects.get(email="test@example.com")
@@ -201,7 +203,7 @@ class RegisterAPIViewTests(TestCase):
             "confirm_password": "SecurePass123",
         }
 
-        response = self.client.post(self.register_url, payload)
+        response = self.api_client.post(self.register_url, payload)
 
         self.assertEqual(response.status_code, 201)
         data = response.json()
@@ -214,7 +216,7 @@ class LoginAPIViewTests(TestCase):
 
     def setUp(self) -> None:
         """Set up test client and create a test user."""
-        self.client = APIClient()
+        self.api_client: Any = APIClient()
         self.login_url = "/api/auth/login/"
 
         self.user = User.objects.create_user(
@@ -230,7 +232,7 @@ class LoginAPIViewTests(TestCase):
             "password": "SecurePass123",
         }
 
-        response = self.client.post(self.login_url, payload)
+        response = self.api_client.post(self.login_url, payload)
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -246,7 +248,7 @@ class LoginAPIViewTests(TestCase):
             "password": "SecurePass123",
         }
 
-        response = self.client.post(self.login_url, payload)
+        response = self.api_client.post(self.login_url, payload)
 
         self.assertEqual(response.status_code, 200)
 
@@ -257,7 +259,7 @@ class LoginAPIViewTests(TestCase):
             "password": "SecurePass123",
         }
 
-        response = self.client.post(self.login_url, payload)
+        response = self.api_client.post(self.login_url, payload)
 
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -270,7 +272,7 @@ class LoginAPIViewTests(TestCase):
             "password": "WrongPassword123",
         }
 
-        response = self.client.post(self.login_url, payload)
+        response = self.api_client.post(self.login_url, payload)
 
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -289,7 +291,7 @@ class LoginAPIViewTests(TestCase):
             "password": "SecurePass123",
         }
 
-        response = self.client.post(self.login_url, payload)
+        response = self.api_client.post(self.login_url, payload)
 
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -309,7 +311,7 @@ class LoginAPIViewTests(TestCase):
             "password": "SecurePass123",
         }
 
-        response = self.client.post(self.login_url, payload)
+        response = self.api_client.post(self.login_url, payload)
 
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -322,7 +324,7 @@ class LoginAPIViewTests(TestCase):
             "password": "SecurePass123",
         }
 
-        response = self.client.post(self.login_url, payload)
+        response = self.api_client.post(self.login_url, payload)
 
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -335,7 +337,7 @@ class LoginAPIViewTests(TestCase):
             "password": "SecurePass123",
         }
 
-        response = self.client.post(self.login_url, payload)
+        response = self.api_client.post(self.login_url, payload)
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -348,7 +350,7 @@ class LoginAPIViewTests(TestCase):
             "password": "SecurePass123",
         }
 
-        response = self.client.post(self.login_url, payload)
+        response = self.api_client.post(self.login_url, payload)
 
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -360,7 +362,7 @@ class LoginAPIViewTests(TestCase):
             "email": "testuser@example.com",
         }
 
-        response = self.client.post(self.login_url, payload)
+        response = self.api_client.post(self.login_url, payload)
 
         self.assertEqual(response.status_code, 400)
         data = response.json()
@@ -372,7 +374,7 @@ class LogoutAPIViewTests(TestCase):
 
     def setUp(self) -> None:
         """Set up authenticated client and JWT tokens."""
-        self.client = APIClient()
+        self.api_client: Any = APIClient()
         self.logout_url = "/api/auth/logout/"
 
         self.user = User.objects.create_user(
@@ -386,10 +388,10 @@ class LogoutAPIViewTests(TestCase):
 
     def test_logout_success_blacklists_refresh_token(self) -> None:
         """Test authenticated logout blacklists refresh token."""
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
         payload = {"refresh_token": self.refresh_token}
 
-        response = self.client.post(self.logout_url, payload)
+        response = self.api_client.post(self.logout_url, payload)
 
         self.assertEqual(response.status_code, 205)
         self.assertTrue(BlacklistedToken.objects.filter(token__token=self.refresh_token).exists())
@@ -398,15 +400,15 @@ class LogoutAPIViewTests(TestCase):
         """Test logout endpoint rejects unauthenticated requests."""
         payload = {"refresh_token": self.refresh_token}
 
-        response = self.client.post(self.logout_url, payload)
+        response = self.api_client.post(self.logout_url, payload)
 
         self.assertEqual(response.status_code, 401)
 
     def test_logout_with_invalid_refresh_token(self) -> None:
         """Test logout rejects malformed refresh token."""
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
         payload = {"refresh_token": "invalid-token"}
 
-        response = self.client.post(self.logout_url, payload)
+        response = self.api_client.post(self.logout_url, payload)
 
         self.assertEqual(response.status_code, 400)

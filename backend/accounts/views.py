@@ -1,10 +1,13 @@
+from typing import Any, cast
+
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken, TokenError
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import User
 from .serializers import (
@@ -40,7 +43,7 @@ class RegisterAPIView(APIView):
     def post(self, request: Request) -> Response:
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        user = cast(User, serializer.save())
 
         return Response(
             AuthResponseSerializer(build_auth_response(user)).data,
@@ -66,7 +69,8 @@ class LoginAPIView(APIView):
             context={"request": request},
         )
         serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data["user"]
+        validated_data = cast(dict[str, Any], serializer.validated_data)
+        user = cast(User, validated_data["user"])
 
         return Response(
             AuthResponseSerializer(build_auth_response(user)).data,
@@ -91,9 +95,10 @@ class LogoutAPIView(APIView):
         serializer = LogoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        refresh_token = serializer.validated_data["refresh_token"]
+        validated_data = cast(dict[str, Any], serializer.validated_data)
+        refresh_token = cast(str, validated_data["refresh_token"])
         try:
-            token = RefreshToken(refresh_token)
+            token = RefreshToken(cast(Any, refresh_token))
             token.blacklist()
         except TokenError as error:
             return Response(
