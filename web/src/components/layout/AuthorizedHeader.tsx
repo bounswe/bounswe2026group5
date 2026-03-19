@@ -89,7 +89,12 @@ export function AuthorizedHeader() {
             <div className="h-8 w-8 rounded-full bg-accent text-background flex items-center justify-center text-sm font-bold shadow-sm">
               AS
             </div>
-            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-sm text-ink-soft hover:text-ink px-2 hidden md:inline-flex">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="text-sm text-ink-soft hover:text-ink px-2 inline-flex"
+            >
               Sign out
             </Button>
           </div>
