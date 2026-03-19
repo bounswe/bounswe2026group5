@@ -66,7 +66,7 @@ function UserAvatar({ name }: { name: string }) {
 // PAGE LAYOUT
 // ---------------------------------------------------------------------------
 
-function DashboardHome() {
+export function DashboardHome() {
   const { mode } = Route.useSearch()
 
   return (
