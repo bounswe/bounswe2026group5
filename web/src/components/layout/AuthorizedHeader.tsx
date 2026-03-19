@@ -3,12 +3,16 @@ import { Link, useRouter, useNavigate, useSearch } from '@tanstack/react-router'
 import { setDemoAuthRole } from '@/lib/demoAuth'
 import { Button } from '@/components/ui/button'
 
+type DashboardMode = 'mentor' | 'mentee'
+type HeaderSearch = {
+  mode?: DashboardMode
+}
+
 export function AuthorizedHeader() {
   const router = useRouter()
   const navigate = useNavigate()
   
-  // strict: false allows us to read the URL even though the header is outside the specific route
-  const search: any = useSearch({ strict: false })
+  const search = useSearch({ strict: false }) as HeaderSearch  
   const isMentorMode = search.mode === 'mentor'
   const currentMode = isMentorMode ? 'mentor' : 'mentee'
 
@@ -17,10 +21,12 @@ export function AuthorizedHeader() {
     router.navigate({ to: '/login' })
   }
 
-  const toggleMode = () => {
+  const setMode = (newMode: DashboardMode) => {
+    if (currentMode === newMode) return; // Do nothing if clicking the already active mode
+    
     navigate({
       to: '/dashboard',
-      search: { mode: isMentorMode ? 'mentee' : 'mentor' }
+      search: { mode: newMode }
     })
   }
 
@@ -47,7 +53,6 @@ export function AuthorizedHeader() {
             >
               Dashboard
             </Link>
-
             <div className="flex items-center gap-1 opacity-60 cursor-not-allowed">
               <span className="text-sm font-medium text-ink-soft">Discover</span>
               <span className="text-[10px] uppercase tracking-wider bg-accent-muted text-ink px-1.5 py-0.5 rounded-sm">Soon</span>
@@ -62,10 +67,10 @@ export function AuthorizedHeader() {
         {/* Right Side: Upgraded Profile & Actions */}
         <div className="flex items-center gap-5">
           
-          {/* UPGRADE: Custom Role Toggle Pill */}
+          {/* FIX #3: Updated buttons to use the specific setMode handler */}
           <div className="hidden sm:flex items-center bg-accent-muted rounded-full p-0.5 border border-line">
             <button
-              onClick={toggleMode}
+              onClick={() => setMode('mentee')}
               className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 ${
                 !isMentorMode ? 'bg-background text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
               }`}
@@ -73,7 +78,7 @@ export function AuthorizedHeader() {
               Mentee
             </button>
             <button
-              onClick={toggleMode}
+              onClick={() => setMode('mentor')}
               className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 ${
                 isMentorMode ? 'bg-background text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
               }`}
@@ -84,17 +89,11 @@ export function AuthorizedHeader() {
 
           <div className="w-px h-6 bg-line hidden sm:block"></div>
 
-          {/* Fake User Avatar & Logout */}
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-full bg-accent text-background flex items-center justify-center text-sm font-bold shadow-sm">
               AS
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLogout}
-              className="text-sm text-ink-soft hover:text-ink px-2 inline-flex"
-            >
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-sm text-ink-soft hover:text-ink px-2 hidden md:inline-flex">
               Sign out
             </Button>
           </div>
