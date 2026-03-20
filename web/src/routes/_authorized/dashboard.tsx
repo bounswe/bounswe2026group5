@@ -5,7 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button'
 import { Heading, Body, Muted } from '@/components/Typography'
 import { MOCK_REQUESTS, MOCK_SESSIONS, MOCK_DISCOVER_SKILLS } from '@/lib/mocks/loggedInHome' // FUTURE: Replace with real API calls once backend is ready
-import { CalendarDays, Clock, CheckCircle2, XCircle, ArrowRight, Plus } from 'lucide-react'
+import { CalendarDays, Clock, CheckCircle2, XCircle, ArrowRight } from 'lucide-react'
+
+// IMPORT OUR NEW MODAL HERE
+import { MentorAvailabilityModal } from '@/components/dashboard/MentorAvailabilityModal'
 
 const dashboardSearchSchema = z.object({
   mode: z.enum(['mentee', 'mentor']).catch('mentee'),
@@ -206,10 +209,9 @@ function MentorDashboardView() {
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
             </Heading>
-            {/* FUTURE: Opens a modal to create new AvailabilitySlots */}
-            <Button size="sm" className="gap-2">
-              <Plus className="w-4 h-4" /> Set Availability
-            </Button>
+            
+            <MentorAvailabilityModal />
+            
           </div>
           
           <div className="flex flex-col gap-4">
@@ -249,7 +251,7 @@ function MentorDashboardView() {
           </div>
         </section>
 
-        {/* Expertise Section (Moved to Left Column for balance!) */}
+        {/* Expertise Section */}
         <section className="space-y-5">
           <div className="flex items-center justify-between">
             <Heading as="h3" className="text-xl">My Listed Expertise</Heading>
