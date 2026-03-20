@@ -2,34 +2,32 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// 1. Use vi.hoisted to safely create the mock before vi.mock runs
 const { mockUseSearch } = vi.hoisted(() => {
   return { mockUseSearch: vi.fn() }
 })
 
-// 2. Mock TanStack Router
-vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
-  return {
-    ...actual,
-    createFileRoute: () => (config: any) => ({
-      ...config,
-      useSearch: mockUseSearch,
-    }),
-  }
-})
+vi.mock('@tanstack/react-router', () => ({
+  createFileRoute: () => (config: any) => ({
+    ...config,
+    useSearch: mockUseSearch,
+  }),
+  useSearch: mockUseSearch,
+}))
 
-// 3. Now import the component
 import { DashboardHome } from '../dashboard'
 
-// 4. Mock the icons
 vi.mock('lucide-react', () => ({
-  CalendarDays: () => <div data-testid="icon-calendar" />,
-  Clock: () => <div data-testid="icon-clock" />,
-  CheckCircle2: () => <div data-testid="icon-check" />,
-  XCircle: () => <div data-testid="icon-x" />,
-  ArrowRight: () => <div data-testid="icon-arrow" />,
-  Plus: () => <div data-testid="icon-plus" />,
+  CalendarDays: () => <span data-testid="icon-calendar" />,
+  Clock: () => <span data-testid="icon-clock" />,
+  CheckCircle2: () => <span data-testid="icon-check" />,
+  XCircle: () => <span data-testid="icon-x-circle" />,
+  ArrowRight: () => <span data-testid="icon-arrow" />,
+  Plus: () => <span data-testid="icon-plus" />,
+  XIcon: () => <span data-testid="icon-close" />,
+  ChevronDownIcon: () => <span data-testid="icon-chevron-down" />,
+  ChevronUpIcon: () => <span data-testid="icon-chevron-up" />, 
+  X: () => <span data-testid="icon-x-main" />, 
+  CheckIcon: () => <span data-testid="icon-check-dropdown" />, 
 }))
 
 describe('Dashboard Component Routing & Role Variants', () => {

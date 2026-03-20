@@ -5,7 +5,8 @@ import { ExpertiseEditModal } from '../ExpertiseEditModal'
 
 // Mock the icons
 vi.mock('lucide-react', () => ({
-  X: () => <div data-testid="icon-x" />,
+  X: () => <span data-testid="icon-x" />,
+  XIcon: () => <span data-testid="icon-close" />,
 }))
 
 // Mock the mock data so our test is predictable and doesn't rely on external files
