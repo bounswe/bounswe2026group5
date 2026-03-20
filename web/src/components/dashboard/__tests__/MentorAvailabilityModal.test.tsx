@@ -30,6 +30,9 @@ describe('MentorAvailabilityModal', () => {
     expect(screen.getByRole('heading', { name: /Add Availability Slot/i })).toBeInTheDocument()
     expect(screen.getByLabelText(/Date/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Start Time/i)).toBeInTheDocument()
+    
+    expect(screen.getByLabelText(/End Time/i)).toBeInTheDocument() 
+    
     expect(screen.getByRole('button', { name: /Save Slot/i })).toBeInTheDocument()
   })
 })
