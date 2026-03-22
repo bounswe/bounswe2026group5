@@ -29,11 +29,5 @@
     }
   },
   "python.analysis.typeCheckingMode": "basic",
-  "black-formatter.args": ["--line-length", "100"],
-  "flake8.cwd": "${workspaceFolder}/backend",
-  "flake8.args": [
-    "--config=${workspaceFolder}/backend/.flake8",
-    "--max-line-length=100",
-    "--extend-ignore=E203"
-  ]
+  "black-formatter.args": ["--line-length", "88"]
 }
