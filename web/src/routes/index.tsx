@@ -1,10 +1,22 @@
-import { createFileRoute } from '@tanstack/react-router'
+// web/src/routes/index.tsx
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { isAuthenticated } from '@/lib/demoAuth'
 
-export const Route = createFileRoute('/')({ component: App })
+export const Route = createFileRoute('/')({
+  beforeLoad: () => {
+    if (isAuthenticated()) {
+      throw redirect({
+        to: '/dashboard', // Fixed path!
+      })
+    } else {
+      throw redirect({
+        to: '/login',
+      })
+    }
+  },
+})
 
-function App() {
-  return (
-    <main className="page-wrap px-4 pb-8 pt-14">
+/*  <main className="page-wrap px-4 pb-8 pt-14">
       <section className="island-shell rise-in relative overflow-hidden rounded-[2rem] px-6 py-10 sm:px-10 sm:py-14">
         <div className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(79,184,178,0.32),transparent_66%)]" />
         <div className="pointer-events-none absolute -bottom-20 -right-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(47,106,74,0.18),transparent_66%)]" />
@@ -18,11 +30,12 @@ function App() {
         </p>
         <div className="flex flex-wrap gap-3">
           <a
-            href="/about"
+            href="/_unauthorized/about"
             className="rounded-full border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-5 py-2.5 text-sm font-semibold text-[var(--lagoon-deep)] no-underline transition hover:-translate-y-0.5 hover:bg-[rgba(79,184,178,0.24)]"
           >
             About This Starter
           </a>
+          <Link to="/login">Go to Login Page</Link>
           <a
             href="https://tanstack.com/router"
             target="_blank"
@@ -83,5 +96,4 @@ function App() {
         </ul>
       </section>
     </main>
-  )
-}
+  ) */
