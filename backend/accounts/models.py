@@ -1,9 +1,11 @@
 import uuid
+from decimal import Decimal
 from typing import Any
 
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
+from django.db.models import Q
 
 
 class UserRole(models.TextChoices):
@@ -15,6 +17,14 @@ class AuthProvider(models.TextChoices):
     LOCAL = "LOCAL", "Local"
     GOOGLE = "GOOGLE", "Google"
     APPLE = "APPLE", "Apple"
+
+
+class MentorshipMode(models.TextChoices):
+    """Supported mentoring participation modes for a profile."""
+
+    MENTOR = "MENTOR", "Mentor"
+    MENTEE = "MENTEE", "Mentee"
+    BOTH = "BOTH", "Both"
 
 
 class UserManager(BaseUserManager["User"]):
@@ -85,3 +95,167 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+
+
+class Profile(models.Model):
+    """Public profile information associated one-to-one with a user."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="profile",
+    )
+    display_name = models.CharField(max_length=120)
+    bio = models.TextField(blank=True, default="")
+    picture_url = models.URLField(blank=True, default="")
+    title = models.CharField(max_length=120, blank=True, default="")
+    location_text = models.CharField(max_length=255, blank=True, default="")
+    is_visible = models.BooleanField(default=True)
+    show_initials_only = models.BooleanField(default=False)
+    mentorship_mode = models.CharField(
+        max_length=16,
+        choices=MentorshipMode.choices,
+        default=MentorshipMode.BOTH,
+    )
+    expertise_fields = models.ManyToManyField(
+        "ExpertiseField",
+        through="ProfileExpertise",
+        related_name="profiles",
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "profiles"
+        ordering = ["display_name", "-created_at"]
+        indexes = [
+            models.Index(fields=["mentorship_mode"]),
+            models.Index(fields=["is_visible", "show_initials_only"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.display_name} ({self.user.email})"
+
+
+class ExpertiseField(models.Model):
+    """Catalog of expertise fields that can be attached to profiles."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=80, unique=True)
+    description = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "expertise_fields"
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class ProfileExpertise(models.Model):
+    """Join model for profile-to-expertise relation and rating metadata."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name="profile_expertise",
+    )
+    expertise_field = models.ForeignKey(
+        ExpertiseField,
+        on_delete=models.CASCADE,
+        related_name="profile_expertise",
+    )
+    proficiency_level = models.PositiveSmallIntegerField(default=1)
+    average_rating = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+    rating_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "profile_expertise"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["profile", "expertise_field"],
+                name="uniq_profile_expertise",
+            ),
+            models.CheckConstraint(
+                condition=Q(proficiency_level__gte=1) & Q(proficiency_level__lte=5),
+                name="profile_expertise_proficiency_level_between_1_5",
+            ),
+            models.CheckConstraint(
+                condition=Q(average_rating__gte=0) & Q(average_rating__lte=5),
+                name="profile_expertise_average_rating_between_0_5",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["profile", "expertise_field"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.profile.display_name} - {self.expertise_field.name}"
+
+    def update_rating(self, incoming_rating: float) -> None:
+        """Update aggregate rating values using a single incoming rating."""
+
+        if incoming_rating < 0 or incoming_rating > 5:
+            raise ValueError("incoming_rating must be between 0 and 5.")
+
+        total_rating = float(self.average_rating) * self.rating_count
+        total_rating += incoming_rating
+        self.rating_count += 1
+        self.average_rating = total_rating / self.rating_count
+        self.save(update_fields=["average_rating", "rating_count", "updated_at"])
+
+
+class AvailabilitySlot(models.Model):
+    """Mentor availability time window that can be booked for sessions."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name="availability_slots",
+    )
+    start_at = models.DateTimeField()
+    end_at = models.DateTimeField()
+    is_booked = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "availability_slots"
+        ordering = ["start_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(end_at__gt=models.F("start_at")),
+                name="availability_slot_end_after_start",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["profile", "start_at"]),
+            models.Index(fields=["is_booked", "start_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.profile.display_name}: {self.start_at.isoformat()}"
+
+    def mark_booked(self) -> None:
+        """Mark slot as booked."""
+
+        self.is_booked = True
+        self.save(update_fields=["is_booked", "updated_at"])
+
+    def mark_available(self) -> None:
+        """Mark slot as available again."""
+
+        self.is_booked = False
+        self.save(update_fields=["is_booked", "updated_at"])
