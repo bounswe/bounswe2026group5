@@ -16,6 +16,7 @@ You are an expert software engineer and AI programming assistant working on the 
 - **Frontend:** Follow ESLint and Prettier rules. Prefer modern React functional components and hooks.
 - **Backend:** Follow PEP 8 strictly. Assume Ruff, Black, Flake8, and Isort are enforcing standards.
 - Do not introduce code smells. Write code that passes SonarQube / SonarLint static analysis with zero issues.
+- Use docstrings for all functions, classes, and modules. Follow Google style for Python docstrings and JSDoc for TypeScript.
 
 ## 3. Web Standards & Accessibility (WCAG 2.1 AA)
 
