@@ -1,18 +1,14 @@
 #!/bin/bash
 echo "=========================================="
-echo "🚀 Starting Development Environment..."
+echo "🚀 Geliştirme Ortamı Başlatılıyor..."
 echo "=========================================="
 
-echo "[1/3] Starting database (PostgreSQL) with Docker..."
+echo "[1/2] Veritabanı (PostgreSQL) Docker üzerinde ayağa kaldırılıyor..."
 docker compose up -d || docker-compose up -d
 
 echo ""
-echo "[2/3] Synchronizing database schema (migrate)..."
+echo "[2/2] Backend sanal ortamı (venv) aktif ediliyor..."
+echo "Not: Sanal ortamda kalmak için bu scripti 'source ./start.sh' şeklinde çalıştırın."
 cd backend
 source venv/bin/activate
-python manage.py migrate
-
-echo ""
-echo "[3/3] Activating backend virtual environment (venv)..."
-echo "Note: To stay inside the virtual environment, run this script as 'source ./start.sh'."
 exec $SHELL
