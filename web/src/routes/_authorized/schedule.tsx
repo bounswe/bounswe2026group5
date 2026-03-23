@@ -32,6 +32,7 @@ export const Route = createFileRoute('/_authorized/schedule')({
 // ---------------------------------------------------------------------------
 const MOCK_MENTOR_SCHEDULE = [
   { id: '1', date: 'Mar 24, 2026', isoDate: '2026-03-24', time: '14:00 - 15:00', peer: 'Ayşe Y.', subject: 'Data Structures', status: 'Upcoming' },
+  { id: '6', date: 'Mar 24, 2026', isoDate: '2026-03-24', time: '16:00 - 17:00', peer: 'Mehmet K.', subject: 'System Design', status: 'Upcoming' },
   { id: '3', date: 'Mar 28, 2026', isoDate: '2026-03-28', time: '16:00 - 17:00', peer: 'Zeynep B.', subject: 'Database Systems', status: 'Upcoming' },
   { id: '4', date: 'Mar 10, 2026', isoDate: '2026-03-10', time: '13:00 - 14:00', peer: 'Ali M.', subject: 'Algorithms', status: 'Completed' },
 ]
@@ -102,6 +103,12 @@ function SchedulePage() {
   // State for the calendar
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<string | null>(null) // Stores 'YYYY-MM-DD'
+  const formattedSelectedDate = useMemo(() => {
+    if (!selectedDate) return ''
+    const [year, month, day] = selectedDate.split('-')
+    const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+    return dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+  }, [selectedDate])
 
   // Get correct mock data based on mode
   const rawSessions = mode === 'mentor' ? MOCK_MENTOR_SCHEDULE : MOCK_MENTEE_SCHEDULE
@@ -241,7 +248,7 @@ function SchedulePage() {
         {/* LIST HEADER (Shows active filter) */}
         <div className="px-6 py-4 flex items-center justify-between bg-white border-t border-line">
           <Heading as="h4" className="text-lg">
-            {selectedDate ? `Sessions for ${selectedDate}` : 'All Sessions'}
+            {selectedDate ? `Sessions for ${formattedSelectedDate}` : 'All Sessions'}
           </Heading>
           {selectedDate && (
             <Button variant="ghost" size="sm" onClick={() => setSelectedDate(null)} className="h-8 text-ink-soft hover:text-ink">

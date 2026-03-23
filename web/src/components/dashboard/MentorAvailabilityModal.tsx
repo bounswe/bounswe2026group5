@@ -20,9 +20,9 @@ export function MentorAvailabilityModal() {
   
   // Local state for the form. 
   // FUTURE: Replace with react-hook-form and Zod validation
-  const [date, setDate] = useState('')
-  const [startTime, setStartTime] = useState('')
-  const [endTime, setEndTime] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]) // Defaults to Today
+  const [startTime, setStartTime] = useState('09:00') // Defaults to 9 AM
+  const [endTime, setEndTime] = useState('10:00')     // Defaults to 10 AM
 
   const handleSave = () => {
     // FUTURE: This will trigger a TanStack Query mutation to the Django API 
@@ -31,9 +31,9 @@ export function MentorAvailabilityModal() {
     
     // Reset and close
     setIsOpen(false)
-    setDate('')
-    setStartTime('')
-    setEndTime('')
+    setDate(new Date().toISOString().split('T')[0])
+    setStartTime('09:00')
+    setEndTime('10:00')
   }
 
   return (
