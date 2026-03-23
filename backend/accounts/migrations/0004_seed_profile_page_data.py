@@ -112,7 +112,7 @@ def seed_profile_page_data(apps, schema_editor):
         )
 
         if created:
-            user.password = make_password("SecurePass123")
+            user.password = make_password("SecurePass123")  # NOSONAR
             user.save(update_fields=["password"])
 
         profile, _ = profile_model.objects.get_or_create(
