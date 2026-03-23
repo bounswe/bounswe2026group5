@@ -3,10 +3,6 @@
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase
-from rest_framework import status
-from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import RefreshToken
-
 from mentorship.models import Match, MentorshipRequest
 from profiles.models import MentorshipMode, Profile
 
@@ -161,8 +157,4 @@ class MentorshipRequestModelTests(TestCase):
         request_obj.save()
         request_obj.refresh_from_db()
 
-<<<<<<< HEAD
         self.assertIsNone(request_obj.responded_at)
-=======
-        self.assertIsNone(request_obj.responded_at)
->>>>>>> acaff5e065aade818d52fd7a2d47b52955c2afce

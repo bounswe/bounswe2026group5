@@ -4,7 +4,7 @@ import uuid
 from typing import Any
 
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 
 from profiles.models import Profile

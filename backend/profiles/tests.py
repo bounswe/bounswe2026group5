@@ -6,9 +6,6 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
-from rest_framework import status
-from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import (
     AvailabilitySlot,
