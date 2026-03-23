@@ -134,13 +134,11 @@ function MenteeDashboardView() {
               </Card>
             ))}
 
-            {MOCK_SESSIONS.length > 3 && (
-              <Link to="/schedule" search={{ mode: 'mentee' }} className="block mt-2">
+            <Link to="/schedule" search={{ mode: 'mentee' }} className="block mt-2">
               <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
                 View Full Schedule <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
-            )}
           </div>
         </section>
       </div>
@@ -239,13 +237,12 @@ function MentorDashboardView() {
               </Card>
             ))}
             
-            {MOCK_SESSIONS.length > 3 && (
-              <Link to="/schedule" search={{ mode: 'mentor' }} className="block mt-2">
+            <Link to="/schedule" search={{ mode: 'mentor' }} className="block mt-2">
               <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
                 View Full Schedule <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
-            )}
+            
           </div>
         </section>
       </div>
