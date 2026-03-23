@@ -180,24 +180,37 @@ python manage.py makemigrations
 python manage.py migrate
 ```
 
-**Create migration for a specific app only (example: accounts):**
+**Create migration for a specific app only (examples):**
 
 ```bash
 cd backend
 # Windows: venv\Scripts\activate
 # Mac/Linux: source venv/bin/activate
 python manage.py makemigrations accounts
+python manage.py makemigrations profiles
+python manage.py makemigrations mentorship
 python manage.py migrate
 ```
 
-### 🧱 Profile Schema (Accounts)
+### 🧱 Domain Schema (Profiles & Mentorship)
 
-The `accounts` app now includes profile-page schema models aligned with the class design and frontend requirements:
+Domain ownership is now split across dedicated apps:
 
-- `Profile` (one-to-one with `User`) for identity and visibility data
-- `ExpertiseField` for reusable skill taxonomy
-- `ProfileExpertise` as the profile-skill relationship with proficiency and rating aggregates
-- `AvailabilitySlot` for mentor time-slot scheduling
+- `profiles` app
+  - `Profile` (one-to-one with `User`) for identity and visibility data
+  - `ExpertiseField` for reusable skill taxonomy
+  - `ProfileExpertise` as the profile-skill relationship with proficiency and rating aggregates
+  - `AvailabilitySlot` for mentor time-slot scheduling
+- `mentorship` app
+  - `MentorshipRequest` for mentor/mentee workflow state
+  - `Match` for accepted mentorship relationships
+
+Auth and identity remain in the `accounts` app (`User`, registration/login/logout endpoints).
+
+### 🌐 Domain API Endpoints
+
+- `GET /api/profiles/me/` returns the authenticated user's profile payload.
+- `GET /api/mentorship/requests/me/` lists mentorship requests where the user is mentor or mentee.
 
 Local development seed data is included via migration `accounts.0004_seed_profile_page_data` and creates demo mentor, mentee, and both-role profiles.
 
