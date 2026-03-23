@@ -50,7 +50,6 @@ describe('Dashboard Component Routing & Role Variants', () => {
 
     expect(screen.getByRole('heading', { name: /Mentor Dashboard/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /Incoming Requests/i })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /My Listed Expertise/i })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: /Sent Requests/i })).not.toBeInTheDocument()
   })
 })

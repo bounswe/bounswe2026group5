@@ -1,5 +1,5 @@
 // web/src/components/layout/AuthorizedHeader.tsx
-import { Link, useRouter, useNavigate, useSearch, useLocation } from '@tanstack/react-router'
+import { Link, useRouter, useNavigate, useSearch } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { setDemoAuthRole } from '@/lib/demoAuth'
 
@@ -22,14 +22,12 @@ export function AuthorizedHeader() {
     router.navigate({ to: '/login' })
   }
 
-  const location = useLocation() 
-
   const setMode = (newMode: DashboardMode) => {
     if (currentMode === newMode) return; 
     
     navigate({
       search: (prev: any) => ({ ...prev, mode: newMode })
-    })
+    } as any)
   }
 
   return (
@@ -57,6 +55,7 @@ export function AuthorizedHeader() {
             </Link>
             <Link 
               to="/schedule" 
+              search={{ mode: currentMode }}
               activeProps={{ className: "text-ink font-semibold" }} 
               className="text-sm font-medium text-ink-soft hover:text-ink transition-colors"
             >

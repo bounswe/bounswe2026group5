@@ -3,17 +3,14 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { AuthorizedHeader } from '../AuthorizedHeader';
 
-// Properly mock TanStack Router and add the missing hooks!
-vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
-  return {
-    ...actual,
-    Link: ({ children, to }: { children: React.ReactNode, to: string }) => <a href={to}>{children}</a>,
-    useRouter: () => ({ navigate: vi.fn() }),
-    useNavigate: () => vi.fn(), 
-    useSearch: () => ({ mode: 'mentee' }), 
-  }
-})
+// Mock TanStack Router hooks
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children, to, className }: any) => <a href={to} className={className}>{children}</a>,
+  useRouter: () => ({ navigate: vi.fn() }),
+  useNavigate: () => vi.fn(),
+  useSearch: () => ({ mode: 'mentee' }),
+  useLocation: () => ({ pathname: '/dashboard' }),
+}));
 
 describe('AuthorizedHeader Component', () => {
   it('renders the branding text', () => {

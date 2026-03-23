@@ -97,7 +97,7 @@ function ScheduleTable({ sessions, peerLabel }: { sessions: any[], peerLabel: st
 // ---------------------------------------------------------------------------
 // MAIN PAGE & CALENDAR LOGIC
 // ---------------------------------------------------------------------------
-function SchedulePage() {
+export function SchedulePage() {
   const { mode } = Route.useSearch()
   
   // State for the calendar
