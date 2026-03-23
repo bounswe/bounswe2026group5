@@ -161,4 +161,8 @@ class MentorshipRequestModelTests(TestCase):
         request_obj.save()
         request_obj.refresh_from_db()
 
+<<<<<<< HEAD
         self.assertIsNone(request_obj.responded_at)
+=======
+        self.assertIsNone(request_obj.responded_at)
+>>>>>>> acaff5e065aade818d52fd7a2d47b52955c2afce
