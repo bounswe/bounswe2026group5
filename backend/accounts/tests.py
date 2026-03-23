@@ -631,6 +631,15 @@ class MentorshipRequestModelTests(TestCase):
 
         self.assertEqual(request_obj.status, MentorshipRequest.Status.PENDING)
 
+    def test_self_request_violates_constraint(self) -> None:
+        """A mentor cannot send a mentorship request to themselves."""
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                MentorshipRequest.objects.create(
+                    mentor=self.mentor_profile,
+                    mentee=self.mentor_profile,
+                )
+
     def test_unique_pending_request_constraint(self) -> None:
         """A mentee cannot create duplicate pending requests for the same mentor."""
         MentorshipRequest.objects.create(

@@ -313,6 +313,10 @@ class MentorshipRequest(models.Model):
         db_table = "mentorship_requests"
         ordering = ["-created_at"]
         constraints = [
+            models.CheckConstraint(
+                condition=~Q(mentor=F("mentee")),
+                name="mentorship_request_mentor_not_mentee",
+            ),
             models.UniqueConstraint(
                 fields=["mentor", "mentee"],
                 condition=Q(status="PENDING"),

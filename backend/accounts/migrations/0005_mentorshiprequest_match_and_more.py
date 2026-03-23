@@ -123,6 +123,13 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name="mentorshiprequest",
+            constraint=models.CheckConstraint(
+                condition=~models.Q(mentor=models.F("mentee")),
+                name="mentorship_request_mentor_not_mentee",
+            ),
+        ),
+        migrations.AddConstraint(
+            model_name="mentorshiprequest",
             constraint=models.UniqueConstraint(
                 condition=models.Q(("status", "PENDING")),
                 fields=("mentor", "mentee"),
