@@ -59,22 +59,7 @@ To ensure a smooth and standardized development experience across the team, plea
 
 ## 🛠 Getting Started
 
-### Quick Setup
-
-Clone the repository and run the setup script corresponding to your operating system. This will automatically initialize the database container, install all dependencies, and run database migrations.
-
-**Windows Users:**
-
-```cmd
-.\setup.bat
-```
-
-**Mac/Linux Users:**
-
-```bash
-chmod +x setup.sh
-./setup.sh
-```
+Clone the repository and start services with Docker Compose.
 
 ### 🐳 Docker-based Local Development
 
