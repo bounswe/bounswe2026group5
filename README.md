@@ -13,6 +13,7 @@ Campus Neighborhood Mentorship Network is a platform designed to connect student
 ## 🚀 Tech Stack
 
 **Frontend (Web):**
+
 - **Core:** React (TypeScript), Vite
 - **Routing & State:** TanStack Router, TanStack Query
 - **Styling & UI:** TailwindCSS, Shadcn UI
@@ -20,11 +21,13 @@ Campus Neighborhood Mentorship Network is a platform designed to connect student
 - **Testing:** Vitest
 
 **Backend:**
+
 - **Core:** Python, Django
 - **API:** Django REST Framework (DRF), drf-spectacular (OpenAPI/Swagger)
 - **Database:** PostgreSQL
 
 **Infrastructure & Code Quality:**
+
 - **Containerization:** Docker & Docker Compose
 - **Linting & Formatting:** ESLint, Prettier (Frontend) / Flake8, Black, Isort (Backend)
 - **Analysis:** SonarQube
@@ -34,85 +37,85 @@ Campus Neighborhood Mentorship Network is a platform designed to connect student
 To ensure a smooth and standardized development experience across the team, please install the following tools before proceeding with the setup:
 
 **1. Core System Requirements:**
+
 - **[Git](https://git-scm.com/):** Version control system.
 - **[Node.js](https://nodejs.org/) (v18+):** Required for the React frontend.
 - **[Python](https://www.python.org/downloads/) (3.10+):** Required for the Django backend.
 - **[Docker Desktop](https://www.docker.com/products/docker-desktop/):** Must be installed and running in the background to host our PostgreSQL database container.
 
 **2. Recommended IDE & Extensions:**
+
 - **[Visual Studio Code](https://code.visualstudio.com/):** The officially supported IDE for this project.
 - _Note on Extensions:_ When you open this repository in VS Code, you will be prompted to install our recommended extensions (ESLint, Prettier, Black, Flake8, and **SonarLint**). Please install them to ensure your code aligns with our auto-formatting and quality standards.
 
 **3. Database Management:**
+
 - **[DBeaver](https://dbeaver.io/) (Community Edition):** Highly recommended for visually managing and querying our local PostgreSQL database. Alternatively, you can use JetBrains DataGrip or pgAdmin.
 
 **4. Browser Extensions (For Accessibility Testing):**
+
 - **[axe DevTools](https://www.deque.com/axe/devtools/):** Chrome/Edge extension to catch WCAG 2.1 AA accessibility issues during UI development.
 - **[WAVE](https://wave.webaim.org/extension/):** Visual tool for evaluating structural and color contrast accessibility.
 
 ## 🛠 Getting Started
 
-### Quick Setup
-
-Clone the repository and run the setup script corresponding to your operating system. This will automatically initialize the database container, install all dependencies, and run database migrations.
-
-**Windows Users:**
-```cmd
-.\setup.bat
-```
-
-**Mac/Linux Users:**
-```bash
-chmod +x setup.sh
-./setup.sh
-```
+Clone the repository and start services with Docker Compose.
 
 ### 🐳 Docker-based Local Development
 
 The project can be run fully inside Docker for a consistent local development environment across the team. This starts the PostgreSQL database, Django backend, and React frontend in isolated containers with volume mounts enabled for hot-reloading.
 
 **Start all services**
+
 ```bash
 docker compose up --build
 ```
 
 **Run in detached mode**
+
 ```bash
 docker compose up --build -d
 ```
 
 **Stop all services**
+
 ```bash
 docker compose down
 ```
 
 **Stop and remove the database volume**
+
 ```bash
 docker compose down -v
 ```
 
 **Service URLs**
+
 - **Frontend:** http://localhost:3000
 - **Backend:** http://localhost:8000
 - **Database:** localhost:5432
 
 **Initial database migration**
 Migrations are applied automatically when the backend container starts. If needed, they can also be run manually:
+
 ```bash
 docker compose exec backend python manage.py migrate
 ```
 
 **Create new migrations**
+
 ```bash
 docker compose exec backend python manage.py makemigrations
 docker compose exec backend python manage.py migrate
 ```
 
 **Notes**
+
 - Backend source code is mounted into the container for automatic reload during development.
 - Frontend source code is mounted into the container and Vite hot-reload is enabled.
 - The backend connects to PostgreSQL using the Docker Compose service name db.
 - If migration history becomes inconsistent during development, reset the local database volume with:
+
 ```bash
 docker compose down -v
 ```
@@ -129,6 +132,7 @@ If you prefer managing the services manually, open your terminal and follow thes
 
 **1. Start the Database:**
 Make sure Docker Desktop is open, then run:
+
 ```bash
 docker compose up -d
 # or
@@ -137,6 +141,7 @@ docker-compose up -d
 
 **2. Start the Backend (Django):**
 Open a terminal, activate the virtual environment, and run the server:
+
 ```bash
 cd backend
 # Windows: venv\Scripts\activate
@@ -146,6 +151,7 @@ python manage.py runserver
 
 **3. Start the Frontend (Vite):**
 Open a new, separate terminal and start the client:
+
 ```bash
 cd web
 npm run dev
@@ -156,6 +162,7 @@ npm run dev
 If you need to manually synchronize or create migrations, use the commands below.
 
 **Apply existing migrations (recommended before runserver):**
+
 ```bash
 cd backend
 # Windows: venv\Scripts\activate
@@ -164,6 +171,7 @@ python manage.py migrate
 ```
 
 **Create new migration files after model changes:**
+
 ```bash
 cd backend
 # Windows: venv\Scripts\activate
@@ -173,6 +181,7 @@ python manage.py migrate
 ```
 
 **Create migration for a specific app only (example: accounts):**
+
 ```bash
 cd backend
 # Windows: venv\Scripts\activate
