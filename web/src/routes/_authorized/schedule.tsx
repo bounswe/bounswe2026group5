@@ -6,7 +6,7 @@ import { Heading, Body } from '@/components/Typography'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X, Globe } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -182,6 +182,17 @@ export function SchedulePage() {
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-4 text-xs font-medium text-ink-soft">
+              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div>Upcoming</div>
+              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-gray-400"></div>Completed</div>
+              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-red-500"></div>Canceled</div>
+            </div>
+            <div className="text-xs text-ink-soft flex items-center gap-1.5 bg-black/[0.03] px-2 py-1 rounded-md">
+              <Globe className="w-3.5 h-3.5" /> All times in your local timezone
+            </div>
+          </div>
+
           {/* Calendar Grid */}
           <div className="grid grid-cols-7 gap-px bg-line/50 rounded-lg overflow-hidden border border-line">
             {/* Day Names */}
@@ -209,11 +220,10 @@ export function SchedulePage() {
                 <div 
                   key={i} 
                   onClick={() => setSelectedDate(isSelected ? null : isoString)}
-                  className={`bg-white min-h-[100px] p-2 cursor-pointer transition-colors hover:bg-accent/5 ${
+                  className={`bg-white min-h-[80px] sm:min-h-[100px] p-2 cursor-pointer transition-colors hover:bg-accent/5 ${
                     !isCurrentMonth ? 'opacity-40 bg-black/[0.02]' : ''
                   } ${isSelected ? 'ring-2 ring-inset ring-accent bg-accent/5' : ''}`}
                 >
-                  {/* UPDATED: If it's today, make it a dark circle. If selected, make it an accent circle. */}
                   <div className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full mb-1 ${
                     isSelected ? 'bg-accent text-white' : 
                     isToday ? 'bg-ink text-white shadow-md' : 'text-ink'
@@ -221,7 +231,7 @@ export function SchedulePage() {
                     {date.getDate()}
                   </div>
                   
-                  {/* Event Markers (Google Calendar Style Chips) */}
+                  {/* Event Markers */}
                   <div className="flex flex-col gap-1">
                     {dayEvents.map(event => {
                       // Dynamically assign colors based on the event's status
