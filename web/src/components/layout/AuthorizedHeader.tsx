@@ -1,7 +1,7 @@
 // web/src/components/layout/AuthorizedHeader.tsx
-import { Link, useRouter, useNavigate, useSearch } from '@tanstack/react-router'
-import { setDemoAuthRole } from '@/lib/demoAuth'
+import { Link, useRouter, useNavigate, useSearch, useLocation } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
+import { setDemoAuthRole } from '@/lib/demoAuth'
 
 type DashboardMode = 'mentor' | 'mentee'
 type HeaderSearch = {
@@ -22,12 +22,13 @@ export function AuthorizedHeader() {
     router.navigate({ to: '/login' })
   }
 
+  const location = useLocation() 
+
   const setMode = (newMode: DashboardMode) => {
-    if (currentMode === newMode) return; // Do nothing if clicking the already active mode
+    if (currentMode === newMode) return; 
     
     navigate({
-      to: '/dashboard',
-      search: { mode: newMode }
+      search: (prev: any) => ({ ...prev, mode: newMode })
     })
   }
 
