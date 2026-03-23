@@ -190,6 +190,17 @@ python manage.py makemigrations accounts
 python manage.py migrate
 ```
 
+### 🧱 Profile Schema (Accounts)
+
+The `accounts` app now includes profile-page schema models aligned with the class design and frontend requirements:
+
+- `Profile` (one-to-one with `User`) for identity and visibility data
+- `ExpertiseField` for reusable skill taxonomy
+- `ProfileExpertise` as the profile-skill relationship with proficiency and rating aggregates
+- `AvailabilitySlot` for mentor time-slot scheduling
+
+Local development seed data is included via migration `accounts.0004_seed_profile_page_data` and creates demo mentor, mentee, and both-role profiles.
+
 ### 🗄️ Connecting to the Database
 
 To view, manage, and query the local PostgreSQL database, we recommend using DBeaver (or DataGrip/pgAdmin). Create a new PostgreSQL connection using the following credentials:
