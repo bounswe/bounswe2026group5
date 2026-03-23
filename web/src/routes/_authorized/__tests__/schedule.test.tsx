@@ -23,6 +23,7 @@ vi.mock('lucide-react', () => ({
   ChevronRight: () => <div data-testid="icon-right" />,
   Calendar: () => <div data-testid="icon-calendar" />,
   X: () => <div data-testid="icon-x" />,
+  Globe: () => <div data-testid="icon-globe" />, 
 }))
 
 // 3. Mock the Availability Modal to isolate the page tests
