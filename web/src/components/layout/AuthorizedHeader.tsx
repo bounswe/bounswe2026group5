@@ -15,6 +15,7 @@ export function AuthorizedHeader() {
   const search = useSearch({ strict: false }) as HeaderSearch  
   const isMentorMode = search.mode === 'mentor'
   const currentMode = isMentorMode ? 'mentor' : 'mentee'
+  const isMenteeMode = currentMode === 'mentee'
 
   const handleLogout = () => {
     setDemoAuthRole(null)
@@ -53,6 +54,13 @@ export function AuthorizedHeader() {
             >
               Dashboard
             </Link>
+            <Link 
+              to="/schedule" 
+              activeProps={{ className: "text-ink font-semibold" }} 
+              className="text-sm font-medium text-ink-soft hover:text-ink transition-colors"
+            >
+              Schedule
+            </Link>
             <div className="flex items-center gap-1 opacity-60 cursor-not-allowed">
               <span className="text-sm font-medium text-ink-soft">Discover</span>
               <span className="text-[10px] uppercase tracking-wider bg-accent-muted text-ink px-1.5 py-0.5 rounded-sm">Soon</span>
@@ -67,12 +75,11 @@ export function AuthorizedHeader() {
         {/* Right Side: Upgraded Profile & Actions */}
         <div className="flex items-center gap-5">
           
-          {/* FIX #3: Updated buttons to use the specific setMode handler */}
           <div className="hidden sm:flex items-center bg-accent-muted rounded-full p-0.5 border border-line">
             <button
               onClick={() => setMode('mentee')}
               className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 ${
-                !isMentorMode ? 'bg-background text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
+                isMenteeMode ? 'bg-background text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
               }`}
             >
               Mentee
