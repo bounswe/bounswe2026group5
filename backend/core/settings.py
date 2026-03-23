@@ -60,6 +60,8 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     # Local Apps
     "accounts",
+    "profiles",
+    "mentorship",
 ]
 
 REST_FRAMEWORK = {
