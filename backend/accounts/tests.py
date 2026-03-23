@@ -556,3 +556,40 @@ class ProfileModelsTests(TestCase):
         slot.mark_available()
         slot.refresh_from_db()
         self.assertFalse(slot.is_booked)
+
+    def test_availability_slot_overlapping_range_rejected(self) -> None:
+        """Overlapping availability slots are rejected for same profile."""
+        first_start = timezone.now() + timedelta(days=2)
+        first_end = first_start + timedelta(hours=2)
+        AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=first_start,
+            end_at=first_end,
+        )
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                AvailabilitySlot.objects.create(
+                    profile=self.mentor_profile,
+                    start_at=first_start + timedelta(hours=1),
+                    end_at=first_end + timedelta(hours=1),
+                )
+
+    def test_availability_slot_adjacent_range_allowed(self) -> None:
+        """Adjacent slots are allowed when one ends exactly when next starts."""
+        first_start = timezone.now() + timedelta(days=3)
+        first_end = first_start + timedelta(hours=1)
+        AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=first_start,
+            end_at=first_end,
+        )
+
+        adjacent_slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=first_end,
+            end_at=first_end + timedelta(hours=1),
+        )
+
+        self.assertIsNotNone(adjacent_slot.id)
+

@@ -4,8 +4,10 @@ from typing import Any
 
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from django.contrib.postgres.constraints import ExclusionConstraint
+from django.contrib.postgres.fields.ranges import RangeOperators
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Func, Q, Value
 
 
 class UserRole(models.TextChoices):
@@ -238,6 +240,21 @@ class AvailabilitySlot(models.Model):
             models.CheckConstraint(
                 condition=Q(end_at__gt=models.F("start_at")),
                 name="availability_slot_end_after_start",
+            ),
+            ExclusionConstraint(
+                name="availability_slot_no_overlap_per_profile",
+                expressions=[
+                    ("profile", RangeOperators.EQUAL),
+                    (
+                        Func(
+                            F("start_at"),
+                            F("end_at"),
+                            Value("[)"),
+                            function="tstzrange",
+                        ),
+                        RangeOperators.OVERLAPS,
+                    ),
+                ],
             ),
         ]
         indexes = [
