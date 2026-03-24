@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
     # 3rd Party Apps
     "corsheaders",
     "rest_framework",
@@ -59,6 +60,8 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     # Local Apps
     "accounts",
+    "profiles",
+    "mentorship",
 ]
 
 REST_FRAMEWORK = {
