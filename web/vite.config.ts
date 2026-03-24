@@ -28,6 +28,6 @@ const config = defineConfig({
       usePolling: true,
     },
   },
-})
+}})
 
 export default config
