@@ -33,7 +33,7 @@ export const Route = createFileRoute('/_unauthorized/register')({
     component: RegisterPage,
 })
 
-function RegisterPage() {
+export function RegisterPage() {
     const [formData, setFormData] = useState<Partial<RegisterFormData>>({
         fullName: '',
         email: '',
