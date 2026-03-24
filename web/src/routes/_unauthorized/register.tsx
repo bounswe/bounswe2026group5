@@ -76,7 +76,7 @@ export function RegisterPage() {
         }
 
         setErrors({});
-        console.log('Registration data:', result.data);
+    
         // TODO: Implement actual registration API call
         setIsSubmitting(false);
     };
