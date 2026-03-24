@@ -21,6 +21,7 @@ const config = defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     css: false, // Speeds up tests by not parsing CSS
+  },
   server: {
     host: '0.0.0.0',
     port: 3000,
@@ -28,6 +29,6 @@ const config = defineConfig({
       usePolling: true,
     },
   },
-}})
+})
 
 export default config
