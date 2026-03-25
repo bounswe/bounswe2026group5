@@ -1,4 +1,4 @@
-import { Text, View, ScrollView } from 'react-native';
+import { Text, View, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RequestCard } from '../../components/dashboard/RequestCard';
@@ -22,7 +22,7 @@ export default function DashboardScreen() {
         {/* Header */}
         <View className="mb-8">
           <Text className="text-3xl font-extrabold text-gray-900">Dashboard</Text>
-          <Text className="text-base text-gray-500 mt-1">Your mentorship overview</Text>
+          <Text className="text-base text-gray-500 mt-1">Welcome back! Here is what&apos;s happening.</Text>
         </View>
 
         {/* Requests Section */}
@@ -32,7 +32,13 @@ export default function DashboardScreen() {
         ))}
 
         {/* Sessions Section */}
-        <Text className="text-xl font-bold text-gray-800 mb-4 mt-6">Upcoming Sessions</Text>
+        <View className="flex-row justify-between items-end mb-4 mt-6">
+          <Text className="text-xl font-bold text-gray-800">Upcoming Sessions</Text>
+          {/* Here is the missing button! */}
+          <TouchableOpacity>
+            <Text className="text-blue-600 font-medium text-sm mb-0.5">View All</Text>
+          </TouchableOpacity>
+        </View>
         {MOCK_SESSIONS.map(session => (
           <SessionCard key={session.id} {...session} />
         ))}
