@@ -1,45 +1,44 @@
-import { Text, View, ScrollView, TouchableOpacity } from 'react-native';
+import { Text, View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// --- MOCK DATA ---
+import { RequestCard } from '../../components/dashboard/RequestCard';
+import { SessionCard } from '../../components/dashboard/SessionCard';
+
+// Mock Data (To be replaced with TanStack Query later)
 const MOCK_REQUESTS = [
-  { id: '1', type: 'incoming', user: 'Ahmet Yılmaz', role: 'Mentee', topic: 'React Native Basics' },
-  { id: '2', type: 'outgoing', user: 'Elif Kaya', role: 'Mentor', topic: 'System Design' },
+  { id: '1', type: 'incoming' as const, user: 'Ahmet Yılmaz', topic: 'React Native Basics' },
+  { id: '2', type: 'outgoing' as const, user: 'Elif Kaya', topic: 'System Design' },
 ];
 
 const MOCK_SESSIONS = [
-  { id: '1', date: 'Oct 28', time: '14:00', user: 'Zeynep Demir', status: 'Upcoming' },
-  { id: '2', date: 'Oct 29', time: '10:00', user: 'Can Özkan', status: 'Pending' },
+  { id: '1', date: 'OCT 28', time: '14:00', user: 'Zeynep Demir', status: 'Upcoming' as const },
 ];
-// -----------------
 
-export default function Dashboard() {
+export default function DashboardScreen() {
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
-      <ScrollView className="flex-1 px-4 py-6">
+      <ScrollView className="flex-1 px-4 pt-6">
         
-        {/* Header Section */}
+        {/* Header */}
         <View className="mb-8">
-          <Text className="text-3xl font-bold text-gray-900">Dashboard</Text>
-          <Text className="text-base text-gray-500 mt-1">Welcome back! Here is your overview.</Text>
+          <Text className="text-3xl font-extrabold text-gray-900">Dashboard</Text>
+          <Text className="text-base text-gray-500 mt-1">Your mentorship overview</Text>
         </View>
 
-        {/* Mentorship Requests Section (We will build this next) */}
-        <View className="mb-8">
-          <Text className="text-xl font-semibold text-gray-800 mb-4">Requests</Text>
-          <View className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-             <Text className="text-gray-400 italic">Request cards will go here...</Text>
-          </View>
-        </View>
+        {/* Requests Section */}
+        <Text className="text-xl font-bold text-gray-800 mb-4">Requests</Text>
+        {MOCK_REQUESTS.map(req => (
+          <RequestCard key={req.id} {...req} />
+        ))}
 
-        {/* Upcoming Sessions Section (We will build this after) */}
-        <View className="mb-8">
-          <Text className="text-xl font-semibold text-gray-800 mb-4">Upcoming Sessions</Text>
-          <View className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-             <Text className="text-gray-400 italic">Session cards will go here...</Text>
-          </View>
-        </View>
-
+        {/* Sessions Section */}
+        <Text className="text-xl font-bold text-gray-800 mb-4 mt-6">Upcoming Sessions</Text>
+        {MOCK_SESSIONS.map(session => (
+          <SessionCard key={session.id} {...session} />
+        ))}
+        
+        {/* Bottom padding so the scroll doesn't get hidden behind the tab bar */}
+        <View className="h-12" />
       </ScrollView>
     </SafeAreaView>
   );

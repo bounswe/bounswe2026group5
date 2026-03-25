@@ -1,38 +1,59 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 
-// Define the exact shape of the data this component needs
 interface RequestCardProps {
   user: string;
-  role: 'Mentor' | 'Mentee';
   topic: string;
   type: 'incoming' | 'outgoing';
 }
 
-export function RequestCard({ user, role, topic, type }: RequestCardProps) {
+export function RequestCard({ user, topic, type }: RequestCardProps) {
   const isIncoming = type === 'incoming';
+  
+  // Define what the USER's role is in this specific relationship
+  const myRole = isIncoming ? 'Mentor' : 'Mentee';
+  const badgeColor = isIncoming ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700';
 
   return (
-    <View className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3 flex-row justify-between items-center">
-      <View>
+    <View className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3">
+      
+      {/* Top Row: Name and Role Badge */}
+      <View className="flex-row justify-between items-start mb-2">
         <Text className="text-lg font-semibold text-gray-900">{user}</Text>
-        <Text className="text-sm text-gray-500 mt-1">
-          Wants to be your <Text className="font-medium text-blue-600">{role}</Text>
-        </Text>
-        <Text className="text-xs text-gray-400 mt-1">Topic: {topic}</Text>
+        <View className={`px-2 py-1 rounded-md ${badgeColor.split(' ')[0]}`}>
+          <Text className={`text-xs font-bold uppercase tracking-wider ${badgeColor.split(' ')[1]}`}>
+            As {myRole}
+          </Text>
+        </View>
       </View>
 
-      {/* Action Buttons */}
-      {isIncoming ? (
-        <View className="flex-row gap-2">
-          <TouchableOpacity className="bg-blue-600 px-4 py-2 rounded-lg">
-            <Text className="text-white font-medium">Accept</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View className="bg-gray-100 px-3 py-1 rounded-full">
-          <Text className="text-gray-500 text-xs font-medium">Pending</Text>
-        </View>
-      )}
+      {/* Middle Row: Context Text */}
+      <View className="mb-3">
+        <Text className="text-sm text-gray-600">
+          {isIncoming 
+            ? 'Has requested you to be their Mentor.' 
+            : 'You requested them to be your Mentor.'}
+        </Text>
+        <Text className="text-xs text-gray-400 mt-1 font-medium">Topic: {topic}</Text>
+      </View>
+      
+      {/* Bottom Row: Actions */}
+      <View className="flex-row justify-end mt-1">
+        {isIncoming ? (
+          <View className="flex-row gap-2">
+            <TouchableOpacity className="bg-white px-4 py-2 rounded-lg border border-gray-200">
+              <Text className="text-gray-600 font-medium text-sm">Decline</Text>
+            </TouchableOpacity>
+            <TouchableOpacity className="bg-blue-600 px-4 py-2 rounded-lg">
+              <Text className="text-white font-medium text-sm">Accept</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View className="bg-gray-100 px-4 py-2 rounded-lg border border-gray-200">
+            <Text className="text-gray-500 text-sm font-medium">Request Pending...</Text>
+          </View>
+        )}
+      </View>
+
     </View>
   );
 }

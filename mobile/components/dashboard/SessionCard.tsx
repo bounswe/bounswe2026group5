@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 
-// Later, this interface can be moved to a shared workspace package!
+// Later, this interface can be moved to a shared workspace package
 interface SessionCardProps {
   user: string;
   date: string;
@@ -9,7 +9,7 @@ interface SessionCardProps {
 }
 
 export function SessionCard({ user, date, time, status }: SessionCardProps) {
-  
+
   // Dynamic styling based on status
   const getStatusBadge = () => {
     switch (status) {
