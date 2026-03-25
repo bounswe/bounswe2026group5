@@ -87,7 +87,7 @@ export function RegisterPage() {
             <aside className="lg:flex flex-col px-14 py-12 bg-petal border-r border-line relative overflow-hidden">
                 <Display className="mb-10 relative z-10">Campus Tutor</Display>
 
-                <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4 relative z-10">
+                <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4 relative z-10 rise-in">
                     <Body className="island-kicker">Academic Editorial Excellence</Body>
                     <Display as="h2" className="leading-[1.2] max-w-md">
                         Join our community of academic excellence
