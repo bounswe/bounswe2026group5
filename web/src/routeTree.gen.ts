@@ -12,10 +12,15 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UnauthorizedRouteRouteImport } from './routes/_unauthorized/route'
 import { Route as AuthorizedRouteRouteImport } from './routes/_authorized/route'
 import { Route as IndexRouteImport } from './routes/index'
+<<<<<<< HEAD
 import { Route as UnauthorizedRegisterRouteImport } from './routes/_unauthorized/register'
+=======
+import { Route as ProfilesProfileIdRouteImport } from './routes/profiles.$profileId'
+>>>>>>> 8bbd0ef (feat(web): add profile pages for authorized and public views)
 import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/login'
 import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/about'
 import { Route as AuthorizedScheduleRouteImport } from './routes/_authorized/schedule'
+import { Route as AuthorizedProfileRouteImport } from './routes/_authorized/profile'
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
@@ -31,10 +36,17 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+<<<<<<< HEAD
 const UnauthorizedRegisterRoute = UnauthorizedRegisterRouteImport.update({
   id: '/register',
   path: '/register',
   getParentRoute: () => UnauthorizedRouteRoute,
+=======
+const ProfilesProfileIdRoute = ProfilesProfileIdRouteImport.update({
+  id: '/profiles/$profileId',
+  path: '/profiles/$profileId',
+  getParentRoute: () => rootRouteImport,
+>>>>>>> 8bbd0ef (feat(web): add profile pages for authorized and public views)
 } as any)
 const UnauthorizedLoginRoute = UnauthorizedLoginRouteImport.update({
   id: '/login',
@@ -51,6 +63,11 @@ const AuthorizedScheduleRoute = AuthorizedScheduleRouteImport.update({
   path: '/schedule',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
+const AuthorizedProfileRoute = AuthorizedProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AuthorizedRouteRoute,
+} as any)
 const AuthorizedDashboardRoute = AuthorizedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -60,18 +77,28 @@ const AuthorizedDashboardRoute = AuthorizedDashboardRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof AuthorizedDashboardRoute
+  '/profile': typeof AuthorizedProfileRoute
   '/schedule': typeof AuthorizedScheduleRoute
   '/about': typeof UnauthorizedAboutRoute
   '/login': typeof UnauthorizedLoginRoute
+<<<<<<< HEAD
   '/register': typeof UnauthorizedRegisterRoute
+=======
+  '/profiles/$profileId': typeof ProfilesProfileIdRoute
+>>>>>>> 8bbd0ef (feat(web): add profile pages for authorized and public views)
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof AuthorizedDashboardRoute
+  '/profile': typeof AuthorizedProfileRoute
   '/schedule': typeof AuthorizedScheduleRoute
   '/about': typeof UnauthorizedAboutRoute
   '/login': typeof UnauthorizedLoginRoute
+<<<<<<< HEAD
   '/register': typeof UnauthorizedRegisterRoute
+=======
+  '/profiles/$profileId': typeof ProfilesProfileIdRoute
+>>>>>>> 8bbd0ef (feat(web): add profile pages for authorized and public views)
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -79,9 +106,11 @@ export interface FileRoutesById {
   '/_authorized': typeof AuthorizedRouteRouteWithChildren
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
+  '/_authorized/profile': typeof AuthorizedProfileRoute
   '/_authorized/schedule': typeof AuthorizedScheduleRoute
   '/_unauthorized/about': typeof UnauthorizedAboutRoute
   '/_unauthorized/login': typeof UnauthorizedLoginRoute
+<<<<<<< HEAD
   '/_unauthorized/register': typeof UnauthorizedRegisterRoute
 }
 export interface FileRouteTypes {
@@ -89,22 +118,51 @@ export interface FileRouteTypes {
   fullPaths: '/' | '/dashboard' | '/about' | '/login' | '/register'
   fileRoutesByTo: FileRoutesByTo
   to: '/' | '/dashboard' | '/about' | '/login' | '/register'
+=======
+  '/profiles/$profileId': typeof ProfilesProfileIdRoute
+}
+export interface FileRouteTypes {
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/profile'
+    | '/schedule'
+    | '/about'
+    | '/login'
+    | '/profiles/$profileId'
+  fileRoutesByTo: FileRoutesByTo
+  to:
+    | '/'
+    | '/dashboard'
+    | '/profile'
+    | '/schedule'
+    | '/about'
+    | '/login'
+    | '/profiles/$profileId'
+>>>>>>> 8bbd0ef (feat(web): add profile pages for authorized and public views)
   id:
     | '__root__'
     | '/'
     | '/_authorized'
     | '/_unauthorized'
     | '/_authorized/dashboard'
+    | '/_authorized/profile'
     | '/_authorized/schedule'
     | '/_unauthorized/about'
     | '/_unauthorized/login'
+<<<<<<< HEAD
     | '/_unauthorized/register'
+=======
+    | '/profiles/$profileId'
+>>>>>>> 8bbd0ef (feat(web): add profile pages for authorized and public views)
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthorizedRouteRoute: typeof AuthorizedRouteRouteWithChildren
   UnauthorizedRouteRoute: typeof UnauthorizedRouteRouteWithChildren
+  ProfilesProfileIdRoute: typeof ProfilesProfileIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -130,12 +188,21 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+<<<<<<< HEAD
     '/_unauthorized/register': {
       id: '/_unauthorized/register'
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof UnauthorizedRegisterRouteImport
       parentRoute: typeof UnauthorizedRouteRoute
+=======
+    '/profiles/$profileId': {
+      id: '/profiles/$profileId'
+      path: '/profiles/$profileId'
+      fullPath: '/profiles/$profileId'
+      preLoaderRoute: typeof ProfilesProfileIdRouteImport
+      parentRoute: typeof rootRouteImport
+>>>>>>> 8bbd0ef (feat(web): add profile pages for authorized and public views)
     }
     '/_unauthorized/login': {
       id: '/_unauthorized/login'
@@ -158,6 +225,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedScheduleRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
+    '/_authorized/profile': {
+      id: '/_authorized/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AuthorizedProfileRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
     '/_authorized/dashboard': {
       id: '/_authorized/dashboard'
       path: '/dashboard'
@@ -170,11 +244,13 @@ declare module '@tanstack/react-router' {
 
 interface AuthorizedRouteRouteChildren {
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
+  AuthorizedProfileRoute: typeof AuthorizedProfileRoute
   AuthorizedScheduleRoute: typeof AuthorizedScheduleRoute
 }
 
 const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,
+  AuthorizedProfileRoute: AuthorizedProfileRoute,
   AuthorizedScheduleRoute: AuthorizedScheduleRoute,
 }
 
@@ -201,6 +277,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthorizedRouteRoute: AuthorizedRouteRouteWithChildren,
   UnauthorizedRouteRoute: UnauthorizedRouteRouteWithChildren,
+  ProfilesProfileIdRoute: ProfilesProfileIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
