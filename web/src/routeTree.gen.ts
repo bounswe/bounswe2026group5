@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as UnauthorizedRegisterRouteImport } from './routes/_unauthorized/register'
 import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/login'
 import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/about'
+import { Route as AuthorizedScheduleRouteImport } from './routes/_authorized/schedule'
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
@@ -45,6 +46,11 @@ const UnauthorizedAboutRoute = UnauthorizedAboutRouteImport.update({
   path: '/about',
   getParentRoute: () => UnauthorizedRouteRoute,
 } as any)
+const AuthorizedScheduleRoute = AuthorizedScheduleRouteImport.update({
+  id: '/schedule',
+  path: '/schedule',
+  getParentRoute: () => AuthorizedRouteRoute,
+} as any)
 const AuthorizedDashboardRoute = AuthorizedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -54,6 +60,7 @@ const AuthorizedDashboardRoute = AuthorizedDashboardRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof AuthorizedDashboardRoute
+  '/schedule': typeof AuthorizedScheduleRoute
   '/about': typeof UnauthorizedAboutRoute
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
@@ -61,6 +68,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof AuthorizedDashboardRoute
+  '/schedule': typeof AuthorizedScheduleRoute
   '/about': typeof UnauthorizedAboutRoute
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
@@ -71,6 +79,7 @@ export interface FileRoutesById {
   '/_authorized': typeof AuthorizedRouteRouteWithChildren
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
+  '/_authorized/schedule': typeof AuthorizedScheduleRoute
   '/_unauthorized/about': typeof UnauthorizedAboutRoute
   '/_unauthorized/login': typeof UnauthorizedLoginRoute
   '/_unauthorized/register': typeof UnauthorizedRegisterRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
     | '/_authorized'
     | '/_unauthorized'
     | '/_authorized/dashboard'
+    | '/_authorized/schedule'
     | '/_unauthorized/about'
     | '/_unauthorized/login'
     | '/_unauthorized/register'
@@ -141,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnauthorizedAboutRouteImport
       parentRoute: typeof UnauthorizedRouteRoute
     }
+    '/_authorized/schedule': {
+      id: '/_authorized/schedule'
+      path: '/schedule'
+      fullPath: '/schedule'
+      preLoaderRoute: typeof AuthorizedScheduleRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
     '/_authorized/dashboard': {
       id: '/_authorized/dashboard'
       path: '/dashboard'
@@ -153,10 +170,12 @@ declare module '@tanstack/react-router' {
 
 interface AuthorizedRouteRouteChildren {
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
+  AuthorizedScheduleRoute: typeof AuthorizedScheduleRoute
 }
 
 const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,
+  AuthorizedScheduleRoute: AuthorizedScheduleRoute,
 }
 
 const AuthorizedRouteRouteWithChildren = AuthorizedRouteRoute._addFileChildren(

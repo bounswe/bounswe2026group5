@@ -1,15 +1,11 @@
 // web/src/routes/_authorized/dashboard.tsx
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { z } from 'zod'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Heading, Body, Muted } from '@/components/Typography'
 import { MOCK_REQUESTS, MOCK_SESSIONS, MOCK_DISCOVER_SKILLS } from '@/lib/mocks/loggedInHome' // FUTURE: Replace with real API calls once backend is ready
 import { CalendarDays, Clock, CheckCircle2, XCircle, ArrowRight } from 'lucide-react'
-
-// IMPORT MODALS
-import { MentorAvailabilityModal } from '@/components/dashboard/MentorAvailabilityModal'
-import { ExpertiseEditModal } from '@/components/dashboard/ExpertiseEditModal'
 
 const dashboardSearchSchema = z.object({
   mode: z.enum(['mentee', 'mentor']).catch('mentee'),
@@ -138,11 +134,11 @@ function MenteeDashboardView() {
               </Card>
             ))}
 
-            {MOCK_SESSIONS.length > 3 && (
-              <Button variant="ghost" className="w-full text-accent hover:bg-accent/10 mt-2">
-                View all {MOCK_SESSIONS.length} sessions <ArrowRight className="w-4 h-4 ml-2" />
+            <Link to="/schedule" search={{ mode: 'mentee' }} className="block mt-2">
+              <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
+                View Full Schedule <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
-            )}
+            </Link>
           </div>
         </section>
       </div>
@@ -209,10 +205,7 @@ function MentorDashboardView() {
             <Heading as="h3" className="text-xl flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
-            </Heading>
-            
-            <MentorAvailabilityModal />
-            
+            </Heading>            
           </div>
           
           <div className="flex flex-col gap-4">
@@ -244,32 +237,14 @@ function MentorDashboardView() {
               </Card>
             ))}
             
-            {MOCK_SESSIONS.length > 3 && (
-              <Button variant="ghost" className="w-full text-accent hover:bg-accent/10 mt-2">
-                View all {MOCK_SESSIONS.length} sessions <ArrowRight className="w-4 h-4 ml-2" />
+            <Link to="/schedule" search={{ mode: 'mentor' }} className="block mt-2">
+              <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
+                View Full Schedule <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
-            )}
-          </div>
-        </section>
-
-        {/* Expertise Section */}
-        <section className="space-y-5">
-          <div className="flex items-center justify-between">
-            <Heading as="h3" className="text-xl">My Listed Expertise</Heading>
-            
-            {/* SWAPPED THE FAKE BUTTON FOR OUR NEW MODAL */}
-            <ExpertiseEditModal />
+            </Link>
             
           </div>
-          <div className="flex flex-wrap gap-2.5">
-            {MOCK_DISCOVER_SKILLS.map(skill => (
-              <div key={skill.id} className="bg-white text-ink px-3.5 py-2 rounded-lg border border-line flex items-center gap-2 shadow-sm">
-                <span className="font-medium text-sm">{skill.name}</span>
-              </div>
-            ))}
-          </div>
         </section>
-
       </div>
 
       {/* RIGHT COLUMN: Requests */}
