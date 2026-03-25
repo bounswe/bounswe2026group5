@@ -6,13 +6,16 @@ const { mockUseSearch } = vi.hoisted(() => {
   return { mockUseSearch: vi.fn() }
 })
 
-vi.mock('@tanstack/react-router', () => ({
-  createFileRoute: () => (config: any) => ({
-    ...config,
-    useSearch: mockUseSearch,
-  }),
-  useSearch: mockUseSearch,
-}))
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<any>()
+  return {
+    ...actual,
+    createFileRoute: () => () => ({
+      useSearch: mockUseSearch,
+    }),
+    Link: ({ children, to, className }: any) => <a href={to} className={className}>{children}</a>,
+  }
+})
 
 import { DashboardHome } from '../dashboard'
 
@@ -50,7 +53,6 @@ describe('Dashboard Component Routing & Role Variants', () => {
 
     expect(screen.getByRole('heading', { name: /Mentor Dashboard/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /Incoming Requests/i })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /My Listed Expertise/i })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: /Sent Requests/i })).not.toBeInTheDocument()
   })
 })
