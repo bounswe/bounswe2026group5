@@ -40,10 +40,21 @@ export function RequestCard({ user, topic, type }: RequestCardProps) {
       <View className="flex-row justify-end mt-1">
         {isIncoming ? (
           <View className="flex-row gap-2">
-            <TouchableOpacity className="bg-white px-4 py-2 rounded-lg border border-gray-200">
+            {/* TODO: Hook up to /api/requests/decline endpoint */}
+            <TouchableOpacity 
+              accessibilityRole="button"
+              onPress={() => console.log(`TODO: Decline request from ${user}`)}
+              className="bg-white px-4 py-2 rounded-lg border border-gray-200"
+            >
               <Text className="text-gray-600 font-medium text-sm">Decline</Text>
             </TouchableOpacity>
-            <TouchableOpacity className="bg-blue-600 px-4 py-2 rounded-lg">
+            
+            {/* TODO: Hook up to /api/requests/accept endpoint */}
+            <TouchableOpacity 
+              accessibilityRole="button"
+              onPress={() => console.log(`TODO: Accept request from ${user}`)}
+              className="bg-blue-600 px-4 py-2 rounded-lg"
+            >
               <Text className="text-white font-medium text-sm">Accept</Text>
             </TouchableOpacity>
           </View>

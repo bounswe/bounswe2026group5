@@ -1,6 +1,5 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 
-// Later, this interface can be moved to a shared workspace package
 interface SessionCardProps {
   user: string;
   date: string;
@@ -9,30 +8,36 @@ interface SessionCardProps {
 }
 
 export function SessionCard({ user, date, time, status }: SessionCardProps) {
-
-  // Dynamic styling based on status
-  const getStatusBadge = () => {
+  
+  // 1. Logic: Determine badge colors
+  const getStatusStyles = () => {
     switch (status) {
-      case 'Upcoming':
-        return 'bg-green-100 text-green-700';
-      case 'Pending':
-        return 'bg-amber-100 text-amber-700';
-      case 'Completed':
-        return 'bg-gray-100 text-gray-600';
-      default:
-        return 'bg-blue-100 text-blue-700';
+      case 'Upcoming': return { bg: 'bg-green-100', text: 'text-green-700' };
+      case 'Pending': return { bg: 'bg-amber-100', text: 'text-amber-700' };
+      case 'Completed': return { bg: 'bg-gray-100', text: 'text-gray-600' };
+      default: return { bg: 'bg-blue-100', text: 'text-blue-700' };
     }
   };
 
+  const statusStyles = getStatusStyles();
+  
+  // 2. Logic: Safely split the date string into month and day
+  const [month = 'TBD', day = '00'] = date.split(' ');
+
+  // 3. UI: Render the interactive card
   return (
+    // TODO: Open Session Details Bottom Sheet Modal when tapped
     <TouchableOpacity 
       activeOpacity={0.7} 
+      accessibilityRole="button"
+      onPress={() => console.log(`TODO: Open Bottom Sheet for session with ${user}`)}
       className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3 flex-row items-center"
     >
+      
       {/* Date/Time Left Column */}
       <View className="bg-blue-50 px-3 py-2 rounded-lg items-center justify-center mr-4 w-16">
-        <Text className="text-blue-600 font-bold text-xs uppercase">{date.split(' ')[0]}</Text>
-        <Text className="text-blue-900 font-bold text-xl">{date.split(' ')[1]}</Text>
+        <Text className="text-blue-600 font-bold text-xs uppercase">{month}</Text>
+        <Text className="text-blue-900 font-bold text-xl">{day}</Text>
       </View>
 
       {/* User Info Middle Column */}
@@ -42,11 +47,12 @@ export function SessionCard({ user, date, time, status }: SessionCardProps) {
       </View>
 
       {/* Status Badge Right Column */}
-      <View className={`px-2 py-1 rounded-md ${getStatusBadge().split(' ')[0]}`}>
-        <Text className={`text-xs font-semibold ${getStatusBadge().split(' ')[1]}`}>
+      <View className={`px-2 py-1 rounded-md ${statusStyles.bg}`}>
+        <Text className={`text-xs font-semibold ${statusStyles.text}`}>
           {status}
         </Text>
       </View>
+      
     </TouchableOpacity>
   );
 }

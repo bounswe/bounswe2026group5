@@ -1,8 +1,8 @@
 import { Text, View, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { RequestCard } from '../../components/dashboard/RequestCard';
-import { SessionCard } from '../../components/dashboard/SessionCard';
+import { RequestCard } from '@/components/dashboard/RequestCard';
+import { SessionCard } from '@/components/dashboard/SessionCard';
 
 // Mock Data (To be replaced with TanStack Query later)
 const MOCK_REQUESTS = [
@@ -34,8 +34,9 @@ export default function DashboardScreen() {
         {/* Sessions Section */}
         <View className="flex-row justify-between items-end mb-4 mt-6">
           <Text className="text-xl font-bold text-gray-800">Upcoming Sessions</Text>
-          {/* Here is the missing button! */}
-          <TouchableOpacity>
+          {/* TODO: Open Schedule Page when clicked */}
+          <TouchableOpacity 
+            onPress={() => console.log('TODO: View All Clicked - Implement navigation to Schedule Page')}>
             <Text className="text-blue-600 font-medium text-sm mb-0.5">View All</Text>
           </TouchableOpacity>
         </View>
