@@ -6,6 +6,8 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from profiles.models import Profile
+
 from .models import AuthProvider, User, UserRole
 
 
@@ -95,6 +97,8 @@ class RegisterAPIViewTests(TestCase):
         # Verify user was created in DB
         user = User.objects.get(email="newuser@example.com")
         self.assertTrue(user.check_password("SecurePass123"))
+        profile = Profile.objects.get(user=user)
+        self.assertEqual(profile.username, "newuser")
 
     def test_register_email_normalization(self) -> None:
         """Test that email is normalized on registration."""

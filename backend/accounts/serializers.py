@@ -5,6 +5,8 @@ from django.contrib.auth.models import Group
 from django.db import transaction
 from rest_framework import serializers
 
+from profiles.models import Profile
+
 from .models import AuthProvider, User, UserRole
 
 
@@ -67,16 +69,23 @@ class RegisterSerializer(serializers.Serializer):
     def create(self, validated_data: dict[str, Any]) -> User:
         validated_data.pop("confirm_password", None)
         password = validated_data.pop("password")
+        email = validated_data["email"]
 
         user: User = cast(
             User,
             User.objects.create_user(
-                email=validated_data["email"],
+                email=email,
                 password=password,
                 role=UserRole.USER,
                 auth_provider=AuthProvider.LOCAL,
                 is_active=True,
             ),
+        )
+
+        display_name = email.split("@", 1)[0].replace(".", " ").replace("_", " ").title()
+        Profile.objects.create(
+            user=user,
+            display_name=display_name,
         )
 
         default_group, _ = Group.objects.get_or_create(name=UserRole.USER)

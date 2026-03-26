@@ -6,6 +6,7 @@ from .models import AvailabilitySlot, ExpertiseField, Profile, ProfileExpertise
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
     list_display = (
+        "username",
         "display_name",
         "user",
         "mentorship_mode",
@@ -14,7 +15,7 @@ class ProfileAdmin(admin.ModelAdmin):
         "created_at",
     )
     list_filter = ("mentorship_mode", "is_visible", "show_initials_only")
-    search_fields = ("display_name", "user__email", "title")
+    search_fields = ("username", "display_name", "user__email", "title")
     ordering = ("display_name",)
 
 
