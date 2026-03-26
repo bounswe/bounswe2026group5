@@ -5,6 +5,7 @@ import { SkillsCloud } from '@/components/profile/SkillsCloud';
 import { ViewAllSkillsModal } from '@/components/profile/ViewAllSkillsModal';
 import { AvailabilityPreview } from '@/components/profile/AvailabilityPreview';
 import { MentorshipOfferings, Offering } from '@/components/profile/MentorshipOfferings';
+import { EditSkillsModal } from '@/components/profile/EditSkillsModal';
 
 const MOCK_PROFILE_DATA = {
   user: {
@@ -41,6 +42,23 @@ export default function ProfileScreen() {
     variant: 'mentor' | 'mentee';
   }>({ visible: false, title: '', skills: [], variant: 'mentor' });
 
+  const [editModalConfig, setEditModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    skills: string[];
+    variant: 'mentor' | 'mentee';
+    onSave: (newSkills: string[]) => void;
+  }>({ 
+    visible: false, title: '', skills: [], variant: 'mentor', onSave: () => {} 
+  });
+
+  const [expertiseData, setExpertiseData] = useState(commonData.expertise);
+  const [learningGoalsData, setLearningGoalsData] = useState(commonData.learningGoals);
+
+  const openEditModal = (title: string, skills: string[], variant: 'mentor' | 'mentee', saveHandler: (s: string[]) => void) => {
+    setEditModalConfig({ visible: true, title, skills, variant, onSave: saveHandler });
+  };
+
   // Helper function to easily open the modal
   const openSkillsModal = (title: string, skills: string[], variant: 'mentor' | 'mentee') => {
     setSkillsModalConfig({ visible: true, title, skills, variant });
@@ -62,18 +80,18 @@ export default function ProfileScreen() {
           <View className="mb-6">
             <SkillsCloud 
             title="Expertise"
-            skills={commonData.expertise}
+            skills={expertiseData} 
             variant="mentor"
-            onEdit={() => console.log('TODO: Open EditSkillsModal for Mentor Expertise')}
-            onViewAll={() => openSkillsModal('Expertise', commonData.expertise, 'mentor')}
+            onEdit={() => openEditModal('Expertise', expertiseData, 'mentor', setExpertiseData)}
+            onViewAll={() => openSkillsModal('Expertise', expertiseData, 'mentor')}
           />
 
           <SkillsCloud 
             title="Learning Goals"
-            skills={commonData.learningGoals}
+            skills={learningGoalsData} 
             variant="mentee"
-            onEdit={() => console.log('TODO: Open EditSkillsModal for Mentee Learning Goals')}
-            onViewAll={() => openSkillsModal('Learning Goals', commonData.learningGoals, 'mentee')}
+            onEdit={() => openEditModal('Learning Goals', learningGoalsData, 'mentee', setLearningGoalsData)}
+            onViewAll={() => openSkillsModal('Learning Goals', learningGoalsData, 'mentee')}
           />
           </View>
           
@@ -107,6 +125,15 @@ export default function ProfileScreen() {
         onClose={() => setSkillsModalConfig(prev => ({ ...prev, visible: false }))}
       />
 
+      {/* The Reusable Edit Skills Sheet */}
+      <EditSkillsModal
+        visible={editModalConfig.visible}
+        title={editModalConfig.title}
+        initialSkills={editModalConfig.skills}
+        variant={editModalConfig.variant}
+        onSave={editModalConfig.onSave}
+        onClose={() => setEditModalConfig(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }
