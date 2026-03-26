@@ -28,9 +28,10 @@ vi.mock('lucide-react', () => ({
   Plus: () => <span data-testid="icon-plus" />,
   XIcon: () => <span data-testid="icon-close" />,
   ChevronDownIcon: () => <span data-testid="icon-chevron-down" />,
-  ChevronUpIcon: () => <span data-testid="icon-chevron-up" />, 
-  X: () => <span data-testid="icon-x-main" />, 
-  CheckIcon: () => <span data-testid="icon-check-dropdown" />, 
+  ChevronUpIcon: () => <span data-testid="icon-chevron-up" />,
+  X: () => <span data-testid="icon-x-main" />,
+  CheckIcon: () => <span data-testid="icon-check-dropdown" />,
+  Link2: () => <span data-testid="icon-link2" />,
 }))
 
 describe('Dashboard Component Routing & Role Variants', () => {
