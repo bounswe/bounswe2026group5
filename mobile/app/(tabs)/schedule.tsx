@@ -79,7 +79,7 @@ export default function ScheduleScreen() {
         {/* Header Section */}
         <View className="px-4 pt-6 mb-6">
           <Text className="text-3xl font-extrabold text-gray-900">Schedule</Text>
-          <Text className="text-base text-gray-500 mt-1">Manage your mentorship calendar.</Text>
+          <Text className="text-base text-gray-500 mt-1">Manage your agenda.</Text>
         </View>
 
         {/* Calendar Grid Section */}
