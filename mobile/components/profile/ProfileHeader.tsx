@@ -10,9 +10,10 @@ interface ProfileHeaderProps {
   // TODO: [Backend] Swap these to a real image URI 
   imageUrl?: string; 
   coverUrl?: string; 
+  onEdit?: () => void;
 }
 
-export function ProfileHeader({ name, bio, rating, reviewCount, imageUrl, coverUrl }: ProfileHeaderProps) {
+export function ProfileHeader({ name, bio, rating, reviewCount, imageUrl, coverUrl, onEdit }: ProfileHeaderProps) {
   return (
     <View className="bg-white mb-6">
       
@@ -39,7 +40,7 @@ export function ProfileHeader({ name, bio, rating, reviewCount, imageUrl, coverU
           </View>
         </View>
 
-        {/* Right: Rating & Settings Gear */}
+        {/* Right: Rating & Edit Button */}
         <View className="flex-row items-center pt-14 gap-2"> 
           {rating && reviewCount ? (
             <View className="h-8 flex-row items-center bg-amber-50 px-2 rounded-lg border border-amber-100">
@@ -48,7 +49,7 @@ export function ProfileHeader({ name, bio, rating, reviewCount, imageUrl, coverU
             </View>
           ) : null}
           
-          <TouchableOpacity className="h-8 w-8 items-center justify-center bg-gray-100 rounded-lg border border-gray-200">
+          <TouchableOpacity className="h-8 w-8 items-center justify-center bg-gray-100 rounded-lg border border-gray-200" onPress={onEdit}>
             <Ionicons name="pencil" size={18} color="#4b5563" />
           </TouchableOpacity>
         </View>

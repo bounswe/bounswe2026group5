@@ -10,6 +10,7 @@ import { AvailabilityPreview } from '@/components/profile/AvailabilityPreview';
 import { MentorshipOfferings, Offering } from '@/components/profile/MentorshipOfferings';
 import { EditSkillsModal } from '@/components/profile/EditSkillsModal';
 import { EditAvailabilityModal } from '@/components/profile/EditAvailabilityModal';
+import { EditProfileModal, UserProfileData } from '@/components/profile/EditProfileModal';
 
 const MOCK_PROFILE_DATA = {
   user: {
@@ -39,6 +40,12 @@ const MOCK_PROFILE_DATA = {
 export default function ProfileScreen() {
   const { preferences, commonData } = MOCK_PROFILE_DATA;
   const insets = useSafeAreaInsets(); 
+
+  const [userData, setUserData] = useState<UserProfileData>({
+    name: MOCK_PROFILE_DATA.user.name,
+    bio: MOCK_PROFILE_DATA.user.bio
+  });
+  const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
 
   const [skillsModalConfig, setSkillsModalConfig] = useState<{
     visible: boolean;
@@ -93,10 +100,11 @@ export default function ProfileScreen() {
       >
         
         <ProfileHeader 
-          name={MOCK_PROFILE_DATA.user.name}
-          bio={MOCK_PROFILE_DATA.user.bio}
+          name={userData.name}
+          bio={userData.bio}
           rating={MOCK_PROFILE_DATA.user.rating}
           reviewCount={MOCK_PROFILE_DATA.user.reviewCount}
+          onEdit={() => setEditProfileModalOpen(true)} 
         />
 
         <View className="px-4 mt-4">
@@ -164,6 +172,17 @@ export default function ProfileScreen() {
         initialSchedule={availabilityData}
         onSave={setAvailabilityData}
         onClose={() => setAvailabilityModalOpen(false)}
+      />
+
+      {/* The Edit Profile Modal */}
+      <EditProfileModal
+        visible={isEditProfileModalOpen}
+        onClose={() => setEditProfileModalOpen(false)}
+        initialData={userData}
+        onSave={(updatedData) => {
+          setUserData(updatedData);
+          setEditProfileModalOpen(false);
+        }}
       />
     </View>
   );
