@@ -1,11 +1,14 @@
 """Tests for profiles domain models."""
 
 from datetime import timedelta
+from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import (
     AvailabilitySlot,
@@ -15,7 +18,7 @@ from profiles.models import (
     ProfileExpertise,
 )
 
-User = get_user_model()
+User: Any = get_user_model()
 
 
 class ProfileModelsTests(TestCase):
@@ -210,3 +213,156 @@ class ProfileModelsTests(TestCase):
         )
 
         self.assertIsNotNone(adjacent_slot.id)
+
+
+class ProfileByUsernameAPIViewTests(TestCase):
+    """Integration tests for username-scoped profile self-service endpoint."""
+
+    def setUp(self) -> None:
+        """Create users, profiles, and authenticated API clients."""
+        self.api_client: Any = APIClient()
+
+        self.owner_user = User.objects.create_user(
+            email="owner@example.com",
+            password="SecurePass123",
+        )
+        self.owner_profile = Profile.objects.create(
+            user=self.owner_user,
+            username="owner_user",
+            display_name="Owner User",
+            mentorship_mode=MentorshipMode.BOTH,
+        )
+
+        self.other_user = User.objects.create_user(
+            email="other@example.com",
+            password="SecurePass123",
+        )
+        self.other_profile = Profile.objects.create(
+            user=self.other_user,
+            username="other_user",
+            display_name="Other User",
+            mentorship_mode=MentorshipMode.MENTOR,
+            is_visible=False,
+        )
+
+        self.public_user = User.objects.create_user(
+            email="public@example.com",
+            password="SecurePass123",
+        )
+        self.public_profile = Profile.objects.create(
+            user=self.public_user,
+            username="public_user",
+            display_name="Public User",
+            mentorship_mode=MentorshipMode.BOTH,
+            is_visible=True,
+        )
+
+        owner_refresh = RefreshToken.for_user(self.owner_user)
+        self.owner_access_token = str(owner_refresh.access_token)
+
+        self.owner_url = f"/api/profiles/{self.owner_profile.username}/"
+        self.other_url = f"/api/profiles/{self.other_profile.username}/"
+        self.public_url = f"/api/profiles/{self.public_profile.username}/"
+
+    def test_get_profile_success(self) -> None:
+        """Authenticated user can get own profile by username."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.get(self.owner_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["username"], self.owner_profile.username)
+        self.assertEqual(payload["display_name"], "Owner User")
+
+    def test_get_profile_public_access_without_authentication(self) -> None:
+        """Public profile is accessible without authentication."""
+        response = self.api_client.get(self.public_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["username"], self.public_profile.username)
+
+    def test_get_profile_private_returns_404_without_authentication(self) -> None:
+        """Private profile remains hidden for unauthenticated requests."""
+        response = self.api_client.get(self.other_url)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_profile_returns_404_for_non_owner(self) -> None:
+        """Authenticated users cannot fetch another private profile by username."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.get(self.other_url)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_profile_returns_200_for_other_public_profile(self) -> None:
+        """Authenticated users can fetch another user's public profile."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.get(self.public_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["username"], self.public_profile.username)
+
+    def test_get_profile_returns_404_for_missing_profile(self) -> None:
+        """Endpoint returns 404 when username does not map to owned profile."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.get("/api/profiles/missing-user/")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_patch_profile_success(self) -> None:
+        """Authenticated user can patch own profile by username."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+        payload = {
+            "display_name": "Owner Updated",
+            "bio": "Updated bio",
+            "mentorship_mode": MentorshipMode.MENTEE,
+        }
+
+        response = self.api_client.patch(self.owner_url, payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertEqual(self.owner_profile.display_name, "Owner Updated")
+        self.assertEqual(self.owner_profile.bio, "Updated bio")
+        self.assertEqual(self.owner_profile.mentorship_mode, MentorshipMode.MENTEE)
+
+    def test_patch_profile_requires_authentication(self) -> None:
+        """PATCH endpoint returns 401 when request is unauthenticated."""
+        response = self.api_client.patch(
+            self.owner_url,
+            {"display_name": "No Auth"},
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_patch_profile_returns_404_for_non_owner(self) -> None:
+        """Authenticated users cannot patch another user's profile by username."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.other_url,
+            {"display_name": "Should Not Update"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.other_profile.refresh_from_db()
+        self.assertEqual(self.other_profile.display_name, "Other User")
+
+    def test_patch_profile_invalid_mentorship_mode(self) -> None:
+        """PATCH returns 400 for invalid mentorship_mode values."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.owner_url,
+            {"mentorship_mode": "INVALID"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertIn("mentorship_mode", payload)
