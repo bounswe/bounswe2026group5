@@ -6,6 +6,7 @@ import { ViewAllSkillsModal } from '@/components/profile/ViewAllSkillsModal';
 import { AvailabilityPreview } from '@/components/profile/AvailabilityPreview';
 import { MentorshipOfferings, Offering } from '@/components/profile/MentorshipOfferings';
 import { EditSkillsModal } from '@/components/profile/EditSkillsModal';
+import { EditAvailabilityModal } from '@/components/profile/EditAvailabilityModal';
 
 const MOCK_PROFILE_DATA = {
   user: {
@@ -54,6 +55,8 @@ export default function ProfileScreen() {
 
   const [expertiseData, setExpertiseData] = useState(commonData.expertise);
   const [learningGoalsData, setLearningGoalsData] = useState(commonData.learningGoals);
+  const [availabilityData, setAvailabilityData] = useState(commonData.availability);
+  const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
 
   const openEditModal = (title: string, skills: string[], variant: 'mentor' | 'mentee', saveHandler: (s: string[]) => void) => {
     setEditModalConfig({ visible: true, title, skills, variant, onSave: saveHandler });
@@ -95,11 +98,10 @@ export default function ProfileScreen() {
           />
           </View>
           
-          {/* Optional: Availability (Mentor focus) */}
           {preferences.showAvailability && (
             <AvailabilityPreview 
-              schedule={commonData.availability}
-              onEdit={() => console.log('TODO: Open EditAvailabilityModal')}
+              schedule={availabilityData} 
+              onEdit={() => setAvailabilityModalOpen(true)} 
             />
           )}
 
@@ -133,6 +135,14 @@ export default function ProfileScreen() {
         variant={editModalConfig.variant}
         onSave={editModalConfig.onSave}
         onClose={() => setEditModalConfig(prev => ({ ...prev, visible: false }))}
+      />
+
+      {/* The Availability Manager Sheet */}
+      <EditAvailabilityModal
+        visible={isAvailabilityModalOpen}
+        initialSchedule={availabilityData}
+        onSave={setAvailabilityData}
+        onClose={() => setAvailabilityModalOpen(false)}
       />
     </View>
   );
