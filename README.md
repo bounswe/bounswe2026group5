@@ -214,6 +214,22 @@ Auth and identity remain in the `accounts` app (`User`, registration/login/logou
 
 Local development seed data is included via migration `accounts.0004_seed_profile_page_data` and creates demo mentor, mentee, and both-role profiles.
 
+### 🧾 API Documentation PDF for Wiki
+
+We generate a PDF from our OpenAPI schema (`drf-spectacular`) and publish it to the GitHub Wiki.
+
+**Automatic sync in GitHub Actions:**
+
+- Workflow: `.github/workflows/wiki-api-endpoints.yml`
+- Trigger: pushes to `main` or `dev` affecting `backend/**` (or manual dispatch)
+- Behavior: runs a three-step OpenAPI-to-PDF pipeline and commits `wiki/API-Documentation.pdf`.
+
+Pipeline steps:
+
+1. Generate OpenAPI JSON from Django (`manage.py spectacular`).
+2. Convert OpenAPI JSON to AsciiDoc (`openapi-generator-cli`).
+3. Convert AsciiDoc to PDF (`asciidoctor-pdf`).
+
 ### 🗄️ Connecting to the Database
 
 To view, manage, and query the local PostgreSQL database, we recommend using DBeaver (or DataGrip/pgAdmin). Create a new PostgreSQL connection using the following credentials:
