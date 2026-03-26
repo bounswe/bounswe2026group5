@@ -3,6 +3,7 @@ import { View, Text, ScrollView } from 'react-native';
 import { ProfileHeader } from '@/components/profile/ProfileHeader';
 import { SkillsCloud } from '@/components/profile/SkillsCloud';
 import { ViewAllSkillsModal } from '@/components/profile/ViewAllSkillsModal';
+import { AvailabilityPreview } from '@/components/profile/AvailabilityPreview';
 
 const MOCK_PROFILE_DATA = {
   user: {
@@ -12,8 +13,13 @@ const MOCK_PROFILE_DATA = {
     reviewCount: 12,
   },
   commonData: {
-    expertise: ['React Native', 'System Design', 'Django', 'SQL', 'Python', 'AWS', 'Docker'],
-    learningGoals: ['Machine Learning', 'Advanced Algorithms', 'DevOps'],
+    expertise: ['React Native', 'System Design', 'Django', 'SQL', 'Data Structures', 'Algorithms', 'Git', 'Agile Methodologies'],
+    learningGoals: ['Machine Learning', 'Advanced Algorithms'],
+    availability: [
+      { day: 'Monday', times: ['10:00 - 12:00', '15:00 - 17:00'] },
+      { day: 'Wednesday', times: ['14:00 - 18:00'] },
+      { day: 'Friday', times: ['09:00 - 10:30'] }
+    ]
   },
   preferences: {
     showAvailability: true,
@@ -68,13 +74,12 @@ export default function ProfileScreen() {
           />
           </View>
           
+          {/* Optional: Availability (Mentor focus) */}
           {preferences.showAvailability && (
-            <View className="mb-6">
-              <Text className="text-lg font-bold text-gray-900 mb-3">Availability</Text>
-              <View className="bg-gray-50 p-4 rounded-xl border border-gray-100 h-32 justify-center items-center">
-                <Text className="text-gray-400 font-medium">Time-Chip Availability Placeholder</Text>
-              </View>
-            </View>
+            <AvailabilityPreview 
+              schedule={commonData.availability}
+              onEdit={() => console.log('TODO: Open EditAvailabilityModal')}
+            />
           )}
 
           {preferences.showGivenLectures && (
@@ -106,7 +111,7 @@ export default function ProfileScreen() {
         variant={skillsModalConfig.variant}
         onClose={() => setSkillsModalConfig(prev => ({ ...prev, visible: false }))}
       />
-      
+
     </View>
   );
 }
