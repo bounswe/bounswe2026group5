@@ -16,9 +16,9 @@ export function DiscoverSearchBar({
   className,
 }: DiscoverSearchBarProps) {
   return (
-    <div className={cn('relative max-w-3xl', className)}>
-      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-        <Search className="h-5 w-5 text-ink-soft" />
+    <div className={cn('relative w-full', className)}>
+      <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
+        <Search className="h-6 w-6 text-ink-soft" />
       </div>
       <input
         type="text"
@@ -26,13 +26,14 @@ export function DiscoverSearchBar({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className={cn(
-          'w-full pl-12 pr-6 py-4',
-          'bg-white border border-line rounded-xl',
+          'w-full pl-14 pr-8 py-5',
+          'bg-white border border-line rounded-2xl',
           'text-ink placeholder:text-ink-soft',
-          'text-base font-sans',
+          'text-lg font-sans',
           'shadow-sm',
           'focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/40',
           'transition-all duration-200',
+          ' hover:bg-background'
         )}
       />
     </div>

@@ -1,25 +1,25 @@
 // web/src/components/features/discover/ProfileCard.tsx
 import { Button } from '@/components/ui/button'
-import { Body, Muted } from '@/components/Typography'
+import { Body } from '@/components/Typography'
 import { cn } from '@/lib/utils'
 import type { DiscoverProfile } from '@/lib/mocks/discover'
 
 interface ProfileCardProps {
   profile: DiscoverProfile
   className?: string
-  /** TODO: Wire up to navigate to /:userId/profile once profile routes exist */
+  /** Wire up to navigate to /:userId/profile once profile routes exist */
   onViewProfile?: (id: string) => void
-  /** TODO: Wire up to open a message compose modal once messaging is implemented */
+  /** Wire up to open a message compose modal once messaging is implemented */
   onSendMessage?: (id: string) => void
 }
 
 function ProfileAvatar({
   name,
   avatarUrl,
-}: {
+}: Readonly<{
   name: string
   avatarUrl?: string
-}) {
+}>) {
   const initials = name
     .split(' ')
     .map((n) => n[0])
@@ -31,7 +31,7 @@ function ProfileAvatar({
     return (
       <img
         src={avatarUrl}
-        alt={`Profile picture of ${name}`}
+        alt={name}
         className="h-20 w-20 rounded-full object-cover shrink-0 border border-line shadow-sm"
       />
     )
@@ -67,7 +67,7 @@ export function ProfileCard({
   return (
     <div
       className={cn(
-        'island-shell bg-white rounded-xl p-8 flex flex-col gap-6 hover:shadow-xl transition-all duration-300',
+        'island-shell bg-white rounded-xl p-8 flex flex-col gap-6 shadow-md hover:shadow-xl/30',
         className,
       )}
     >
@@ -100,9 +100,9 @@ export function ProfileCard({
       </Body>
 
       {/* Actions */}
-      <div className="flex items-center gap-3 mt-auto">
+      <div className="grid grid-cols-2 gap-3 mt-auto">
         <Button
-          className="flex-1 bg-accent hover:bg-accent-light text-white shadow-sm"
+          className="w-full bg-accent hover:bg-accent-light text-white shadow-sm"
           size="sm"
           onClick={() => onViewProfile?.(profile.id)}
         >
@@ -110,7 +110,7 @@ export function ProfileCard({
         </Button>
         <Button
           variant="outline"
-          className="flex-1 border-line text-ink-soft hover:text-ink hover:border-accent/30 bg-white"
+          className="w-full flex-1 min-w-0 truncate border-line text-ink-soft hover:text-ink hover:border-accent/30 bg-white hover:bg-accent/20"
           size="sm"
           onClick={() => onSendMessage?.(profile.id)}
         >
