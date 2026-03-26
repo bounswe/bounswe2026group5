@@ -4,6 +4,7 @@ import { ProfileHeader } from '@/components/profile/ProfileHeader';
 import { SkillsCloud } from '@/components/profile/SkillsCloud';
 import { ViewAllSkillsModal } from '@/components/profile/ViewAllSkillsModal';
 import { AvailabilityPreview } from '@/components/profile/AvailabilityPreview';
+import { MentorshipOfferings, Offering } from '@/components/profile/MentorshipOfferings';
 
 const MOCK_PROFILE_DATA = {
   user: {
@@ -13,18 +14,20 @@ const MOCK_PROFILE_DATA = {
     reviewCount: 12,
   },
   commonData: {
-    expertise: ['React Native', 'System Design', 'Django', 'SQL', 'Data Structures', 'Algorithms', 'Git', 'Agile Methodologies'],
+    expertise: ['React Native', 'System Design', 'Django', 'SQL'],
     learningGoals: ['Machine Learning', 'Advanced Algorithms'],
     availability: [
       { day: 'Monday', times: ['10:00 - 12:00', '15:00 - 17:00'] },
-      { day: 'Wednesday', times: ['14:00 - 18:00'] },
-      { day: 'Friday', times: ['09:00 - 10:30'] }
-    ]
+      { day: 'Wednesday', times: ['14:00 - 18:00'] }
+    ],
+    offerings: [
+      { id: '1', title: 'React Native Architecture Review', duration: '45 min', level: 'Intermediate', icon: 'logo-react' },
+      { id: '2', title: 'System Design Mock Interview', duration: '60 min', level: 'Advanced', icon: 'server-outline' },
+    ] as Offering[]
   },
   preferences: {
     showAvailability: true,
-    showGivenLectures: true,
-    showEnrolledLectures: false,
+    showOfferings: true, 
   }
 };
 
@@ -82,21 +85,13 @@ export default function ProfileScreen() {
             />
           )}
 
-          {preferences.showGivenLectures && (
-            <View className="mb-6">
-              <Text className="text-lg font-bold text-gray-900 mb-3">Offered Lectures</Text>
-              <View className="bg-gray-50 p-4 rounded-xl border border-gray-100 h-24 justify-center items-center">
-                <Text className="text-gray-400 font-medium">Lectures Storefront Placeholder</Text>
-              </View>
-            </View>
-          )}
-
-          {preferences.showEnrolledLectures && (
-            <View className="mb-6">
-              <Text className="text-lg font-bold text-gray-900 mb-3">Enrolled Lectures</Text>
-              <View className="bg-gray-50 p-4 rounded-xl border border-gray-100 h-24 justify-center items-center">
-                <Text className="text-gray-400 font-medium">Enrolled List Placeholder</Text>
-              </View>
+          {preferences.showOfferings && (
+            <View className="-mx-4"> 
+              <MentorshipOfferings 
+                offerings={commonData.offerings}
+                onEdit={() => console.log('TODO: Edit Offerings')}
+                onSelectOffering={(offering) => console.log('TODO: Open Offering Modal for:', offering.title)}
+              />
             </View>
           )}
 
