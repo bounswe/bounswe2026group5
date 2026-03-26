@@ -96,4 +96,11 @@ export const MOCK_DISCOVER_PROFILES: DiscoverProfile[] = [
     skills: ['Phonetics', 'NLP', 'AI Ethics'],
     bio: 'Analyzing the evolution of human language and its integration into modern artificial intelligence systems.',
   },
+  {
+    id: 'dp9',
+    name: 'Dr. Layla Hassan',
+    title: 'Quantum Computing Researcher',
+    skills: ['Qiskit', 'Linear Algebra', 'Cryptography'],
+    bio: 'Exploring the frontiers of quantum algorithms to solve computationally intractable problems in materials science.',
+  },
 ]

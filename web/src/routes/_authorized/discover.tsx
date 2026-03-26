@@ -9,7 +9,7 @@ import { MOCK_DISCOVER_PROFILES } from '@/lib/mocks/discover'
 
 // TODO: Replace PAGE_SIZE and pagination logic with a real API call that
 //       supports GET /api/users/discover/?page=N&pageSize=PAGE_SIZE&q=<query>
-const PAGE_SIZE = 8
+const PAGE_SIZE = 6
 
 export const Route = createFileRoute('/_authorized/discover')({
   component: DiscoverPage,
