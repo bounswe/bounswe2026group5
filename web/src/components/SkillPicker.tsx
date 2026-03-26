@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Input } from "#/components/ui/input.tsx"
-
+// I think that component can be used in more places. (Like profile page maybe)
 type Skill = { name: string }
 
 type SkillPickerProps = {
@@ -8,6 +8,7 @@ type SkillPickerProps = {
     onChange: (skills: Skill[]) => void
 }
 
+// This is the skillSet
 const PREDEFINED_SKILLS: Skill[] = [
     { name: 'Mathematics' }, { name: 'Calculus' }, { name: 'Linear Algebra' },
     { name: 'Statistics' }, { name: 'Physics' }, { name: 'Chemistry' },
