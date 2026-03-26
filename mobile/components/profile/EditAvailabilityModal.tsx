@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, Text, Modal, TouchableOpacity, ScrollView, 
+  View, Text, Modal, TouchableOpacity, ScrollView, Alert,
   Switch, TextInput, KeyboardAvoidingView, Platform, Pressable 
 } from 'react-native';
 // 1. Import the hook from the modern, correct library!
@@ -76,12 +76,46 @@ export function EditAvailabilityModal({ visible, onClose, initialSchedule, onSav
 
   const handleSave = () => {
     const finalSchedule: AvailabilitySlot[] = [];
+    let hasFormatError = false;
+    let hasTimeOrderError = false;
+
+    // 1. Regex to strictly match 24-hour time format
+    const isValidTime = (time: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(time);
+
+    // 2. Helper to convert "14:30" into 870 total minutes for easy comparison
+    const timeToMinutes = (time: string) => {
+      const [hours, minutes] = time.split(':').map(Number);
+      return (hours * 60) + minutes;
+    };
+
     WEEK_DAYS.forEach(day => {
       const dayData = scheduleState[day];
       if (dayData && dayData.enabled && dayData.slots.length > 0) {
+        
+        dayData.slots.forEach(slot => {
+          if (!isValidTime(slot.start) || !isValidTime(slot.end)) {
+            hasFormatError = true;
+          } else if (timeToMinutes(slot.start) >= timeToMinutes(slot.end)) {
+            // 3. Check if start time is AFTER or EQUAL TO end time
+            hasTimeOrderError = true;
+          }
+        });
+
         finalSchedule.push({ day, times: dayData.slots.map(slot => `${slot.start} - ${slot.end}`) });
       }
     });
+
+    // 4. Trigger the appropriate error alerts!
+    if (hasFormatError) {
+      Alert.alert("Invalid Format", "Please use the 24-hour format (e.g., 09:00, 14:30).", [{ text: "Got it" }]);
+      return; 
+    }
+
+    if (hasTimeOrderError) {
+      Alert.alert("Invalid Time Range", "The start time must be before the end time.", [{ text: "Got it" }]);
+      return;
+    }
+
     onSave(finalSchedule);
     onClose();
   };

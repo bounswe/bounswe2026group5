@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import { View, ScrollView, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; 
+import { Ionicons } from '@expo/vector-icons';
+
 import { ProfileHeader } from '@/components/profile/ProfileHeader';
 import { SkillsCloud } from '@/components/profile/SkillsCloud';
 import { ViewAllSkillsModal } from '@/components/profile/ViewAllSkillsModal';
@@ -35,6 +38,7 @@ const MOCK_PROFILE_DATA = {
 
 export default function ProfileScreen() {
   const { preferences, commonData } = MOCK_PROFILE_DATA;
+  const insets = useSafeAreaInsets(); 
 
   const [skillsModalConfig, setSkillsModalConfig] = useState<{
     visible: boolean;
@@ -62,14 +66,31 @@ export default function ProfileScreen() {
     setEditModalConfig({ visible: true, title, skills, variant, onSave: saveHandler });
   };
 
-  // Helper function to easily open the modal
   const openSkillsModal = (title: string, skills: string[], variant: 'mentor' | 'mentee') => {
     setSkillsModalConfig({ visible: true, title, skills, variant });
   };
 
   return (
     <View className="flex-1 bg-white">
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} bounces={false}>
+      
+      {/* 1. THE FIXED TOP HEADER (Solves the Top Unsafe Area!) */}
+      <View 
+        className="bg-white z-10 shadow-sm border-b border-gray-100" 
+        style={{ paddingTop: insets.top }} // Automatically sizes to fit the notch perfectly
+      >
+        <View className="flex-row justify-between items-center px-4 pb-3 pt-2">
+          <Text className="text-xl font-extrabold text-gray-900">Profile</Text>
+          <Ionicons name="settings-outline" size={24} color="#4b5563" />
+        </View>
+      </View>
+
+      {/* 2. THE SCROLLVIEW */}
+      <ScrollView 
+        className="flex-1"
+        showsVerticalScrollIndicator={false} 
+        // 3. THE BOTTOM FIX: We use a massive bottom padding to force the content over the tab bar
+        contentContainerStyle={{ paddingBottom: 160 }} 
+      >
         
         <ProfileHeader 
           name={MOCK_PROFILE_DATA.user.name}
@@ -78,24 +99,24 @@ export default function ProfileScreen() {
           reviewCount={MOCK_PROFILE_DATA.user.reviewCount}
         />
 
-        <View className="px-4 pb-12 mt-4">
+        <View className="px-4 mt-4">
 
           <View className="mb-6">
             <SkillsCloud 
-            title="Expertise"
-            skills={expertiseData} 
-            variant="mentor"
-            onEdit={() => openEditModal('Expertise', expertiseData, 'mentor', setExpertiseData)}
-            onViewAll={() => openSkillsModal('Expertise', expertiseData, 'mentor')}
-          />
+              title="Expertise"
+              skills={expertiseData} 
+              variant="mentor"
+              onEdit={() => openEditModal('Expertise', expertiseData, 'mentor', setExpertiseData)}
+              onViewAll={() => openSkillsModal('Expertise', expertiseData, 'mentor')}
+            />
 
-          <SkillsCloud 
-            title="Learning Goals"
-            skills={learningGoalsData} 
-            variant="mentee"
-            onEdit={() => openEditModal('Learning Goals', learningGoalsData, 'mentee', setLearningGoalsData)}
-            onViewAll={() => openSkillsModal('Learning Goals', learningGoalsData, 'mentee')}
-          />
+            <SkillsCloud 
+              title="Learning Goals"
+              skills={learningGoalsData} 
+              variant="mentee"
+              onEdit={() => openEditModal('Learning Goals', learningGoalsData, 'mentee', setLearningGoalsData)}
+              onViewAll={() => openSkillsModal('Learning Goals', learningGoalsData, 'mentee')}
+            />
           </View>
           
           {preferences.showAvailability && (

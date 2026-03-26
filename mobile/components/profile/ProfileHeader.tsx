@@ -9,7 +9,7 @@ interface ProfileHeaderProps {
   reviewCount?: number;
   // TODO: [Backend] Swap these to a real image URI 
   imageUrl?: string; 
-  coverUrl?: string; // Added cover photo support
+  coverUrl?: string; 
 }
 
 export function ProfileHeader({ name, bio, rating, reviewCount, imageUrl, coverUrl }: ProfileHeaderProps) {
@@ -48,21 +48,16 @@ export function ProfileHeader({ name, bio, rating, reviewCount, imageUrl, coverU
             </View>
           ) : null}
           
-          {/* Added h-8 w-8, reduced icon size slightly to 18 to fit perfectly */}
           <TouchableOpacity className="h-8 w-8 items-center justify-center bg-gray-100 rounded-lg border border-gray-200">
-            <Ionicons name="settings-outline" size={18} color="#4b5563" />
+            <Ionicons name="pencil" size={18} color="#4b5563" />
           </TouchableOpacity>
         </View>
 
       </View>
 
-      {/* 3. Name & Minimal Edit Button */}
-      {/* TODO: [Mobile] Wire this up to the EditProfileModal Bottom Sheet */}
+      {/* 3. Name */}
       <View className="px-4 mt-2 items-start">
         <Text className="text-2xl font-extrabold text-gray-900">{name}</Text>
-        <TouchableOpacity className="mt-0.5 py-1">
-          <Text className="text-blue-600 font-medium text-sm">Edit Profile</Text>
-        </TouchableOpacity>
       </View>
 
       {/* 4. Bio below everything */}
