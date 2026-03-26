@@ -1,14 +1,21 @@
-name: CI
+name: Backend Tests
 
 on:
   push:
     branches: [main, dev]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
   pull_request:
     branches: [main, dev]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+  workflow_dispatch:
 
 jobs:
   backend:
-    name: Backend Tests
+    name: Backend API Tests
     runs-on: ubuntu-latest
 
     services:
@@ -39,10 +46,10 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: backend/requirements-dev.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
         working-directory: backend
 
       - name: Run migrations
@@ -52,29 +59,3 @@ jobs:
       - name: Run tests
         run: python manage.py test
         working-directory: backend
-
-  frontend:
-    name: Frontend Build & Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: web
-
-      - name: Build
-        run: npm run build
-        working-directory: web
-
-      - name: Run tests
-        run: npm run test
-        working-directory: web
