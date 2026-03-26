@@ -10,16 +10,22 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UnauthorizedRouteRouteImport } from './routes/_unauthorized/route'
+import { Route as OnBoardingRouteRouteImport } from './routes/_onBoarding/route'
 import { Route as AuthorizedRouteRouteImport } from './routes/_authorized/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UnauthorizedRegisterRouteImport } from './routes/_unauthorized/register'
 import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/login'
 import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/about'
+import { Route as OnBoardingGettingToKnowYouRouteImport } from './routes/_onBoarding/gettingToKnowYou'
 import { Route as AuthorizedScheduleRouteImport } from './routes/_authorized/schedule'
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
   id: '/_unauthorized',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnBoardingRouteRoute = OnBoardingRouteRouteImport.update({
+  id: '/_onBoarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthorizedRouteRoute = AuthorizedRouteRouteImport.update({
@@ -46,6 +52,12 @@ const UnauthorizedAboutRoute = UnauthorizedAboutRouteImport.update({
   path: '/about',
   getParentRoute: () => UnauthorizedRouteRoute,
 } as any)
+const OnBoardingGettingToKnowYouRoute =
+  OnBoardingGettingToKnowYouRouteImport.update({
+    id: '/gettingToKnowYou',
+    path: '/gettingToKnowYou',
+    getParentRoute: () => OnBoardingRouteRoute,
+  } as any)
 const AuthorizedScheduleRoute = AuthorizedScheduleRouteImport.update({
   id: '/schedule',
   path: '/schedule',
@@ -61,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/schedule': typeof AuthorizedScheduleRoute
+  '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/about': typeof UnauthorizedAboutRoute
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
@@ -69,6 +82,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/schedule': typeof AuthorizedScheduleRoute
+  '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/about': typeof UnauthorizedAboutRoute
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
@@ -77,9 +91,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authorized': typeof AuthorizedRouteRouteWithChildren
+  '/_onBoarding': typeof OnBoardingRouteRouteWithChildren
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
   '/_authorized/schedule': typeof AuthorizedScheduleRoute
+  '/_onBoarding/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/_unauthorized/about': typeof UnauthorizedAboutRoute
   '/_unauthorized/login': typeof UnauthorizedLoginRoute
   '/_unauthorized/register': typeof UnauthorizedRegisterRoute
@@ -90,18 +106,28 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/schedule'
+    | '/gettingToKnowYou'
     | '/about'
     | '/login'
     | '/register'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard' | '/schedule' | '/about' | '/login' | '/register'
+  to:
+    | '/'
+    | '/dashboard'
+    | '/schedule'
+    | '/gettingToKnowYou'
+    | '/about'
+    | '/login'
+    | '/register'
   id:
     | '__root__'
     | '/'
     | '/_authorized'
+    | '/_onBoarding'
     | '/_unauthorized'
     | '/_authorized/dashboard'
     | '/_authorized/schedule'
+    | '/_onBoarding/gettingToKnowYou'
     | '/_unauthorized/about'
     | '/_unauthorized/login'
     | '/_unauthorized/register'
@@ -110,6 +136,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthorizedRouteRoute: typeof AuthorizedRouteRouteWithChildren
+  OnBoardingRouteRoute: typeof OnBoardingRouteRouteWithChildren
   UnauthorizedRouteRoute: typeof UnauthorizedRouteRouteWithChildren
 }
 
@@ -120,6 +147,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof UnauthorizedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_onBoarding': {
+      id: '/_onBoarding'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof OnBoardingRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authorized': {
@@ -157,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnauthorizedAboutRouteImport
       parentRoute: typeof UnauthorizedRouteRoute
     }
+    '/_onBoarding/gettingToKnowYou': {
+      id: '/_onBoarding/gettingToKnowYou'
+      path: '/gettingToKnowYou'
+      fullPath: '/gettingToKnowYou'
+      preLoaderRoute: typeof OnBoardingGettingToKnowYouRouteImport
+      parentRoute: typeof OnBoardingRouteRoute
+    }
     '/_authorized/schedule': {
       id: '/_authorized/schedule'
       path: '/schedule'
@@ -188,6 +229,18 @@ const AuthorizedRouteRouteWithChildren = AuthorizedRouteRoute._addFileChildren(
   AuthorizedRouteRouteChildren,
 )
 
+interface OnBoardingRouteRouteChildren {
+  OnBoardingGettingToKnowYouRoute: typeof OnBoardingGettingToKnowYouRoute
+}
+
+const OnBoardingRouteRouteChildren: OnBoardingRouteRouteChildren = {
+  OnBoardingGettingToKnowYouRoute: OnBoardingGettingToKnowYouRoute,
+}
+
+const OnBoardingRouteRouteWithChildren = OnBoardingRouteRoute._addFileChildren(
+  OnBoardingRouteRouteChildren,
+)
+
 interface UnauthorizedRouteRouteChildren {
   UnauthorizedAboutRoute: typeof UnauthorizedAboutRoute
   UnauthorizedLoginRoute: typeof UnauthorizedLoginRoute
@@ -206,6 +259,7 @@ const UnauthorizedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthorizedRouteRoute: AuthorizedRouteRouteWithChildren,
+  OnBoardingRouteRoute: OnBoardingRouteRouteWithChildren,
   UnauthorizedRouteRoute: UnauthorizedRouteRouteWithChildren,
 }
 export const routeTree = rootRouteImport

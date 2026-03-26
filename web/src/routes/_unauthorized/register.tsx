@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import {createFileRoute, Link, useRouter} from '@tanstack/react-router'
 import { z } from 'zod'
 import { useState } from 'react'
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card"
 import { Heading, Body, Display } from "@/components/Typography"
 import { User, Mail } from 'lucide-react'
+import {setDemoAuthRole} from "#/lib/demoAuth.ts";
 
 // Zod schema for registration form validation
 const registerSchema = z.object({
@@ -34,6 +35,9 @@ export const Route = createFileRoute('/_unauthorized/register')({
 })
 
 export function RegisterPage() {
+
+    const router = useRouter();
+
     const [formData, setFormData] = useState<Partial<RegisterFormData>>({
         fullName: '',
         email: '',
@@ -243,6 +247,21 @@ export function RegisterPage() {
                         </CardContent>
 
                         <CardFooter className="flex-col gap-2 pt-2">
+                            {/* Temporary Button for Bypassing Register*/}
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                className="w-full bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border border-dashed border-yellow-300"
+                                onClick={() => {
+                                    setDemoAuthRole("both")
+                                    router.navigate({
+                                        to: '/gettingToKnowYou',
+                                        replace: true,
+                                    })
+                                }}
+                            >
+                                Bypass Register (UI Demo Mode)
+                            </Button>
                             <Button
                                 type="submit"
                                 form="register-form"
