@@ -5,11 +5,13 @@ on:
     branches: [main, dev]
     paths:
       - "web/**"
+      - "scripts/ci/frontend_*"
       - ".github/workflows/frontend-tests.yml"
   pull_request:
     branches: [main, dev]
     paths:
       - "web/**"
+      - "scripts/ci/frontend_*"
       - ".github/workflows/frontend-tests.yml"
   workflow_dispatch:
 
@@ -36,6 +38,10 @@ jobs:
         run: npm run build
         working-directory: web
 
-      - name: Run tests
-        run: npm run test
+      - name: Run tests with coverage
+        run: npm run test -- --coverage --coverage.reporter=json-summary --coverage.reporter=text
         working-directory: web
+
+      - name: Add frontend coverage to job summary
+        if: always()
+        run: node scripts/ci/frontend_coverage_summary.js

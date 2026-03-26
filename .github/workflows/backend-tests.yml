@@ -5,11 +5,13 @@ on:
     branches: [main, dev]
     paths:
       - "backend/**"
+      - "scripts/ci/backend_*"
       - ".github/workflows/backend-tests.yml"
   pull_request:
     branches: [main, dev]
     paths:
       - "backend/**"
+      - "scripts/ci/backend_*"
       - ".github/workflows/backend-tests.yml"
   workflow_dispatch:
 
@@ -56,6 +58,13 @@ jobs:
         run: python manage.py migrate
         working-directory: backend
 
-      - name: Run tests
-        run: python manage.py test
+      - name: Run tests with coverage
+        run: |
+          coverage run manage.py test
+          coverage json -o coverage.json
+          coverage report
         working-directory: backend
+
+      - name: Add backend coverage to job summary
+        if: always()
+        run: python scripts/ci/backend_coverage_summary.py
