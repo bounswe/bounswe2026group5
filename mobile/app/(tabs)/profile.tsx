@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView } from 'react-native';
-// Note: We don't need SafeAreaView wrapper here because the cover photo should touch the top of the screen!
 import { ProfileHeader } from '@/components/profile/ProfileHeader';
+import { SkillsCloud } from '@/components/profile/SkillsCloud';
 
 const MOCK_PROFILE_DATA = {
   user: {
@@ -11,7 +11,6 @@ const MOCK_PROFILE_DATA = {
     reviewCount: 12,
   },
   commonData: {
-    // We split these up as you suggested!
     expertise: ['React Native', 'System Design', 'Django', 'SQL'],
     learningGoals: ['Machine Learning', 'Advanced Algorithms', 'DevOps'],
   },
@@ -38,20 +37,20 @@ export default function ProfileScreen() {
 
         <View className="px-4 pb-12 mt-4">
 
-          {/* Divided: Expertise (Mentor Focus) */}
           <View className="mb-6">
-            <Text className="text-lg font-bold text-gray-900 mb-3">Expertise</Text>
-            <View className="bg-gray-50 p-4 rounded-xl border border-gray-100 h-24 justify-center items-center">
-              <Text className="text-gray-400 font-medium">Expertise Tags Placeholder</Text>
-            </View>
-          </View>
+            <SkillsCloud 
+            title="Expertise"
+            skills={commonData.expertise}
+            variant="mentor"
+            onEdit={() => console.log('TODO: Open EditSkillsModal for Mentor Expertise')}
+          />
 
-          {/* Divided: Learning Goals (Mentee Focus) */}
-          <View className="mb-6">
-            <Text className="text-lg font-bold text-gray-900 mb-3">Learning Goals</Text>
-            <View className="bg-gray-50 p-4 rounded-xl border border-gray-100 h-24 justify-center items-center">
-              <Text className="text-gray-400 font-medium">Learning Tags Placeholder</Text>
-            </View>
+          <SkillsCloud 
+            title="Learning Goals"
+            skills={commonData.learningGoals}
+            variant="mentee"
+            onEdit={() => console.log('TODO: Open EditSkillsModal for Mentee Learning Goals')}
+          />
           </View>
           
           {preferences.showAvailability && (
