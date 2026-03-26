@@ -9,14 +9,15 @@ import { View, Text, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar, DateData } from 'react-native-calendars';
 import { SessionCard } from '@/components/dashboard/SessionCard';
+import { SessionDetailsModal } from '@/components/dashboard/SessionDetailsModal';
 
 // TODO: [Backend] Replace MOCK_SESSIONS with TanStack Query fetching from /api/sessions
 // Ensure the backend returns dates in ISO format (YYYY-MM-DD) for the calendar engine.
 const MOCK_SESSIONS = [
-  { id: '1', rawDate: '2026-03-26', displayDate: 'MAR 26', time: '14:00', user: 'Zeynep Demir', status: 'Upcoming' as const },
-  { id: '2', rawDate: '2026-03-26', displayDate: 'MAR 26', time: '16:30', user: 'Ahmet Yılmaz', status: 'Pending' as const }, // Second event on the 26th!
-  { id: '3', rawDate: '2026-03-28', displayDate: 'MAR 28', time: '10:00', user: 'Can Özkan', status: 'Upcoming' as const },
-  { id: '4', rawDate: '2026-04-02', displayDate: 'APR 02', time: '09:00', user: 'Elif Kaya', status: 'Completed' as const },
+  { id: '1', rawDate: '2026-03-26', displayDate: 'MAR 26', time: '14:00', user: 'Zeynep Demir', status: 'Upcoming' as const, topic: 'React Native Architecture', myRole: 'Mentor', meetingUrl: 'https://zoom.us/j/12345' },
+  { id: '2', rawDate: '2026-03-26', displayDate: 'MAR 26', time: '16:30', user: 'Ahmet Yılmaz', status: 'Pending' as const, topic: 'System Design Interview Prep', myRole: 'Mentee', location: 'Campus Library, Room 4B' },
+  { id: '3', rawDate: '2026-03-28', displayDate: 'MAR 28', time: '10:00', user: 'Can Özkan', status: 'Upcoming' as const, topic: 'Database Normalization', myRole: 'Mentor', location: 'Neighborhood Cafe' },
+  { id: '4', rawDate: '2026-04-02', displayDate: 'APR 02', time: '09:00', user: 'Elif Kaya', status: 'Completed' as const, topic: 'Career Advice', myRole: 'Mentee', meetingUrl: 'https://meet.google.com/abc' },
 ];
 
 /**
@@ -29,8 +30,9 @@ const formatFriendlyDate = (dateString: string) => {
 };
 
 export default function ScheduleScreen() {
-  // State: Tracks the currently tapped date on the calendar
+  // States
   const [selectedDate, setSelectedDate] = useState('2026-03-26');
+  const [selectedSession, setSelectedSession] = useState<any | null>(null);
 
   /**
    * Generates the multi-dot markings for the calendar grid.
@@ -104,7 +106,6 @@ export default function ScheduleScreen() {
         {/* Dynamic Agenda Section */}
         <View className="px-4 mb-8">
           <Text className="text-xl font-bold text-gray-800 mb-4">
-            {/* Using our new formatter for a beautiful, human-readable date! */}
             Sessions on {formatFriendlyDate(selectedDate)}
           </Text>
 
@@ -120,13 +121,29 @@ export default function ScheduleScreen() {
                 date={session.displayDate}
                 time={session.time}
                 status={session.status}
+                onPress={() => setSelectedSession({
+                  user: session.user,
+                  date: formatFriendlyDate(session.rawDate), 
+                  time: session.time,
+                  status: session.status,
+                  topic: session.topic,
+                  myRole: session.myRole, 
+                  location: session.location,
+                  meetingUrl: session.meetingUrl
+                })}
               />
             ))
           )}
         </View>
-
         <View className="h-20" />
       </ScrollView>
+
+      <SessionDetailsModal 
+        visible={!!selectedSession} 
+        onClose={() => setSelectedSession(null)} 
+        session={selectedSession} 
+        />
+
     </SafeAreaView>
   );
 }

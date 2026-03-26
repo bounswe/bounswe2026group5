@@ -5,9 +5,10 @@ interface SessionCardProps {
   date: string;
   time: string;
   status: 'Upcoming' | 'Pending' | 'Completed';
+  onPress?: () => void;
 }
 
-export function SessionCard({ user, date, time, status }: SessionCardProps) {
+export function SessionCard({ user, date, time, status, onPress }: SessionCardProps) {
   
   // 1. Logic: Determine badge colors
   const getStatusStyles = () => {
@@ -26,11 +27,10 @@ export function SessionCard({ user, date, time, status }: SessionCardProps) {
 
   // 3. UI: Render the interactive card
   return (
-    // TODO: Open Session Details Bottom Sheet Modal when tapped
     <TouchableOpacity 
       activeOpacity={0.7} 
       accessibilityRole="button"
-      onPress={() => console.log(`TODO: Open Bottom Sheet for session with ${user}`)}
+      onPress={onPress}
       className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3 flex-row items-center"
     >
       
