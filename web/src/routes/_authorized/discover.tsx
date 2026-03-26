@@ -51,28 +51,31 @@ function DiscoverPage() {
   }
 
   return (
-    <div className="page-wrap py-10 sm:py-16 rise-in flex flex-col gap-12">
+    <div className="py-10 sm:py-16 rise-in flex flex-col gap-12">
 
-      {/* ── Hero Section ─────────────────────────────────────────────────── */}
-      <section className="flex flex-col gap-8">
-        <Display as="h1" className="text-5xl md:text-7xl tracking-tight text-ink">
-          Discover the{' '}
-          <span className="italic text-accent">Curated</span>{' '}
-          Network
-        </Display>
+      {/* ── Hero Section — constrained to page-wrap width ─────────────────── */}
+      <div className="page-wrap">
+        <section className="flex flex-col items-center gap-8 text-center">
+          <Display as="h1" className="text-5xl sm:text-6xl md:text-7xl tracking-tight text-ink">
+            Discover the{' '}
+            <span className="italic text-accent">Curated</span>{' '}
+            Network
+          </Display>
 
-        <DiscoverSearchBar
-          value={query}
-          onChange={(val) => {
-            setQuery(val)
-            // Reset pagination when search query changes
-            setVisibleCount(PAGE_SIZE)
-          }}
-        />
-      </section>
+          <DiscoverSearchBar
+            value={query}
+            onChange={(val) => {
+              setQuery(val)
+              // Reset pagination when search query changes
+              setVisibleCount(PAGE_SIZE)
+            }}
+            className="w-full max-w-xs sm:max-w-lg md:max-w-2xl lg:max-w-3xl"
+          />
+        </section>
+      </div>
 
-      {/* ── Profile Grid ─────────────────────────────────────────────────── */}
-      <section>
+      {/* ── Profile Grid — wider than page-wrap, responsive padding ───────── */}
+      <section className="w-full max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 lg:px-20 xl:px-28">
         {visibleProfiles.length === 0 ? (
           <div className="py-24 text-center">
             <p className="text-ink-soft text-lg">
@@ -84,7 +87,7 @@ function DiscoverPage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {visibleProfiles.map((profile) => (
               <ProfileCard
                 key={profile.id}
