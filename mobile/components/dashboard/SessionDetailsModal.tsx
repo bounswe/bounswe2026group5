@@ -11,8 +11,8 @@ interface SessionDetailsModalProps {
     status: string;
     topic?: string; 
     myRole?: string;
-    location?: string; // New
-    meetingUrl?: string; // New
+    location?: string; 
+    meetingUrl?: string; 
   } | null;
 }
 
@@ -106,7 +106,13 @@ export function SessionDetailsModal({ visible, onClose, session }: SessionDetail
               className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
               onPress={() => console.log('TODO: Trigger Reschedule Flow')}
             >
-              <Text className="text-gray-700 font-bold text-base">Request Reschedule</Text>
+              <Text className="text-gray-700 font-bold text-base">Reschedule</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
+              onPress={() => console.log('TODO: Trigger Cancel Flow')}
+            >
+              <Text className="text-gray-700 font-bold text-base">Cancel</Text>
             </TouchableOpacity>
           </View>
 
