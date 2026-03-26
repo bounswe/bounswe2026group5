@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { ProfileHeader } from '@/components/profile/ProfileHeader';
 import { SkillsCloud } from '@/components/profile/SkillsCloud';
+import { ViewAllSkillsModal } from '@/components/profile/ViewAllSkillsModal';
 
 const MOCK_PROFILE_DATA = {
   user: {
@@ -11,7 +12,7 @@ const MOCK_PROFILE_DATA = {
     reviewCount: 12,
   },
   commonData: {
-    expertise: ['React Native', 'System Design', 'Django', 'SQL'],
+    expertise: ['React Native', 'System Design', 'Django', 'SQL', 'Python', 'AWS', 'Docker'],
     learningGoals: ['Machine Learning', 'Advanced Algorithms', 'DevOps'],
   },
   preferences: {
@@ -23,6 +24,18 @@ const MOCK_PROFILE_DATA = {
 
 export default function ProfileScreen() {
   const { preferences, commonData } = MOCK_PROFILE_DATA;
+
+  const [skillsModalConfig, setSkillsModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    skills: string[];
+    variant: 'mentor' | 'mentee';
+  }>({ visible: false, title: '', skills: [], variant: 'mentor' });
+
+  // Helper function to easily open the modal
+  const openSkillsModal = (title: string, skills: string[], variant: 'mentor' | 'mentee') => {
+    setSkillsModalConfig({ visible: true, title, skills, variant });
+  };
 
   return (
     <View className="flex-1 bg-white">
@@ -43,6 +56,7 @@ export default function ProfileScreen() {
             skills={commonData.expertise}
             variant="mentor"
             onEdit={() => console.log('TODO: Open EditSkillsModal for Mentor Expertise')}
+            onViewAll={() => openSkillsModal('Expertise', commonData.expertise, 'mentor')}
           />
 
           <SkillsCloud 
@@ -50,6 +64,7 @@ export default function ProfileScreen() {
             skills={commonData.learningGoals}
             variant="mentee"
             onEdit={() => console.log('TODO: Open EditSkillsModal for Mentee Learning Goals')}
+            onViewAll={() => openSkillsModal('Learning Goals', commonData.learningGoals, 'mentee')}
           />
           </View>
           
@@ -82,6 +97,16 @@ export default function ProfileScreen() {
 
         </View>
       </ScrollView>
+
+      {/* The Reusable Bottom Sheet */}
+      <ViewAllSkillsModal
+        visible={skillsModalConfig.visible}
+        title={skillsModalConfig.title}
+        skills={skillsModalConfig.skills}
+        variant={skillsModalConfig.variant}
+        onClose={() => setSkillsModalConfig(prev => ({ ...prev, visible: false }))}
+      />
+      
     </View>
   );
 }
