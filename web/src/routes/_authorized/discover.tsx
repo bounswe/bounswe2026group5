@@ -1,11 +1,11 @@
 // web/src/routes/_authorized/discover.tsx
 import { useState, useMemo } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Display } from '@/components/Typography'
 import { ProfileCard } from '@/components/features/discover/ProfileCard'
 import { DiscoverSearchBar } from '@/components/features/discover/DiscoverSearchBar'
-import { MOCK_DISCOVER_PROFILES } from '@/lib/mocks/discover'
+import { getAllMockProfiles } from '@/lib/mocks/profiles'
 
 // TODO: Replace PAGE_SIZE and pagination logic with a real API call that
 //       supports GET /api/users/discover/?page=N&pageSize=PAGE_SIZE&q=<query>
@@ -15,19 +15,24 @@ export const Route = createFileRoute('/_authorized/discover')({
   component: DiscoverPage,
 })
 
+const ALL_PROFILES = getAllMockProfiles().filter(
+  (p) => p.mentorshipMode === 'MENTOR' || p.mentorshipMode === 'BOTH',
+)
+
 function DiscoverPage() {
+  const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
   // TODO: Replace this client-side filter with a debounced API search call
   const filteredProfiles = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return MOCK_DISCOVER_PROFILES
-    return MOCK_DISCOVER_PROFILES.filter(
+    if (!q) return ALL_PROFILES
+    return ALL_PROFILES.filter(
       (p) =>
-        p.name.toLowerCase().includes(q) ||
+        p.displayName.toLowerCase().includes(q) ||
         p.title.toLowerCase().includes(q) ||
-        p.skills.some((s) => s.toLowerCase().includes(q)) ||
+        p.expertise.some((e) => e.name.toLowerCase().includes(q)) ||
         p.bio.toLowerCase().includes(q),
     )
   }, [query])
@@ -41,9 +46,8 @@ function DiscoverPage() {
     setVisibleCount((prev) => prev + PAGE_SIZE)
   }
 
-  const handleViewProfile = (_id: string) => {
-    // TODO: Navigate to the profile page once individual profile routes exist
-    //       e.g. navigate({ to: '/profiles/$userId', params: { userId: id } })
+  const handleViewProfile = (id: string) => {
+    navigate({ to: '/profiles/$profileId', params: { profileId: id } })
   }
 
   const handleSendMessage = (_id: string) => {

@@ -2,10 +2,10 @@
 import { Button } from '@/components/ui/button'
 import { Body } from '@/components/Typography'
 import { cn } from '@/lib/utils'
-import type { DiscoverProfile } from '@/lib/mocks/discover'
+import type { MockProfileDetails } from '@/lib/mocks/profiles'
 
 interface ProfileCardProps {
-  profile: DiscoverProfile
+  profile: MockProfileDetails
   className?: string
   /** Wire up to navigate to /:userId/profile once profile routes exist */
   onViewProfile?: (id: string) => void
@@ -14,24 +14,24 @@ interface ProfileCardProps {
 }
 
 function ProfileAvatar({
-  name,
-  avatarUrl,
+  displayName,
+  pictureUrl,
 }: Readonly<{
-  name: string
-  avatarUrl?: string
+  displayName: string
+  pictureUrl: string
 }>) {
-  const initials = name
+  const initials = displayName
     .split(' ')
     .map((n) => n[0])
     .join('')
     .substring(0, 2)
     .toUpperCase()
 
-  if (avatarUrl) {
+  if (pictureUrl) {
     return (
       <img
-        src={avatarUrl}
-        alt={name}
+        src={pictureUrl}
+        alt={displayName}
         className="h-20 w-20 rounded-full object-cover shrink-0 border border-line shadow-sm"
       />
     )
@@ -44,7 +44,7 @@ function ProfileAvatar({
     'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
     'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
   ]
-  const colorClass = colors[name.length % colors.length]
+  const colorClass = colors[displayName.length % colors.length]
 
   return (
     <div
@@ -73,10 +73,10 @@ export function ProfileCard({
     >
       {/* Header: Avatar + Name + Title */}
       <div className="flex items-center gap-4">
-        <ProfileAvatar name={profile.name} avatarUrl={profile.avatarUrl} />
+        <ProfileAvatar displayName={profile.displayName} pictureUrl={profile.pictureUrl} />
         <div className="min-w-0">
           <h3 className="font-display text-2xl font-bold text-ink leading-tight truncate">
-            {profile.name}
+            {profile.displayName}
           </h3>
           <p className="text-accent font-medium text-sm mt-0.5">{profile.title}</p>
         </div>
@@ -84,12 +84,12 @@ export function ProfileCard({
 
       {/* Skills */}
       <div className="flex flex-wrap gap-2">
-        {profile.skills.map((skill) => (
+        {profile.expertise.map((e) => (
           <span
-            key={skill}
+            key={e.id}
             className="px-3 py-1 bg-accent-muted text-accent text-xs font-bold uppercase tracking-wider rounded-full"
           >
-            {skill}
+            {e.name}
           </span>
         ))}
       </div>
