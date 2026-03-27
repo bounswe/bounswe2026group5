@@ -27,7 +27,7 @@ export function DiscoverSearchBar({
         placeholder={placeholder}
         className={cn(
           'w-full pl-14 pr-8 py-5',
-          'bg-white border border-line rounded-2xl',
+          'bg-mist border border-line rounded-2xl',
           'text-ink placeholder:text-ink-soft',
           'text-lg font-sans',
           'shadow-sm',

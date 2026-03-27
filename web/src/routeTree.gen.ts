@@ -16,6 +16,7 @@ import { Route as UnauthorizedRegisterRouteImport } from './routes/_unauthorized
 import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/login'
 import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/about'
 import { Route as AuthorizedScheduleRouteImport } from './routes/_authorized/schedule'
+import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/discover'
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
@@ -51,6 +52,11 @@ const AuthorizedScheduleRoute = AuthorizedScheduleRouteImport.update({
   path: '/schedule',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
+const AuthorizedDiscoverRoute = AuthorizedDiscoverRouteImport.update({
+  id: '/discover',
+  path: '/discover',
+  getParentRoute: () => AuthorizedRouteRoute,
+} as any)
 const AuthorizedDashboardRoute = AuthorizedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -60,6 +66,7 @@ const AuthorizedDashboardRoute = AuthorizedDashboardRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof AuthorizedDashboardRoute
+  '/discover': typeof AuthorizedDiscoverRoute
   '/schedule': typeof AuthorizedScheduleRoute
   '/about': typeof UnauthorizedAboutRoute
   '/login': typeof UnauthorizedLoginRoute
@@ -68,6 +75,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof AuthorizedDashboardRoute
+  '/discover': typeof AuthorizedDiscoverRoute
   '/schedule': typeof AuthorizedScheduleRoute
   '/about': typeof UnauthorizedAboutRoute
   '/login': typeof UnauthorizedLoginRoute
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/_authorized': typeof AuthorizedRouteRouteWithChildren
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
+  '/_authorized/discover': typeof AuthorizedDiscoverRoute
   '/_authorized/schedule': typeof AuthorizedScheduleRoute
   '/_unauthorized/about': typeof UnauthorizedAboutRoute
   '/_unauthorized/login': typeof UnauthorizedLoginRoute
@@ -86,15 +95,30 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dashboard' | '/about' | '/login' | '/register'
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/discover'
+    | '/schedule'
+    | '/about'
+    | '/login'
+    | '/register'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard' | '/about' | '/login' | '/register'
+  to:
+    | '/'
+    | '/dashboard'
+    | '/discover'
+    | '/schedule'
+    | '/about'
+    | '/login'
+    | '/register'
   id:
     | '__root__'
     | '/'
     | '/_authorized'
     | '/_unauthorized'
     | '/_authorized/dashboard'
+    | '/_authorized/discover'
     | '/_authorized/schedule'
     | '/_unauthorized/about'
     | '/_unauthorized/login'
@@ -158,6 +182,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedScheduleRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
+    '/_authorized/discover': {
+      id: '/_authorized/discover'
+      path: '/discover'
+      fullPath: '/discover'
+      preLoaderRoute: typeof AuthorizedDiscoverRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
     '/_authorized/dashboard': {
       id: '/_authorized/dashboard'
       path: '/dashboard'
@@ -170,11 +201,13 @@ declare module '@tanstack/react-router' {
 
 interface AuthorizedRouteRouteChildren {
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
+  AuthorizedDiscoverRoute: typeof AuthorizedDiscoverRoute
   AuthorizedScheduleRoute: typeof AuthorizedScheduleRoute
 }
 
 const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,
+  AuthorizedDiscoverRoute: AuthorizedDiscoverRoute,
   AuthorizedScheduleRoute: AuthorizedScheduleRoute,
 }
 

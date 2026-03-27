@@ -38,11 +38,11 @@ function ProfileAvatar({
   }
 
   const colors = [
-    'bg-blue-100 text-blue-700',
-    'bg-emerald-100 text-emerald-700',
-    'bg-violet-100 text-violet-700',
-    'bg-rose-100 text-rose-700',
-    'bg-amber-100 text-amber-700',
+    'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+    'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+    'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
   ]
   const colorClass = colors[name.length % colors.length]
 
@@ -67,7 +67,7 @@ export function ProfileCard({
   return (
     <div
       className={cn(
-        'island-shell bg-white rounded-xl p-8 flex flex-col gap-6 shadow-md hover:shadow-xl/30',
+        'island-shell rounded-xl p-8 flex flex-col gap-6 shadow-md hover:shadow-xl/30',
         className,
       )}
     >
@@ -110,7 +110,7 @@ export function ProfileCard({
         </Button>
         <Button
           variant="outline"
-          className="w-full flex-1 min-w-0 truncate border-line text-ink-soft hover:text-ink hover:border-accent/30 bg-white hover:bg-accent/20"
+          className="w-full flex-1 min-w-0 truncate border-line text-ink-soft hover:text-ink hover:border-accent/30 bg-mist hover:bg-accent/20"
           size="sm"
           onClick={() => onSendMessage?.(profile.id)}
         >
