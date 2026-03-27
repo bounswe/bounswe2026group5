@@ -63,7 +63,7 @@ export function ProfileCard({
   className,
   onViewProfile,
   onSendMessage,
-}: ProfileCardProps) {
+}: Readonly<ProfileCardProps>) {
   return (
     <div
       className={cn(
