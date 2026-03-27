@@ -34,7 +34,7 @@ function RouteComponent() {
 
             <aside className="lg:flex flex-col px-14 py-12 bg-petal border-r border-line">
                 <Display className="mb-10">Campus Tutor</Display>
-                <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4">
+                <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4 rise-in">
                     <Body className="island-kicker">Peer tutoring platform</Body>
                     <Display as="h2" className="leading-[1.2] max-w-xs">
                         Study better,<br />together.
@@ -158,7 +158,7 @@ function RouteComponent() {
                             <Muted className="text-xs text-center w-full">
                                 No account yet?{' '}
                                 <Link
-                                    to="/"
+                                    to="/register"
                                     className="font-medium text-accent-light underline-offset-4 hover:underline hover:text-accent transition-colors"
                                 >
                                     Sign up free
