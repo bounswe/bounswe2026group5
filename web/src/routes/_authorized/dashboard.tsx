@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Heading, Body, Muted } from '@/components/Typography'
 import { MOCK_REQUESTS, MOCK_SESSIONS, MOCK_DISCOVER_SKILLS } from '@/lib/mocks/loggedInHome' // FUTURE: Replace with real API calls once backend is ready
 import { CalendarDays, Clock, CheckCircle2, XCircle, ArrowRight } from 'lucide-react'
+import { SessionManagementModal } from '@/components/dashboard/SessionManagementModal'
 
 const dashboardSearchSchema = z.object({
   mode: z.enum(['mentee', 'mentor']).catch('mentee'),
@@ -229,10 +230,7 @@ function MentorDashboardView() {
                   </div>
                 </CardContent>
                 <CardFooter className="pt-4 pb-5 bg-black/[0.02]">
-                  {/* FUTURE: Opens session management modal */}
-                  <Button variant="outline" size="sm" className="w-full bg-white border-line text-ink-soft hover:text-ink hover:border-accent/30 transition-colors">
-                    Manage Session
-                  </Button>
+                  <SessionManagementModal session={session} />
                 </CardFooter>
               </Card>
             ))}

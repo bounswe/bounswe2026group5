@@ -61,10 +61,13 @@ export function AuthorizedHeader() {
             >
               Schedule
             </Link>
-            <div className="flex items-center gap-1 opacity-60 cursor-not-allowed">
-              <span className="text-sm font-medium text-ink-soft">Discover</span>
-              <span className="text-[10px] uppercase tracking-wider bg-accent-muted text-ink px-1.5 py-0.5 rounded-sm">Soon</span>
-            </div>
+            <Link
+              to="/discover"
+              activeProps={{ className: 'text-ink font-semibold' }}
+              className="text-sm font-medium text-ink-soft hover:text-ink transition-colors"
+            >
+              Discover
+            </Link>
             <div className="flex items-center gap-1 opacity-60 cursor-not-allowed">
               <span className="text-sm font-medium text-ink-soft">Requests</span>
               <span className="text-[10px] uppercase tracking-wider bg-accent-muted text-ink px-1.5 py-0.5 rounded-sm">Soon</span>
@@ -97,9 +100,13 @@ export function AuthorizedHeader() {
           <div className="w-px h-6 bg-line hidden sm:block"></div>
 
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-full bg-accent text-background flex items-center justify-center text-sm font-bold shadow-sm">
+            <Link
+              to="/profile"
+              aria-label="Open profile page"
+              className="h-8 w-8 rounded-full bg-accent text-background flex items-center justify-center text-sm font-bold shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+            >
               AS
-            </div>
+            </Link>
             <Button variant="ghost" size="sm" onClick={handleLogout} className="text-sm text-ink-soft hover:text-ink px-2 hidden md:inline-flex">
               Sign out
             </Button>
