@@ -6,12 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Offering } from './MentorshipOfferings';
-
-interface AvailabilitySlot {
-  day: string;
-  times: string[];
-}
-
+import type { AvailabilitySlot } from './AvailabilityPreview';
 interface BookingModalProps {
   visible: boolean;
   onClose: () => void;
