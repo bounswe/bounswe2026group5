@@ -23,7 +23,7 @@ const ALL_PROFILES = getAllMockProfiles().filter(
 // Unique skill names across all mentor profiles, sorted A→Z (case-insensitive)
 const ALL_SKILLS = Array.from(
   new Set(ALL_PROFILES.flatMap((p) => p.expertise.map((e) => e.name))),
-).sort((a, b) => a.localeCompare(b))
+).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
 
 export function DiscoverPage() {
   const navigate = useNavigate()
