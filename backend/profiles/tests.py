@@ -62,6 +62,32 @@ class ProfileModelsTests(TestCase):
         )
 
         self.assertEqual(both_profile.mentorship_mode, MentorshipMode.BOTH)
+        self.assertEqual(both_profile.username, "both")
+
+    def test_profile_username_is_unique_for_same_email_prefix(self) -> None:
+        """Profiles with same email local-part receive unique usernames."""
+        first_user = User.objects.create_user(
+            email="sam@example.com",
+            password="SecurePass123",
+        )
+        second_user = User.objects.create_user(
+            email="sam@anotherdomain.com",
+            password="SecurePass123",
+        )
+
+        first_profile = Profile.objects.create(
+            user=first_user,
+            display_name="Sam One",
+            mentorship_mode=MentorshipMode.MENTOR,
+        )
+        second_profile = Profile.objects.create(
+            user=second_user,
+            display_name="Sam Two",
+            mentorship_mode=MentorshipMode.MENTEE,
+        )
+
+        self.assertEqual(first_profile.username, "sam")
+        self.assertEqual(second_profile.username, "sam_1")
 
     def test_profile_expertise_unique_per_profile(self) -> None:
         """Same expertise cannot be inserted twice for the same profile."""
