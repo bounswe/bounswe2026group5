@@ -11,6 +11,7 @@ import { MentorshipOfferings, Offering } from '@/components/profile/MentorshipOf
 import { EditSkillsModal } from '@/components/profile/EditSkillsModal';
 import { EditAvailabilityModal } from '@/components/profile/EditAvailabilityModal';
 import { EditProfileModal, UserProfileData } from '@/components/profile/EditProfileModal';
+import { BookingModal } from '@/components/profile/BookingModal';
 
 const MOCK_PROFILE_DATA = {
   user: {
@@ -40,12 +41,12 @@ const MOCK_PROFILE_DATA = {
 export default function ProfileScreen() {
   const { preferences, commonData } = MOCK_PROFILE_DATA;
   const insets = useSafeAreaInsets(); 
+  const [selectedOffering, setSelectedOffering] = useState<Offering | null>(null);
 
   const [userData, setUserData] = useState<UserProfileData>({
     name: MOCK_PROFILE_DATA.user.name,
     bio: MOCK_PROFILE_DATA.user.bio
   });
-  const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
 
   const [skillsModalConfig, setSkillsModalConfig] = useState<{
     visible: boolean;
@@ -68,6 +69,7 @@ export default function ProfileScreen() {
   const [learningGoalsData, setLearningGoalsData] = useState(commonData.learningGoals);
   const [availabilityData, setAvailabilityData] = useState(commonData.availability);
   const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
+  const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
 
   const openEditModal = (title: string, skills: string[], variant: 'mentor' | 'mentee', saveHandler: (s: string[]) => void) => {
     setEditModalConfig({ visible: true, title, skills, variant, onSave: saveHandler });
@@ -138,8 +140,8 @@ export default function ProfileScreen() {
             <View className="-mx-4"> 
               <MentorshipOfferings 
                 offerings={commonData.offerings}
-                onEdit={() => console.log('TODO: Edit Offerings')}
-                onSelectOffering={(offering) => console.log('TODO: Open Offering Modal for:', offering.title)}
+                onEdit={() => console.log('Edit Offerings')}
+                onSelectOffering={(offering) => setSelectedOffering(offering)} 
               />
             </View>
           )}
@@ -183,6 +185,13 @@ export default function ProfileScreen() {
           setUserData(updatedData);
           setEditProfileModalOpen(false);
         }}
+      />
+
+      <BookingModal 
+        visible={!!selectedOffering}
+        offering={selectedOffering}
+        availability={availabilityData} 
+        onClose={() => setSelectedOffering(null)}
       />
     </View>
   );

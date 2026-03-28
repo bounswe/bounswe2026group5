@@ -8,6 +8,7 @@ export interface Offering {
   duration: string;
   level: string;
   icon: keyof typeof Ionicons.glyphMap;
+  description?: string; // NEW!
 }
 
 interface MentorshipOfferingsProps {
