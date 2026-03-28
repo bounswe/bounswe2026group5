@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import {createFileRoute, Link, useRouter} from '@tanstack/react-router'
 import { z } from 'zod'
 import { useState } from 'react'
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card"
 import { Heading, Body, Display } from "@/components/Typography"
 import { User, Mail } from 'lucide-react'
+import {setDemoAuthRole} from "#/lib/demoAuth.ts";
 
 // Zod schema for registration form validation
 const registerSchema = z.object({
@@ -34,6 +35,9 @@ export const Route = createFileRoute('/_unauthorized/register')({
 })
 
 export function RegisterPage() {
+
+    const router = useRouter();
+
     const [formData, setFormData] = useState<Partial<RegisterFormData>>({
         fullName: '',
         email: '',
@@ -87,7 +91,7 @@ export function RegisterPage() {
             <aside className="lg:flex flex-col px-14 py-12 bg-petal border-r border-line relative overflow-hidden">
                 <Display className="mb-10 relative z-10">Campus Tutor</Display>
 
-                <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4 relative z-10">
+                <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4 relative z-10 rise-in">
                     <Body className="island-kicker">Academic Editorial Excellence</Body>
                     <Display as="h2" className="leading-[1.2] max-w-md">
                         Join our community of academic excellence
@@ -243,6 +247,21 @@ export function RegisterPage() {
                         </CardContent>
 
                         <CardFooter className="flex-col gap-2 pt-2">
+                            {/* Temporary Button for Bypassing Register*/}
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                className="w-full bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border border-dashed border-yellow-300"
+                                onClick={() => {
+                                    setDemoAuthRole("both")
+                                    router.navigate({
+                                        to: '/gettingToKnowYou',
+                                        replace: true,
+                                    })
+                                }}
+                            >
+                                Bypass Register (UI Demo Mode)
+                            </Button>
                             <Button
                                 type="submit"
                                 form="register-form"

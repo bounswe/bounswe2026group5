@@ -1,0 +1,176 @@
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  ScrollView,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+
+export interface UserProfileData {
+  name: string;
+  bio: string;
+}
+
+interface EditProfileModalProps {
+  visible: boolean;
+  onClose: () => void;
+  initialData: UserProfileData;
+  onSave: (data: UserProfileData) => void;
+}
+
+export function EditProfileModal({
+  visible,
+  onClose,
+  initialData,
+  onSave,
+}: EditProfileModalProps) {
+  const insets = useSafeAreaInsets();
+
+  const [name, setName] = useState("");
+  const [bio, setBio] = useState("");
+
+  useEffect(() => {
+    if (visible) {
+      setName(initialData.name);
+      setBio(initialData.bio);
+    }
+  }, [visible, initialData]);
+
+  const handleSave = () => {
+    if (!name.trim()) {
+      alert("Name cannot be empty!");
+      return;
+    }
+    onSave({ name: name.trim(), bio: bio.trim() });
+    onClose();
+  };
+
+  return (
+    <Modal
+      animationType="slide"
+      transparent={false}
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <View
+        className="flex-1 bg-white"
+        style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+      >
+        {/* Header */}
+        <View className="flex-row justify-between items-center px-6 py-4 border-b border-gray-100 mb-2">
+          <TouchableOpacity
+            onPress={onClose}
+            className="p-2 -ml-2"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close" size={24} color="#4b5563" />
+          </TouchableOpacity>
+          <Text className="text-xl font-extrabold text-gray-900">
+            Edit Profile
+          </Text>
+          <TouchableOpacity
+            onPress={handleSave}
+            className="bg-gray-900 px-5 py-2 rounded-full"
+          >
+            <Text className="text-white font-bold text-sm">Save</Text>
+          </TouchableOpacity>
+        </View>
+
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          className="flex-1"
+        >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            className="flex-1 px-6"
+            keyboardShouldPersistTaps="handled"
+          >
+            <View className="mb-8">
+              {/* 1. The Cover Photo Area */}
+              <View className="h-32 bg-indigo-50 relative -mx-6">
+                <TouchableOpacity
+                  className="absolute bottom-3 right-4 bg-gray-900/60 px-3 py-1.5 rounded-full flex-row items-center"
+                  onPress={() => console.log("TODO: Change Cover Photo")}
+                >
+                  <Ionicons name="camera" size={16} color="white" />
+                  <Text className="text-white text-xs font-bold ml-1.5">
+                    Edit Cover
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* 2. The Overlapping Avatar */}
+              <View className="items-center -mt-12">
+                <View className="relative">
+                  <View className="w-24 h-24 bg-white rounded-full items-center justify-center shadow-sm">
+                    {/* Inner circle */}
+                    <View
+                      className="w-22 h-22 bg-indigo-100 rounded-full items-center justify-center border-4 border-white overflow-hidden"
+                      style={{ width: 88, height: 88 }}
+                    >
+                      <Text className="text-3xl font-bold text-indigo-700">
+                        {name ? name.charAt(0).toUpperCase() : "?"}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    className="absolute bottom-0 right-0 bg-gray-900 w-8 h-8 rounded-full items-center justify-center border-2 border-white"
+                    onPress={() => console.log("TODO: Change Avatar")}
+                  >
+                    <Ionicons name="camera" size={14} color="white" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            {/* Form Fields */}
+            <View className="gap-y-6 pb-12">
+              {/* Name Input - FIXED CLIPPING BUG */}
+              <View>
+                <Text className="text-sm font-bold text-gray-700 mb-2 ml-1">
+                  Full Name
+                </Text>
+                <TextInput
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Enter your name"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-4 h-14 text-base text-gray-900 font-medium"
+                  style={
+                    Platform.OS === "android"
+                      ? { textAlignVertical: "center", paddingVertical: 0 }
+                      : undefined
+                  }
+                />
+              </View>
+
+              {/* Bio Input */}
+              <View>
+                <View className="flex-row justify-between items-end mb-2 ml-1 mr-1">
+                  <Text className="text-sm font-bold text-gray-700">Bio</Text>
+                  <Text className="text-xs text-gray-400 font-medium">
+                    {bio.length}/150
+                  </Text>
+                </View>
+                <TextInput
+                  value={bio}
+                  onChangeText={setBio}
+                  placeholder="Tell mentees about yourself..."
+                  multiline={true}
+                  maxLength={150}
+                  textAlignVertical="top"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-4 text-base text-gray-900 h-32"
+                />
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
