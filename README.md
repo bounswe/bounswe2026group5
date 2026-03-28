@@ -32,6 +32,22 @@ Campus Neighborhood Mentorship Network is a platform designed to connect student
 - **Linting & Formatting:** ESLint, Prettier (Frontend) / Flake8, Black, Isort (Backend)
 - **Analysis:** SonarQube
 
+## 📦 Dependency Convention
+
+This repository separates dependencies by purpose so runtime images stay lean and CI/local development can still use test and lint tooling.
+
+**Backend (Python):**
+
+- `backend/requirements.txt`: Runtime dependencies used by the Django app in containers and production-like environments.
+- `backend/requirements-dev.txt`: Development and test tooling (includes `-r requirements.txt` plus lint/format/test-related packages).
+- Backend CI installs `requirements-dev.txt` so tests run with the full developer toolchain.
+
+**Frontend (Node.js):**
+
+- Runtime packages are listed in `dependencies`.
+- Tooling and test packages are listed in `devDependencies`.
+- This is the conventional frontend split and is already used in `web/package.json`.
+
 ## 🧰 Required Tools & Software
 
 To ensure a smooth and standardized development experience across the team, please install the following tools before proceeding with the setup:
