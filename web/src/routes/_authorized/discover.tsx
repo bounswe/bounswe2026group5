@@ -25,7 +25,7 @@ const ALL_SKILLS = Array.from(
   new Set(ALL_PROFILES.flatMap((p) => p.expertise.map((e) => e.name))),
 ).sort((a, b) => a.localeCompare(b))
 
-function DiscoverPage() {
+export function DiscoverPage() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set())
