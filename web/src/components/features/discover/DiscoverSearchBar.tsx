@@ -26,14 +26,14 @@ export function DiscoverSearchBar({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className={cn(
-          'w-full pl-14 pr-8 py-5',
+          'w-full pl-14 pr-6 py-5',
           'bg-mist border border-line rounded-2xl',
           'text-ink placeholder:text-ink-soft',
-          'text-lg font-sans',
+          'text-base sm:text-lg font-sans',
           'shadow-sm',
           'focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/40',
           'transition-all duration-200',
-          ' hover:bg-background'
+          'hover:bg-background',
         )}
       />
     </div>

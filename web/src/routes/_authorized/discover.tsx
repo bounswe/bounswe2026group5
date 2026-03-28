@@ -1,10 +1,11 @@
 // web/src/routes/_authorized/discover.tsx
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Display } from '@/components/Typography'
 import { ProfileCard } from '@/components/features/discover/ProfileCard'
 import { DiscoverSearchBar } from '@/components/features/discover/DiscoverSearchBar'
+import { DiscoverFilterPanel } from '@/components/features/discover/DiscoverFilterPanel'
 import { getAllMockProfiles } from '@/lib/mocks/profiles'
 
 // TODO: Replace PAGE_SIZE and pagination logic with a real API call that
@@ -19,23 +20,53 @@ const ALL_PROFILES = getAllMockProfiles().filter(
   (p) => p.mentorshipMode === 'MENTOR' || p.mentorshipMode === 'BOTH',
 )
 
+// Unique skill names across all mentor profiles, sorted A→Z (case-insensitive)
+const ALL_SKILLS = Array.from(
+  new Set(ALL_PROFILES.flatMap((p) => p.expertise.map((e) => e.name))),
+).sort((a, b) => a.localeCompare(b))
+
 function DiscoverPage() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
+  const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set())
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  const handleSkillToggle = useCallback((skill: string) => {
+    setSelectedSkills((prev) => {
+      const next = new Set(prev)
+      if (next.has(skill)) {
+        next.delete(skill)
+      } else {
+        next.add(skill)
+      }
+      return next
+    })
+    setVisibleCount(PAGE_SIZE)
+  }, [])
+
+  const handleSkillClear = useCallback(() => {
+    setSelectedSkills(new Set())
+    setVisibleCount(PAGE_SIZE)
+  }, [])
 
   // TODO: Replace this client-side filter with a debounced API search call
   const filteredProfiles = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return ALL_PROFILES
-    return ALL_PROFILES.filter(
-      (p) =>
+    return ALL_PROFILES.filter((p) => {
+      const matchesQuery =
+        !q ||
         p.displayName.toLowerCase().includes(q) ||
         p.title.toLowerCase().includes(q) ||
         p.expertise.some((e) => e.name.toLowerCase().includes(q)) ||
-        p.bio.toLowerCase().includes(q),
-    )
-  }, [query])
+        p.bio.toLowerCase().includes(q)
+
+      const matchesSkills =
+        selectedSkills.size === 0 ||
+        p.expertise.some((e) => selectedSkills.has(e.name))
+
+      return matchesQuery && matchesSkills
+    })
+  }, [query, selectedSkills])
 
   const visibleProfiles = filteredProfiles.slice(0, visibleCount)
   const hasMore = visibleCount < filteredProfiles.length
@@ -66,15 +97,22 @@ function DiscoverPage() {
             Network
           </Display>
 
-          <DiscoverSearchBar
-            value={query}
-            onChange={(val) => {
-              setQuery(val)
-              // Reset pagination when search query changes
-              setVisibleCount(PAGE_SIZE)
-            }}
-            className="w-full max-w-xs sm:max-w-lg md:max-w-2xl lg:max-w-3xl"
-          />
+          <div className="flex items-stretch gap-3 w-full max-w-xs sm:max-w-lg md:max-w-2xl lg:max-w-3xl">
+            <DiscoverSearchBar
+              value={query}
+              onChange={(val) => {
+                setQuery(val)
+                setVisibleCount(PAGE_SIZE)
+              }}
+              className="flex-1 min-w-0"
+            />
+            <DiscoverFilterPanel
+              allSkills={ALL_SKILLS}
+              selectedSkills={selectedSkills}
+              onToggle={handleSkillToggle}
+              onClear={handleSkillClear}
+            />
+          </div>
         </section>
       </div>
 
@@ -83,11 +121,12 @@ function DiscoverPage() {
         {visibleProfiles.length === 0 ? (
           <div className="py-24 text-center">
             <p className="text-ink-soft text-lg">
-              No profiles found matching{' '}
-              <span className="font-semibold text-ink">"{query}"</span>.
+              {query
+                ? <>No mentors found matching <span className="font-semibold text-ink">"{query}"</span>.</>
+                : 'No mentors match the selected filters.'}
             </p>
             <p className="text-ink-soft text-sm mt-2">
-              Try a different name, skill, or title.
+              Try adjusting your search or clearing the skill filters.
             </p>
           </div>
         ) : (
