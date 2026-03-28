@@ -4,9 +4,10 @@ interface RequestCardProps {
   user: string;
   topic: string;
   type: 'incoming' | 'outgoing';
+  onPress?: () => void;
 }
 
-export function RequestCard({ user, topic, type }: RequestCardProps) {
+export function RequestCard({ user, topic, type, onPress }: RequestCardProps) {
   const isIncoming = type === 'incoming';
   
   // Define what the USER's role is in this specific relationship
@@ -14,7 +15,11 @@ export function RequestCard({ user, topic, type }: RequestCardProps) {
   const badgeColor = isIncoming ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700';
 
   return (
-    <View className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3">
+    <TouchableOpacity 
+      activeOpacity={0.7}
+      onPress={onPress}
+      className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3"
+    >
       
       {/* Top Row: Name and Role Badge */}
       <View className="flex-row justify-between items-start mb-2">
@@ -43,7 +48,7 @@ export function RequestCard({ user, topic, type }: RequestCardProps) {
             {/* TODO: Hook up to /api/requests/decline endpoint */}
             <TouchableOpacity 
               accessibilityRole="button"
-              onPress={() => console.log(`TODO: Decline request from ${user}`)}
+              onPress={(e) => { e.stopPropagation(); console.log(`TODO: Decline request from ${user}`); }}
               className="bg-white px-4 py-2 rounded-lg border border-gray-200"
             >
               <Text className="text-gray-600 font-medium text-sm">Decline</Text>
@@ -52,7 +57,7 @@ export function RequestCard({ user, topic, type }: RequestCardProps) {
             {/* TODO: Hook up to /api/requests/accept endpoint */}
             <TouchableOpacity 
               accessibilityRole="button"
-              onPress={() => console.log(`TODO: Accept request from ${user}`)}
+              onPress={(e) => { e.stopPropagation(); console.log(`TODO: Accept request from ${user}`); }}
               className="bg-blue-600 px-4 py-2 rounded-lg"
             >
               <Text className="text-white font-medium text-sm">Accept</Text>
@@ -65,6 +70,6 @@ export function RequestCard({ user, topic, type }: RequestCardProps) {
         )}
       </View>
 
-    </View>
+    </TouchableOpacity>
   );
 }
