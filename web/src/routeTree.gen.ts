@@ -20,6 +20,7 @@ import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/ab
 import { Route as OnBoardingGettingToKnowYouRouteImport } from './routes/_onBoarding/gettingToKnowYou'
 import { Route as AuthorizedScheduleRouteImport } from './routes/_authorized/schedule'
 import { Route as AuthorizedProfileRouteImport } from './routes/_authorized/profile'
+import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/discover'
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
@@ -75,6 +76,11 @@ const AuthorizedProfileRoute = AuthorizedProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
+const AuthorizedDiscoverRoute = AuthorizedDiscoverRouteImport.update({
+  id: '/discover',
+  path: '/discover',
+  getParentRoute: () => AuthorizedRouteRoute,
+} as any)
 const AuthorizedDashboardRoute = AuthorizedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -84,6 +90,7 @@ const AuthorizedDashboardRoute = AuthorizedDashboardRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof AuthorizedDashboardRoute
+  '/discover': typeof AuthorizedDiscoverRoute
   '/profile': typeof AuthorizedProfileRoute
   '/schedule': typeof AuthorizedScheduleRoute
   '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
@@ -95,6 +102,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof AuthorizedDashboardRoute
+  '/discover': typeof AuthorizedDiscoverRoute
   '/profile': typeof AuthorizedProfileRoute
   '/schedule': typeof AuthorizedScheduleRoute
   '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
@@ -110,6 +118,7 @@ export interface FileRoutesById {
   '/_onBoarding': typeof OnBoardingRouteRouteWithChildren
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
+  '/_authorized/discover': typeof AuthorizedDiscoverRoute
   '/_authorized/profile': typeof AuthorizedProfileRoute
   '/_authorized/schedule': typeof AuthorizedScheduleRoute
   '/_onBoarding/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
@@ -123,8 +132,10 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/discover'
     | '/profile'
     | '/schedule'
+    | '/gettingToKnowYou'
     | '/about'
     | '/login'
     | '/register'
@@ -133,8 +144,10 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/dashboard'
+    | '/discover'
     | '/profile'
     | '/schedule'
+    | '/gettingToKnowYou'
     | '/about'
     | '/login'
     | '/register'
@@ -146,6 +159,7 @@ export interface FileRouteTypes {
     | '/_onBoarding'
     | '/_unauthorized'
     | '/_authorized/dashboard'
+    | '/_authorized/discover'
     | '/_authorized/profile'
     | '/_authorized/schedule'
     | '/_onBoarding/gettingToKnowYou'
@@ -242,6 +256,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedProfileRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
+    '/_authorized/discover': {
+      id: '/_authorized/discover'
+      path: '/discover'
+      fullPath: '/discover'
+      preLoaderRoute: typeof AuthorizedDiscoverRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
     '/_authorized/dashboard': {
       id: '/_authorized/dashboard'
       path: '/dashboard'
@@ -254,12 +275,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthorizedRouteRouteChildren {
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
+  AuthorizedDiscoverRoute: typeof AuthorizedDiscoverRoute
   AuthorizedProfileRoute: typeof AuthorizedProfileRoute
   AuthorizedScheduleRoute: typeof AuthorizedScheduleRoute
 }
 
 const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,
+  AuthorizedDiscoverRoute: AuthorizedDiscoverRoute,
   AuthorizedProfileRoute: AuthorizedProfileRoute,
   AuthorizedScheduleRoute: AuthorizedScheduleRoute,
 }
