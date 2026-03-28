@@ -124,19 +124,30 @@ function RouteComponent() {
                                     Added temporarily so UI teammates can view the Dashboard.
                                     FUTURE: Delete this entire button once real auth is merged.
                                 --------------------------------------------------------- */}
-                            <Button 
-                                type="button" 
-                                variant="secondary" 
+                            <Button
+                                type="button"
+                                variant="secondary"
                                 className="w-full bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border border-dashed border-yellow-300"
                                 onClick={() => {
                                     setDemoAuthRole('mentor')
-                                    router.navigate({ 
+                                    router.navigate({
                                         to: '/dashboard',
-                                        search: { mode: 'mentor' } 
+                                        search: { mode: 'mentor' }
                                     })
                                 }}
                             >
                                 Bypass Login (UI Demo Mode)
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                className="w-full bg-red-50 text-red-700 hover:bg-red-100 border border-dashed border-red-300"
+                                onClick={() => {
+                                    setDemoAuthRole('admin')
+                                    router.navigate({ to: '/admin' })
+                                }}
+                            >
+                                Bypass Login (Admin Demo Mode)
                             </Button>
 
                             <div className="flex items-center gap-3 w-full mt-2">

@@ -2,7 +2,7 @@
 // TEMPORARY: Demo authentication state for MVP. 
 // Replace with real auth context (e.g., JWT decoding/TanStack Query) later.
 
-export const setDemoAuthRole = (role: 'mentor' | 'mentee' | 'both' | null) => {
+export const setDemoAuthRole = (role: 'mentor' | 'mentee' | 'both' | 'admin' | null) => {
   if (role) {
     localStorage.setItem('demo_user_role', role);
   } else {

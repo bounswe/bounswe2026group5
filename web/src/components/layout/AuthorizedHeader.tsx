@@ -1,7 +1,7 @@
 // web/src/components/layout/AuthorizedHeader.tsx
 import { Link, useRouter, useNavigate, useSearch } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
-import { setDemoAuthRole } from '@/lib/demoAuth'
+import { setDemoAuthRole, getDemoAuthRole } from '@/lib/demoAuth'
 
 type DashboardMode = 'mentor' | 'mentee'
 type HeaderSearch = {
@@ -12,10 +12,11 @@ export function AuthorizedHeader() {
   const router = useRouter()
   const navigate = useNavigate()
   
-  const search = useSearch({ strict: false }) as HeaderSearch  
+  const search = useSearch({ strict: false }) as HeaderSearch
   const isMentorMode = search.mode === 'mentor'
   const currentMode = isMentorMode ? 'mentor' : 'mentee'
   const isMenteeMode = currentMode === 'mentee'
+  const isAdmin = getDemoAuthRole() === 'admin'
 
   const handleLogout = () => {
     setDemoAuthRole(null)
@@ -72,6 +73,15 @@ export function AuthorizedHeader() {
               <span className="text-sm font-medium text-ink-soft">Requests</span>
               <span className="text-[10px] uppercase tracking-wider bg-accent-muted text-ink px-1.5 py-0.5 rounded-sm">Soon</span>
             </div>
+            {isAdmin && (
+              <Link
+                to="/admin"
+                activeProps={{ className: 'text-ink font-semibold' }}
+                className="text-sm font-medium text-red-500 hover:text-red-700 transition-colors"
+              >
+                Admin
+              </Link>
+            )}
           </nav>
         </div>
 
