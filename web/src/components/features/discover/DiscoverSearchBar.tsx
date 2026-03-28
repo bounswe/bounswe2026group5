@@ -27,6 +27,7 @@ export function DiscoverSearchBar({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        aria-label={placeholder}
         className={cn(
           'w-full pl-14 pr-6 py-5',
           'bg-mist border border-line rounded-2xl',
