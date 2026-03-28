@@ -19,19 +19,12 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 import { DashboardHome } from '../dashboard'
 
-vi.mock('lucide-react', () => ({
-  CalendarDays: () => <span data-testid="icon-calendar" />,
-  Clock: () => <span data-testid="icon-clock" />,
-  CheckCircle2: () => <span data-testid="icon-check" />,
-  XCircle: () => <span data-testid="icon-x-circle" />,
-  ArrowRight: () => <span data-testid="icon-arrow" />,
-  Plus: () => <span data-testid="icon-plus" />,
-  XIcon: () => <span data-testid="icon-close" />,
-  ChevronDownIcon: () => <span data-testid="icon-chevron-down" />,
-  ChevronUpIcon: () => <span data-testid="icon-chevron-up" />, 
-  X: () => <span data-testid="icon-x-main" />, 
-  CheckIcon: () => <span data-testid="icon-check-dropdown" />, 
-}))
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<any>()
+  return {
+    ...actual,
+  }
+})
 
 describe('Dashboard Component Routing & Role Variants', () => {
   beforeEach(() => {
