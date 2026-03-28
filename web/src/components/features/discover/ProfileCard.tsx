@@ -27,6 +27,7 @@ function ProfileAvatar({
     .substring(0, 2)
     .toUpperCase()
 
+
   if (pictureUrl) {
     return (
       <img
@@ -44,7 +45,9 @@ function ProfileAvatar({
     'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
     'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
   ]
+
   const colorClass = colors[displayName.length % colors.length]
+
 
   return (
     <div

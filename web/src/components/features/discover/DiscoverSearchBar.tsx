@@ -14,7 +14,9 @@ export function DiscoverSearchBar({
   onChange,
   placeholder = 'Search profiles, skills, or projects...',
   className,
+
 }: Readonly<DiscoverSearchBarProps>) {
+
   return (
     <div className={cn('relative w-full', className)}>
       <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
