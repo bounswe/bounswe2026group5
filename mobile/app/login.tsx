@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -45,7 +46,7 @@ export default function LoginScreen() {
               className="text-2xl font-black tracking-tight"
               style={{ color: theme.primary }}
             >
-              Stitch
+              Mentorship
             </Text>
           </View>
 
@@ -56,7 +57,7 @@ export default function LoginScreen() {
               style={{ color: theme.textPrimary }}
               accessibilityRole="header"
             >
-              Log In to Stitch
+              Log In to Mentorship
             </Text>
             <Text
               className="text-base font-medium"
@@ -75,7 +76,7 @@ export default function LoginScreen() {
                 className="text-xs font-bold tracking-widest uppercase ml-1"
                 style={{ color: theme.textSoft }}
               >
-                Email or Username
+                Email
               </Text>
               <View
                 className="flex-row items-center h-14 rounded-xl px-4 gap-3"
@@ -234,8 +235,29 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
 
+          {/* ── Demo Bypass ── */}
+          <TouchableOpacity
+            className="w-full rounded-full h-12 mt-8 py-3 items-center"
+            style={{
+              backgroundColor: "#FEF3C7",
+              borderColor: isDark ? theme.divider : `${theme.divider}40`,
+              borderWidth: 2
+            }}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Continue as demo user"
+            onPress={() => router.replace('/(tabs)')}
+          >
+            <Text
+              className="text-sm font-semibold underline"
+              style={{ color: 'blue' }}
+            >
+              Continue without logging in (Demo)
+            </Text>
+          </TouchableOpacity>
+
           {/* ── Sign Up Footer ── */}
-          <View className="mt-12 items-center">
+          <View className="mt-6 items-center">
             <Text
               className="font-medium text-base"
               style={{ color: theme.textSoft }}
