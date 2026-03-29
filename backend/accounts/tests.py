@@ -427,6 +427,11 @@ class RBACPermissionTests(TestCase):
             email="rbac_admin@test.com",
             password="Admin123!",
         )
+        self.banned_admin = User.objects.create_superuser(
+            email="rbac_banned_admin@test.com",
+            password="BannedAdmin123!",
+            is_banned=True,
+        )
         self.user = User.objects.create_user(
             email="rbac_user@test.com",
             password="User123!",
@@ -440,6 +445,9 @@ class RBACPermissionTests(TestCase):
     def _get_token(self, user: User) -> str:
         refresh = RefreshToken.for_user(user)
         return str(refresh.access_token)
+
+    def _get_refresh_token(self, user: User) -> str:
+        return str(RefreshToken.for_user(user))
 
     def test_admin_only_endpoint_access_control(self) -> None:
         url = "/api/auth/admin/users/"
@@ -457,6 +465,38 @@ class RBACPermissionTests(TestCase):
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.admin)}")
         response = self.api_client.get(url)
         self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("count", payload)
+        self.assertIn("results", payload)
+        self.assertIsInstance(payload["results"], list)
+        self.assertEqual(payload["count"], len(payload["results"]))
+
+        if payload["results"]:
+            first_user = payload["results"][0]
+            self.assertIn("id", first_user)
+            self.assertIn("email", first_user)
+            self.assertIn("role", first_user)
+            self.assertIn("is_banned", first_user)
+            self.assertIn("is_active", first_user)
+            self.assertIn("created_at", first_user)
+            self.assertIn("updated_at", first_user)
+
+    def test_admin_only_endpoint_banned_admin_forbidden(self) -> None:
+        url = "/api/auth/admin/users/"
+
+        banned_admin_token = self._get_token(self.banned_admin)
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {banned_admin_token}")
+        response = self.api_client.get(url)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_banned_user_cannot_refresh_token(self) -> None:
+        refresh_url = "/api/auth/token/refresh/"
+        payload = {"refresh": self._get_refresh_token(self.banned)}
+
+        response = self.api_client.post(refresh_url, payload)
+
+        self.assertEqual(response.status_code, 403)
 
     def test_profile_edit_requires_user_and_not_banned(self) -> None:
         # create profile for user

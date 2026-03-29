@@ -2,7 +2,7 @@
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -68,6 +68,7 @@ class ProfileByUsernameAPIView(APIView):
             200: ProfileResponseSerializer,
             400: OpenApiResponse(description="Validation error."),
             401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Account banned."),
             404: OpenApiResponse(description="Profile not found."),
         },
         description="Partially update authenticated user's profile by username.",
@@ -83,6 +84,4 @@ class ProfileByUsernameAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
-        return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
         return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)

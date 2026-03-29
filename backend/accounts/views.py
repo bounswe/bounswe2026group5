@@ -8,12 +8,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 
 from .models import User
-from .permissions import IsAdmin, IsNotBanned, IsUser
-from .rbac_utils import require_admin, require_user
+from .permissions import IsAdmin, IsNotBanned
 from .serializers import (
     AuthResponseSerializer,
+    BannedAwareTokenRefreshSerializer,
     LoginSerializer,
     LogoutSerializer,
     RegisterSerializer,
@@ -110,6 +111,22 @@ class LogoutAPIView(APIView):
             )
 
         return Response(status=status.HTTP_205_RESET_CONTENT)
+
+
+class TokenRefreshAPIView(TokenRefreshView):
+    serializer_class = BannedAwareTokenRefreshSerializer
+
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(description="Token refresh successful."),
+            401: OpenApiResponse(description="Invalid or expired refresh token."),
+            403: OpenApiResponse(description="Account banned."),
+        },
+        description="Refresh access token using refresh token. Banned users are blocked.",
+        tags=["Auth"],
+    )
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return cast(Response, super().post(request, *args, **kwargs))
 
 
 class AdminUsersListAPIView(APIView):
