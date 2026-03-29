@@ -150,7 +150,7 @@ export default function LoginScreen() {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
-                  autoComplete="password"
+                  autoComplete="current-password"
                   returnKeyType="done"
                   accessibilityLabel="Password"
                   onSubmitEditing={() =>
