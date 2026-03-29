@@ -237,11 +237,11 @@ export default function LoginScreen() {
 
           {/* ── Demo Bypass ── */}
           <TouchableOpacity
-            className="w-full rounded-full h-12 mt-8 py-3 items-center"
+            className="w-full rounded-full h-12 mt-8 items-center justify-center"
             style={{
-              backgroundColor: "#FEF3C7",
-              borderColor: isDark ? theme.divider : `${theme.divider}40`,
-              borderWidth: 2
+              backgroundColor: isDark ? '#451a03' : '#FEF3C7',
+              borderColor: isDark ? '#92400e' : '#d97706',
+              borderWidth: 1.5,
             }}
             activeOpacity={0.7}
             accessibilityRole="button"
@@ -249,8 +249,8 @@ export default function LoginScreen() {
             onPress={() => router.replace('/(tabs)')}
           >
             <Text
-              className="text-sm font-semibold underline"
-              style={{ color: 'blue' }}
+              className="text-sm font-semibold"
+              style={{ color: isDark ? '#fcd34d' : '#92400e' }}
             >
               Continue without logging in (Demo)
             </Text>
