@@ -93,7 +93,7 @@ export default function LoginScreen() {
                   className="flex-1 text-base font-medium"
                   style={{ color: theme.textPrimary }}
                   placeholder="Enter your email"
-                  placeholderTextColor={isDark ? '#4a5568' : '#9da3ae'}
+                  placeholderTextColor={theme.textMuted}
                   value={email}
                   onChangeText={setEmail}
                   autoCapitalize="none"
