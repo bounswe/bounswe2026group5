@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
@@ -42,10 +43,7 @@ export default function LoginScreen() {
           {/* ── Brand Header ── */}
           <View className="flex-row items-center gap-2 mb-12">
             <Ionicons name="leaf" size={28} color={theme.primary} />
-            <Text
-              className="text-2xl font-black tracking-tight"
-              style={{ color: theme.primary }}
-            >
+            <Text className="text-2xl font-black tracking-tight text-primary dark:text-primary-dim">
               Mentorship
             </Text>
           </View>
@@ -53,16 +51,12 @@ export default function LoginScreen() {
           {/* ── Hero Title ── */}
           <View className="mb-10">
             <Text
-              className="text-4xl font-extrabold leading-tight tracking-tight mb-2"
-              style={{ color: theme.textPrimary }}
+              className="text-4xl font-extrabold leading-tight tracking-tight mb-2 text-on-surface dark:text-on-surface-dark"
               accessibilityRole="header"
             >
               Log In to Mentorship
             </Text>
-            <Text
-              className="text-base font-medium"
-              style={{ color: theme.textSoft }}
-            >
+            <Text className="text-base font-medium text-on-surface-soft dark:text-on-surface-soft-dark">
               Enter your details to access your dashboard.
             </Text>
           </View>
@@ -72,16 +66,10 @@ export default function LoginScreen() {
 
             {/* Email / Username */}
             <View className="gap-1.5">
-              <Text
-                className="text-xs font-bold tracking-widest uppercase ml-1"
-                style={{ color: theme.textSoft }}
-              >
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
                 Email
               </Text>
-              <View
-                className="flex-row items-center h-14 rounded-xl px-4 gap-3"
-                style={{ backgroundColor: theme.inputBackground }}
-              >
+              <View className="flex-row items-center h-14 rounded-xl px-4 gap-3 bg-surface-input dark:bg-surface-input-dark">
                 <Ionicons
                   name="person-outline"
                   size={20}
@@ -90,8 +78,7 @@ export default function LoginScreen() {
                   importantForAccessibility="no"
                 />
                 <TextInput
-                  className="flex-1 text-base font-medium"
-                  style={{ color: theme.textPrimary }}
+                  className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
                   placeholder="Enter your email"
                   placeholderTextColor={isDark ? '#4a5568' : '#9da3ae'}
                   value={email}
@@ -108,10 +95,7 @@ export default function LoginScreen() {
             {/* Password */}
             <View className="gap-1.5">
               <View className="flex-row justify-between items-center ml-1">
-                <Text
-                  className="text-xs font-bold tracking-widest uppercase"
-                  style={{ color: theme.textSoft }}
-                >
+                <Text className="text-xs font-bold tracking-widest uppercase text-on-surface-soft dark:text-on-surface-soft-dark">
                   Password
                 </Text>
                 <TouchableOpacity
@@ -122,19 +106,13 @@ export default function LoginScreen() {
                   }
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text
-                    className="text-sm font-semibold"
-                    style={{ color: theme.primary }}
-                  >
+                  <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
                     Forgot Password?
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              <View
-                className="flex-row items-center h-14 rounded-xl px-4 gap-3"
-                style={{ backgroundColor: theme.inputBackground }}
-              >
+              <View className="flex-row items-center h-14 rounded-xl px-4 gap-3 bg-surface-input dark:bg-surface-input-dark">
                 <Ionicons
                   name="lock-closed-outline"
                   size={20}
@@ -143,8 +121,7 @@ export default function LoginScreen() {
                   importantForAccessibility="no"
                 />
                 <TextInput
-                  className="flex-1 text-base font-medium"
-                  style={{ color: theme.textPrimary }}
+                  className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
                   placeholder="Enter your password"
                   placeholderTextColor={isDark ? '#4a5568' : '#9da3ae'}
                   value={password}
@@ -157,12 +134,14 @@ export default function LoginScreen() {
                     console.log('TODO: Trigger login on keyboard done')
                   }
                 />
-                <TouchableOpacity
+                {/* Pressable avoids the stuck-opacity bug that TouchableOpacity
+                    (which wraps children in Animated.View) causes when secureTextEntry
+                    toggles rebuild the TextInput and interrupt the fade animation. */}
+                <Pressable
                   onPress={() => setShowPassword((prev) => !prev)}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
                   accessibilityRole="button"
-                  accessibilityLabel={
-                    showPassword ? 'Hide password' : 'Show password'
-                  }
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Ionicons
@@ -170,14 +149,13 @@ export default function LoginScreen() {
                     size={20}
                     color={theme.textMuted}
                   />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
 
             {/* Login CTA */}
             <TouchableOpacity
-              className="w-full h-14 rounded-full items-center justify-center mt-2 shadow-sm"
-              style={{ backgroundColor: theme.primary }}
+              className="w-full h-14 rounded-full items-center justify-center mt-2 shadow-sm bg-primary dark:bg-primary-dim"
               activeOpacity={0.88}
               accessibilityRole="button"
               accessibilityLabel="Log in"
@@ -192,29 +170,16 @@ export default function LoginScreen() {
 
           {/* ── Divider ── */}
           <View className="flex-row items-center gap-4 mt-12 mb-8">
-            <View
-              className="flex-1 h-px"
-              style={{ backgroundColor: isDark ? theme.divider : `${theme.divider}80` }}
-            />
-            <Text
-              className="text-xs font-bold uppercase tracking-widest"
-              style={{ color: theme.textMuted }}
-            >
+            <View className="flex-1 h-px bg-divider/50 dark:bg-divider-dark" />
+            <Text className="text-xs font-bold uppercase tracking-widest text-on-surface-muted dark:text-on-surface-muted-dark">
               or
             </Text>
-            <View
-              className="flex-1 h-px"
-              style={{ backgroundColor: isDark ? theme.divider : `${theme.divider}80` }}
-            />
+            <View className="flex-1 h-px bg-divider/50 dark:bg-divider-dark" />
           </View>
 
           {/* ── Google Sign-In ── */}
           <TouchableOpacity
-            className="w-full h-14 rounded-full flex-row items-center justify-center gap-3 shadow-sm border"
-            style={{
-              backgroundColor: theme.cardBackground,
-              borderColor: isDark ? theme.divider : `${theme.divider}40`,
-            }}
+            className="w-full h-14 rounded-full flex-row items-center justify-center gap-3 shadow-sm border bg-surface-card dark:bg-surface-card-dark border-divider/25 dark:border-divider-dark"
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel="Log in with Google"
@@ -227,10 +192,7 @@ export default function LoginScreen() {
               accessibilityElementsHidden
               importantForAccessibility="no"
             />
-            <Text
-              className="font-bold text-base"
-              style={{ color: theme.textPrimary }}
-            >
+            <Text className="font-bold text-base text-on-surface dark:text-on-surface-dark">
               Log In with Google
             </Text>
           </TouchableOpacity>
@@ -258,14 +220,10 @@ export default function LoginScreen() {
 
           {/* ── Sign Up Footer ── */}
           <View className="mt-6 items-center">
-            <Text
-              className="font-medium text-base"
-              style={{ color: theme.textSoft }}
-            >
+            <Text className="font-medium text-base text-on-surface-soft dark:text-on-surface-soft-dark">
               Don&apos;t have an account?{' '}
               <Text
-                className="font-bold"
-                style={{ color: theme.primary }}
+                className="font-bold text-primary dark:text-primary-dim"
                 accessibilityRole="link"
                 accessibilityLabel="Sign up"
                 onPress={() =>
