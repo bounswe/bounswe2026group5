@@ -80,7 +80,7 @@ export default function LoginScreen() {
                 <TextInput
                   className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
                   placeholder="Enter your email"
-                  placeholderTextColor={isDark ? '#4a5568' : '#9da3ae'}
+                  placeholderTextColor={theme.textMuted}
                   value={email}
                   onChangeText={setEmail}
                   autoCapitalize="none"
@@ -123,11 +123,11 @@ export default function LoginScreen() {
                 <TextInput
                   className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
                   placeholder="Enter your password"
-                  placeholderTextColor={isDark ? '#4a5568' : '#9da3ae'}
+                  placeholderTextColor={theme.textMuted}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
-                  autoComplete="password"
+                  autoComplete="current-password"
                   returnKeyType="done"
                   accessibilityLabel="Password"
                   onSubmitEditing={() =>
