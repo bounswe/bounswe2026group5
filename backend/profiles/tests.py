@@ -1,6 +1,6 @@
 """Tests for profiles domain models."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from django.contrib.auth import get_user_model
@@ -366,3 +366,262 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 400)
         payload = response.json()
         self.assertIn("mentorship_mode", payload)
+
+
+class AvailabilitySlotAPIViewTests(TestCase):
+    """Integration tests for mentor availability slot CRUD endpoints."""
+
+    def setUp(self) -> None:
+        """Create mentor/mentee users and authenticate API clients."""
+        self.api_client: Any = APIClient()
+
+        self.mentor_user = User.objects.create_user(
+            email="mentor-slots@example.com",
+            password="SecurePass123",
+        )
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            display_name="Mentor Slots",
+            mentorship_mode=MentorshipMode.MENTOR,
+        )
+
+        self.other_mentor_user = User.objects.create_user(
+            email="other-mentor@example.com",
+            password="SecurePass123",
+        )
+        self.other_mentor_profile = Profile.objects.create(
+            user=self.other_mentor_user,
+            display_name="Other Mentor",
+            mentorship_mode=MentorshipMode.MENTOR,
+        )
+
+        self.mentee_user = User.objects.create_user(
+            email="mentee-slots@example.com",
+            password="SecurePass123",
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user,
+            display_name="Mentee Slots",
+            mentorship_mode=MentorshipMode.MENTEE,
+        )
+
+        mentor_refresh = RefreshToken.for_user(self.mentor_user)
+        self.mentor_access_token = str(mentor_refresh.access_token)
+
+        other_mentor_refresh = RefreshToken.for_user(self.other_mentor_user)
+        self.other_mentor_access_token = str(other_mentor_refresh.access_token)
+
+        mentee_refresh = RefreshToken.for_user(self.mentee_user)
+        self.mentee_access_token = str(mentee_refresh.access_token)
+
+        self.collection_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/"
+        self.other_collection_url = (
+            f"/api/profiles/{self.other_mentor_profile.username}/availability-slots/"
+        )
+
+    def test_create_availability_slot_success(self) -> None:
+        """Mentor can create a slot with date/startTime/endTime payload."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        payload = {
+            "date": (timezone.localdate() + timedelta(days=1)).isoformat(),
+            "startTime": "10:00:00",
+            "endTime": "11:00:00",
+        }
+
+        response = self.api_client.post(self.collection_url, payload)
+
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertEqual(body["date"], payload["date"])
+        self.assertEqual(body["startTime"], payload["startTime"])
+        self.assertEqual(body["endTime"], payload["endTime"])
+        self.assertTrue(
+            AvailabilitySlot.objects.filter(id=body["id"], profile=self.mentor_profile).exists()
+        )
+
+    def test_create_availability_slot_rejects_past_date(self) -> None:
+        """Serializer rejects past dates for slot creation."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        payload = {
+            "date": (timezone.localdate() - timedelta(days=1)).isoformat(),
+            "startTime": "10:00:00",
+            "endTime": "11:00:00",
+        }
+
+        response = self.api_client.post(self.collection_url, payload)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("date", response.json())
+
+    def test_create_availability_slot_rejects_end_before_start(self) -> None:
+        """Serializer rejects invalid time ranges where endTime <= startTime."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        payload = {
+            "date": (timezone.localdate() + timedelta(days=1)).isoformat(),
+            "startTime": "14:00:00",
+            "endTime": "13:59:59",
+        }
+
+        response = self.api_client.post(self.collection_url, payload)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("endTime", response.json())
+
+    def test_list_upcoming_slots_returns_only_future_slots(self) -> None:
+        """GET endpoint returns only slots whose start_at is in the future."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        tz = timezone.get_current_timezone()
+
+        past_start = timezone.now() - timedelta(days=1)
+        past_end = past_start + timedelta(hours=1)
+        AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=past_start,
+            end_at=past_end,
+        )
+
+        future_date = timezone.localdate() + timedelta(days=2)
+        future_start = timezone.make_aware(datetime.combine(future_date, datetime.min.time()), tz)
+        future_start = future_start.replace(hour=9)
+        future_end = future_start + timedelta(hours=1)
+        future_slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=future_start,
+            end_at=future_end,
+        )
+
+        response = self.api_client.get(self.collection_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        returned_ids = {slot["id"] for slot in payload}
+        self.assertIn(str(future_slot.id), returned_ids)
+        self.assertEqual(len(payload), 1)
+
+    def test_patch_availability_slot_success(self) -> None:
+        """Mentor can update own slot via PATCH."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        slot_start = timezone.now() + timedelta(days=3)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+        )
+        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+
+        response = self.api_client.patch(
+            detail_url,
+            {
+                "date": (timezone.localdate() + timedelta(days=4)).isoformat(),
+                "startTime": "15:00:00",
+                "endTime": "16:00:00",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        slot.refresh_from_db()
+        self.assertEqual(timezone.localtime(slot.start_at).hour, 15)
+        self.assertEqual(timezone.localtime(slot.end_at).hour, 16)
+
+    def test_delete_availability_slot_success(self) -> None:
+        """Mentor can delete own availability slot."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+        )
+        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+
+        response = self.api_client.delete(detail_url)
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(AvailabilitySlot.objects.filter(id=slot.id).exists())
+
+    def test_delete_other_mentor_slot_returns_404(self) -> None:
+        """Mentors cannot delete slots that belong to another mentor."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.other_mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+        )
+        detail_url = (
+            f"/api/profiles/{self.other_mentor_profile.username}/availability-slots/{slot.id}/"
+        )
+
+        response = self.api_client.delete(detail_url)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(AvailabilitySlot.objects.filter(id=slot.id).exists())
+
+    def test_mentee_cannot_create_or_delete_slots(self) -> None:
+        """Mentees cannot manage availability slots."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
+        payload = {
+            "date": (timezone.localdate() + timedelta(days=1)).isoformat(),
+            "startTime": "10:00:00",
+            "endTime": "11:00:00",
+        }
+
+        create_response = self.api_client.post(self.collection_url, payload)
+        self.assertEqual(create_response.status_code, 403)
+
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+        )
+        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+        delete_response = self.api_client.delete(detail_url)
+
+        self.assertEqual(delete_response.status_code, 403)
+
+    def test_other_authenticated_user_can_get_mentor_slots(self) -> None:
+        """Other authenticated users can read a mentor's availability slots."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+        )
+
+        list_response = self.api_client.get(self.collection_url)
+        detail_response = self.api_client.get(
+            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(detail_response.status_code, 200)
+
+    def test_non_owner_cannot_create_for_other_mentor_username(self) -> None:
+        """Authenticated non-owners cannot create slots for another mentor."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
+
+        response = self.api_client.post(
+            self.collection_url,
+            {
+                "date": (timezone.localdate() + timedelta(days=1)).isoformat(),
+                "startTime": "10:00:00",
+                "endTime": "11:00:00",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_availability_slot_requires_authentication(self) -> None:
+        """Unauthenticated requests cannot create availability slots."""
+        response = self.api_client.post(
+            self.collection_url,
+            {
+                "date": (timezone.localdate() + timedelta(days=1)).isoformat(),
+                "startTime": "10:00:00",
+                "endTime": "11:00:00",
+            },
+        )
+
+        self.assertEqual(response.status_code, 401)
