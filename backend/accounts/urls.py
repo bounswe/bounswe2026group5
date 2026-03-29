@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     AdminUsersListAPIView,
+    AuthUserByUsernameAPIView,
     LoginAPIView,
     LogoutAPIView,
     RegisterAPIView,
@@ -14,4 +15,5 @@ urlpatterns = [
     path("logout/", LogoutAPIView.as_view(), name="logout"),
     path("token/refresh/", TokenRefreshAPIView.as_view(), name="token-refresh"),
     path("admin/users/", AdminUsersListAPIView.as_view(), name="admin-users-list"),
+    path("<str:username>/", AuthUserByUsernameAPIView.as_view(), name="auth-user-by-username"),
 ]
