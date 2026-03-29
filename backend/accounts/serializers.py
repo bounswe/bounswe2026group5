@@ -14,11 +14,21 @@ from .models import AuthProvider, User, UserRole
 
 
 class UserResponseSerializer(serializers.ModelSerializer):
+    username = serializers.SerializerMethodField()
+
+    def get_username(self, obj: User) -> str | None:
+        """Return linked profile username for route navigation compatibility."""
+        profile = getattr(obj, "profile", None)
+        if profile is None:
+            return None
+        return cast(str, profile.username)
+
     class Meta:
         model = User
         fields = (
             "id",
             "email",
+            "username",
             "role",
             "auth_provider",
             "is_active",
@@ -130,12 +140,10 @@ class BannedAwareTokenRefreshSerializer(TokenRefreshSerializer):
     """Refresh serializer that blocks token refresh for banned users."""
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        data = super().validate(attrs)
-
         refresh_token = RefreshToken(attrs["refresh"])
         user_id = refresh_token.payload.get("user_id")
 
         if user_id is not None and User.objects.filter(id=user_id, is_banned=True).exists():
             raise PermissionDenied("This account has been banned.")
 
-        return data
+        return super().validate(attrs)

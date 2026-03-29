@@ -1,5 +1,6 @@
 from typing import Any
 
+from django.conf import settings
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -90,6 +91,8 @@ class RegisterAPIViewTests(TestCase):
         data = response.json()
         self.assertIn("access_token", data)
         self.assertIn("refresh_token", data)
+        self.assertIn(settings.AUTH_ACCESS_COOKIE_NAME, response.cookies)
+        self.assertIn(settings.AUTH_REFRESH_COOKIE_NAME, response.cookies)
         self.assertEqual(data["user"]["email"], "newuser@example.com")
         self.assertEqual(data["user"]["role"], UserRole.USER)
         self.assertTrue(data["user"]["is_active"])
@@ -242,6 +245,8 @@ class LoginAPIViewTests(TestCase):
         data = response.json()
         self.assertIn("access_token", data)
         self.assertIn("refresh_token", data)
+        self.assertIn(settings.AUTH_ACCESS_COOKIE_NAME, response.cookies)
+        self.assertIn(settings.AUTH_REFRESH_COOKIE_NAME, response.cookies)
         self.assertEqual(data["user"]["email"], "testuser@example.com")
         self.assertEqual(data["user"]["role"], UserRole.USER)
 
@@ -417,12 +422,85 @@ class LogoutAPIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_logout_with_cookie_refresh_token(self) -> None:
+        """Test logout accepts refresh token from HttpOnly cookie."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+        self.api_client.cookies[settings.AUTH_REFRESH_COOKIE_NAME] = self.refresh_token
+
+        response = self.api_client.post(self.logout_url, {})
+
+        self.assertEqual(response.status_code, 205)
+        self.assertTrue(BlacklistedToken.objects.filter(token__token=self.refresh_token).exists())
+
+
+class TokenRefreshAndAuthUserByUsernameAPIViewTests(TestCase):
+    """Tests for token refresh and authenticated username auth endpoint."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+        self.user = User.objects.create_user(
+            email="refreshme@example.com",
+            password="SecurePass123",
+            is_active=True,
+        )
+        self.profile = Profile.objects.create(
+            user=self.user,
+            username="refreshme",
+            display_name="Refresh Me",
+        )
+        refresh = RefreshToken.for_user(self.user)
+        self.access_token = str(refresh.access_token)
+        self.refresh_token = str(refresh)
+
+    def test_refresh_from_cookie_rotates_tokens(self) -> None:
+        """Test token refresh succeeds when refresh token is supplied via cookie."""
+        self.api_client.cookies[settings.AUTH_REFRESH_COOKIE_NAME] = self.refresh_token
+
+        response = self.api_client.post("/api/auth/token/refresh/", {})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("access", data)
+        self.assertIn(settings.AUTH_ACCESS_COOKIE_NAME, response.cookies)
+        self.assertIn(settings.AUTH_REFRESH_COOKIE_NAME, response.cookies)
+
+    def test_auth_user_endpoint_with_bearer_token(self) -> None:
+        """Test authenticated user details endpoint with bearer authentication."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+
+        response = self.api_client.get(f"/api/auth/{self.profile.username}/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["email"], self.user.email)
+        self.assertEqual(data["role"], self.user.role)
+        self.assertEqual(data["username"], self.profile.username)
+
+    def test_auth_user_endpoint_with_cookie_token(self) -> None:
+        """Test authenticated user details endpoint with cookie authentication."""
+        self.api_client.cookies[settings.AUTH_ACCESS_COOKIE_NAME] = self.access_token
+
+        response = self.api_client.get(f"/api/auth/{self.profile.username}/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["email"], self.user.email)
+        self.assertEqual(data["username"], self.profile.username)
+
+    def test_auth_user_endpoint_with_other_username_returns_not_found(self) -> None:
+        """Test that authenticated users cannot access another username route."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+
+        response = self.api_client.get("/api/auth/someone_else/")
+
+        self.assertEqual(response.status_code, 404)
+
 
 class RBACPermissionTests(TestCase):
     """Tests for role-based access control behavior on protected views."""
 
     def setUp(self) -> None:
-        self.api_client = APIClient()
+        self.api_client: Any = APIClient()
         self.admin = User.objects.create_superuser(
             email="rbac_admin@test.com",
             password="Admin123!",

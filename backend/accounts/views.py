@@ -1,5 +1,6 @@
 from typing import Any, cast
 
+from django.conf import settings
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -22,13 +23,47 @@ from .serializers import (
 )
 
 
-def build_auth_response(user: User) -> dict[str, object]:
-    refresh = RefreshToken.for_user(user)
+def build_auth_response(user: User, refresh: RefreshToken | None = None) -> dict[str, object]:
+    """Build a consistent auth response payload for both web and mobile clients."""
+    if refresh is None:
+        refresh = RefreshToken.for_user(user)
+
     return {
         "access_token": str(refresh.access_token),
         "refresh_token": str(refresh),
         "user": UserResponseSerializer(user).data,
     }
+
+
+def _set_auth_cookies(response: Response, refresh: RefreshToken) -> None:
+    """Attach secure HttpOnly auth cookies to the response."""
+    access_max_age = int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds())
+    refresh_max_age = int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds())
+    cookie_secure = settings.AUTH_COOKIE_SECURE
+    cookie_samesite = settings.AUTH_COOKIE_SAMESITE
+
+    response.set_cookie(
+        key=settings.AUTH_ACCESS_COOKIE_NAME,
+        value=str(refresh.access_token),
+        max_age=access_max_age,
+        httponly=True,
+        secure=cookie_secure,
+        samesite=cookie_samesite,
+    )
+    response.set_cookie(
+        key=settings.AUTH_REFRESH_COOKIE_NAME,
+        value=str(refresh),
+        max_age=refresh_max_age,
+        httponly=True,
+        secure=cookie_secure,
+        samesite=cookie_samesite,
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    """Clear auth cookies on logout or token invalidation."""
+    response.delete_cookie(key=settings.AUTH_ACCESS_COOKIE_NAME)
+    response.delete_cookie(key=settings.AUTH_REFRESH_COOKIE_NAME)
 
 
 class RegisterAPIView(APIView):
@@ -47,11 +82,15 @@ class RegisterAPIView(APIView):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = cast(User, serializer.save())
+        refresh = RefreshToken.for_user(user)
 
-        return Response(
-            AuthResponseSerializer(build_auth_response(user)).data,
+        response = Response(
+            AuthResponseSerializer(build_auth_response(user, refresh)).data,
             status=status.HTTP_201_CREATED,
         )
+        _set_auth_cookies(response, refresh)
+
+        return response
 
 
 class LoginAPIView(APIView):
@@ -74,11 +113,15 @@ class LoginAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         validated_data = cast(dict[str, Any], serializer.validated_data)
         user = cast(User, validated_data["user"])
+        refresh = RefreshToken.for_user(user)
 
-        return Response(
-            AuthResponseSerializer(build_auth_response(user)).data,
+        response = Response(
+            AuthResponseSerializer(build_auth_response(user, refresh)).data,
             status=status.HTTP_200_OK,
         )
+        _set_auth_cookies(response, refresh)
+
+        return response
 
 
 class LogoutAPIView(APIView):
@@ -96,11 +139,17 @@ class LogoutAPIView(APIView):
         tags=["Auth"],
     )
     def post(self, request: Request) -> Response:
-        serializer = LogoutSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        request_data = cast(dict[str, Any], request.data)
+        refresh_token = cast(str | None, request_data.get("refresh_token"))
+        if not refresh_token:
+            refresh_token = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
 
-        validated_data = cast(dict[str, Any], serializer.validated_data)
-        refresh_token = cast(str, validated_data["refresh_token"])
+        if not refresh_token:
+            return Response(
+                {"refresh_token": ["This field is required."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             token = RefreshToken(cast(Any, refresh_token))
             token.blacklist()
@@ -110,7 +159,9 @@ class LogoutAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response(status=status.HTTP_205_RESET_CONTENT)
+        response = Response(status=status.HTTP_205_RESET_CONTENT)
+        _clear_auth_cookies(response)
+        return response
 
 
 class TokenRefreshAPIView(TokenRefreshView):
@@ -126,7 +177,60 @@ class TokenRefreshAPIView(TokenRefreshView):
         tags=["Auth"],
     )
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        return cast(Response, super().post(request, *args, **kwargs))
+        payload = cast(dict[str, Any], request.data).copy()
+
+        if not payload.get("refresh"):
+            cookie_refresh = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
+            if cookie_refresh:
+                payload["refresh"] = cookie_refresh
+
+        serializer = self.get_serializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+        data = cast(dict[str, Any], serializer.validated_data)
+        response = Response(data, status=status.HTTP_200_OK)
+
+        refresh_token_value = cast(str | None, data.get("refresh"))
+        if refresh_token_value is not None:
+            _set_auth_cookies(response, RefreshToken(refresh_token_value))
+        else:
+            access_token = cast(str, data["access"])
+            access_max_age = int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds())
+            response.set_cookie(
+                key=settings.AUTH_ACCESS_COOKIE_NAME,
+                value=access_token,
+                max_age=access_max_age,
+                httponly=True,
+                secure=settings.AUTH_COOKIE_SECURE,
+                samesite=settings.AUTH_COOKIE_SAMESITE,
+            )
+
+        return response
+
+
+class AuthUserByUsernameAPIView(APIView):
+    """Return authenticated user metadata for the matching username route."""
+
+    permission_classes = [IsAuthenticated, IsNotBanned]
+
+    @extend_schema(
+        responses={
+            200: UserResponseSerializer,
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="User not found."),
+            403: OpenApiResponse(description="Account banned."),
+        },
+        description="Get authenticated user details by own username route.",
+        tags=["Auth"],
+    )
+    def get(self, request: Request, username: str) -> Response:
+        profile = getattr(request.user, "profile", None)
+        if profile is None or profile.username != username:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(
+            UserResponseSerializer(cast(User, request.user)).data,
+            status=status.HTTP_200_OK,
+        )
 
 
 class AdminUsersListAPIView(APIView):
