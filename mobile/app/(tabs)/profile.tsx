@@ -1,16 +1,14 @@
 import React, { useState } from "react";
-import { View, ScrollView, Text } from "react-native";
+import { View, ScrollView, Text, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from 'expo-router';
 
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { AvailabilityPreview } from "@/components/profile/AvailabilityPreview";
-import {
-  MentorshipOfferings,
-  Offering,
-} from "@/components/profile/MentorshipOfferings";
+import { MentorshipOfferings, Offering } from "@/components/profile/MentorshipOfferings";
 import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { EditAvailabilityModal } from "@/components/profile/EditAvailabilityModal";
 import {
@@ -60,6 +58,7 @@ const MOCK_PROFILE_DATA = {
 export default function ProfileScreen() {
   const { preferences, commonData } = MOCK_PROFILE_DATA;
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [selectedOffering, setSelectedOffering] = useState<Offering | null>(
     null,
   );
@@ -129,14 +128,20 @@ export default function ProfileScreen() {
 
   return (
     <View className="flex-1 bg-white">
-      {/* 1. THE FIXED TOP HEADER (Solves the Top Unsafe Area!) */}
-      <View
-        className="bg-white z-10 shadow-sm border-b border-gray-100"
-        style={{ paddingTop: insets.top }} // Automatically sizes to fit the notch perfectly
+      <View 
+        className="bg-white z-10 shadow-sm border-b border-gray-100" 
+        style={{ paddingTop: insets.top }} 
       >
         <View className="flex-row justify-between items-center px-4 pb-3 pt-2">
           <Text className="text-xl font-extrabold text-gray-900">Profile</Text>
-          <Ionicons name="settings-outline" size={24} color="#4b5563" />
+          
+          {/* THE UPDATED GEAR ICON */}
+          <TouchableOpacity 
+            onPress={() => router.push('/settings')} 
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="settings-outline" size={24} color="#4b5563" />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -261,6 +266,13 @@ export default function ProfileScreen() {
           setOfferingsData([...offeringsData, newOffering]);
           setAddOfferingModalOpen(false);
         }}
+      />
+
+      <BookingModal 
+        visible={!!selectedOffering}
+        offering={selectedOffering}
+        availability={availabilityData} 
+        onClose={() => setSelectedOffering(null)}
       />
     </View>
   );
