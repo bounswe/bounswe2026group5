@@ -8,10 +8,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 
 from .models import User
+from .permissions import IsAdmin, IsNotBanned
 from .serializers import (
     AuthResponseSerializer,
+    BannedAwareTokenRefreshSerializer,
     LoginSerializer,
     LogoutSerializer,
     RegisterSerializer,
@@ -79,7 +82,7 @@ class LoginAPIView(APIView):
 
 
 class LogoutAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsNotBanned]
 
     @extend_schema(
         request=LogoutSerializer,
@@ -87,6 +90,7 @@ class LogoutAPIView(APIView):
             205: OpenApiResponse(description="Logout successful."),
             400: OpenApiResponse(description="Validation error."),
             401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Account banned."),
         },
         description="Logout by blacklisting the provided refresh token.",
         tags=["Auth"],
@@ -107,3 +111,51 @@ class LogoutAPIView(APIView):
             )
 
         return Response(status=status.HTTP_205_RESET_CONTENT)
+
+
+class TokenRefreshAPIView(TokenRefreshView):
+    serializer_class = BannedAwareTokenRefreshSerializer
+
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(description="Token refresh successful."),
+            401: OpenApiResponse(description="Invalid or expired refresh token."),
+            403: OpenApiResponse(description="Account banned."),
+        },
+        description="Refresh access token using refresh token. Banned users are blocked.",
+        tags=["Auth"],
+    )
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return cast(Response, super().post(request, *args, **kwargs))
+
+
+class AdminUsersListAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(description="List of all users (admin only)."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Admin access required."),
+        },
+        description="Admin only: list all users and their roles.",
+        tags=["Admin"],
+    )
+    def get(self, request: Request) -> Response:
+        users = User.objects.all().values(
+            "id",
+            "email",
+            "role",
+            "is_banned",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
+
+        return Response(
+            {
+                "count": User.objects.count(),
+                "results": list(users),
+            },
+            status=status.HTTP_200_OK,
+        )

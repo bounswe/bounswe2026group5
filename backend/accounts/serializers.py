@@ -4,6 +4,9 @@ from django.contrib.auth import password_validation
 from django.contrib.auth.models import Group
 from django.db import transaction
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import Profile
 
@@ -121,3 +124,18 @@ class LoginSerializer(serializers.Serializer):
 
         attrs["user"] = user_obj
         return attrs
+
+
+class BannedAwareTokenRefreshSerializer(TokenRefreshSerializer):
+    """Refresh serializer that blocks token refresh for banned users."""
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        data = super().validate(attrs)
+
+        refresh_token = RefreshToken(attrs["refresh"])
+        user_id = refresh_token.payload.get("user_id")
+
+        if user_id is not None and User.objects.filter(id=user_id, is_banned=True).exists():
+            raise PermissionDenied("This account has been banned.")
+
+        return data

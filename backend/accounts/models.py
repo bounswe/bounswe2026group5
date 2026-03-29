@@ -7,6 +7,7 @@ from django.db import models
 
 
 class UserRole(models.TextChoices):
+    GUEST = "GUEST", "Guest"
     USER = "USER", "User"
     ADMIN = "ADMIN", "Admin"
 

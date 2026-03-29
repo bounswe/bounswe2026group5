@@ -2,10 +2,12 @@
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from accounts.permissions import IsNotBanned, IsUser
 
 from .models import Profile
 from .serializers import ProfileResponseSerializer, ProfileUpdateSerializer
@@ -17,10 +19,11 @@ class ProfileByUsernameAPIView(APIView):
     """Retrieve by username and update own profile by username."""
 
     def get_permissions(self) -> list[BasePermission]:
-        """Allow public reads but require auth for mutations."""
+        """Allow public reads but require auth and role checks for mutations."""
         if self.request.method == "GET":
             return [AllowAny()]
-        return [IsAuthenticated()]
+
+        return [IsUser(), IsNotBanned()]
 
     def _get_owned_profile_or_404(self, request: Request, username: str) -> Profile | None:
         """Return profile only if it belongs to current user and username matches."""
@@ -65,6 +68,7 @@ class ProfileByUsernameAPIView(APIView):
             200: ProfileResponseSerializer,
             400: OpenApiResponse(description="Validation error."),
             401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Account banned."),
             404: OpenApiResponse(description="Profile not found."),
         },
         description="Partially update authenticated user's profile by username.",
