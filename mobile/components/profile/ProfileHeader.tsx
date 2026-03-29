@@ -7,13 +7,26 @@ interface ProfileHeaderProps {
   bio: string;
   rating?: number;
   reviewCount?: number;
+  // NEW: Impact Stats
+  totalSessions?: number;
+  menteesHelped?: number;
   // TODO: [Backend] Swap these to a real image URI 
   imageUrl?: string; 
   coverUrl?: string; 
   onEdit?: () => void;
 }
 
-export function ProfileHeader({ name, bio, rating, reviewCount, imageUrl, coverUrl, onEdit }: ProfileHeaderProps) {
+export function ProfileHeader({ 
+  name, 
+  bio, 
+  rating, 
+  reviewCount, 
+  totalSessions = 24, // Mock default
+  menteesHelped = 15, // Mock default
+  imageUrl, 
+  coverUrl, 
+  onEdit 
+}: ProfileHeaderProps) {
   return (
     <View className="bg-white mb-6">
       
@@ -42,7 +55,7 @@ export function ProfileHeader({ name, bio, rating, reviewCount, imageUrl, coverU
 
         {/* Right: Rating & Edit Button */}
         <View className="flex-row items-center pt-14 gap-2"> 
-          {rating && reviewCount ? (
+          {rating ? (
             <View className="h-8 flex-row items-center bg-amber-50 px-2 rounded-lg border border-amber-100">
               <Ionicons name="star" size={14} color="#f59e0b" />
               <Text className="text-amber-700 font-bold text-xs ml-1">{rating.toFixed(1)}</Text>
@@ -61,11 +74,33 @@ export function ProfileHeader({ name, bio, rating, reviewCount, imageUrl, coverU
         <Text className="text-2xl font-extrabold text-gray-900">{name}</Text>
       </View>
 
-      {/* 4. Bio below everything */}
+      {/* 4. Bio */}
       <View className="px-4 mt-3">
         <Text className="text-base text-gray-600 leading-relaxed">
           {bio}
         </Text>
+      </View>
+
+      {/* 5. NEW: Impact Stats Row */}
+      <View className="px-4 mt-6">
+        <View className="flex-row items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100">
+          
+          <View className="items-center flex-1 border-r border-gray-200">
+            <Text className="text-xl font-extrabold text-indigo-600 mb-0.5">{totalSessions}</Text>
+            <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider">Sessions</Text>
+          </View>
+
+          <View className="items-center flex-1 border-r border-gray-200">
+            <Text className="text-xl font-extrabold text-emerald-600 mb-0.5">{menteesHelped}</Text>
+            <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider">Mentees</Text>
+          </View>
+
+          <View className="items-center flex-1">
+            <Text className="text-xl font-extrabold text-gray-900 mb-0.5">{reviewCount || 0}</Text>
+            <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider">Reviews</Text>
+          </View>
+
+        </View>
       </View>
 
     </View>
