@@ -416,3 +416,69 @@ class LogoutAPIViewTests(TestCase):
         response = self.api_client.post(self.logout_url, payload)
 
         self.assertEqual(response.status_code, 400)
+
+
+class RBACPermissionTests(TestCase):
+    """Tests for role-based access control behavior on protected views."""
+
+    def setUp(self) -> None:
+        self.api_client = APIClient()
+        self.admin = User.objects.create_superuser(
+            email="rbac_admin@test.com",
+            password="Admin123!",
+        )
+        self.user = User.objects.create_user(
+            email="rbac_user@test.com",
+            password="User123!",
+        )
+        self.banned = User.objects.create_user(
+            email="rbac_banned@test.com",
+            password="Banned123!",
+            is_banned=True,
+        )
+
+    def _get_token(self, user: User) -> str:
+        refresh = RefreshToken.for_user(user)
+        return str(refresh.access_token)
+
+    def test_admin_only_endpoint_access_control(self) -> None:
+        url = "/api/auth/admin/users/"
+
+        # guest -> 401 unauthorized
+        response = self.api_client.get(url)
+        self.assertEqual(response.status_code, 401)
+
+        # regular user -> 403 forbidden
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.user)}")
+        response = self.api_client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+        # admin -> 200 ok
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.admin)}")
+        response = self.api_client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_profile_edit_requires_user_and_not_banned(self) -> None:
+        # create profile for user
+        profile = Profile.objects.create(
+            user=self.user,
+            username="rbac_user",
+            display_name="RBAC User",
+        )
+
+        url = f"/api/profiles/{profile.username}/"
+        payload = {"title": "Updated Title"}
+
+        # guest should be 401
+        response = self.api_client.patch(url, payload)
+        self.assertEqual(response.status_code, 401)
+
+        # banned user should be 403
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.banned)}")
+        response = self.api_client.patch(url, payload)
+        self.assertEqual(response.status_code, 403)
+
+        # authenticated non-banned user should update own profile
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.user)}")
+        response = self.api_client.patch(url, payload)
+        self.assertEqual(response.status_code, 200)

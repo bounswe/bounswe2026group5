@@ -7,6 +7,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import IsNotBanned, IsUser
+
 from .models import Profile
 from .serializers import ProfileResponseSerializer, ProfileUpdateSerializer
 
@@ -17,10 +19,11 @@ class ProfileByUsernameAPIView(APIView):
     """Retrieve by username and update own profile by username."""
 
     def get_permissions(self) -> list[BasePermission]:
-        """Allow public reads but require auth for mutations."""
+        """Allow public reads but require auth and role checks for mutations."""
         if self.request.method == "GET":
             return [AllowAny()]
-        return [IsAuthenticated()]
+
+        return [IsUser(), IsNotBanned()]
 
     def _get_owned_profile_or_404(self, request: Request, username: str) -> Profile | None:
         """Return profile only if it belongs to current user and username matches."""
@@ -80,4 +83,6 @@ class ProfileByUsernameAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
+        return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
+        return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
         return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
