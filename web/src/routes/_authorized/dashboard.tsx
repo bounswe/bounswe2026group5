@@ -7,6 +7,8 @@ import { Heading, Body, Muted } from '@/components/Typography'
 import { MOCK_REQUESTS, MOCK_SESSIONS, MOCK_DISCOVER_SKILLS } from '@/lib/mocks/loggedInHome' // FUTURE: Replace with real API calls once backend is ready
 import { CalendarDays, Clock, CheckCircle2, XCircle, ArrowRight } from 'lucide-react'
 import { SessionManagementModal } from '@/components/dashboard/SessionManagementModal'
+import {meQueryOptions} from "#/lib/queries/Authqueries.ts";
+import {useQuery} from "@tanstack/react-query";
 
 const dashboardSearchSchema = z.object({
   mode: z.enum(['mentee', 'mentor']).catch('mentee'),
@@ -14,6 +16,7 @@ const dashboardSearchSchema = z.object({
 
 export const Route = createFileRoute('/_authorized/dashboard')({
   validateSearch: dashboardSearchSchema,
+  loader: ({ context }) => context.queryClient.ensureQueryData(meQueryOptions),
   component: DashboardHome,
 })
 
@@ -70,8 +73,12 @@ function UserAvatar({ name }: { name: string }) {
 export function DashboardHome() {
   const { mode } = Route.useSearch()
 
+  const { data, isSuccess } = useQuery(meQueryOptions)
+
+
   return (
     <div className="page-wrap py-10 rise-in flex flex-col gap-10">
+      {!isSuccess && alert("This is a friendly indicator that we know you logged in " + data?.email)}
       <div className="flex flex-col gap-2">
         <Heading as="h2">{mode === 'mentor' ? 'Mentor Dashboard' : 'Mentee Dashboard'}</Heading>
         <Body className="text-ink-soft max-w-2xl">

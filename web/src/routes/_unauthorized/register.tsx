@@ -13,10 +13,13 @@ import {
 import { Heading, Body, Display } from "@/components/Typography"
 import { User, Mail } from 'lucide-react'
 import {setDemoAuthRole} from "#/lib/demoAuth.ts";
+import {useMutation} from "@tanstack/react-query";
+import {handleAuthSuccess, registerFn} from "#/lib/queries/Authqueries.ts";
+
+
 
 // Zod schema for registration form validation
 const registerSchema = z.object({
-    fullName: z.string().min(1, "Full name is required").min(2, "Full name must be at least 2 characters"),
     email: z.string().min(1, "Email is required").email("Please enter a valid email address"),
     password: z.string().min(1, "Password is required").min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string().min(1, "Please confirm your password"),
@@ -38,15 +41,13 @@ export function RegisterPage() {
 
     const router = useRouter();
 
-    const [formData, setFormData] = useState<Partial<RegisterFormData>>({
-        fullName: '',
+    const [formData, setFormData] = useState<RegisterFormData>({
         email: '',
         password: '',
         confirmPassword: '',
         terms: false,
     });
     const [errors, setErrors] = useState<Partial<Record<keyof RegisterFormData, string>>>({});
-    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const validateField = (field: keyof RegisterFormData, value: unknown) => {
         const result = registerSchema.safeParse({ ...formData, [field]: value });
@@ -63,27 +64,39 @@ export function RegisterPage() {
         setErrors((prev) => ({ ...prev, [field]: error }));
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSubmitting(true);
+    const register = useMutation({
+        mutationFn: registerFn,
+        onSuccess: (data) => {
+            handleAuthSuccess(data)
+            router.navigate({ to: '/gettingToKnowYou' })
+        },
+        onError: (error) => {
+            console.error('Register error:', error)
+        },
+    })
 
-        const result = registerSchema.safeParse(formData);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+
+        const result = registerSchema.safeParse(formData)
         if (!result.success) {
-            const newErrors: Partial<Record<keyof RegisterFormData, string>> = {};
+            const newErrors: Partial<Record<keyof RegisterFormData, string>> = {}
             result.error.issues.forEach((error: z.ZodIssue) => {
-                const field = error.path[0] as keyof RegisterFormData;
-                newErrors[field] = error.message;
-            });
-            setErrors(newErrors);
-            setIsSubmitting(false);
-            return;
+                const field = error.path[0] as keyof RegisterFormData
+                newErrors[field] = error.message
+            })
+            setErrors(newErrors)
+            return
         }
 
-        setErrors({});
-    
-        // TODO: Implement actual registration API call
-        setIsSubmitting(false);
-    };
+        setErrors({})
+        register.mutate({
+            email: formData.email,
+            password: formData.password,
+            confirm_password: formData.confirmPassword,
+        })
+    }
 
     return (
         <div className="grid min-h-screen lg:grid-cols-[5fr_4fr]">
@@ -139,26 +152,6 @@ export function RegisterPage() {
                                 className="space-y-6"
                                 onSubmit={handleSubmit}
                             >
-                                {/* Full Name */}
-                                <div className="space-y-2">
-                                    <Label htmlFor="fullName" className="ml-1">Full Name</Label>
-                                    <div className="relative">
-                                        <Input
-                                            id="fullName"
-                                            type="text"
-                                            placeholder="Jane Doe"
-                                            value={formData.fullName}
-                                            onChange={(e) => handleChange('fullName', e.target.value)}
-                                            aria-invalid={!!errors.fullName}
-                                            className="w-full px-4 py-3 rounded-xl"
-                                        />
-                                        <User className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                    </div>
-                                    {errors.fullName && (
-                                        <p className="text-xs text-destructive ml-1">{errors.fullName}</p>
-                                    )}
-                                </div>
-
                                 {/* Email */}
                                 <div className="space-y-2">
                                     <Label htmlFor="email" className="ml-1">Email</Label>
@@ -180,7 +173,6 @@ export function RegisterPage() {
                                 </div>
 
                                 {/* Password Row */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="password" className="ml-1">Password</Label>
                                         <Input
@@ -212,14 +204,13 @@ export function RegisterPage() {
                                             <p className="text-xs text-destructive ml-1">{errors.confirmPassword}</p>
                                         )}
                                     </div>
-                                </div>
 
                                 {/* Terms Checkbox */}
                                 <div className="flex items-start gap-3 mt-2">
                                     <Checkbox
                                         id="terms"
                                         checked={formData.terms}
-                                        onCheckedChange={(checked) => handleChange('terms', checked)}
+                                        onCheckedChange={(checked) => handleChange('terms', checked === true)}
                                     />
                                     <div className="text-sm leading-tight">
                                         <Label htmlFor="terms" className="font-normal cursor-pointer">
@@ -266,10 +257,14 @@ export function RegisterPage() {
                                 type="submit"
                                 form="register-form"
                                 className="w-full py-4 font-bold rounded-xl"
-                                disabled={isSubmitting}
+                                disabled={register.isPending}
                             >
-                                {isSubmitting ? "Creating account..." : "Create Account"}
+                                {register.isPending ? "Creating account..." : "Create Account"}
                             </Button>
+
+                            {register.isError && (
+                                <p className="text-xs text-destructive text-center">{register.error.message}</p>
+                            )}
 
                             <div className="mt-2 pt-2 border-t border-border/10 text-center w-full">
                                 <p className="text-primary/70">

@@ -1,0 +1,83 @@
+// lib/queries/auth.ts
+import { queryOptions, useQuery } from "@tanstack/react-query"
+import { queryClient, router } from "#/router.tsx"
+
+export interface User {
+    id: string
+    email: string
+    username: string
+    role: string
+    auth_provider: string
+    is_active: boolean
+    created_at: string
+}
+
+interface AuthResponse {
+    access_token: string
+    refresh_token: string
+    user: User
+}
+
+// ---- Query Options ----
+
+export const meQueryOptions = queryOptions({
+    queryKey: ['me'],
+    queryFn: async () => {
+        const token = localStorage.getItem('access_token')
+        const username = localStorage.getItem('username')
+        if (!token || !username) return null
+
+        const res = await fetch(`/api/auth/${username}/`, {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+
+        if (!res.ok) return null
+        return res.json() as Promise<User>
+    },
+    staleTime: 5 * 60 * 1000,
+})
+// ---- Plain functions ----
+
+export const getStoredUser = (): Partial<User> | null => {
+    const token = localStorage.getItem('access_token')
+    const username = localStorage.getItem('username')
+    if (!token || !username) return null
+    return { username }
+}
+
+export function handleAuthSuccess(data: AuthResponse) {
+    localStorage.setItem('access_token', data.access_token)
+    localStorage.setItem('refresh_token', data.refresh_token)
+    localStorage.setItem('username', data.user.username)
+    queryClient.setQueryData(['me'], data.user)
+}
+
+export function logout() {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('username')
+    queryClient.setQueryData(['me'], null)
+    router.navigate({ to: '/login' })
+}
+
+// ---- API functions (used as mutationFn inside components) ----
+
+export async function loginFn(credentials: { email: string; password: string }) {
+    const res = await fetch('/api/auth/login/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+    })
+    if (!res.ok) throw new Error('Invalid credentials')
+    return res.json() as Promise<AuthResponse>
+}
+
+export async function registerFn(credentials: { email: string; password: string; confirm_password: string }) {
+    const res = await fetch('/api/auth/register/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+    })
+    if (!res.ok) throw new Error('Registration failed')
+    return res.json() as Promise<AuthResponse>
+}
