@@ -32,8 +32,8 @@ const SUBJECTS = [
 ];
 
 export default function RegisterScreen() {
-  const colorScheme = useColorScheme();
-  const theme = Colors[colorScheme ?? 'light'];
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
   
   const [role, setRole] = useState<'mentor' | 'mentee'>('mentor');
   const [firstName, setFirstName] = useState('');
