@@ -1,3 +1,4 @@
+import uuid
 from typing import Any
 
 from django.conf import settings
@@ -433,8 +434,8 @@ class LogoutAPIViewTests(TestCase):
         self.assertTrue(BlacklistedToken.objects.filter(token__token=self.refresh_token).exists())
 
 
-class TokenRefreshAndAuthUserByUsernameAPIViewTests(TestCase):
-    """Tests for token refresh and authenticated username auth endpoint."""
+class TokenRefreshAndAuthUserByIdAPIViewTests(TestCase):
+    """Tests for token refresh and authenticated user id auth endpoint."""
 
     def setUp(self) -> None:
         self.api_client: Any = APIClient()
@@ -468,7 +469,7 @@ class TokenRefreshAndAuthUserByUsernameAPIViewTests(TestCase):
         """Test authenticated user details endpoint with bearer authentication."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
 
-        response = self.api_client.get(f"/api/auth/{self.profile.username}/")
+        response = self.api_client.get(f"/api/auth/{self.user.id}/")
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -480,18 +481,18 @@ class TokenRefreshAndAuthUserByUsernameAPIViewTests(TestCase):
         """Test authenticated user details endpoint with cookie authentication."""
         self.api_client.cookies[settings.AUTH_ACCESS_COOKIE_NAME] = self.access_token
 
-        response = self.api_client.get(f"/api/auth/{self.profile.username}/")
+        response = self.api_client.get(f"/api/auth/{self.user.id}/")
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["email"], self.user.email)
         self.assertEqual(data["username"], self.profile.username)
 
-    def test_auth_user_endpoint_with_other_username_returns_not_found(self) -> None:
-        """Test that authenticated users cannot access another username route."""
+    def test_auth_user_endpoint_with_other_id_returns_not_found(self) -> None:
+        """Test that authenticated users cannot access another user id route."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
 
-        response = self.api_client.get("/api/auth/someone_else/")
+        response = self.api_client.get(f"/api/auth/{uuid.uuid4()}/")
 
         self.assertEqual(response.status_code, 404)
 

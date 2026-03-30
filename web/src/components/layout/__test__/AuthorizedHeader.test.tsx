@@ -4,14 +4,17 @@ import { describe, it, expect, vi } from 'vitest';
 import { AuthorizedHeader } from '../AuthorizedHeader';
 
 // Mock TanStack Router hooks
-vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to, className }: any) => <a href={to} className={className}>{children}</a>,
-  useRouter: () => ({ navigate: vi.fn() }),
-  useNavigate: () => vi.fn(),
-  useSearch: () => ({ mode: 'mentee' }),
-  useLocation: () => ({ pathname: '/dashboard' }),
-}));
-
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    Link: ({ children, to, className }: any) => <a href={to} className={className}>{children}</a>,
+    useRouter: () => ({ navigate: vi.fn() }),
+    useNavigate: () => vi.fn(),
+    useSearch: () => ({ mode: 'mentee' }),
+    useLocation: () => ({ pathname: '/dashboard' }),
+  }
+});
 describe('AuthorizedHeader Component', () => {
   it('renders the branding text', () => {
     render(<AuthorizedHeader />);
