@@ -5,7 +5,6 @@ import { queryClient, router } from "#/router.tsx"
 export interface User {
     id: string
     email: string
-    username: string
     role: string
     auth_provider: string
     is_active: boolean
@@ -24,10 +23,10 @@ export const meQueryOptions = queryOptions({
     queryKey: ['me'],
     queryFn: async () => {
         const token = localStorage.getItem('access_token')
-        const username = localStorage.getItem('username')
-        if (!token || !username) return null
+        const id = localStorage.getItem('id')
+        if (!token || !id) return null
 
-        const res = await fetch(`/api/auth/${username}/`, {
+        const res = await fetch(`/api/auth/${id}/`, {
             headers: { Authorization: `Bearer ${token}` }
         })
 
@@ -40,22 +39,22 @@ export const meQueryOptions = queryOptions({
 
 export const getStoredUser = (): Partial<User> | null => {
     const token = localStorage.getItem('access_token')
-    const username = localStorage.getItem('username')
-    if (!token || !username) return null
-    return { username }
+    const id = localStorage.getItem('id')
+    if (!token || !id) return null
+    return { id }
 }
 
 export function handleAuthSuccess(data: AuthResponse) {
     localStorage.setItem('access_token', data.access_token)
     localStorage.setItem('refresh_token', data.refresh_token)
-    localStorage.setItem('username', data.user.username)
+    localStorage.setItem('id', data.user.id)
     queryClient.setQueryData(['me'], data.user)
 }
 
 export function logout() {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
-    localStorage.removeItem('username')
+    localStorage.removeItem('id')
     queryClient.setQueryData(['me'], null)
     router.navigate({ to: '/login' })
 }

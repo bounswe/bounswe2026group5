@@ -78,7 +78,9 @@ export function DashboardHome() {
 
   return (
     <div className="page-wrap py-10 rise-in flex flex-col gap-10">
-      {!isSuccess && alert("This is a friendly indicator that we know you logged in " + data?.email)}
+      {isSuccess && (
+          <p className="text-xs text-green-600">Logged in as: {data?.email}</p>
+      )}
       <div className="flex flex-col gap-2">
         <Heading as="h2">{mode === 'mentor' ? 'Mentor Dashboard' : 'Mentee Dashboard'}</Heading>
         <Body className="text-ink-soft max-w-2xl">
