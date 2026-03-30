@@ -1,5 +1,6 @@
 """Profile-domain models."""
 
+import re
 import uuid
 from decimal import Decimal
 
@@ -27,6 +28,7 @@ class Profile(models.Model):
         on_delete=models.CASCADE,
         related_name="profile",
     )
+    username = models.CharField(max_length=50, unique=True)
     display_name = models.CharField(max_length=120)
     bio = models.TextField(blank=True, default="")
     picture_url = models.URLField(blank=True, default="")
@@ -58,6 +60,28 @@ class Profile(models.Model):
 
     def __str__(self) -> str:
         return f"{self.display_name} ({self.user.email})"
+
+    def save(self, *args, **kwargs) -> None:
+        """Generate a unique username when one is not provided."""
+        if not self.username:
+            email_prefix = (self.user.email or "").split("@", 1)[0]
+            self.username = self._generate_unique_username(email_prefix)
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def _generate_unique_username(cls, source_value: str) -> str:
+        """Build a unique username from a source value."""
+        sanitized_base = re.sub(r"[^a-z0-9_]+", "_", source_value.lower()).strip("_")
+        base_username = (sanitized_base or "user")[:50]
+        candidate = base_username
+        suffix = 1
+
+        while cls.objects.filter(username=candidate).exists():
+            numeric_suffix = f"_{suffix}"
+            candidate = f"{base_username[: 50 - len(numeric_suffix)]}{numeric_suffix}"
+            suffix += 1
+
+        return candidate
 
 
 class ExpertiseField(models.Model):

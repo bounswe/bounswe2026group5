@@ -4,16 +4,31 @@ from django.contrib.auth import password_validation
 from django.contrib.auth.models import Group
 from django.db import transaction
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from profiles.models import Profile
 
 from .models import AuthProvider, User, UserRole
 
 
 class UserResponseSerializer(serializers.ModelSerializer):
+    username = serializers.SerializerMethodField()
+
+    def get_username(self, obj: User) -> str | None:
+        """Return linked profile username for route navigation compatibility."""
+        profile = getattr(obj, "profile", None)
+        if profile is None:
+            return None
+        return cast(str, profile.username)
+
     class Meta:
         model = User
         fields = (
             "id",
             "email",
+            "username",
             "role",
             "auth_provider",
             "is_active",
@@ -67,16 +82,23 @@ class RegisterSerializer(serializers.Serializer):
     def create(self, validated_data: dict[str, Any]) -> User:
         validated_data.pop("confirm_password", None)
         password = validated_data.pop("password")
+        email = validated_data["email"]
 
         user: User = cast(
             User,
             User.objects.create_user(
-                email=validated_data["email"],
+                email=email,
                 password=password,
                 role=UserRole.USER,
                 auth_provider=AuthProvider.LOCAL,
                 is_active=True,
             ),
+        )
+
+        display_name = email.split("@", 1)[0].replace(".", " ").replace("_", " ").title()
+        Profile.objects.create(
+            user=user,
+            display_name=display_name,
         )
 
         default_group, _ = Group.objects.get_or_create(name=UserRole.USER)
@@ -112,3 +134,16 @@ class LoginSerializer(serializers.Serializer):
 
         attrs["user"] = user_obj
         return attrs
+
+
+class BannedAwareTokenRefreshSerializer(TokenRefreshSerializer):
+    """Refresh serializer that blocks token refresh for banned users."""
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        refresh_token = RefreshToken(attrs["refresh"])
+        user_id = refresh_token.payload.get("user_id")
+
+        if user_id is not None and User.objects.filter(id=user_id, is_banned=True).exists():
+            raise PermissionDenied("This account has been banned.")
+
+        return super().validate(attrs)
