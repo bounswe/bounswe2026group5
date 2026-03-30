@@ -8,7 +8,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,6 +32,7 @@ const SUBJECTS = [
 
 export default function RegisterScreen() {
   const colorScheme = useColorScheme() ?? 'light';
+  const isDark = colorScheme === 'dark';
   const theme = Colors[colorScheme];
   
   const [role, setRole] = useState<'mentor' | 'mentee'>('mentor');
@@ -51,7 +51,7 @@ export default function RegisterScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 dark:bg-surface-dark bg-surface">
+    <SafeAreaView className={`flex-1 ${isDark ? 'bg-surface-dark' : 'bg-surface'}`}>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -108,42 +108,37 @@ export default function RegisterScreen() {
                 My Role
               </Text>
               <View className="flex-row items-center p-1.5 rounded-xl h-14 bg-surface-input dark:bg-surface-input-dark">
+                {/* Active state uses style prop (not className) so NativeWind never
+                    transitions a Pressable from className="" to a dark: variant,
+                    which triggers a broken re-render path in NativeWind v4. */}
                 <Pressable
                   onPress={() => setRole('mentor')}
-                  className={`flex-1 h-full rounded-lg items-center justify-center ${
-                    role === 'mentor' ? 'bg-surface-card dark:bg-surface-card-dark shadow-sm' : ''
-                  }`}
+                  className="flex-1 h-full rounded-lg items-center justify-center"
+                  style={role === 'mentor' ? { backgroundColor: theme.cardBackground } : undefined}
                   accessibilityRole="button"
                   accessibilityState={{ selected: role === 'mentor' }}
                   accessibilityLabel="I want to be a Mentor"
                 >
                   <Text
-                    className={`text-sm font-semibold ${
-                      role === 'mentor'
-                        ? 'text-primary dark:text-primary-dim'
-                        : 'text-on-surface-soft dark:text-on-surface-soft-dark'
-                    }`}
+                    className="text-sm font-semibold"
+                    style={{ color: role === 'mentor' ? theme.primary : theme.textSoft }}
                   >
-                    I want to be a Mentor
+                    Mentor
                   </Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setRole('mentee')}
-                  className={`flex-1 h-full rounded-lg items-center justify-center ${
-                    role === 'mentee' ? 'bg-surface-card dark:bg-surface-card-dark shadow-sm' : ''
-                  }`}
+                  className="flex-1 h-full rounded-lg items-center justify-center"
+                  style={role === 'mentee' ? { backgroundColor: theme.cardBackground } : undefined}
                   accessibilityRole="button"
                   accessibilityState={{ selected: role === 'mentee' }}
                   accessibilityLabel="I want to be a Mentee"
                 >
                   <Text
-                    className={`text-sm font-semibold ${
-                      role === 'mentee'
-                        ? 'text-primary dark:text-primary-dim'
-                        : 'text-on-surface-soft dark:text-on-surface-soft-dark'
-                    }`}
+                    className="text-sm font-semibold"
+                    style={{ color: role === 'mentee' ? theme.primary : theme.textSoft }}
                   >
-                    I want to be a Mentee
+                    Mentee
                   </Text>
                 </Pressable>
               </View>
@@ -358,16 +353,12 @@ export default function RegisterScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── Gender Picker Modal ── */}
-      <Modal
-        animationType="fade"
-        transparent
-        visible={genderModalVisible}
-        onRequestClose={() => setGenderModalVisible(false)}
-        statusBarTranslucent
-      >
+      {/* ── Gender Picker ── (absolute overlay — avoids Modal's back-press handler
+           which requires navigation context at the root Stack level) */}
+      {genderModalVisible && (
         <Pressable
-          className="flex-1 bg-black/40 justify-end"
+          className="absolute inset-0 bg-black/40 justify-end"
+          style={{ zIndex: 50 }}
           onPress={() => setGenderModalVisible(false)}
         >
           <Pressable
@@ -418,7 +409,7 @@ export default function RegisterScreen() {
             ))}
           </Pressable>
         </Pressable>
-      </Modal>
+      )}
     </SafeAreaView>
   );
 }
