@@ -10,15 +10,14 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Calendar, DateData } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
+import { BirthdayDatePicker } from '@/components/ui/BirthdayDatePicker';
 
 const GENDER_OPTIONS = ['Female', 'Male', 'Non-binary', 'Prefer not to say'] as const;
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 
 const SUBJECTS = [
   'Software Engineering',
@@ -36,7 +35,7 @@ export default function RegisterScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const theme = Colors[colorScheme];
-  
+
   const [role, setRole] = useState<'mentor' | 'mentee'>('mentor');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -45,14 +44,6 @@ export default function RegisterScreen() {
   const [gender, setGender] = useState('');
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [genderModalVisible, setGenderModalVisible] = useState(false);
-  const [dobPickerVisible, setDobPickerVisible] = useState(false);
-  const [dobPickerMode, setDobPickerMode] = useState<'calendar' | 'month' | 'year'>('calendar');
-
-  // Today as YYYY-MM-DD — used as the calendar's maxDate (no future birthdays)
-  const today = new Date().toISOString().split('T')[0];
-  // Default calendar month when no date is typed yet (20 years back is a sensible start)
-  const defaultCalendarMonth = `${new Date().getFullYear() - 20}-01-01`;
-  const [displayDate, setDisplayDate] = useState(defaultCalendarMonth);
 
   /**
    * Strips non-digits and re-inserts slashes to produce MM/DD/YYYY.
@@ -70,29 +61,9 @@ export default function RegisterScreen() {
     setDob(formatDob(text));
   };
 
-  /** Converts the display format MM/DD/YYYY to the calendar engine format YYYY-MM-DD. */
-  const dobToCalendarDate = (formatted: string): string | undefined => {
-    if (formatted.length !== 10) return undefined;
-    const [mm, dd, yyyy] = formatted.split('/');
-    if (!mm || !dd || yyyy?.length !== 4) return undefined;
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
-  const handleDaySelect = (day: DateData): void => {
-    const mm = String(day.month).padStart(2, '0');
-    const dd = String(day.day).padStart(2, '0');
-    setDob(`${mm}/${dd}/${day.year}`);
-    setDobPickerVisible(false);
-  };
-
-  // Derived from displayDate so renderHeader and mode grids stay in sync
-  const calendarDate = dobToCalendarDate(dob);
-  const displayYear = parseInt(displayDate.slice(0, 4), 10);
-  const displayMonth = parseInt(displayDate.slice(5, 7), 10); // 1-indexed
-
   const toggleSubject = (subject: string) => {
     setSelectedSubjects((prev) =>
-      prev.includes(subject) ? prev.filter((s) => s !== subject) : [...prev, subject]
+      prev.includes(subject) ? prev.filter((s) => s !== subject) : [...prev, subject],
     );
   };
 
@@ -270,20 +241,8 @@ export default function RegisterScreen() {
                   accessibilityLabel="Date of birth"
                   maxLength={10}
                 />
-                {/* Calendar icon opens the picker; static className avoids NativeWind re-render issue */}
-                <Pressable
-                  onPress={() => {
-                    setDobPickerMode('calendar');
-                    setDisplayDate(dobToCalendarDate(dob) ?? defaultCalendarMonth);
-                    setDobPickerVisible(true);
-                  }}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open calendar to select date of birth"
-                >
-                  <Ionicons name="calendar-outline" size={20} color={theme.textMuted} />
-                </Pressable>
+                {/* BirthdayDatePicker renders the calendar icon and the full picker Modal */}
+                <BirthdayDatePicker value={dob} onChange={setDob} />
               </View>
             </View>
 
@@ -405,200 +364,6 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* ── DOB Calendar Picker ── */}
-      {dobPickerVisible && (
-        <Pressable
-          className="absolute inset-0 bg-black/40 justify-end"
-          style={{ zIndex: 50 }}
-          onPress={() => setDobPickerVisible(false)}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            className="rounded-t-3xl p-6 pb-10 bg-surface-card dark:bg-surface-card-dark"
-          >
-            {/* Drag handle */}
-            <View className="w-10 h-1 rounded-full bg-divider dark:bg-divider-dark self-center mb-4" />
-
-            {/* Sheet header — back arrow + title */}
-            <View className="flex-row items-center mb-3" style={{ gap: 8 }}>
-              {dobPickerMode !== 'calendar' && (
-                <Pressable
-                  onPress={() => setDobPickerMode('calendar')}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Back to calendar"
-                >
-                  <Ionicons name="arrow-back" size={20} color={theme.primary} />
-                </Pressable>
-              )}
-              <Text className="flex-1 text-lg font-bold text-on-surface dark:text-on-surface-dark">
-                {dobPickerMode === 'calendar' && 'Date of Birth'}
-                {dobPickerMode === 'month' && 'Select Month'}
-                {dobPickerMode === 'year' && 'Select Year'}
-              </Text>
-            </View>
-
-            {/* ── Calendar mode ── */}
-            {dobPickerMode === 'calendar' && (
-              <Calendar
-                current={displayDate}
-                maxDate={today}
-                onDayPress={handleDaySelect}
-                onMonthChange={(month) =>
-                  setDisplayDate(`${month.year}-${String(month.month).padStart(2, '0')}-01`)
-                }
-                markedDates={
-                  calendarDate
-                    ? { [calendarDate]: { selected: true, selectedColor: theme.primary } }
-                    : {}
-                }
-                renderHeader={() => (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    {/* Month label — opens month grid */}
-                    <Pressable
-                      onPress={() => setDobPickerMode('month')}
-                      style={({ pressed }) => ({
-                        opacity: pressed ? 0.6 : 1,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 3,
-                      })}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Select month, currently ${MONTH_NAMES[displayMonth - 1]}`}
-                    >
-                      <Text style={{ color: theme.textPrimary, fontWeight: 'bold', fontSize: 15 }}>
-                        {MONTH_NAMES[displayMonth - 1]}
-                      </Text>
-                      <Ionicons name="chevron-down" size={13} color={theme.textMuted} />
-                    </Pressable>
-                    {/* Year label — opens year list */}
-                    <Pressable
-                      onPress={() => setDobPickerMode('year')}
-                      style={({ pressed }) => ({
-                        opacity: pressed ? 0.6 : 1,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 3,
-                      })}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Select year, currently ${displayYear}`}
-                    >
-                      <Text style={{ color: theme.textPrimary, fontWeight: 'bold', fontSize: 15 }}>
-                        {displayYear}
-                      </Text>
-                      <Ionicons name="chevron-down" size={13} color={theme.textMuted} />
-                    </Pressable>
-                  </View>
-                )}
-                theme={{
-                  backgroundColor: 'transparent',
-                  calendarBackground: 'transparent',
-                  textSectionTitleColor: theme.textSoft,
-                  selectedDayBackgroundColor: theme.primary,
-                  selectedDayTextColor: '#ffffff',
-                  todayTextColor: theme.primary,
-                  dayTextColor: theme.textPrimary,
-                  textDisabledColor: theme.textMuted,
-                  monthTextColor: theme.textPrimary,
-                  textMonthFontWeight: 'bold',
-                  arrowColor: theme.primary,
-                  textDayFontSize: 14,
-                  textMonthFontSize: 15,
-                  textDayHeaderFontSize: 12,
-                }}
-              />
-            )}
-
-            {/* ── Month grid mode ── */}
-            {dobPickerMode === 'month' && (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                {MONTH_NAMES.map((name, idx) => {
-                  const monthNum = idx + 1;
-                  const isSelected = monthNum === displayMonth;
-                  return (
-                    <Pressable
-                      key={name}
-                      onPress={() => {
-                        setDisplayDate(`${displayYear}-${String(monthNum).padStart(2, '0')}-01`);
-                        setDobPickerMode('calendar');
-                      }}
-                      style={({ pressed }) => ({
-                        width: '25%',
-                        opacity: pressed ? 0.7 : 1,
-                        backgroundColor: isSelected ? theme.primary : 'transparent',
-                        borderRadius: 10,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingVertical: 12,
-                        marginBottom: 8,
-                      })}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isSelected }}
-                      accessibilityLabel={name}
-                    >
-                      <Text
-                        style={{
-                          color: isSelected ? '#ffffff' : theme.textPrimary,
-                          fontWeight: isSelected ? 'bold' : 'normal',
-                          fontSize: 14,
-                        }}
-                      >
-                        {name}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-
-            {/* ── Year list mode ── */}
-            {dobPickerMode === 'year' && (() => {
-              const currentYear = new Date().getFullYear();
-              const years = Array.from({ length: 100 }, (_, i) => currentYear - i);
-              return (
-                <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-                  {years.map((year) => {
-                    const isSelected = year === displayYear;
-                    return (
-                      <Pressable
-                        key={year}
-                        onPress={() => {
-                          setDisplayDate(`${year}-${String(displayMonth).padStart(2, '0')}-01`);
-                          setDobPickerMode('calendar');
-                        }}
-                        style={({ pressed }) => ({
-                          opacity: pressed ? 0.7 : 1,
-                          backgroundColor: isSelected ? theme.primary : 'transparent',
-                          borderRadius: 10,
-                          height: 48,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginBottom: 4,
-                        })}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: isSelected }}
-                        accessibilityLabel={String(year)}
-                      >
-                        <Text
-                          style={{
-                            color: isSelected ? '#ffffff' : theme.textPrimary,
-                            fontWeight: isSelected ? 'bold' : 'normal',
-                            fontSize: 15,
-                          }}
-                        >
-                          {year}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              );
-            })()}
-          </Pressable>
-        </Pressable>
-      )}
 
       {/* ── Gender Picker ── (absolute overlay — avoids Modal's back-press handler
            which requires navigation context at the root Stack level) */}
