@@ -16,20 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import { BirthdayDatePicker } from '@/components/ui/BirthdayDatePicker';
+import { SubjectExpertisePicker } from '@/components/ui/SubjectExpertisePicker';
 
 const GENDER_OPTIONS = ['Female', 'Male', 'Non-binary', 'Prefer not to say'] as const;
-
-const SUBJECTS = [
-  'Software Engineering',
-  'React',
-  'Backend',
-  'Career Advice',
-  'UI/UX Design',
-  'Data Science',
-  'Machine Learning',
-  'DevOps',
-  'Product Management',
-];
 
 export default function RegisterScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -59,12 +48,6 @@ export default function RegisterScreen() {
 
   const handleDobChange = (text: string): void => {
     setDob(formatDob(text));
-  };
-
-  const toggleSubject = (subject: string) => {
-    setSelectedSubjects((prev) =>
-      prev.includes(subject) ? prev.filter((s) => s !== subject) : [...prev, subject],
-    );
   };
 
   return (
@@ -272,60 +255,15 @@ export default function RegisterScreen() {
             </View>
 
             {/* Subject Expertise */}
-            <View className="gap-3 pt-2">
-              <View className="gap-1">
-                <Text className="text-xl font-bold text-on-surface dark:text-on-surface-dark">
-                  Subject Expertise
-                </Text>
-                <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
-                  {role === 'mentor'
-                    ? 'Select subjects you feel confident mentoring others in.'
-                    : 'Select subjects you want to learn about.'}
-                </Text>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingVertical: 4, gap: 10 }}
-              >
-                {SUBJECTS.map((subject) => {
-                  const active = selectedSubjects.includes(subject);
-                  return (
-                    <Pressable
-                      key={subject}
-                      onPress={() => toggleSubject(subject)}
-                      style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-                      className={`px-5 py-2.5 rounded-full flex-row items-center gap-2 ${
-                        active
-                          ? 'bg-primary dark:bg-primary-dim'
-                          : 'bg-surface-input dark:bg-surface-input-dark'
-                      }`}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: active }}
-                      accessibilityLabel={subject}
-                    >
-                      <Text
-                        className={`text-sm font-semibold ${
-                          active
-                            ? 'text-white'
-                            : 'text-on-surface-soft dark:text-on-surface-soft-dark'
-                        }`}
-                      >
-                        {subject}
-                      </Text>
-                      {active && (
-                        <Ionicons
-                          name="checkmark"
-                          size={14}
-                          color="white"
-                          accessibilityElementsHidden
-                          importantForAccessibility="no"
-                        />
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
+            <View className="gap-1.5 pt-2">
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                Subject Expertise
+              </Text>
+              <SubjectExpertisePicker
+                selected={selectedSubjects}
+                onChange={setSelectedSubjects}
+                role={role}
+              />
             </View>
 
             {/* CTA + Log In link */}

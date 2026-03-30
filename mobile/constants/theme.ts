@@ -21,6 +21,7 @@ export const Colors = {
     surfaceBase: '#f7f9fb',
     inputBackground: '#e6e8ea',
     cardBackground: '#ffffff',
+    surfaceActive: '#e8eeff', // selected / active row background (light)
     textPrimary: '#191c1e',
     textSoft: '#434655',
     textMuted: '#737686',
@@ -38,6 +39,7 @@ export const Colors = {
     surfaceBase: '#0f1214',
     inputBackground: '#1e2530',
     cardBackground: '#141920',
+    surfaceActive: '#1c253d', // selected / active row background (dark)
     textPrimary: '#e2e8f0',
     textSoft: '#94a3b8',
     textMuted: '#4a5568',
