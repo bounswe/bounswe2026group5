@@ -4,12 +4,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-// Import the components you provided/we updated
+// Import the components for the dashboard
 import { RequestCard } from '@/components/dashboard/RequestCard';
 import { SessionCard } from '@/components/dashboard/SessionCard';
 import { SessionDetailsModal } from '@/components/dashboard/SessionDetailsModal';
 import { RequestDetailsModal } from '@/components/dashboard/RequestDetailsModal';
 import { ViewAllRequestsModal } from '@/components/dashboard/ViewAllRequestsModal';
+import { BookingModal } from '@/components/profile/BookingModal';
 
 // Mock Data
 const MOCK_REQUESTS = [
@@ -23,6 +24,11 @@ const MOCK_SESSIONS = [
   { id: '2', user: 'Elif Şahin', date: 'Oct 25', time: '09:00 - 10:00', status: 'Pending' as const, topic: 'Portfolio Review', myRole: 'Mentor' }
 ];
 
+const MOCK_AVAILABILITY = [
+  { day: "Monday", times: ["10:00 - 12:00", "15:00 - 17:00"] },
+  { day: "Wednesday", times: ["14:00 - 18:00"] },
+];
+
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -31,6 +37,7 @@ export default function DashboardScreen() {
   const [selectedRequest, setSelectedRequest] = useState<typeof MOCK_REQUESTS[0] | null>(null);
   const [selectedSession, setSelectedSession] = useState<typeof MOCK_SESSIONS[0] | null>(null);
   const [isViewAllRequestsOpen, setViewAllRequestsOpen] = useState(false);
+  const [sessionToReschedule, setSessionToReschedule] = useState<typeof MOCK_SESSIONS[0] | null>(null);
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -113,6 +120,7 @@ export default function DashboardScreen() {
         visible={!!selectedSession}
         session={selectedSession}
         onClose={() => setSelectedSession(null)}
+        onReschedule={() => setSessionToReschedule(selectedSession)}
       />
 
       {/* The View All Requests Modal */}
@@ -124,6 +132,22 @@ export default function DashboardScreen() {
           setViewAllRequestsOpen(false); // Close the list
           setTimeout(() => setSelectedRequest(req as typeof MOCK_REQUESTS[0]), 300); 
         }}
+      />
+
+      {/* The Reschedule Flow (Reusing BookingModal) */}
+      <BookingModal 
+        visible={!!sessionToReschedule}
+        onClose={() => setSessionToReschedule(null)}
+        availability={MOCK_AVAILABILITY}
+        existingSession={sessionToReschedule ? { date: sessionToReschedule.date, time: sessionToReschedule.time } : undefined}
+        offering={sessionToReschedule ? {
+          id: 'reschedule-temp',
+          title: sessionToReschedule.topic,
+          duration: '60 min',
+          level: 'Previous Session Level',
+          icon: 'calendar-outline',
+          description: `You are requesting to reschedule your session with ${sessionToReschedule.user}.`
+        } : null}
       />
     </View>
   );

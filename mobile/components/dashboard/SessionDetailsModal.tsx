@@ -4,6 +4,7 @@ import { View, Text, Modal, TouchableOpacity, Pressable, Alert} from 'react-nati
 interface SessionDetailsModalProps {
   visible: boolean;
   onClose: () => void;
+  onReschedule?: () => void;
   session: {
     user: string;
     date: string;
@@ -16,7 +17,7 @@ interface SessionDetailsModalProps {
   } | null;
 }
 
-export function SessionDetailsModal({ visible, onClose, session }: SessionDetailsModalProps) {
+export function SessionDetailsModal({ visible, onClose, onReschedule, session }: SessionDetailsModalProps) {
   if (!session) return null;
 
   return (
@@ -105,20 +106,10 @@ export function SessionDetailsModal({ visible, onClose, session }: SessionDetail
             <TouchableOpacity 
               className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
               onPress={() => {
-                Alert.alert(
-                  "Reschedule Session",
-                  "This will cancel the current session and send a reschedule request to the user. Are you sure?",
-                  [
-                    { text: "Nevermind", style: "cancel" },
-                    { 
-                      text: "Reschedule", 
-                      onPress: () => {
-                        console.log(`TODO: Hit /api/sessions/$session.id/reschedule`);
-                        onClose();
-                      }
-                    }
-                  ]
-                );
+                onClose();
+                if (onReschedule) {
+                  setTimeout(() => onReschedule(), 300);
+                }
               }}
             >
               <Text className="text-gray-700 font-bold text-base">Reschedule</Text>

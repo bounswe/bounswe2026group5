@@ -12,6 +12,7 @@ interface BookingModalProps {
   onClose: () => void;
   offering: Offering | null;
   availability: AvailabilitySlot[]; 
+  existingSession?: { date: string; time: string };
 }
 
 const UPCOMING_DATES = [
@@ -24,7 +25,7 @@ const UPCOMING_DATES = [
 
 const MAX_COVER_LETTER_LENGTH = 300;
 
-export function BookingModal({ visible, onClose, offering, availability }: BookingModalProps) {
+export function BookingModal({ visible, onClose, offering, availability, existingSession }: BookingModalProps) {
   const insets = useSafeAreaInsets();
   
   const [step, setStep] = useState<1 | 2>(1);
@@ -50,6 +51,24 @@ export function BookingModal({ visible, onClose, offering, availability }: Booki
       setIsLoading(false);
     }
   }, [visible]);
+
+  const handleCloseWithWarning = () => {
+    // If they selected a date, proposed a custom time, or wrote a letter, it is "half filled"
+    const hasUnsavedChanges = selectedDateObj !== null || isCustomTime || coverLetter.length > 0;
+    
+    if (hasUnsavedChanges && !isLoading) {
+      Alert.alert(
+        'Discard Request?',
+        'You have unsaved changes. Are you sure you want to discard this and go back?',
+        [
+          { text: 'Keep Editing', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: onClose }
+        ]
+      );
+    } else {
+      onClose();
+    }
+  };
 
   // The Undeletable Colon Formatter
   const handleTimeInput = (text: string, setTime: (val: string) => void) => {
@@ -113,6 +132,17 @@ export function BookingModal({ visible, onClose, offering, availability }: Booki
         return;
       }
     }
+    // NEW: Check if they are trying to reschedule to the exact same slot
+    if (existingSession) {
+      const proposedTime = isCustomTime ? `${customStartTime} - ${customEndTime}` : selectedSlot;
+      if (selectedDateObj.date === existingSession.date && proposedTime === existingSession.time) {
+        Alert.alert(
+          'No Change Detected', 
+          'You selected the exact same date and time as your current session. Please select a new slot to reschedule.'
+        );
+        return;
+      }
+    }
     setStep(2);
   };
 
@@ -141,7 +171,7 @@ export function BookingModal({ visible, onClose, offering, availability }: Booki
         {/* Header */}
         <View className="flex-row justify-between items-center px-6 py-4 border-b border-gray-100 mb-2">
           <TouchableOpacity 
-            onPress={() => step === 2 ? setStep(1) : onClose()} 
+            onPress={() => step === 2 ? setStep(1) : handleCloseWithWarning()}            
             className="p-2 -ml-2" 
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             disabled={isLoading}
