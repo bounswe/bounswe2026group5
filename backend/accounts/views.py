@@ -253,6 +253,7 @@ class AdminUsersListAPIView(APIView):
         users = User.objects.all().values(
             "id",
             "email",
+            "username",
             "role",
             "is_banned",
             "is_active",
