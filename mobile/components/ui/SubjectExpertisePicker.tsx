@@ -93,35 +93,24 @@ const SubjectItem = React.memo(function SubjectItem({
       onPress={handlePress}
       style={({ pressed }) => ({
         opacity: pressed ? 0.7 : 1,
-        height: ITEM_H,
+        // Explicit row layout — indicator always left of the label.
         // Background uses theme tokens (no hardcoded hex) for the active/inactive
         // distinction — avoids the NativeWind v4 re-render bug that occurs when a
         // Pressable's className transitions from "" to a string with dark: variants.
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: ITEM_H,
         backgroundColor: isSelected ? theme.surfaceActive : theme.inputBackground,
         marginHorizontal: 16,
         marginBottom: ITEM_GAP,
         borderRadius: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
         paddingHorizontal: 16,
       })}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: isSelected }}
       accessibilityLabel={subject}
     >
-      {/* Subject label */}
-      <Text
-        style={{
-          flex: 1,
-          fontSize: 16,
-          fontWeight: isSelected ? '600' : '400',
-          color: isSelected ? theme.primary : theme.textPrimary,
-        }}
-      >
-        {subject}
-      </Text>
-
-      {/* Circular checkbox indicator */}
+      {/* Circular checkbox indicator — rendered first so it sits to the LEFT */}
       <View
         style={{
           width: 24,
@@ -129,6 +118,7 @@ const SubjectItem = React.memo(function SubjectItem({
           borderRadius: 12,
           alignItems: 'center',
           justifyContent: 'center',
+          marginRight: 12,
           backgroundColor: isSelected ? theme.primary : 'transparent',
           borderWidth: isSelected ? 0 : 1.5,
           borderColor: theme.divider,
@@ -144,6 +134,18 @@ const SubjectItem = React.memo(function SubjectItem({
           />
         )}
       </View>
+
+      {/* Subject label — flex:1 fills remaining row space */}
+      <Text
+        style={{
+          flex: 1,
+          fontSize: 16,
+          fontWeight: isSelected ? '600' : '400',
+          color: isSelected ? theme.primary : theme.textPrimary,
+        }}
+      >
+        {subject}
+      </Text>
     </Pressable>
   );
 });
@@ -172,15 +174,21 @@ const SelectedChip = React.memo(function SelectedChip({
     <Pressable
       onPress={handlePress}
       style={({ pressed }) => ({
-        opacity: pressed ? 0.7 : 1,
+        opacity: pressed ? 0.75 : 1,
+        // Chip/tag layout — label + remove icon always on the same row
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        paddingHorizontal: 12,
+        gap: 6,
+        paddingLeft: 12,
+        paddingRight: 9,
         paddingVertical: 7,
         borderRadius: 100,
-        // Chip background: primary color at 15 % opacity — from the design token
+        // Tinted chip appearance: surfaceActive background with primary text.
+        // Visually reads as an interactive removable tag — distinct from the
+        // solid-primary CTA button further down the screen.
         backgroundColor: theme.surfaceActive,
+        borderWidth: 1,
+        borderColor: theme.primary + '40', // 25 % opacity border ring
       })}
       accessibilityRole="button"
       accessibilityLabel={`Remove ${label}`}
@@ -225,7 +233,7 @@ export function SubjectExpertisePicker({
   selected,
   onChange,
   role,
-}: SubjectExpertisePickerProps) {
+}: Readonly<SubjectExpertisePickerProps>) {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
@@ -287,12 +295,15 @@ export function SubjectExpertisePicker({
 
   // ── Trigger label ──────────────────────────────────────────────────────────
 
-  const triggerLabel =
+  let triggerLabel = `${selectionCount} subjects selected`;
+  if (selectionCount === 0) triggerLabel = 'Select subjects';
+  else if (selectionCount === 1) triggerLabel = '1 subject selected';
+
+  const subjectWord = selectionCount === 1 ? 'subject' : 'subjects';
+  const doneBtnA11yLabel =
     selectionCount === 0
-      ? 'Select subjects'
-      : selectionCount === 1
-      ? '1 subject selected'
-      : `${selectionCount} subjects selected`;
+      ? 'Done, no subjects selected'
+      : `Done, ${selectionCount} ${subjectWord} selected`;
 
   // ── Subtitle inside modal ──────────────────────────────────────────────────
 
@@ -478,11 +489,7 @@ export function SubjectExpertisePicker({
                   justifyContent: 'center',
                 })}
                 accessibilityRole="button"
-                accessibilityLabel={
-                  selectionCount === 0
-                    ? 'Done, no subjects selected'
-                    : `Done, ${selectionCount} subject${selectionCount > 1 ? 's' : ''} selected`
-                }
+                accessibilityLabel={doneBtnA11yLabel}
               >
                 <Text style={{ fontSize: 16, fontWeight: '700', color: 'white' }}>
                   {selectionCount === 0
