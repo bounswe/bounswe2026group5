@@ -1,5 +1,5 @@
 // web/src/routes/_authorized/connections.tsx
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { z } from 'zod'
 import { Display, Body } from '@/components/Typography'
@@ -34,6 +34,12 @@ function ConnectionsPage() {
   const navigate = useNavigate()
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set())
+
+  // Reset pagination and filters whenever the user switches between mentee/mentor view.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+    setSelectedSkills(new Set())
+  }, [mode])
 
   const isMentorMode = mode === 'mentor'
   const allConnections = isMentorMode ? ALL_MENTEE_CONNECTIONS : ALL_MENTOR_CONNECTIONS
@@ -82,9 +88,8 @@ function ConnectionsPage() {
     setVisibleCount((prev) => prev + PAGE_SIZE)
   }
 
-  const handleViewProfile = (_id: string) => {
-    // FUTURE: navigate to /profiles/:id once profile detail routes exist.
-    navigate({ to: '/discover' })
+  const handleViewProfile = (id: string) => {
+    navigate({ to: '/profiles/$profileId', params: { profileId: id } })
   }
 
   const handleSendMessage = (_id: string) => {
@@ -191,9 +196,10 @@ function ConnectionCardWithBadge({
   onSendMessage?: (id: string) => void
 }>) {
   return (
-    <div className="relative">
+    <div className="relative h-full">
       <ProfileCard
         profile={connection.profile}
+        className="h-full"
         onViewProfile={onViewProfile}
         onSendMessage={onSendMessage}
       />
