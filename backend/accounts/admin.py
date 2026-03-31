@@ -6,6 +6,7 @@ from .models import User
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
     list_display = (
+        "username",
         "email",
         "role",
         "auth_provider",
@@ -22,5 +23,5 @@ class UserAdmin(admin.ModelAdmin):
         "is_banned",
         "is_staff",
     )
-    search_fields = ("email",)
+    search_fields = ("email", "username")
     ordering = ("email",)

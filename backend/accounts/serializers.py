@@ -14,15 +14,6 @@ from .models import AuthProvider, User, UserRole
 
 
 class UserResponseSerializer(serializers.ModelSerializer):
-    username = serializers.SerializerMethodField()
-
-    def get_username(self, obj: User) -> str | None:
-        """Return linked profile username for route navigation compatibility."""
-        profile = getattr(obj, "profile", None)
-        if profile is None:
-            return None
-        return cast(str, profile.username)
-
     class Meta:
         model = User
         fields = (
@@ -98,6 +89,7 @@ class RegisterSerializer(serializers.Serializer):
         display_name = email.split("@", 1)[0].replace(".", " ").replace("_", " ").title()
         Profile.objects.create(
             user=user,
+            username=user.username,
             display_name=display_name,
         )
 
