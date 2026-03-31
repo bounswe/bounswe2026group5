@@ -29,7 +29,7 @@ const PAGE_SIZE = 6
 const ALL_MENTOR_CONNECTIONS = getMockMentorConnections()
 const ALL_MENTEE_CONNECTIONS = getMockMenteeConnections()
 
-function ConnectionsPage() {
+export function ConnectionsPage() {
   const { mode } = Route.useSearch()
   const navigate = useNavigate()
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
