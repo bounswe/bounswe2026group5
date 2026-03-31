@@ -2,13 +2,16 @@ import React, { useState } from "react";
 import { View, ScrollView, Text, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from 'expo-router';
+import { useRouter } from "expo-router";
 
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { AvailabilityPreview } from "@/components/profile/AvailabilityPreview";
-import { MentorshipOfferings, Offering } from "@/components/profile/MentorshipOfferings";
+import {
+  MentorshipOfferings,
+  Offering,
+} from "@/components/profile/MentorshipOfferings";
 import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { EditAvailabilityModal } from "@/components/profile/EditAvailabilityModal";
 import {
@@ -17,6 +20,9 @@ import {
 } from "@/components/profile/EditProfileModal";
 import { BookingModal } from "@/components/profile/BookingModal";
 import { ManageOfferingsModal } from "@/components/profile/ManageOfferingsModal";
+
+// Mock Data from centralized file
+import { MOCK_AVAILABILITY, MOCK_OFFERINGS } from "@/constants/mockData";
 
 const MOCK_PROFILE_DATA = {
   user: {
@@ -28,26 +34,6 @@ const MOCK_PROFILE_DATA = {
   commonData: {
     expertise: ["React Native", "System Design", "Django", "SQL"],
     learningGoals: ["Machine Learning", "Advanced Algorithms"],
-    availability: [
-      { day: "Monday", times: ["10:00 - 12:00", "15:00 - 17:00"] },
-      { day: "Wednesday", times: ["14:00 - 18:00"] },
-    ],
-    offerings: [
-      {
-        id: "1",
-        title: "React Native Architecture Review",
-        duration: "45 min",
-        level: "Intermediate",
-        icon: "logo-react",
-      },
-      {
-        id: "2",
-        title: "System Design Mock Interview",
-        duration: "60 min",
-        level: "Advanced",
-        icon: "server-outline",
-      },
-    ] as Offering[],
   },
   preferences: {
     showAvailability: true,
@@ -59,14 +45,28 @@ export default function ProfileScreen() {
   const { preferences, commonData } = MOCK_PROFILE_DATA;
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [selectedOffering, setSelectedOffering] = useState<Offering | null>(
-    null,
+
+  const [availabilityData, setAvailabilityData] = useState(MOCK_AVAILABILITY);
+  const [offeringsData, setOfferingsData] = useState<Offering[]>(
+    MOCK_OFFERINGS as Offering[],
+  );
+  const [expertiseData, setExpertiseData] = useState(commonData.expertise);
+  const [learningGoalsData, setLearningGoalsData] = useState(
+    commonData.learningGoals,
   );
 
   const [userData, setUserData] = useState<UserProfileData>({
     name: MOCK_PROFILE_DATA.user.name,
     bio: MOCK_PROFILE_DATA.user.bio,
   });
+
+  const [selectedOffering, setSelectedOffering] = useState<Offering | null>(
+    null,
+  );
+  const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
+  const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
+  const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] =
+    useState(false);
 
   const [skillsModalConfig, setSkillsModalConfig] = useState<{
     visible: boolean;
@@ -88,21 +88,6 @@ export default function ProfileScreen() {
     variant: "mentor",
     onSave: () => {},
   });
-
-  const [expertiseData, setExpertiseData] = useState(commonData.expertise);
-  const [learningGoalsData, setLearningGoalsData] = useState(
-    commonData.learningGoals,
-  );
-  const [availabilityData, setAvailabilityData] = useState(
-    commonData.availability,
-  );
-  const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
-  const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
-  const [offeringsData, setOfferingsData] = useState<Offering[]>(
-    commonData.offerings,
-  );
-
-const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] = useState(false);
 
   const openEditModal = (
     title: string,
@@ -129,16 +114,14 @@ const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] = useState(false
 
   return (
     <View className="flex-1 bg-white">
-      <View 
-        className="bg-white z-10 shadow-sm border-b border-gray-100" 
-        style={{ paddingTop: insets.top }} 
+      <View
+        className="bg-white z-10 shadow-sm border-b border-gray-100"
+        style={{ paddingTop: insets.top }}
       >
         <View className="flex-row justify-between items-center px-4 pb-3 pt-2">
           <Text className="text-xl font-extrabold text-gray-900">Profile</Text>
-          
-          {/* THE UPDATED GEAR ICON */}
-          <TouchableOpacity 
-            onPress={() => router.push('/settings')} 
+          <TouchableOpacity
+            onPress={() => router.push("/settings" as any)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="settings-outline" size={24} color="#4b5563" />
@@ -146,11 +129,9 @@ const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] = useState(false
         </View>
       </View>
 
-      {/* 2. THE SCROLLVIEW */}
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
-        // 3. THE BOTTOM FIX: We use a massive bottom padding to force the content over the tab bar
         contentContainerStyle={{ paddingBottom: 160 }}
       >
         <ProfileHeader
@@ -179,7 +160,6 @@ const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] = useState(false
                 openSkillsModal("Expertise", expertiseData, "mentor")
               }
             />
-
             <SkillsCloud
               title="Learning Goals"
               skills={learningGoalsData}
@@ -217,7 +197,6 @@ const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] = useState(false
         </View>
       </ScrollView>
 
-      {/* The Reusable Bottom Sheet */}
       <ViewAllSkillsModal
         visible={skillsModalConfig.visible}
         title={skillsModalConfig.title}
@@ -227,8 +206,6 @@ const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] = useState(false
           setSkillsModalConfig((prev) => ({ ...prev, visible: false }))
         }
       />
-
-      {/* The Reusable Edit Skills Sheet */}
       <EditSkillsModal
         visible={editModalConfig.visible}
         title={editModalConfig.title}
@@ -239,16 +216,12 @@ const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] = useState(false
           setEditModalConfig((prev) => ({ ...prev, visible: false }))
         }
       />
-
-      {/* The Availability Manager Sheet */}
       <EditAvailabilityModal
         visible={isAvailabilityModalOpen}
         initialSchedule={availabilityData}
         onSave={setAvailabilityData}
         onClose={() => setAvailabilityModalOpen(false)}
       />
-
-      {/* The Edit Profile Modal */}
       <EditProfileModal
         visible={isEditProfileModalOpen}
         onClose={() => setEditProfileModalOpen(false)}
@@ -258,21 +231,22 @@ const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] = useState(false
           setEditProfileModalOpen(false);
         }}
       />
-
-      {/* The Manage Offerings Modal */}
       <ManageOfferingsModal
         visible={isManageOfferingsModalOpen}
         offerings={offeringsData}
         onClose={() => setManageOfferingsModalOpen(false)}
-        onAdd={(newOffering) => setOfferingsData([...offeringsData, newOffering])}
-        onDelete={(id) => setOfferingsData(offeringsData.filter(o => o.id !== id))}
+        onAdd={(newOffering) =>
+          setOfferingsData([...offeringsData, newOffering])
+        }
+        onDelete={(id) =>
+          setOfferingsData(offeringsData.filter((o) => o.id !== id))
+        }
         onReorder={(newOrder) => setOfferingsData(newOrder)}
       />
-      
-      <BookingModal 
+      <BookingModal
         visible={!!selectedOffering}
         offering={selectedOffering}
-        availability={availabilityData} 
+        availability={availabilityData}
         onClose={() => setSelectedOffering(null)}
       />
     </View>

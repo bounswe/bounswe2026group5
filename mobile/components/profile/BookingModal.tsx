@@ -15,14 +15,6 @@ interface BookingModalProps {
   existingSession?: { date: string; time: string };
 }
 
-const UPCOMING_DATES = [
-  { date: 'Oct 26', dayOfWeek: 'Monday' },
-  { date: 'Oct 27', dayOfWeek: 'Tuesday' },
-  { date: 'Oct 28', dayOfWeek: 'Wednesday' },
-  { date: 'Oct 29', dayOfWeek: 'Thursday' },
-  { date: 'Nov 2', dayOfWeek: 'Monday' },
-];
-
 const MAX_COVER_LETTER_LENGTH = 300;
 
 export function BookingModal({ visible, onClose, offering, availability, existingSession }: BookingModalProps) {
@@ -31,7 +23,7 @@ export function BookingModal({ visible, onClose, offering, availability, existin
   const [step, setStep] = useState<1 | 2>(1);
   const [isLoading, setIsLoading] = useState(false);
 
-  const [selectedDateObj, setSelectedDateObj] = useState<{date: string, dayOfWeek: string} | null>(null);
+  const [selectedDateObj, setSelectedDateObj] = useState<{date: string, dayOfWeek: string, rawDate: string} | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null); 
   const [coverLetter, setCoverLetter] = useState('');
   
@@ -80,8 +72,25 @@ export function BookingModal({ visible, onClose, offering, availability, existin
     setTime(formatted);
   };
 
+  // Dynamically generate the next 14 days and filter by availability
   const availableDates = useMemo(() => {
-    return UPCOMING_DATES.filter(d => 
+    const dates = [];
+    const today = new Date(); // Dynamically grabs today's date
+    
+    // Generate the next 14 days
+    for (let i = 1; i <= 14; i++) {
+      const nextDate = new Date(today);
+      nextDate.setDate(today.getDate() + i);
+      
+      dates.push({
+        date: nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        dayOfWeek: nextDate.toLocaleDateString('en-US', { weekday: 'long' }),
+        rawDate: nextDate.toISOString().split('T')[0] // Keep the exact YYYY-MM-DD for the reschedule check
+      });
+    }
+
+    // Filter to only show days that match the mentor's availability schedule
+    return dates.filter(d => 
       availability.some(a => a.day === d.dayOfWeek && a.times.length > 0)
     );
   }, [availability]);
@@ -132,10 +141,10 @@ export function BookingModal({ visible, onClose, offering, availability, existin
         return;
       }
     }
-    // NEW: Check if they are trying to reschedule to the exact same slot
     if (existingSession) {
       const proposedTime = isCustomTime ? `${customStartTime} - ${customEndTime}` : selectedSlot;
-      if (selectedDateObj.date === existingSession.date && proposedTime === existingSession.time) {
+      // FIX: Use rawDate for the strict comparison
+      if (selectedDateObj.rawDate === existingSession.date && proposedTime === existingSession.time) {
         Alert.alert(
           'No Change Detected', 
           'You selected the exact same date and time as your current session. Please select a new slot to reschedule.'

@@ -12,22 +12,8 @@ import { RequestDetailsModal } from '@/components/dashboard/RequestDetailsModal'
 import { ViewAllRequestsModal } from '@/components/dashboard/ViewAllRequestsModal';
 import { BookingModal } from '@/components/profile/BookingModal';
 
-// Mock Data
-const MOCK_REQUESTS = [
-  { id: '1', user: 'Zeynep Kaya', topic: 'React Native Architecture', type: 'incoming' as const, message: 'Hi! I saw your profile and would love to get your thoughts on structuring a large Expo app.', proposedDate: 'Oct 24, 10:00 AM' },
-  { id: '2', user: 'Ahmet Yılmaz', topic: 'System Design Mock', type: 'outgoing' as const, message: 'Looking for a mock interview for my upcoming big tech loop.' },
-  { id: '3', user: 'Fatma Demir', topic: 'Advanced Algorithms', type: 'incoming' as const, isReschedule: true, message: 'I am so sorry, but I have a conflict. Can we reschedule our session to next week?', proposedDate: 'Nov 2, 14:00' }
-];
-
-const MOCK_SESSIONS = [
-  { id: '1', user: 'Mehmet Demir', date: 'Oct 22', time: '14:00 - 15:00', status: 'Upcoming' as const, topic: 'Advanced Algorithms', myRole: 'Mentee', meetingUrl: 'https://meet.google.com/abc-defg-hij' },
-  { id: '2', user: 'Elif Şahin', date: 'Oct 25', time: '09:00 - 10:00', status: 'Pending' as const, topic: 'Portfolio Review', myRole: 'Mentor' }
-];
-
-const MOCK_AVAILABILITY = [
-  { day: "Monday", times: ["10:00 - 12:00", "15:00 - 17:00"] },
-  { day: "Wednesday", times: ["14:00 - 18:00"] },
-];
+// Import mock data (This will be removed once we have real API integration)
+import { MOCK_REQUESTS, MOCK_SESSIONS, MOCK_AVAILABILITY } from '@/constants/mockData';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();

@@ -12,18 +12,11 @@ import { SessionCard } from '@/components/dashboard/SessionCard';
 import { SessionDetailsModal } from '@/components/dashboard/SessionDetailsModal';
 import { BookingModal } from '@/components/profile/BookingModal'; 
 
-// Mock availability specifically for the reschedule flow (All will be removed once we have real data)
-const MOCK_AVAILABILITY = [
-  { day: "Monday", times: ["10:00 - 12:00", "15:00 - 17:00"] },
-  { day: "Wednesday", times: ["14:00 - 18:00"] },
-];
+// Mock Data, we will fetch this data from an API 
+import { MOCK_SESSIONS, MOCK_AVAILABILITY } from '@/constants/mockData';
 
-const MOCK_SESSIONS = [
-  { id: '1', rawDate: '2026-03-26', displayDate: 'MAR 26', time: '14:00 - 15:00', user: 'Zeynep Demir', status: 'Upcoming' as const, topic: 'React Native Architecture', myRole: 'Mentor', meetingUrl: 'https://zoom.us/j/12345' },
-  { id: '2', rawDate: '2026-03-26', displayDate: 'MAR 26', time: '16:30 - 17:30', user: 'Ahmet Yılmaz', status: 'Pending' as const, topic: 'System Design Interview Prep', myRole: 'Mentee', location: 'Campus Library, Room 4B' },
-  { id: '3', rawDate: '2026-03-28', displayDate: 'MAR 28', time: '10:00 - 11:00', user: 'Can Özkan', status: 'Upcoming' as const, topic: 'Database Normalization', myRole: 'Mentor', location: 'Neighborhood Cafe' },
-  { id: '4', rawDate: '2026-04-02', displayDate: 'APR 02', time: '09:00 - 10:00', user: 'Elif Kaya', status: 'Completed' as const, topic: 'Career Advice', myRole: 'Mentee', meetingUrl: 'https://meet.google.com/abc' },
-];
+// This grabs today's date dynamically and formats it as 'YYYY-MM-DD'
+const TODAY = new Date().toISOString().split('T')[0];
 
 const formatFriendlyDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -31,7 +24,7 @@ const formatFriendlyDate = (dateString: string) => {
 };
 
 export default function ScheduleScreen() {
-  const [selectedDate, setSelectedDate] = useState('2026-03-26');
+  const [selectedDate, setSelectedDate] = useState(TODAY);  
   const [selectedSession, setSelectedSession] = useState<any | null>(null);
   const [sessionToReschedule, setSessionToReschedule] = useState<any | null>(null); 
 
@@ -71,7 +64,7 @@ export default function ScheduleScreen() {
 
         <View className="px-2 mb-6 shadow-sm">
           <Calendar
-            current={'2026-03-26'}
+            current={TODAY}
             markingType={'multi-dot'} 
             onDayPress={(day: DateData) => setSelectedDate(day.dateString)}
             markedDates={markedDates}
@@ -103,7 +96,7 @@ export default function ScheduleScreen() {
               <SessionCard 
                 key={session.id} 
                 user={session.user}
-                date={session.displayDate}
+                date={session.date}
                 time={session.time}
                 status={session.status}
                 onPress={() => setSelectedSession({
