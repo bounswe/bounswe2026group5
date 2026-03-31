@@ -12,7 +12,7 @@ import { RequestDetailsModal } from '@/components/dashboard/RequestDetailsModal'
 import { ViewAllRequestsModal } from '@/components/dashboard/ViewAllRequestsModal';
 import { BookingModal } from '@/components/profile/BookingModal';
 
-// Import mock data (This will be removed once we have real API integration)
+// Import mock data
 import { MOCK_REQUESTS, MOCK_SESSIONS, MOCK_AVAILABILITY } from '@/constants/mockData';
 
 export default function DashboardScreen() {
@@ -48,14 +48,21 @@ export default function DashboardScreen() {
         
         {/* Requests Section */}
         <View className="mb-6">
-          <View className="flex-row justify-between items-end mb-3">
-            <Text className="text-lg font-bold text-gray-900">Pending Requests</Text>
+          <View className="flex-row justify-between items-center mb-3 mt-2">
+            <View className="flex-row items-center">
+              <Text className="text-lg font-bold text-gray-900">Pending Requests</Text>
+              {MOCK_REQUESTS.length > 0 && (
+                <View className="bg-red-500 rounded-full px-2 py-0.5 ml-2 justify-center items-center">
+                  <Text className="text-white text-xs font-bold">{MOCK_REQUESTS.length}</Text>
+                </View>
+              )}
+            </View>
             <TouchableOpacity onPress={() => setViewAllRequestsOpen(true)}>
-              <Text className="text-indigo-600 font-semibold text-sm mb-0.5">View All</Text>
+              <Text className="text-indigo-600 font-semibold text-sm">View All</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Just show the first 2 requests on the dashboard to save space */}
+          {/* Show the first 2 requests on the dashboard */}
           {MOCK_REQUESTS.slice(0, 2).map((req) => (
             <RequestCard 
               key={req.id}
@@ -69,13 +76,12 @@ export default function DashboardScreen() {
 
         {/* Sessions Section */}
         <View className="mb-6">
-          
-          {/* THE UPDATED HEADER WITH 'VIEW ALL' BUTTON */}
-          <View className="flex-row justify-between items-end mb-3">
+          <View className="flex-row justify-between items-center mb-3 mt-2">
             <Text className="text-lg font-bold text-gray-900">Your Sessions</Text>
-            {/* Navigates to the Schedule tab */}
             <TouchableOpacity onPress={() => router.push('/schedule')}>
-              <Text className="text-blue-600 font-semibold text-sm mb-0.5">View All</Text>
+              <Text className="text-blue-600 font-semibold text-sm">
+                View All {MOCK_SESSIONS.length > 0 ? `(${MOCK_SESSIONS.length})` : ''}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -86,7 +92,7 @@ export default function DashboardScreen() {
               date={session.date}
               time={session.time}
               status={session.status}
-              onPress={() => setSelectedSession(session)} // Opens the Session Modal
+              onPress={() => setSelectedSession(session)}
             />
           ))}
         </View>
@@ -94,14 +100,12 @@ export default function DashboardScreen() {
       </ScrollView>
 
       {/* 3. MODALS */}
-      {/* The Request Details Bottom Sheet */}
       <RequestDetailsModal 
         visible={!!selectedRequest}
         request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
       />
 
-      {/* The Session Details Bottom Sheet */}
       <SessionDetailsModal 
         visible={!!selectedSession}
         session={selectedSession}
@@ -109,18 +113,16 @@ export default function DashboardScreen() {
         onReschedule={() => setSessionToReschedule(selectedSession)}
       />
 
-      {/* The View All Requests Modal */}
       <ViewAllRequestsModal
         visible={isViewAllRequestsOpen}
         requests={MOCK_REQUESTS}
         onClose={() => setViewAllRequestsOpen(false)}
         onSelectRequest={(req) => {
-          setViewAllRequestsOpen(false); // Close the list
+          setViewAllRequestsOpen(false);
           setTimeout(() => setSelectedRequest(req as typeof MOCK_REQUESTS[0]), 300); 
         }}
       />
 
-      {/* The Reschedule Flow (Reusing BookingModal) */}
       <BookingModal 
         visible={!!sessionToReschedule}
         onClose={() => setSessionToReschedule(null)}
