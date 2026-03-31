@@ -125,7 +125,7 @@ export default function DashboardScreen() {
         visible={!!sessionToReschedule}
         onClose={() => setSessionToReschedule(null)}
         availability={MOCK_AVAILABILITY}
-        existingSession={sessionToReschedule ? { date: sessionToReschedule.date, time: sessionToReschedule.time } : undefined}
+        existingSession={sessionToReschedule ? { date: sessionToReschedule.rawDate, time: sessionToReschedule.time } : undefined}
         offering={sessionToReschedule ? {
           id: 'reschedule-temp',
           title: sessionToReschedule.topic,
