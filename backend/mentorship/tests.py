@@ -1,15 +1,18 @@
 """Tests for mentorship domain models and API endpoints."""
 
+from typing import Any
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import IntegrityError, transaction
 from django.test import TestCase
-from mentorship.models import Match, MentorshipRequest
-from profiles.models import MentorshipMode, Profile
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-User = get_user_model()
+from mentorship.models import Match, MentorshipRequest
+from profiles.models import MentorshipMode, Profile
+
+User: Any = get_user_model()
 
 
 class MentorshipRequestModelTests(TestCase):
@@ -163,7 +166,7 @@ class MentorshipRequestModelTests(TestCase):
         self.assertIsNone(request_obj.responded_at)
 
 
-def _token_for(user: User) -> str:
+def _token_for(user: Any) -> str:
     """Return a JWT access token string for the given user."""
     return str(RefreshToken.for_user(user).access_token)
 
@@ -210,20 +213,14 @@ class MentorshipRequestAPIBaseTestCase(TestCase):
             mentorship_mode=MentorshipMode.BOTH,
         )
 
-        self.mentor_client = APIClient()
-        self.mentee_client = APIClient()
-        self.other_client = APIClient()
-        self.anon_client = APIClient()
+        self.mentor_client: Any = APIClient()
+        self.mentee_client: Any = APIClient()
+        self.other_client: Any = APIClient()
+        self.anon_client: Any = APIClient()
 
-        self.mentor_client.credentials(
-            HTTP_AUTHORIZATION=f"Bearer {_token_for(self.mentor_user)}"
-        )
-        self.mentee_client.credentials(
-            HTTP_AUTHORIZATION=f"Bearer {_token_for(self.mentee_user)}"
-        )
-        self.other_client.credentials(
-            HTTP_AUTHORIZATION=f"Bearer {_token_for(self.other_user)}"
-        )
+        self.mentor_client.credentials(HTTP_AUTHORIZATION=f"Bearer {_token_for(self.mentor_user)}")
+        self.mentee_client.credentials(HTTP_AUTHORIZATION=f"Bearer {_token_for(self.mentee_user)}")
+        self.other_client.credentials(HTTP_AUTHORIZATION=f"Bearer {_token_for(self.other_user)}")
 
     def _respond_url(self, request_id) -> str:
         return f"/api/mentorship/requests/{request_id}/respond/"
@@ -302,9 +299,7 @@ class CreateRequestAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_nonexistent_mentor_username_returns_400(self) -> None:
-        response = self.mentee_client.post(
-            self.REQUESTS_URL, {"mentor_username": "does_not_exist"}
-        )
+        response = self.mentee_client.post(self.REQUESTS_URL, {"mentor_username": "does_not_exist"})
         self.assertEqual(response.status_code, 400)
 
     def test_target_without_mentor_mode_returns_400(self) -> None:
