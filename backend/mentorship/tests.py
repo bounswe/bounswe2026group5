@@ -1,12 +1,18 @@
-"""Tests for mentorship domain models."""
+"""Tests for mentorship domain models and API endpoints."""
+
+from typing import Any
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
+
 from mentorship.models import Match, MentorshipRequest
 from profiles.models import MentorshipMode, Profile
 
-User = get_user_model()
+User: Any = get_user_model()
 
 
 class MentorshipRequestModelTests(TestCase):
@@ -158,3 +164,270 @@ class MentorshipRequestModelTests(TestCase):
         request_obj.refresh_from_db()
 
         self.assertIsNone(request_obj.responded_at)
+
+
+def _token_for(user: Any) -> str:
+    """Return a JWT access token string for the given user."""
+    return str(RefreshToken.for_user(user).access_token)
+
+
+class MentorshipRequestAPIBaseTestCase(TestCase):
+    """Shared fixtures for mentorship API tests."""
+
+    REQUESTS_URL = "/api/mentorship/requests/"
+    REQUESTS_ME_URL = "/api/mentorship/requests/me/"
+    MATCHES_ME_URL = "/api/mentorship/matches/me/"
+
+    def setUp(self) -> None:
+        """Create mentor and mentee users with matching profiles."""
+        from accounts.models import UserRole
+
+        Group.objects.get_or_create(name=UserRole.USER)
+
+        self.mentor_user = User.objects.create_user(
+            email="mentor.api@example.com",
+            password="SecurePass123",
+        )
+        self.mentee_user = User.objects.create_user(
+            email="mentee.api@example.com",
+            password="SecurePass123",
+        )
+        self.other_user = User.objects.create_user(
+            email="other.api@example.com",
+            password="SecurePass123",
+        )
+
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            display_name="API Mentor",
+            mentorship_mode=MentorshipMode.MENTOR,
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user,
+            display_name="API Mentee",
+            mentorship_mode=MentorshipMode.MENTEE,
+        )
+        self.other_profile = Profile.objects.create(
+            user=self.other_user,
+            display_name="API Other",
+            mentorship_mode=MentorshipMode.BOTH,
+        )
+
+        self.mentor_client: Any = APIClient()
+        self.mentee_client: Any = APIClient()
+        self.other_client: Any = APIClient()
+        self.anon_client: Any = APIClient()
+
+        self.mentor_client.credentials(HTTP_AUTHORIZATION=f"Bearer {_token_for(self.mentor_user)}")
+        self.mentee_client.credentials(HTTP_AUTHORIZATION=f"Bearer {_token_for(self.mentee_user)}")
+        self.other_client.credentials(HTTP_AUTHORIZATION=f"Bearer {_token_for(self.other_user)}")
+
+    def _respond_url(self, request_id) -> str:
+        return f"/api/mentorship/requests/{request_id}/respond/"
+
+
+class MyRequestsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
+    """Tests for GET /api/mentorship/requests/me/."""
+
+    def test_unauthenticated_returns_401(self) -> None:
+        response = self.anon_client.get(self.REQUESTS_ME_URL)
+        self.assertEqual(response.status_code, 401)
+
+    def test_no_requests_returns_empty_list(self) -> None:
+        response = self.mentee_client.get(self.REQUESTS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_mentee_sees_sent_requests(self) -> None:
+        MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+        )
+        response = self.mentee_client.get(self.REQUESTS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["mentee"]["username"], self.mentee_profile.username)
+
+    def test_mentor_sees_received_requests(self) -> None:
+        MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+        )
+        response = self.mentor_client.get(self.REQUESTS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["mentor"]["username"], self.mentor_profile.username)
+
+    def test_user_sees_requests_as_both_parties(self) -> None:
+        """BOTH-mode user sees requests where they are mentor or mentee."""
+        MentorshipRequest.objects.create(
+            mentor=self.other_profile,
+            mentee=self.mentee_profile,
+        )
+        MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.other_profile,
+        )
+        response = self.other_client.get(self.REQUESTS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 2)
+
+
+class CreateRequestAPIViewTests(MentorshipRequestAPIBaseTestCase):
+    """Tests for POST /api/mentorship/requests/."""
+
+    def test_unauthenticated_returns_401(self) -> None:
+        response = self.anon_client.post(
+            self.REQUESTS_URL, {"mentor_username": self.mentor_profile.username}
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_mentee_creates_request_successfully(self) -> None:
+        response = self.mentee_client.post(
+            self.REQUESTS_URL,
+            {"mentor_username": self.mentor_profile.username, "cover_letter": "Hi!"},
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], "PENDING")
+        self.assertEqual(response.data["mentor"]["username"], self.mentor_profile.username)
+        self.assertEqual(response.data["cover_letter"], "Hi!")
+
+    def test_mentor_only_profile_cannot_send_request(self) -> None:
+        response = self.mentor_client.post(
+            self.REQUESTS_URL, {"mentor_username": self.other_profile.username}
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_nonexistent_mentor_username_returns_400(self) -> None:
+        response = self.mentee_client.post(self.REQUESTS_URL, {"mentor_username": "does_not_exist"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_target_without_mentor_mode_returns_400(self) -> None:
+        """Cannot send a request to a MENTEE-only profile."""
+        response = self.mentee_client.post(
+            self.REQUESTS_URL, {"mentor_username": self.mentee_profile.username}
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_duplicate_pending_returns_400(self) -> None:
+        self.mentee_client.post(
+            self.REQUESTS_URL, {"mentor_username": self.mentor_profile.username}
+        )
+        response = self.mentee_client.post(
+            self.REQUESTS_URL, {"mentor_username": self.mentor_profile.username}
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_cover_letter_optional(self) -> None:
+        response = self.mentee_client.post(
+            self.REQUESTS_URL, {"mentor_username": self.mentor_profile.username}
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["cover_letter"], "")
+
+
+class RespondToRequestAPIViewTests(MentorshipRequestAPIBaseTestCase):
+    """Tests for POST /api/mentorship/requests/{id}/respond/."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.pending_request = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+        )
+        self.respond_url = self._respond_url(self.pending_request.id)
+
+    def test_unauthenticated_returns_401(self) -> None:
+        response = self.anon_client.post(self.respond_url, {"action": "accept"})
+        self.assertEqual(response.status_code, 401)
+
+    def test_non_mentor_cannot_respond(self) -> None:
+        response = self.mentee_client.post(self.respond_url, {"action": "accept"})
+        self.assertEqual(response.status_code, 403)
+
+    def test_unrelated_user_cannot_respond(self) -> None:
+        response = self.other_client.post(self.respond_url, {"action": "accept"})
+        self.assertEqual(response.status_code, 403)
+
+    def test_mentor_accepts_request(self) -> None:
+        response = self.mentor_client.post(self.respond_url, {"action": "accept"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "ACCEPTED")
+        self.assertTrue(Match.objects.filter(request=self.pending_request).exists())
+
+    def test_mentor_rejects_request(self) -> None:
+        response = self.mentor_client.post(self.respond_url, {"action": "reject"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "REJECTED")
+        self.assertFalse(Match.objects.filter(request=self.pending_request).exists())
+
+    def test_responding_to_already_accepted_returns_400(self) -> None:
+        self.pending_request.status = MentorshipRequest.Status.ACCEPTED
+        self.pending_request.save()
+        response = self.mentor_client.post(self.respond_url, {"action": "reject"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_invalid_action_returns_400(self) -> None:
+        response = self.mentor_client.post(self.respond_url, {"action": "maybe"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_nonexistent_request_returns_404(self) -> None:
+        import uuid
+
+        url = self._respond_url(uuid.uuid4())
+        response = self.mentor_client.post(url, {"action": "accept"})
+        self.assertEqual(response.status_code, 404)
+
+
+class MyMatchesListAPIViewTests(MentorshipRequestAPIBaseTestCase):
+    """Tests for GET /api/mentorship/matches/me/."""
+
+    def test_unauthenticated_returns_401(self) -> None:
+        response = self.anon_client.get(self.MATCHES_ME_URL)
+        self.assertEqual(response.status_code, 401)
+
+    def test_no_matches_returns_empty_list(self) -> None:
+        response = self.mentee_client.get(self.MATCHES_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_accepted_request_appears_in_matches(self) -> None:
+        req = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        response = self.mentee_client.get(self.MATCHES_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(str(response.data[0]["request_id"]), str(req.id))
+
+    def test_mentor_also_sees_match(self) -> None:
+        MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        response = self.mentor_client.get(self.MATCHES_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+
+    def test_inactive_match_excluded(self) -> None:
+        req = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        Match.objects.filter(request=req).update(is_active=False)
+        response = self.mentee_client.get(self.MATCHES_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_pending_request_not_in_matches(self) -> None:
+        MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+        )
+        response = self.mentee_client.get(self.MATCHES_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
