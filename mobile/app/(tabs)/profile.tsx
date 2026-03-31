@@ -16,7 +16,7 @@ import {
   UserProfileData,
 } from "@/components/profile/EditProfileModal";
 import { BookingModal } from "@/components/profile/BookingModal";
-import { AddOfferingModal } from "@/components/profile/AddOfferingModal";
+import { ManageOfferingsModal } from "@/components/profile/ManageOfferingsModal";
 
 const MOCK_PROFILE_DATA = {
   user: {
@@ -101,7 +101,8 @@ export default function ProfileScreen() {
   const [offeringsData, setOfferingsData] = useState<Offering[]>(
     commonData.offerings,
   );
-  const [isAddOfferingModalOpen, setAddOfferingModalOpen] = useState(false);
+
+const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] = useState(false);
 
   const openEditModal = (
     title: string,
@@ -208,7 +209,7 @@ export default function ProfileScreen() {
             <View className="-mx-4">
               <MentorshipOfferings
                 offerings={offeringsData}
-                onEdit={() => setAddOfferingModalOpen(true)}
+                onEdit={() => setManageOfferingsModalOpen(true)}
                 onSelectOffering={(offering) => setSelectedOffering(offering)}
               />
             </View>
@@ -258,16 +259,16 @@ export default function ProfileScreen() {
         }}
       />
 
-      {/* The Add Offering Modal */}
-      <AddOfferingModal
-        visible={isAddOfferingModalOpen}
-        onClose={() => setAddOfferingModalOpen(false)}
-        onSave={(newOffering) => {
-          setOfferingsData([...offeringsData, newOffering]);
-          setAddOfferingModalOpen(false);
-        }}
+      {/* The Manage Offerings Modal */}
+      <ManageOfferingsModal
+        visible={isManageOfferingsModalOpen}
+        offerings={offeringsData}
+        onClose={() => setManageOfferingsModalOpen(false)}
+        onAdd={(newOffering) => setOfferingsData([...offeringsData, newOffering])}
+        onDelete={(id) => setOfferingsData(offeringsData.filter(o => o.id !== id))}
+        onReorder={(newOrder) => setOfferingsData(newOrder)}
       />
-
+      
       <BookingModal 
         visible={!!selectedOffering}
         offering={selectedOffering}
