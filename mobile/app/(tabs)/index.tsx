@@ -9,11 +9,13 @@ import { RequestCard } from '@/components/dashboard/RequestCard';
 import { SessionCard } from '@/components/dashboard/SessionCard';
 import { SessionDetailsModal } from '@/components/dashboard/SessionDetailsModal';
 import { RequestDetailsModal } from '@/components/dashboard/RequestDetailsModal';
+import { ViewAllRequestsModal } from '@/components/dashboard/ViewAllRequestsModal';
 
 // Mock Data
 const MOCK_REQUESTS = [
   { id: '1', user: 'Zeynep Kaya', topic: 'React Native Architecture', type: 'incoming' as const, message: 'Hi! I saw your profile and would love to get your thoughts on structuring a large Expo app.', proposedDate: 'Oct 24, 10:00 AM' },
-  { id: '2', user: 'Ahmet Yılmaz', topic: 'System Design Mock', type: 'outgoing' as const, message: 'Looking for a mock interview for my upcoming big tech loop.' }
+  { id: '2', user: 'Ahmet Yılmaz', topic: 'System Design Mock', type: 'outgoing' as const, message: 'Looking for a mock interview for my upcoming big tech loop.' },
+  { id: '3', user: 'Fatma Demir', topic: 'Advanced Algorithms', type: 'incoming' as const, isReschedule: true, message: 'I am so sorry, but I have a conflict. Can we reschedule our session to next week?', proposedDate: 'Nov 2, 14:00' }
 ];
 
 const MOCK_SESSIONS = [
@@ -28,6 +30,7 @@ export default function DashboardScreen() {
   // State for Modals
   const [selectedRequest, setSelectedRequest] = useState<typeof MOCK_REQUESTS[0] | null>(null);
   const [selectedSession, setSelectedSession] = useState<typeof MOCK_SESSIONS[0] | null>(null);
+  const [isViewAllRequestsOpen, setViewAllRequestsOpen] = useState(false);
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -52,14 +55,21 @@ export default function DashboardScreen() {
         
         {/* Requests Section */}
         <View className="mb-6">
-          <Text className="text-lg font-bold text-gray-900 mb-3">Pending Requests</Text>
-          {MOCK_REQUESTS.map((req) => (
+          <View className="flex-row justify-between items-end mb-3">
+            <Text className="text-lg font-bold text-gray-900">Pending Requests</Text>
+            <TouchableOpacity onPress={() => setViewAllRequestsOpen(true)}>
+              <Text className="text-indigo-600 font-semibold text-sm mb-0.5">View All</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Just show the first 2 requests on the dashboard to save space */}
+          {MOCK_REQUESTS.slice(0, 2).map((req) => (
             <RequestCard 
               key={req.id}
               user={req.user}
               topic={req.topic}
               type={req.type}
-              onPress={() => setSelectedRequest(req)} // Opens the Request Modal
+              onPress={() => setSelectedRequest(req)} 
             />
           ))}
         </View>
@@ -105,6 +115,16 @@ export default function DashboardScreen() {
         onClose={() => setSelectedSession(null)}
       />
 
+      {/* The View All Requests Modal */}
+      <ViewAllRequestsModal
+        visible={isViewAllRequestsOpen}
+        requests={MOCK_REQUESTS}
+        onClose={() => setViewAllRequestsOpen(false)}
+        onSelectRequest={(req) => {
+          setViewAllRequestsOpen(false); // Close the list
+          setTimeout(() => setSelectedRequest(req as typeof MOCK_REQUESTS[0]), 300); 
+        }}
+      />
     </View>
   );
 }

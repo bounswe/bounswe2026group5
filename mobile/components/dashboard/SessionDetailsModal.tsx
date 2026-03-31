@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Modal, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, Pressable, Alert} from 'react-native';
 
 interface SessionDetailsModalProps {
   visible: boolean;
@@ -100,19 +100,51 @@ export function SessionDetailsModal({ visible, onClose, session }: SessionDetail
             </TouchableOpacity>
           ) : null}
           
-          {/* Your updated Secondary Action */}
+          {/* Secondary Actions */}
           <View className="flex-row justify-between gap-3 mb-2 mt-2">
             <TouchableOpacity 
               className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
-              onPress={() => console.log('TODO: Trigger Reschedule Flow')}
+              onPress={() => {
+                Alert.alert(
+                  "Reschedule Session",
+                  "This will cancel the current session and send a reschedule request to the user. Are you sure?",
+                  [
+                    { text: "Nevermind", style: "cancel" },
+                    { 
+                      text: "Reschedule", 
+                      onPress: () => {
+                        console.log(`TODO: Hit /api/sessions/$session.id/reschedule`);
+                        onClose();
+                      }
+                    }
+                  ]
+                );
+              }}
             >
               <Text className="text-gray-700 font-bold text-base">Reschedule</Text>
             </TouchableOpacity>
+
             <TouchableOpacity 
               className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
-              onPress={() => console.log('TODO: Trigger Cancel Flow')}
+              onPress={() => {
+                Alert.alert(
+                  "Cancel Session",
+                  "Are you sure you want to permanently cancel this session? This action cannot be undone.",
+                  [
+                    { text: "Keep Session", style: "cancel" },
+                    { 
+                      text: "Cancel", 
+                      style: "destructive",
+                      onPress: () => {
+                        console.log(`TODO: Hit /api/sessions/$session.id/cancel`);
+                        onClose();
+                      }
+                    }
+                  ]
+                );
+              }}
             >
-              <Text className="text-gray-700 font-bold text-base">Cancel</Text>
+              <Text className="text-gray-700 font-bold text-base text-red-600">Cancel</Text>
             </TouchableOpacity>
           </View>
 
