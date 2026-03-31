@@ -20,7 +20,10 @@ const DURATIONS = ['30 min', '45 min', '60 min', '90 min'];
 const LEVELS = ['Beginner', 'Intermediate', 'Advanced', 'All Levels'];
 const ICONS: (keyof typeof Ionicons.glyphMap)[] = [
   'bulb-outline', 'code-slash-outline', 'server-outline', 
-  'rocket-outline', 'logo-react', 'laptop-outline', 'bug-outline'
+  'rocket-outline', 'logo-react', 'laptop-outline', 'bug-outline',
+  'briefcase-outline', 'chatbubbles-outline', 'color-palette-outline',
+  'globe-outline', 'calculator-outline', 'stats-chart-outline',
+  'terminal-outline', 'book-outline', 'people-outline', 'shield-checkmark-outline'
 ];
 
 export function ManageOfferingsModal({ 
@@ -30,6 +33,7 @@ export function ManageOfferingsModal({
   
   // Composer State
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState(''); // <-- ADDED BACK
   const [selectedDuration, setSelectedDuration] = useState('60 min');
   const [selectedLevel, setSelectedLevel] = useState('All Levels');
   const [selectedIcon, setSelectedIcon] = useState<keyof typeof Ionicons.glyphMap>('bulb-outline');
@@ -42,6 +46,7 @@ export function ManageOfferingsModal({
     const newOffering: Offering = {
       id: Date.now().toString(), 
       title: title.trim(),
+      description: description.trim(), // <-- SAVED TO OBJECT
       duration: selectedDuration,
       level: selectedLevel,
       icon: selectedIcon,
@@ -50,6 +55,7 @@ export function ManageOfferingsModal({
     
     // Reset composer
     setTitle('');
+    setDescription(''); // <-- RESET
     setSelectedDuration('60 min');
     setSelectedLevel('All Levels');
     setSelectedIcon('bulb-outline');
@@ -62,7 +68,6 @@ export function ManageOfferingsModal({
     const newOfferings = [...offerings];
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
     
-    // Swap elements
     [newOfferings[index], newOfferings[swapIndex]] = [newOfferings[swapIndex], newOfferings[index]];
     onReorder(newOfferings);
   };
@@ -91,7 +96,17 @@ export function ManageOfferingsModal({
                 value={title}
                 onChangeText={setTitle}
                 placeholder="Offering Title (e.g., React Review)"
-                className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-base text-gray-900 font-bold mb-4"
+                className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-base text-gray-900 font-bold mb-3"
+              />
+
+              {/* ADDED: Description Input */}
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Short description (Optional)"
+                multiline={true}
+                className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-sm text-gray-700 h-20 mb-4"
+                textAlignVertical="top"
               />
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-2 px-2 mb-4">
@@ -145,10 +160,13 @@ export function ManageOfferingsModal({
                   
                   <View className="flex-1 mr-2">
                     <Text className="font-bold text-gray-900 mb-0.5" numberOfLines={1}>{item.title}</Text>
-                    <Text className="text-xs text-gray-500 font-medium">{item.duration} • {item.level}</Text>
+                    <Text className="text-xs text-gray-500 font-medium mb-1">{item.duration} • {item.level}</Text>
+                    {/* ADDED: Description preview so the mentor knows what they wrote */}
+                    {item.description ? (
+                      <Text className="text-xs text-gray-400" numberOfLines={1}>{item.description}</Text>
+                    ) : null}
                   </View>
 
-                  {/* Controls: Up, Down, Delete */}
                   <View className="flex-row items-center gap-1 border-l border-gray-100 pl-2">
                     <View>
                       <TouchableOpacity onPress={() => moveItem(index, 'up')} disabled={index === 0} className="p-1">
