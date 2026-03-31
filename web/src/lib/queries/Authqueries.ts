@@ -2,6 +2,8 @@
 import { queryOptions, useQuery } from "@tanstack/react-query"
 import { queryClient, router } from "#/router.tsx"
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+
 export interface User {
     id: string
     email: string
@@ -26,7 +28,7 @@ export const meQueryOptions = queryOptions({
         const id = localStorage.getItem('id')
         if (!token || !id) return null
 
-        const res = await fetch(`/api/auth/${id}/`, {
+        const res = await fetch(`${API_BASE_URL}/auth/${id}/`, {
             headers: { Authorization: `Bearer ${token}` }
         })
 
@@ -62,7 +64,7 @@ export function logout() {
 // ---- API functions (used as mutationFn inside components) ----
 
 export async function loginFn(credentials: { email: string; password: string }) {
-    const res = await fetch('/api/auth/login/', {
+    const res = await fetch(`${API_BASE_URL}/auth/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
@@ -72,7 +74,7 @@ export async function loginFn(credentials: { email: string; password: string }) 
 }
 
 export async function registerFn(credentials: { email: string; password: string; confirm_password: string }) {
-    const res = await fetch('/api/auth/register/', {
+    const res = await fetch(`${API_BASE_URL}/auth/register/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
