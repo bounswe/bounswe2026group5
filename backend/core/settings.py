@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.postgres",
+    "django.contrib.gis",
     # 3rd Party Apps
     "corsheaders",
     "rest_framework",
@@ -125,6 +126,7 @@ WSGI_APPLICATION = "core.wsgi.application"
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {"default": env.db("DATABASE_URL")}
+DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
 
 AUTH_USER_MODEL = "accounts.User"
 

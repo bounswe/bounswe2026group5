@@ -2,14 +2,44 @@
 
 from datetime import datetime
 
+from django.contrib.gis.geos import Point
 from django.utils import timezone
 from rest_framework import serializers
 
 from .models import AvailabilitySlot, MentorshipMode, Profile
 
 
+class LocationField(serializers.Field):
+    """Serialize a PointField as {latitude, longitude} and accept the same on input."""
+
+    def to_representation(self, value):
+        if value is None:
+            return None
+        return {"latitude": value.y, "longitude": value.x}
+
+    def to_internal_value(self, data):
+        if data is None:
+            return None
+        if not isinstance(data, dict) or "latitude" not in data or "longitude" not in data:
+            raise serializers.ValidationError(
+                "Expected {\"latitude\": <float>, \"longitude\": <float>}."
+            )
+        try:
+            lat = float(data["latitude"])
+            lng = float(data["longitude"])
+        except (TypeError, ValueError):
+            raise serializers.ValidationError("latitude and longitude must be numbers.")
+        if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+            raise serializers.ValidationError(
+                "latitude must be between -90 and 90, longitude between -180 and 180."
+            )
+        return Point(lng, lat, srid=4326)
+
+
 class ProfileResponseSerializer(serializers.ModelSerializer):
     """Read serializer for authenticated user's profile data."""
+
+    location = LocationField(read_only=True)
 
     class Meta:
         model = Profile
@@ -20,7 +50,7 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
             "bio",
             "picture_url",
             "title",
-            "location_text",
+            "location",
             "is_visible",
             "show_initials_only",
             "mentorship_mode",
@@ -34,6 +64,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
     """Partial update serializer for authenticated user's profile."""
 
     mentorship_mode = serializers.ChoiceField(choices=MentorshipMode.choices)
+    location = LocationField(required=False, allow_null=True)
 
     class Meta:
         model = Profile
@@ -42,7 +73,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
             "bio",
             "picture_url",
             "title",
-            "location_text",
+            "location",
             "is_visible",
             "show_initials_only",
             "mentorship_mode",

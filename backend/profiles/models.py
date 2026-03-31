@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields.ranges import RangeOperators
+from django.contrib.gis.db import models as gis_models
 from django.db import models
 from django.db.models import F, Func, Q, Value
 
@@ -33,7 +34,7 @@ class Profile(models.Model):
     bio = models.TextField(blank=True, default="")
     picture_url = models.URLField(blank=True, default="")
     title = models.CharField(max_length=120, blank=True, default="")
-    location_text = models.CharField(max_length=255, blank=True, default="")
+    location = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     is_visible = models.BooleanField(default=True)
     show_initials_only = models.BooleanField(default=False)
     mentorship_mode = models.CharField(
