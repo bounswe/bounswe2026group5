@@ -198,18 +198,17 @@ const SelectedChip = React.memo(function SelectedChip({
         style={{
           fontSize: 13,
           fontWeight: '600',
-          color: theme.primary,
+          color: theme.cardBackground,
+          backgroundColor: theme.primary,
+          paddingHorizontal: 10,
+          paddingVertical: 6,
+          borderRadius: 999,
+          overflow: 'hidden'
         }}
       >
         {label}
       </Text>
-      <Ionicons
-        name="close-circle"
-        size={15}
-        color={theme.primary}
-        accessibilityElementsHidden
-        importantForAccessibility="no"
-      />
+
     </Pressable>
   );
 });
@@ -485,6 +484,8 @@ export function SubjectExpertisePicker({
                   height: 52,
                   borderRadius: 16,
                   backgroundColor: theme.primary,
+                  flexDirection: 'row',
+                  
                   alignItems: 'center',
                   justifyContent: 'center',
                 })}
