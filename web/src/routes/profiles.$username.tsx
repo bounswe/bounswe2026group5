@@ -77,7 +77,7 @@ function PublicProfileRoute() {
             {header}
             <ProfilePageView
                 profile={mappedProfile}
-                isOwner={me?.id === profile.id}
+                isOwner={me?.username === profile.username}
                 isAuthenticatedViewer={isAuthenticated}
             />
             {footer}
