@@ -6,6 +6,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 export interface User {
     id: string
+    username: string,
     email: string
     role: string
     auth_provider: string
@@ -33,7 +34,7 @@ export const meQueryOptions = queryOptions({
         })
 
         if (!res.ok) return null
-        return res.json() as Promise<User>
+        return await res.json() as Promise<User>
     },
     staleTime: 5 * 60 * 1000,
 })

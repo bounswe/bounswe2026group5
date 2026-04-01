@@ -1,8 +1,8 @@
 // web/src/components/layout/AuthorizedHeader.tsx
-import { Link, useRouter, useNavigate, useSearch } from '@tanstack/react-router'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
-import { setDemoAuthRole } from '@/lib/demoAuth'
-import {logout} from "#/lib/queries/Authqueries.ts";
+import {logout, meQueryOptions} from "#/lib/queries/AuthQueries.ts";
+import {useQuery} from "@tanstack/react-query";
 
 type DashboardMode = 'mentor' | 'mentee'
 type HeaderSearch = {
@@ -11,7 +11,7 @@ type HeaderSearch = {
 
 export function AuthorizedHeader() {
   const navigate = useNavigate()
-  
+  const { data: me } = useQuery(meQueryOptions)
   const search = useSearch({ strict: false }) as HeaderSearch  
   const isMentorMode = search.mode === 'mentor'
   const currentMode = isMentorMode ? 'mentor' : 'mentee'
@@ -104,9 +104,10 @@ export function AuthorizedHeader() {
 
           <div className="flex items-center gap-3">
             <Link
-              to="/profile"
-              aria-label="Open profile page"
-              className="h-8 w-8 rounded-full bg-accent text-background flex items-center justify-center text-sm font-bold shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                to="/profiles/$username"
+                params={{ username: me?.username ?? '' }}
+                aria-label="Open profile page"
+                className="h-8 w-8 rounded-full bg-accent text-background flex items-center justify-center text-sm font-bold shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             >
               AS
             </Link>

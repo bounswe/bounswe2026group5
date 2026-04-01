@@ -15,7 +15,7 @@ import { Heading, Muted, Body, Display } from "@/components/Typography"
 
 // DEMO BYPASS IMPORT - FUTURE: Delete this once real auth is merged
 import { setDemoAuthRole } from '@/lib/demoAuth'
-import {handleAuthSuccess, loginFn} from "#/lib/queries/Authqueries.ts";
+import {handleAuthSuccess, loginFn} from "#/lib/queries/AuthQueries.ts";
 import {useMutation} from "@tanstack/react-query";
 import {useState} from "react";
 

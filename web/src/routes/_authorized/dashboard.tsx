@@ -4,10 +4,10 @@ import { z } from 'zod'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Heading, Body, Muted } from '@/components/Typography'
-import { MOCK_REQUESTS, MOCK_SESSIONS, MOCK_DISCOVER_SKILLS } from '@/lib/mocks/loggedInHome' // FUTURE: Replace with real API calls once backend is ready
+import { MOCK_REQUESTS, MOCK_SESSIONS} from '@/lib/mocks/loggedInHome' // FUTURE: Replace with real API calls once backend is ready
 import { CalendarDays, Clock, CheckCircle2, XCircle, ArrowRight } from 'lucide-react'
 import { SessionManagementModal } from '@/components/dashboard/SessionManagementModal'
-import {meQueryOptions} from "#/lib/queries/Authqueries.ts";
+import {meQueryOptions} from "#/lib/queries/AuthQueries.ts";
 import {useQuery} from "@tanstack/react-query";
 
 const dashboardSearchSchema = z.object({

@@ -1,7 +1,7 @@
 // web/src/routes/_authorized/route.tsx
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
 import { AuthorizedHeader } from '@/components/layout/AuthorizedHeader'
-import {getStoredUser} from "#/lib/queries/Authqueries.ts";
+import {getStoredUser} from "#/lib/queries/AuthQueries.ts";
 
 export const Route = createFileRoute('/_authorized')({
     beforeLoad: () => {
