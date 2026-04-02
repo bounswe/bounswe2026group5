@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AvailabilitySlot, ExpertiseField, Profile, ProfileExpertise
+from .models import AvailabilitySlot, ExpertiseField, Profile, ProfileExpertise, Skill
 
 
 @admin.register(Profile)
@@ -16,6 +16,13 @@ class ProfileAdmin(admin.ModelAdmin):
     list_filter = ("is_visible", "show_initials_only")
     search_fields = ("username", "display_name", "user__email", "title")
     ordering = ("display_name",)
+
+
+@admin.register(Skill)
+class SkillAdmin(admin.ModelAdmin):
+    list_display = ("name",)
+    search_fields = ("name",)
+    ordering = ("name",)
 
 
 @admin.register(ExpertiseField)

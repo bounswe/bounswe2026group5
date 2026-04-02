@@ -8,9 +8,11 @@ from .views import (
     AvailabilitySlotDetailAPIView,
     AvailabilitySlotListCreateAPIView,
     ProfileByUsernameAPIView,
+    SkillListAPIView,
 )
 
 urlpatterns = [
+    path("skills/", SkillListAPIView.as_view(), name="skill-list"),
     path(
         "<str:username>/availability-slots/",
         AvailabilitySlotListCreateAPIView.as_view(),

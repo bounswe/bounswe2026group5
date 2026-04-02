@@ -16,6 +16,7 @@ from profiles.models import (
     ExpertiseField,
     Profile,
     ProfileExpertise,
+    Skill,
 )
 
 User: Any = get_user_model()
@@ -399,6 +400,33 @@ class ProfileByUsernameAPIViewTests(TestCase):
         payload = response.json()
         self.assertEqual(len(payload["eager_to_learn"]), 1)
         self.assertEqual(payload["eager_to_learn"][0], "Data Science")
+
+
+class SkillListAPIViewTests(TestCase):
+    """Tests for GET /api/profiles/skills/ endpoint."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+        self.url = "/api/profiles/skills/"
+        
+        Skill.objects.create(name="Python")
+        Skill.objects.create(name="JavaScript")
+        Skill.objects.create(name="Django")
+
+    def test_list_skills_success(self) -> None:
+        """Anyone can fetch the list of skills."""
+        response = self.api_client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 3)
+        
+        # Should be ordered by name
+        self.assertEqual(payload[0]["name"], "Django")
+        self.assertEqual(payload[1]["name"], "JavaScript")
+        self.assertEqual(payload[2]["name"], "Python")
+        
+        self.assertIn("id", payload[0])
 
 
 class AvailabilitySlotAPIViewTests(TestCase):

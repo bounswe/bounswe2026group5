@@ -14,6 +14,19 @@ from django.db.models import F, Func, Q, Value
 from django.utils import timezone
 
 
+class Skill(models.Model):
+    """Catalog of skills available in the system."""
+
+    name = models.CharField(max_length=120, unique=True)
+
+    class Meta:
+        db_table = "skills"
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Profile(models.Model):
     """Public profile information associated one-to-one with a user."""
 
