@@ -9,12 +9,15 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.models import AppUsageMode
 from accounts.permissions import IsNotBanned, IsUser
 
-from .models import AvailabilitySlot, MentorshipMode, Profile
+from .models import AvailabilitySlot, Profile
 from .serializers import (
     AvailabilitySlotSerializer,
     AvailabilitySlotWriteSerializer,
+    MenteeProfileResponseSerializer,
+    MentorProfileResponseSerializer,
     ProfileResponseSerializer,
     ProfileUpdateSerializer,
 )
@@ -39,13 +42,13 @@ class ProfileLookupMixin:
     def _get_profile_or_404(self, username: str) -> Profile | None:
         """Return profile by username when it exists."""
         try:
-            return Profile.objects.get(username=username)
+            return Profile.objects.select_related("user").get(username=username)
         except Profile.DoesNotExist:
             return None
 
     def _is_mentor_profile(self, profile: Profile) -> bool:
-        """Return True when profile supports mentoring."""
-        return profile.mentorship_mode in {MentorshipMode.MENTOR, MentorshipMode.BOTH}
+        """Return True when the user's app usage mode is MENTOR."""
+        return profile.user.app_usage_mode == AppUsageMode.MENTOR
 
 
 class AvailabilitySlotLookupMixin(ProfileLookupMixin):
@@ -78,12 +81,13 @@ class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
 
     @extend_schema(
         responses={
-            200: ProfileResponseSerializer,
+            200: MentorProfileResponseSerializer,
             404: OpenApiResponse(description="Profile not found."),
         },
         description=(
-            "Get profile by username. Returns profile when requester is the owner or "
-            "when the profile is marked visible."
+            "Get profile by username. Returns a mentee or mentor profile shape "
+            "based on the user's app usage mode. Returns profile when requester "
+            "is the owner or when the profile is marked visible."
         ),
         tags=["Profiles"],
     )
@@ -97,7 +101,16 @@ class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
         if not is_owner and not profile.is_visible:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
-        return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
+        app_usage_mode = profile.user.app_usage_mode
+        if app_usage_mode == AppUsageMode.MENTEE:
+            serializer = MenteeProfileResponseSerializer(profile)
+        elif app_usage_mode == AppUsageMode.MENTOR:
+            serializer = MentorProfileResponseSerializer(profile)
+        else:
+            # Fallback for users who haven't set their usage mode yet
+            serializer = ProfileResponseSerializer(profile)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         request=ProfileUpdateSerializer,

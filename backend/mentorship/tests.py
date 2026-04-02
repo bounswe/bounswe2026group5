@@ -9,8 +9,9 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from accounts.models import AppUsageMode
 from mentorship.models import Match, MentorshipRequest
-from profiles.models import MentorshipMode, Profile
+from profiles.models import Profile
 
 User: Any = get_user_model()
 
@@ -23,21 +24,21 @@ class MentorshipRequestModelTests(TestCase):
         mentor_user = User.objects.create_user(
             email="mentor.request@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
         )
         mentee_user = User.objects.create_user(
             email="mentee.request@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
         )
 
         self.mentor_profile = Profile.objects.create(
             user=mentor_user,
             display_name="Mentor Request",
-            mentorship_mode=MentorshipMode.MENTOR,
         )
         self.mentee_profile = Profile.objects.create(
             user=mentee_user,
             display_name="Mentee Request",
-            mentorship_mode=MentorshipMode.MENTEE,
         )
 
     def test_default_status_is_pending(self) -> None:
@@ -187,30 +188,30 @@ class MentorshipRequestAPIBaseTestCase(TestCase):
         self.mentor_user = User.objects.create_user(
             email="mentor.api@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
         )
         self.mentee_user = User.objects.create_user(
             email="mentee.api@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
         )
         self.other_user = User.objects.create_user(
             email="other.api@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
         )
 
         self.mentor_profile = Profile.objects.create(
             user=self.mentor_user,
             display_name="API Mentor",
-            mentorship_mode=MentorshipMode.MENTOR,
         )
         self.mentee_profile = Profile.objects.create(
             user=self.mentee_user,
             display_name="API Mentee",
-            mentorship_mode=MentorshipMode.MENTEE,
         )
         self.other_profile = Profile.objects.create(
             user=self.other_user,
             display_name="API Other",
-            mentorship_mode=MentorshipMode.BOTH,
         )
 
         self.mentor_client: Any = APIClient()

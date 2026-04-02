@@ -6,19 +6,12 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.postgres.constraints import ExclusionConstraint
+from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.fields.ranges import RangeOperators
 from django.contrib.gis.db import models as gis_models
 from django.db import models
 from django.db.models import F, Func, Q, Value
 from django.utils import timezone
-
-
-class MentorshipMode(models.TextChoices):
-    """Supported mentoring participation modes for a profile."""
-
-    MENTOR = "MENTOR", "Mentor"
-    MENTEE = "MENTEE", "Mentee"
-    BOTH = "BOTH", "Both"
 
 
 class Profile(models.Model):
@@ -38,11 +31,13 @@ class Profile(models.Model):
     location = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     is_visible = models.BooleanField(default=True)
     show_initials_only = models.BooleanField(default=False)
-    mentorship_mode = models.CharField(
-        max_length=16,
-        choices=MentorshipMode.choices,
-        default=MentorshipMode.BOTH,
+    skills = ArrayField(
+        models.CharField(max_length=120),
+        blank=True,
+        default=list,
     )
+    rating = models.PositiveIntegerField(default=0)
+    total_mentee_count = models.PositiveIntegerField(default=0)
     expertise_fields = models.ManyToManyField(
         "ExpertiseField",
         through="ProfileExpertise",
@@ -56,7 +51,6 @@ class Profile(models.Model):
         db_table = "profiles"
         ordering = ["display_name", "-created_at"]
         indexes = [
-            models.Index(fields=["mentorship_mode"]),
             models.Index(fields=["is_visible", "show_initials_only"]),
         ]
 
