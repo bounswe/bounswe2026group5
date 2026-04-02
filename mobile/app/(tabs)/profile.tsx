@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, ScrollView, Text, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,6 +20,11 @@ import {
 } from "@/components/profile/EditProfileModal";
 import { BookingModal } from "@/components/profile/BookingModal";
 import { ManageOfferingsModal } from "@/components/profile/ManageOfferingsModal";
+import { PROFILE_USERNAME } from "@/lib/api/config";
+import {
+  mapAvailabilityToSchedule,
+  useAvailabilitySlotsQuery,
+} from "@/lib/queries/mentorship";
 
 // Mock Data from centralized file
 import { MOCK_AVAILABILITY, MOCK_OFFERINGS } from "@/constants/mockData";
@@ -45,6 +50,7 @@ export default function ProfileScreen() {
   const { preferences, commonData } = MOCK_PROFILE_DATA;
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const availabilityQuery = useAvailabilitySlotsQuery(PROFILE_USERNAME);
 
   const [availabilityData, setAvailabilityData] = useState(MOCK_AVAILABILITY);
   const [offeringsData, setOfferingsData] = useState<Offering[]>(
@@ -67,6 +73,12 @@ export default function ProfileScreen() {
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
   const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] =
     useState(false);
+
+  useEffect(() => {
+    if (availabilityQuery.data) {
+      setAvailabilityData(mapAvailabilityToSchedule(availabilityQuery.data));
+    }
+  }, [availabilityQuery.data]);
 
   const [skillsModalConfig, setSkillsModalConfig] = useState<{
     visible: boolean;
