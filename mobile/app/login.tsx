@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,15 +16,55 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
+import { useLoginMutation } from '@/lib/queries/auth';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const loginMutation = useLoginMutation();
 
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const theme = Colors[colorScheme];
+
+  /**
+   * Navigate to dashboard when login succeeds.
+   */
+  useEffect(() => {
+    if (loginMutation.data) {
+      router.replace('/(tabs)');
+    }
+  }, [loginMutation.data]);
+
+  /**
+   * Handle login button press.
+   * Validates input and calls login mutation.
+   */
+  const handleLogin = async () => {
+    setLocalError(null);
+
+    if (!email.trim()) {
+      setLocalError('Please enter your email');
+      return;
+    }
+
+    if (!password) {
+      setLocalError('Please enter your password');
+      return;
+    }
+
+    try {
+      await loginMutation.mutateAsync({ email: email.trim(), password });
+    } catch (error) {
+      // Error is already handled by mutation's onError, but we can add local handling if needed
+      console.error('Login error:', error);
+    }
+  };
+
+  const isLoading = loginMutation.isPending;
 
   return (
     <SafeAreaView
@@ -63,6 +104,15 @@ export default function LoginScreen() {
 
           {/* ── Form ── */}
           <View className="gap-5">
+
+            {/* Error Message */}
+            {(loginMutation.error || localError) && (
+              <View className="p-3 rounded-lg bg-error/10 dark:bg-error-dark/10 border border-error dark:border-error-dark">
+                <Text className="text-sm font-medium text-error dark:text-error-dark">
+                  {localError || loginMutation.error?.message}
+                </Text>
+              </View>
+            )}
 
             {/* Email / Username */}
             <View className="gap-1.5">
@@ -130,9 +180,7 @@ export default function LoginScreen() {
                   autoComplete="current-password"
                   returnKeyType="done"
                   accessibilityLabel="Password"
-                  onSubmitEditing={() =>
-                    console.log('TODO: Trigger login on keyboard done')
-                  }
+                  onSubmitEditing={handleLogin}
                 />
                 {/* Pressable avoids the stuck-opacity bug that TouchableOpacity
                     (which wraps children in Animated.View) causes when secureTextEntry
@@ -155,15 +203,20 @@ export default function LoginScreen() {
 
             {/* Login CTA */}
             <TouchableOpacity
-              className="w-full h-14 rounded-full items-center justify-center mt-2 shadow-sm bg-primary dark:bg-primary-dim"
+              className={`w-full h-14 rounded-full items-center justify-center mt-2 shadow-sm ${
+                isLoading ? 'bg-primary/50 dark:bg-primary-dim/50' : 'bg-primary dark:bg-primary-dim'
+              }`}
               activeOpacity={0.88}
+              disabled={isLoading}
               accessibilityRole="button"
               accessibilityLabel="Log in"
-              onPress={() =>
-                console.log('TODO: POST /api/auth/login with email + password')
-              }
+              onPress={handleLogin}
             >
-              <Text className="text-white text-lg font-bold">Log In</Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Text className="text-white text-lg font-bold">Log In</Text>
+              )}
             </TouchableOpacity>
 
           </View>
