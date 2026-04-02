@@ -7,8 +7,9 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.models import AppUsageMode
 from accounts.permissions import IsNotBanned, IsUser
-from profiles.models import MentorshipMode, Profile
+from profiles.models import Profile
 
 from .models import Match, MentorshipRequest
 from .serializers import (
@@ -85,7 +86,7 @@ class CreateRequestAPIView(APIView):
         except Profile.DoesNotExist:
             return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
 
-        if mentee_profile.mentorship_mode not in {MentorshipMode.MENTEE, MentorshipMode.BOTH}:
+        if mentee_profile.user.app_usage_mode != AppUsageMode.MENTEE:
             return Response(_MENTEE_REQUIRED, status=status.HTTP_403_FORBIDDEN)
 
         serializer = MentorshipRequestCreateSerializer(

@@ -9,12 +9,11 @@ class ProfileAdmin(admin.ModelAdmin):
         "username",
         "display_name",
         "user",
-        "mentorship_mode",
         "is_visible",
         "show_initials_only",
         "created_at",
     )
-    list_filter = ("mentorship_mode", "is_visible", "show_initials_only")
+    list_filter = ("is_visible", "show_initials_only")
     search_fields = ("username", "display_name", "user__email", "title")
     ordering = ("display_name",)
 
