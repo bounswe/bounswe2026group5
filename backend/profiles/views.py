@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from accounts.models import AppUsageMode
 from accounts.permissions import IsNotBanned, IsUser
 
-from .models import AvailabilitySlot, Profile
+from .models import AvailabilitySlot, Profile, Skill
 from .serializers import (
     AvailabilitySlotSerializer,
     AvailabilitySlotWriteSerializer,
@@ -20,6 +20,7 @@ from .serializers import (
     MentorProfileResponseSerializer,
     ProfileResponseSerializer,
     ProfileUpdateSerializer,
+    SkillSerializer,
 )
 from .services import (
     BookingCancelNotAllowedError,
@@ -49,6 +50,22 @@ class ProfileLookupMixin:
     def _is_mentor_profile(self, profile: Profile) -> bool:
         """Return True when the user's app usage mode is MENTOR."""
         return profile.user.app_usage_mode == AppUsageMode.MENTOR
+
+
+class SkillListAPIView(APIView):
+    """List all available predefined skills in the catalog."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        responses={200: SkillSerializer(many=True)},
+        description="Get a list of all available skills stored in the system catalog.",
+        tags=["Profiles"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return all skills ordered by name."""
+        qs = Skill.objects.all()
+        return Response(SkillSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
 
 class AvailabilitySlotLookupMixin(ProfileLookupMixin):

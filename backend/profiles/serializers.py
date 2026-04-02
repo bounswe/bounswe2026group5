@@ -8,7 +8,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import AvailabilitySlot, Profile
+from .models import AvailabilitySlot, Profile, Skill
 
 
 class LocationField(serializers.Field):
@@ -36,6 +36,15 @@ class LocationField(serializers.Field):
                 "latitude must be between -90 and 90, longitude between -180 and 180."
             )
         return Point(lng, lat, srid=4326)
+
+
+class SkillSerializer(serializers.ModelSerializer):
+    """Read serializer for skills."""
+
+    class Meta:
+        model = Skill
+        fields = ("id", "name")
+        read_only_fields = fields
 
 
 class AvailabilitySlotSerializer(serializers.ModelSerializer):
