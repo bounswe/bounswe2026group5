@@ -4,10 +4,12 @@ interface RequestCardProps {
   user: string;
   topic: string;
   type: 'incoming' | 'outgoing';
+  isReschedule?: boolean;
   onPress?: () => void;
 }
 
-export function RequestCard({ user, topic, type, onPress }: RequestCardProps) {
+// FIX: Added `isReschedule` to the destructured props
+export function RequestCard({ user, topic, type, isReschedule, onPress }: RequestCardProps) {
   const isIncoming = type === 'incoming';
   
   // Define what the USER's role is in this specific relationship
@@ -18,26 +20,42 @@ export function RequestCard({ user, topic, type, onPress }: RequestCardProps) {
     <TouchableOpacity 
       activeOpacity={0.7}
       onPress={onPress}
-      className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3"
+      // FIX: Apply amber styling if it's a reschedule request
+      className={`p-4 rounded-xl shadow-sm border mb-3 ${isReschedule ? 'bg-amber-50/30 border-amber-200' : 'bg-white border-gray-100'}`}
     >
       
       {/* Top Row: Name and Role Badge */}
       <View className="flex-row justify-between items-start mb-2">
         <Text className="text-lg font-semibold text-gray-900">{user}</Text>
-        <View className={`px-2 py-1 rounded-md ${badgeColor.split(' ')[0]}`}>
-          <Text className={`text-xs font-bold uppercase tracking-wider ${badgeColor.split(' ')[1]}`}>
-            As {myRole}
-          </Text>
+        <View className="flex-row gap-2">
+          {/* FIX: Add the Reschedule Badge if applicable */}
+          {isReschedule && (
+            <View className="bg-amber-100 px-2 py-1 rounded-md">
+              <Text className="text-xs font-bold uppercase tracking-wider text-amber-700">Reschedule</Text>
+            </View>
+          )}
+          <View className={`px-2 py-1 rounded-md ${badgeColor.split(' ')[0]}`}>
+            <Text className={`text-xs font-bold uppercase tracking-wider ${badgeColor.split(' ')[1]}`}>
+              As {myRole}
+            </Text>
+          </View>
         </View>
       </View>
 
       {/* Middle Row: Context Text */}
       <View className="mb-3">
-        <Text className="text-sm text-gray-600">
-          {isIncoming 
-            ? 'Has requested you to be their Mentor.' 
-            : 'You requested them to be your Mentor.'}
-        </Text>
+        {/* FIX: Change descriptive text based on reschedule status */}
+        {isReschedule ? (
+          <Text className="text-sm font-bold text-amber-700">
+            Requested to reschedule your upcoming session.
+          </Text>
+        ) : (
+          <Text className="text-sm text-gray-600">
+            {isIncoming 
+              ? 'Has requested you to be their Mentor.' 
+              : 'You requested them to be your Mentor.'}
+          </Text>
+        )}
         <Text className="text-xs text-gray-400 mt-1 font-medium">Topic: {topic}</Text>
       </View>
       
@@ -58,7 +76,8 @@ export function RequestCard({ user, topic, type, onPress }: RequestCardProps) {
             <TouchableOpacity 
               accessibilityRole="button"
               onPress={(e) => { e.stopPropagation(); console.log(`TODO: Accept request from ${user}`); }}
-              className="bg-blue-600 px-4 py-2 rounded-lg"
+              // FIX: Update Accept button color if it's a reschedule
+              className={`px-4 py-2 rounded-lg ${isReschedule ? 'bg-amber-600' : 'bg-blue-600'}`}
             >
               <Text className="text-white font-medium text-sm">Accept</Text>
             </TouchableOpacity>

@@ -29,6 +29,7 @@ export function SkillsCloud({ title, skills, variant, onEdit, onViewAll }: Skill
         <TouchableOpacity 
           onPress={onEdit} 
           className="p-1.5 bg-gray-50 rounded-md border border-gray-200"
+          testID="edit-button"
         >
           <Ionicons name="pencil" size={14} color="#6b7280" />
         </TouchableOpacity>

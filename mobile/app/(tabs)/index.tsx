@@ -4,22 +4,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-// Import the components you provided/we updated
+// Import the components for the dashboard
 import { RequestCard } from '@/components/dashboard/RequestCard';
 import { SessionCard } from '@/components/dashboard/SessionCard';
 import { SessionDetailsModal } from '@/components/dashboard/SessionDetailsModal';
 import { RequestDetailsModal } from '@/components/dashboard/RequestDetailsModal';
+import { ViewAllRequestsModal } from '@/components/dashboard/ViewAllRequestsModal';
+import { BookingModal } from '@/components/profile/BookingModal';
 
-// Mock Data
-const MOCK_REQUESTS = [
-  { id: '1', user: 'Zeynep Kaya', topic: 'React Native Architecture', type: 'incoming' as const, message: 'Hi! I saw your profile and would love to get your thoughts on structuring a large Expo app.', proposedDate: 'Oct 24, 10:00 AM' },
-  { id: '2', user: 'Ahmet Yılmaz', topic: 'System Design Mock', type: 'outgoing' as const, message: 'Looking for a mock interview for my upcoming big tech loop.' }
-];
-
-const MOCK_SESSIONS = [
-  { id: '1', user: 'Mehmet Demir', date: 'Oct 22', time: '14:00 - 15:00', status: 'Upcoming' as const, topic: 'Advanced Algorithms', myRole: 'Mentee', meetingUrl: 'https://meet.google.com/abc-defg-hij' },
-  { id: '2', user: 'Elif Şahin', date: 'Oct 25', time: '09:00 - 10:00', status: 'Pending' as const, topic: 'Portfolio Review', myRole: 'Mentor' }
-];
+// Import mock data
+import { MOCK_REQUESTS, MOCK_SESSIONS, MOCK_AVAILABILITY } from '@/constants/mockData';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
@@ -28,6 +22,8 @@ export default function DashboardScreen() {
   // State for Modals
   const [selectedRequest, setSelectedRequest] = useState<typeof MOCK_REQUESTS[0] | null>(null);
   const [selectedSession, setSelectedSession] = useState<typeof MOCK_SESSIONS[0] | null>(null);
+  const [isViewAllRequestsOpen, setViewAllRequestsOpen] = useState(false);
+  const [sessionToReschedule, setSessionToReschedule] = useState<typeof MOCK_SESSIONS[0] | null>(null);
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -52,27 +48,40 @@ export default function DashboardScreen() {
         
         {/* Requests Section */}
         <View className="mb-6">
-          <Text className="text-lg font-bold text-gray-900 mb-3">Pending Requests</Text>
-          {MOCK_REQUESTS.map((req) => (
+          <View className="flex-row justify-between items-center mb-3 mt-2">
+            <View className="flex-row items-center">
+              <Text className="text-lg font-bold text-gray-900">Pending Requests</Text>
+              {MOCK_REQUESTS.length > 0 && (
+                <View className="bg-red-500 rounded-full px-2 py-0.5 ml-2 justify-center items-center">
+                  <Text className="text-white text-xs font-bold">{MOCK_REQUESTS.length}</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity onPress={() => setViewAllRequestsOpen(true)}>
+              <Text className="text-indigo-600 font-semibold text-sm">View All</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Show the first 2 requests on the dashboard */}
+          {MOCK_REQUESTS.slice(0, 2).map((req) => (
             <RequestCard 
               key={req.id}
               user={req.user}
               topic={req.topic}
               type={req.type}
-              onPress={() => setSelectedRequest(req)} // Opens the Request Modal
+              onPress={() => setSelectedRequest(req)} 
             />
           ))}
         </View>
 
         {/* Sessions Section */}
         <View className="mb-6">
-          
-          {/* THE UPDATED HEADER WITH 'VIEW ALL' BUTTON */}
-          <View className="flex-row justify-between items-end mb-3">
+          <View className="flex-row justify-between items-center mb-3 mt-2">
             <Text className="text-lg font-bold text-gray-900">Your Sessions</Text>
-            {/* Navigates to the Schedule tab */}
             <TouchableOpacity onPress={() => router.push('/schedule')}>
-              <Text className="text-blue-600 font-semibold text-sm mb-0.5">View All</Text>
+              <Text className="text-blue-600 font-semibold text-sm">
+                View All {MOCK_SESSIONS.length > 0 ? `(${MOCK_SESSIONS.length})` : ''}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -83,7 +92,7 @@ export default function DashboardScreen() {
               date={session.date}
               time={session.time}
               status={session.status}
-              onPress={() => setSelectedSession(session)} // Opens the Session Modal
+              onPress={() => setSelectedSession(session)}
             />
           ))}
         </View>
@@ -91,20 +100,43 @@ export default function DashboardScreen() {
       </ScrollView>
 
       {/* 3. MODALS */}
-      {/* The Request Details Bottom Sheet */}
       <RequestDetailsModal 
         visible={!!selectedRequest}
         request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
       />
 
-      {/* The Session Details Bottom Sheet */}
       <SessionDetailsModal 
         visible={!!selectedSession}
         session={selectedSession}
         onClose={() => setSelectedSession(null)}
+        onReschedule={() => setSessionToReschedule(selectedSession)}
       />
 
+      <ViewAllRequestsModal
+        visible={isViewAllRequestsOpen}
+        requests={MOCK_REQUESTS}
+        onClose={() => setViewAllRequestsOpen(false)}
+        onSelectRequest={(req) => {
+          setViewAllRequestsOpen(false);
+          setTimeout(() => setSelectedRequest(req as typeof MOCK_REQUESTS[0]), 300); 
+        }}
+      />
+
+      <BookingModal 
+        visible={!!sessionToReschedule}
+        onClose={() => setSessionToReschedule(null)}
+        availability={MOCK_AVAILABILITY}
+        existingSession={sessionToReschedule ? { date: sessionToReschedule.rawDate, time: sessionToReschedule.time } : undefined}
+        offering={sessionToReschedule ? {
+          id: 'reschedule-temp',
+          title: sessionToReschedule.topic,
+          duration: '60 min',
+          level: 'Previous Session Level',
+          icon: 'calendar-outline',
+          description: `You are requesting to reschedule your session with ${sessionToReschedule.user}.`
+        } : null}
+      />
     </View>
   );
 }
