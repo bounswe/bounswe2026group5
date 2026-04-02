@@ -3,13 +3,6 @@ from rest_framework.permissions import BasePermission
 from .models import UserRole
 
 
-class IsGuest(BasePermission):
-    message = "Only unauthenticated users (guests) can access this resource."
-
-    def has_permission(self, request, view):
-        return not request.user or not request.user.is_authenticated
-
-
 class IsUser(BasePermission):
     message = "You must be an authenticated user to access this resource."
 

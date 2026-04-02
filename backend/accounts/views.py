@@ -262,9 +262,7 @@ class UserAppUsageModeAPIView(APIView):
         if str(request_user_id) != str(user_id):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = UserAppUsageModeUpdateSerializer(
-            request.user, data=request.data, partial=True
-        )
+        serializer = UserAppUsageModeUpdateSerializer(request.user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
@@ -275,7 +273,7 @@ class UserAppUsageModeAPIView(APIView):
 
 
 class AdminUsersListAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAdmin]
 
     @extend_schema(
         responses={
