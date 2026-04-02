@@ -11,16 +11,13 @@ import { Calendar, DateData } from "react-native-calendars";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { BookingModal } from "@/components/profile/BookingModal";
-import { ENABLE_MOCK_FALLBACK } from "@/lib/api/config";
 import {
   mapAvailabilityToSchedule,
   useAvailabilitySlotsQuery,
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
 
-// Mock Data, we will fetch this data from an API
 // TODO: Implement GET /api/mentorship/sessions/me/ to fetch user's scheduled sessions
-import { MOCK_SESSIONS, MOCK_AVAILABILITY } from "@/constants/mockData";
 
 // This grabs today's date dynamically and formats it as 'YYYY-MM-DD'
 const TODAY = new Date().toISOString().split("T")[0];
@@ -61,12 +58,15 @@ export default function ScheduleScreen() {
       return mapAvailabilityToSchedule(availabilityQuery.data);
     }
 
-    return ENABLE_MOCK_FALLBACK ? MOCK_AVAILABILITY : [];
+    return [];
   }, [availabilityQuery.data]);
+
+  // TODO: Replace with API-driven sessions once endpoint is ready.
+  const sessions: ScheduleSession[] = [];
 
   const markedDates = useMemo(() => {
     const marks: any = {};
-    MOCK_SESSIONS.forEach((session) => {
+    sessions.forEach((session) => {
       if (!marks[session.rawDate]) {
         marks[session.rawDate] = { dots: [] };
       }
@@ -88,9 +88,9 @@ export default function ScheduleScreen() {
     };
 
     return marks;
-  }, [selectedDate]);
+  }, [selectedDate, sessions]);
 
-  const selectedSessions = MOCK_SESSIONS.filter(
+  const selectedSessions = sessions.filter(
     (session) => session.rawDate === selectedDate,
   );
 

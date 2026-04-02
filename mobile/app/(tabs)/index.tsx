@@ -12,13 +12,6 @@ import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal"
 import { ViewAllRequestsModal } from "@/components/dashboard/ViewAllRequestsModal";
 import { BookingModal } from "@/components/profile/BookingModal";
 
-// Import mock data
-import {
-  MOCK_REQUESTS,
-  MOCK_SESSIONS,
-  MOCK_AVAILABILITY,
-} from "@/constants/mockData";
-import { ENABLE_MOCK_FALLBACK } from "@/lib/api/config";
 import {
   mapAvailabilityToSchedule,
   mapRequestsToDashboard,
@@ -74,11 +67,6 @@ export default function DashboardScreen() {
       console.log("[Dashboard] Requests error:", requestsQuery.error.message);
     }
 
-    if (ENABLE_MOCK_FALLBACK) {
-      console.log("[Dashboard] Falling back to mock requests");
-      return MOCK_REQUESTS;
-    }
-
     return [];
   }, [
     requestsQuery.data,
@@ -92,19 +80,29 @@ export default function DashboardScreen() {
       return mapAvailabilityToSchedule(availabilityQuery.data);
     }
 
-    return ENABLE_MOCK_FALLBACK ? MOCK_AVAILABILITY : [];
+    return [];
   }, [availabilityQuery.data]);
+
+  // TODO: Replace with API-driven sessions from GET /api/mentorship/sessions/me/
+  const sessions: {
+    id: string;
+    user: string;
+    date: string;
+    time: string;
+    status: "Pending" | "Upcoming" | "Completed";
+    rawDate: string;
+    topic: string;
+    myRole: string;
+    location?: string;
+    meetingUrl?: string;
+  }[] = [];
 
   // State for Modals
   const [selectedRequest, setSelectedRequest] =
     useState<DashboardRequestItem | null>(null);
-  const [selectedSession, setSelectedSession] = useState<
-    (typeof MOCK_SESSIONS)[0] | null
-  >(null);
+  const [selectedSession, setSelectedSession] = useState<(typeof sessions)[0] | null>(null);
   const [isViewAllRequestsOpen, setViewAllRequestsOpen] = useState(false);
-  const [sessionToReschedule, setSessionToReschedule] = useState<
-    (typeof MOCK_SESSIONS)[0] | null
-  >(null);
+  const [sessionToReschedule, setSessionToReschedule] = useState<(typeof sessions)[0] | null>(null);
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -170,21 +168,29 @@ export default function DashboardScreen() {
             <TouchableOpacity onPress={() => router.push("/schedule")}>
               <Text className="text-blue-600 font-semibold text-sm">
                 View All{" "}
-                {MOCK_SESSIONS.length > 0 ? `(${MOCK_SESSIONS.length})` : ""}
+                {sessions.length > 0 ? `(${sessions.length})` : ""}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {MOCK_SESSIONS.map((session) => (
-            <SessionCard
-              key={session.id}
-              user={session.user}
-              date={session.date}
-              time={session.time}
-              status={session.status}
-              onPress={() => setSelectedSession(session)}
-            />
-          ))}
+          {sessions.length === 0 ? (
+            <View className="bg-white p-4 rounded-xl border border-gray-100">
+              <Text className="text-gray-500 font-medium">
+                No sessions yet. Session data will appear when the backend sessions endpoint is wired.
+              </Text>
+            </View>
+          ) : (
+            sessions.map((session) => (
+              <SessionCard
+                key={session.id}
+                user={session.user}
+                date={session.date}
+                time={session.time}
+                status={session.status}
+                onPress={() => setSelectedSession(session)}
+              />
+            ))
+          )}
         </View>
       </ScrollView>
 

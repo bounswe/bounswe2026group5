@@ -26,20 +26,11 @@ import {
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
 
-// Mock Data from centralized file
-import { MOCK_AVAILABILITY, MOCK_OFFERINGS } from "@/constants/mockData";
-
-const MOCK_PROFILE_DATA = {
-  user: {
-    name: "Ali Aydın",
-    bio: "Computer Engineering student passionate about full-stack development, system design, and helping others learn React Native.",
-    rating: 4.8,
-    reviewCount: 12,
-  },
-  commonData: {
-    expertise: ["React Native", "System Design", "Django", "SQL"],
-    learningGoals: ["Machine Learning", "Advanced Algorithms"],
-  },
+const PROFILE_DEFAULTS = {
+  rating: 0,
+  reviewCount: 0,
+  expertise: [] as string[],
+  learningGoals: [] as string[],
   preferences: {
     showAvailability: true,
     showOfferings: true,
@@ -47,25 +38,35 @@ const MOCK_PROFILE_DATA = {
 };
 
 export default function ProfileScreen() {
-  const { preferences, commonData } = MOCK_PROFILE_DATA;
+  const { preferences } = PROFILE_DEFAULTS;
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const authUser = useAuthStore((state) => state.user);
   const currentUsername = useAuthStore((state) => state.user?.username);
-  const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || '');
+  const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
 
-  const [availabilityData, setAvailabilityData] = useState(MOCK_AVAILABILITY);
-  const [offeringsData, setOfferingsData] = useState<Offering[]>(
-    MOCK_OFFERINGS as Offering[],
+  const [availabilityData, setAvailabilityData] = useState<
+    { day: string; times: string[] }[]
+  >([]);
+  const [offeringsData, setOfferingsData] = useState<Offering[]>([]);
+  const [expertiseData, setExpertiseData] = useState<string[]>(
+    PROFILE_DEFAULTS.expertise,
   );
-  const [expertiseData, setExpertiseData] = useState(commonData.expertise);
-  const [learningGoalsData, setLearningGoalsData] = useState(
-    commonData.learningGoals,
+  const [learningGoalsData, setLearningGoalsData] = useState<string[]>(
+    PROFILE_DEFAULTS.learningGoals,
   );
 
   const [userData, setUserData] = useState<UserProfileData>({
-    name: MOCK_PROFILE_DATA.user.name,
-    bio: MOCK_PROFILE_DATA.user.bio,
+    name: authUser?.username ?? "User",
+    bio: "",
   });
+
+  useEffect(() => {
+    setUserData((prev) => ({
+      ...prev,
+      name: authUser?.username ?? prev.name,
+    }));
+  }, [authUser?.username]);
 
   const [selectedOffering, setSelectedOffering] = useState<Offering | null>(
     null,
@@ -150,8 +151,8 @@ export default function ProfileScreen() {
         <ProfileHeader
           name={userData.name}
           bio={userData.bio}
-          rating={MOCK_PROFILE_DATA.user.rating}
-          reviewCount={MOCK_PROFILE_DATA.user.reviewCount}
+          rating={PROFILE_DEFAULTS.rating}
+          reviewCount={PROFILE_DEFAULTS.reviewCount}
           onEdit={() => setEditProfileModalOpen(true)}
         />
 
