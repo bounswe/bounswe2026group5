@@ -15,10 +15,23 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
-import { BirthdayDatePicker } from '@/components/ui/BirthdayDatePicker';
 import { SubjectExpertisePicker } from '@/components/ui/SubjectExpertisePicker';
 
-const GENDER_OPTIONS = ['Female', 'Male', 'Non-binary', 'Prefer not to say'] as const;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateEmail(value: string): string {
+  if (!value.trim()) return 'Email is required.';
+  if (!EMAIL_REGEX.test(value.trim())) return 'Please enter a valid email address.';
+  return '';
+}
+
+function validatePassword(value: string): string {
+  if (!value) return 'Password is required.';
+  if (value.length < 8) return 'Password must be at least 8 characters.';
+  if (!/[A-Z]/.test(value)) return 'Password must contain at least one uppercase letter.';
+  if (!/[0-9]/.test(value)) return 'Password must contain at least one number.';
+  return '';
+}
 
 export default function RegisterScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -26,28 +39,41 @@ export default function RegisterScreen() {
   const theme = Colors[colorScheme];
 
   const [role, setRole] = useState<'mentor' | 'mentee'>('mentor');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
-  const [dob, setDob] = useState('');
-  const [gender, setGender] = useState('');
+  const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
-  const [genderModalVisible, setGenderModalVisible] = useState(false);
+  const [skillsError, setSkillsError] = useState('');
 
-  /**
-   * Strips non-digits and re-inserts slashes to produce MM/DD/YYYY.
-   * Works naturally on backspace: removing a slash pulls the digit with it
-   * because the slash is re-derived from the remaining digits.
-   */
-  const formatDob = (text: string): string => {
-    const digits = text.replaceAll(/\D/g, '');
-    if (digits.length <= 2) return digits;
-    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+  const handleConfirmPasswordChange = (text: string) => {
+    setConfirmPassword(text);
+    if (text && text !== password) {
+      setConfirmPasswordError('Passwords do not match.');
+    } else {
+      setConfirmPasswordError('');
+    }
   };
 
-  const handleDobChange = (text: string): void => {
-    setDob(formatDob(text));
+  const handleSubmit = () => {
+    const eErr = validateEmail(email);
+    const pErr = validatePassword(password);
+    const cpErr = confirmPassword !== password ? 'Passwords do not match.' : '';
+    const sErr = selectedSubjects.length === 0 ? 'Please select at least one skill.' : '';
+
+    setEmailError(eErr);
+    setPasswordError(pErr);
+    setConfirmPasswordError(cpErr);
+    setSkillsError(sErr);
+
+    if (eErr || pErr || cpErr || sErr) return;
+
+    console.log('TODO: POST /api/auth/register', { role, username, email });
   };
 
   return (
@@ -108,9 +134,6 @@ export default function RegisterScreen() {
                 My Role
               </Text>
               <View className="flex-row items-center p-1.5 rounded-xl h-14 bg-surface-input dark:bg-surface-input-dark">
-                {/* Active state uses style prop (not className) so NativeWind never
-                    transitions a Pressable from className="" to a dark: variant,
-                    which triggers a broken re-render path in NativeWind v4. */}
                 <Pressable
                   onPress={() => setRole('mentor')}
                   className="flex-1 h-full rounded-lg items-center justify-center"
@@ -144,46 +167,6 @@ export default function RegisterScreen() {
               </View>
             </View>
 
-            {/* First Name + Last Name */}
-            <View className="flex-row gap-4">
-              <View className="flex-1 gap-1.5">
-                <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
-                  First Name
-                </Text>
-                <View className="flex-row items-center h-14 rounded-xl px-4 bg-surface-input dark:bg-surface-input-dark">
-                  <TextInput
-                    className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
-                    placeholder="Alex"
-                    placeholderTextColor={theme.textMuted}
-                    value={firstName}
-                    onChangeText={setFirstName}
-                    autoCapitalize="words"
-                    autoComplete="given-name"
-                    returnKeyType="next"
-                    accessibilityLabel="First name"
-                  />
-                </View>
-              </View>
-              <View className="flex-1 gap-1.5">
-                <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
-                  Last Name
-                </Text>
-                <View className="flex-row items-center h-14 rounded-xl px-4 bg-surface-input dark:bg-surface-input-dark">
-                  <TextInput
-                    className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
-                    placeholder="Rivers"
-                    placeholderTextColor={theme.textMuted}
-                    value={lastName}
-                    onChangeText={setLastName}
-                    autoCapitalize="words"
-                    autoComplete="family-name"
-                    returnKeyType="next"
-                    accessibilityLabel="Last name"
-                  />
-                </View>
-              </View>
-            </View>
-
             {/* Username */}
             <View className="gap-1.5">
               <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
@@ -207,63 +190,132 @@ export default function RegisterScreen() {
               </View>
             </View>
 
-            {/* Date of Birth */}
+            {/* Email */}
             <View className="gap-1.5">
               <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
-                Date of Birth
+                Email
               </Text>
-              <View className="flex-row items-center h-14 rounded-xl px-4 gap-3 bg-surface-input dark:bg-surface-input-dark">
+              <View className="flex-row items-center h-14 rounded-xl px-4 gap-2 bg-surface-input dark:bg-surface-input-dark">
+                <Ionicons name="mail-outline" size={18} color={theme.textMuted} />
                 <TextInput
                   className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
-                  placeholder="MM/DD/YYYY"
+                  placeholder="alex@example.com"
                   placeholderTextColor={theme.textMuted}
-                  value={dob}
-                  onChangeText={handleDobChange}
-                  keyboardType="number-pad"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (emailError) setEmailError(validateEmail(text));
+                  }}
+                  onBlur={() => setEmailError(validateEmail(email))}
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
                   returnKeyType="next"
-                  accessibilityLabel="Date of birth"
-                  maxLength={10}
+                  accessibilityLabel="Email"
                 />
-                {/* BirthdayDatePicker renders the calendar icon and the full picker Modal */}
-                <BirthdayDatePicker value={dob} onChange={setDob} />
               </View>
+              {emailError ? (
+                <Text className="text-xs text-red-500 ml-1">{emailError}</Text>
+              ) : null}
             </View>
 
-            {/* Gender */}
+            {/* Password */}
             <View className="gap-1.5">
               <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
-                Gender
+                Password
               </Text>
-              <Pressable
-                onPress={() => setGenderModalVisible(true)}
-                style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-                className="flex-row items-center justify-between h-14 rounded-xl px-4 bg-surface-input dark:bg-surface-input-dark"
-                accessibilityRole="button"
-                accessibilityLabel={gender ? `Gender: ${gender}` : 'Select gender'}
-              >
-                <Text
-                  className={`text-base font-medium ${
-                    gender
-                      ? 'text-on-surface dark:text-on-surface-dark'
-                      : 'text-on-surface-muted dark:text-on-surface-muted-dark'
-                  }`}
+              <View className="flex-row items-center h-14 rounded-xl px-4 gap-2 bg-surface-input dark:bg-surface-input-dark">
+                <Ionicons name="lock-closed-outline" size={18} color={theme.textMuted} />
+                <TextInput
+                  className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
+                  placeholder="Min 8 chars, 1 uppercase, 1 number"
+                  placeholderTextColor={theme.textMuted}
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (passwordError) setPasswordError(validatePassword(text));
+                    if (confirmPassword && text !== confirmPassword) {
+                      setConfirmPasswordError('Passwords do not match.');
+                    } else if (confirmPassword) {
+                      setConfirmPasswordError('');
+                    }
+                  }}
+                  onBlur={() => setPasswordError(validatePassword(password))}
+                  secureTextEntry={!showPassword}
+                  autoComplete="new-password"
+                  returnKeyType="next"
+                  accessibilityLabel="Password"
+                />
+                <Pressable
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {gender || 'Select gender'}
-                </Text>
-                <Ionicons name="chevron-down" size={20} color={theme.textMuted} />
-              </Pressable>
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={theme.textMuted}
+                  />
+                </Pressable>
+              </View>
+              {passwordError ? (
+                <Text className="text-xs text-red-500 ml-1">{passwordError}</Text>
+              ) : null}
             </View>
 
-            {/* Subject Expertise */}
+            {/* Confirm Password */}
+            <View className="gap-1.5">
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                Confirm Password
+              </Text>
+              <View className="flex-row items-center h-14 rounded-xl px-4 gap-2 bg-surface-input dark:bg-surface-input-dark">
+                <Ionicons name="lock-closed-outline" size={18} color={theme.textMuted} />
+                <TextInput
+                  className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
+                  placeholder="Re-enter your password"
+                  placeholderTextColor={theme.textMuted}
+                  value={confirmPassword}
+                  onChangeText={handleConfirmPasswordChange}
+                  secureTextEntry={!showConfirmPassword}
+                  autoComplete="new-password"
+                  returnKeyType="next"
+                  accessibilityLabel="Confirm password"
+                />
+                <Pressable
+                  onPress={() => setShowConfirmPassword((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                >
+                  <Ionicons
+                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={theme.textMuted}
+                  />
+                </Pressable>
+              </View>
+              {confirmPasswordError ? (
+                <Text className="text-xs text-red-500 ml-1">{confirmPasswordError}</Text>
+              ) : null}
+            </View>
+
+            {/* Skills (Teach / Learn based on role) */}
             <View className="gap-1.5 pt-2">
               <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
-                Subject Expertise
+                {role === 'mentor' ? 'Teach Skills' : 'Learn Skills'}
               </Text>
               <SubjectExpertisePicker
                 selected={selectedSubjects}
-                onChange={setSelectedSubjects}
+                onChange={(subjects) => {
+                  setSelectedSubjects(subjects);
+                  if (subjects.length > 0) setSkillsError('');
+                }}
                 role={role}
               />
+              {skillsError ? (
+                <Text className="text-xs text-red-500 ml-1">{skillsError}</Text>
+              ) : null}
             </View>
 
             {/* CTA + Log In link */}
@@ -273,7 +325,7 @@ export default function RegisterScreen() {
                 activeOpacity={0.88}
                 accessibilityRole="button"
                 accessibilityLabel="Complete registration"
-                onPress={() => console.log('TODO: POST /api/auth/register')}
+                onPress={handleSubmit}
               >
                 <Text className="text-white font-bold text-lg">Complete Registration</Text>
                 <Ionicons
@@ -302,64 +354,6 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* ── Gender Picker ── (absolute overlay — avoids Modal's back-press handler
-           which requires navigation context at the root Stack level) */}
-      {genderModalVisible && (
-        <Pressable
-          className="absolute inset-0 bg-black/40 justify-end"
-          style={{ zIndex: 50 }}
-          onPress={() => setGenderModalVisible(false)}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            className="rounded-t-3xl p-6 pb-10 bg-surface-card dark:bg-surface-card-dark"
-          >
-            {/* Drag handle */}
-            <View className="w-10 h-1 rounded-full bg-divider dark:bg-divider-dark self-center mb-5" />
-            <Text className="text-lg font-bold mb-4 text-on-surface dark:text-on-surface-dark">
-              Select Gender
-            </Text>
-            {GENDER_OPTIONS.map((option) => (
-              <Pressable
-                key={option}
-                onPress={() => {
-                  setGender(option);
-                  setGenderModalVisible(false);
-                }}
-                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                className={`flex-row items-center justify-between h-14 px-4 rounded-xl mb-2 ${
-                  gender === option
-                    ? 'bg-surface-card dark:bg-surface-card-dark'
-                    : 'bg-surface-input dark:bg-surface-input-dark'
-                }`}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: gender === option }}
-                accessibilityLabel={option}
-              >
-                <Text
-                  className={`text-base ${
-                    gender === option
-                      ? 'font-bold text-primary dark:text-primary-dim'
-                      : 'font-medium text-on-surface dark:text-on-surface-dark'
-                  }`}
-                >
-                  {option}
-                </Text>
-                {gender === option && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={theme.primary}
-                    accessibilityElementsHidden
-                    importantForAccessibility="no"
-                  />
-                )}
-              </Pressable>
-            ))}
-          </Pressable>
-        </Pressable>
-      )}
     </SafeAreaView>
   );
 }
