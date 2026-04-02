@@ -33,16 +33,59 @@ export default function DashboardScreen() {
   const router = useRouter();
 
   const currentUsername = useAuthStore((state) => state.user?.username);
+  const accessToken = useAuthStore((state) => state.accessToken);
+
   const requestsQuery = useMentorshipRequestsQuery();
-  const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || '');
+  const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log("[Dashboard] Auth State:", {
+      username: currentUsername,
+      hasAccessToken: !!accessToken,
+      requestsLoading: requestsQuery.isLoading,
+      requestsError: requestsQuery.error?.message,
+      requestsData: requestsQuery.data?.length,
+    });
+  }, [
+    currentUsername,
+    accessToken,
+    requestsQuery.isLoading,
+    requestsQuery.error,
+    requestsQuery.data,
+  ]);
 
   const requests = useMemo<DashboardRequestItem[]>(() => {
     if (requestsQuery.data && currentUsername) {
-      return mapRequestsToDashboard(requestsQuery.data, currentUsername);
+      const mapped = mapRequestsToDashboard(
+        requestsQuery.data,
+        currentUsername,
+      );
+      console.log("[Dashboard] Mapped requests from backend:", mapped.length);
+      return mapped;
     }
 
-    return ENABLE_MOCK_FALLBACK ? MOCK_REQUESTS : [];
-  }, [requestsQuery.data, currentUsername]);
+    if (requestsQuery.isLoading) {
+      console.log("[Dashboard] Requests loading...");
+      return [];
+    }
+
+    if (requestsQuery.error) {
+      console.log("[Dashboard] Requests error:", requestsQuery.error.message);
+    }
+
+    if (ENABLE_MOCK_FALLBACK) {
+      console.log("[Dashboard] Falling back to mock requests");
+      return MOCK_REQUESTS;
+    }
+
+    return [];
+  }, [
+    requestsQuery.data,
+    requestsQuery.isLoading,
+    requestsQuery.error,
+    currentUsername,
+  ]);
 
   const availability = useMemo(() => {
     if (availabilityQuery.data) {
