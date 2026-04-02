@@ -1,6 +1,7 @@
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from accounts.models import User, UserRole
+from mentorship.models import Match
 from django.utils import timezone
 from mentorship.models import MentorshipRequest
 from profiles.models import AvailabilitySlot, ExpertiseField, Profile, ProfileExpertise
@@ -36,7 +37,10 @@ p_mert, _ = Profile.objects.get_or_create(
 p_mert.username = "mert.yilmaz"
 p_mert.display_name = "Mert Yilmaz"
 p_mert.bio = "Senior CS student helping with algorithms, Django, and system design."
+p_mert.title = "CS Senior | Backend Mentor"
 p_mert.mentorship_mode = "BOTH"
+p_mert.is_visible = True
+p_mert.show_initials_only = False
 p_mert.save()
 
 p_emma, _ = Profile.objects.get_or_create(
@@ -51,7 +55,10 @@ p_emma, _ = Profile.objects.get_or_create(
 p_emma.username = "emma.wilson"
 p_emma.display_name = "Emma Wilson"
 p_emma.bio = "Junior dev improving backend fundamentals and API design."
+p_emma.title = "Junior Developer"
 p_emma.mentorship_mode = "BOTH"
+p_emma.is_visible = True
+p_emma.show_initials_only = False
 p_emma.save()
 
 p_azra, _ = Profile.objects.get_or_create(
@@ -66,7 +73,10 @@ p_azra, _ = Profile.objects.get_or_create(
 p_azra.username = "azra.demir"
 p_azra.display_name = "Azra Demir"
 p_azra.bio = "Interested in data structures, clean architecture, and test automation."
+p_azra.title = "Software Engineering Student"
 p_azra.mentorship_mode = "BOTH"
+p_azra.is_visible = True
+p_azra.show_initials_only = False
 p_azra.save()
 
 p_jack, _ = Profile.objects.get_or_create(
@@ -81,7 +91,10 @@ p_jack, _ = Profile.objects.get_or_create(
 p_jack.username = "jack.turner"
 p_jack.display_name = "Jack Turner"
 p_jack.bio = "Focusing on React Native performance and REST API integrations."
+p_jack.title = "Mobile Developer"
 p_jack.mentorship_mode = "BOTH"
+p_jack.is_visible = True
+p_jack.show_initials_only = False
 p_jack.save()
 
 for name in ["Django REST", "System Design", "React Native", "Testing", "PostgreSQL"]:
@@ -109,15 +122,28 @@ for profile, names in expertise_map.items():
             pe.proficiency_level = min(i, 5)
             pe.save(update_fields=["proficiency_level", "updated_at"])
 
-now = timezone.now().replace(minute=0, second=0, microsecond=0)
-for day in (1, 2, 3, 4):
-    for hour in (10, 14, 17):
-        start = now + timedelta(days=day, hours=(hour - now.hour))
-        end = start + timedelta(hours=1)
-        AvailabilitySlot.objects.get_or_create(
+# Reset unbooked demo slots for deterministic UI output.
+AvailabilitySlot.objects.filter(profile=p_mert, is_booked=False).delete()
+
+slot_template = {
+    1: [(9, 30, 10, 30), (14, 0, 15, 0), (19, 0, 20, 0)],
+    2: [(11, 0, 12, 0), (16, 30, 17, 30)],
+    3: [(10, 0, 11, 0), (13, 30, 14, 30), (18, 0, 19, 0)],
+    4: [(9, 0, 10, 0), (15, 0, 16, 0)],
+}
+
+for day_offset, slots in slot_template.items():
+    slot_date = timezone.localdate() + timedelta(days=day_offset)
+    for sh, sm, eh, em in slots:
+        start_naive = datetime.combine(slot_date, time(hour=sh, minute=sm))
+        end_naive = datetime.combine(slot_date, time(hour=eh, minute=em))
+        start = timezone.make_aware(start_naive, timezone.get_current_timezone())
+        end = timezone.make_aware(end_naive, timezone.get_current_timezone())
+        AvailabilitySlot.objects.create(
             profile=p_mert,
             start_at=start,
-            defaults={"end_at": end, "is_booked": False},
+            end_at=end,
+            is_booked=False,
         )
 
 requests_data = [
@@ -130,14 +156,20 @@ requests_data = [
     (
         p_mert,
         p_azra,
-        "PENDING",
+        "ACCEPTED",
         "Merhaba Mert, system design interview prep konusunda mentorluğa ihtiyacım var.",
     ),
     (
         p_mert,
         p_jack,
-        "PENDING",
+        "REJECTED",
         "Could we have a session on API error handling and auth best practices?",
+    ),
+    (
+        p_emma,
+        p_mert,
+        "PENDING",
+        "Hi Emma, I would like a reverse-mentoring chat about mobile accessibility patterns.",
     ),
 ]
 
@@ -155,6 +187,20 @@ for mentor, mentee, status, message in requests_data:
 print("seed complete")
 print("login: mert.yilmaz@example.com / MertPass123!")
 print("requests_for_mert=", MentorshipRequest.objects.filter(mentor=p_mert).count())
+print("incoming_for_mert=", MentorshipRequest.objects.filter(mentor=p_mert).count())
+print("outgoing_for_mert=", MentorshipRequest.objects.filter(mentee=p_mert).count())
+print(
+    "accepted_for_mert=",
+    MentorshipRequest.objects.filter(mentor=p_mert, status=MentorshipRequest.Status.ACCEPTED).count(),
+)
+print(
+    "rejected_for_mert=",
+    MentorshipRequest.objects.filter(mentor=p_mert, status=MentorshipRequest.Status.REJECTED).count(),
+)
+print(
+    "matches_for_mert=",
+    Match.objects.filter(mentor=p_mert).count(),
+)
 print(
     "availability_for_mert=",
     AvailabilitySlot.objects.filter(profile=p_mert, is_booked=False).count(),
