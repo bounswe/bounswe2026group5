@@ -22,10 +22,17 @@ class UserResponseSerializer(serializers.ModelSerializer):
             "username",
             "role",
             "auth_provider",
+            "app_usage_mode",
             "is_active",
             "created_at",
         )
         read_only_fields = fields
+
+
+class UserAppUsageModeUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ("app_usage_mode",)
 
 
 class AuthResponseSerializer(serializers.Serializer):

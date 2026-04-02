@@ -7,6 +7,7 @@ from .views import (
     LogoutAPIView,
     RegisterAPIView,
     TokenRefreshAPIView,
+    UserAppUsageModeAPIView,
 )
 
 urlpatterns = [
@@ -16,4 +17,9 @@ urlpatterns = [
     path("token/refresh/", TokenRefreshAPIView.as_view(), name="token-refresh"),
     path("admin/users/", AdminUsersListAPIView.as_view(), name="admin-users-list"),
     path("<uuid:user_id>/", AuthUserByIdAPIView.as_view(), name="auth-user-by-id"),
+    path(
+        "<uuid:user_id>/app-usage-mode/",
+        UserAppUsageModeAPIView.as_view(),
+        name="auth-user-app-usage-mode"
+    ),
 ]
