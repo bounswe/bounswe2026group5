@@ -18,13 +18,48 @@ from .serializers import (
     ProfileResponseSerializer,
     ProfileUpdateSerializer,
 )
+from .services import (
+    BookingCancelNotAllowedError,
+    OwnSlotBookingError,
+    SlotAlreadyBookedError,
+    SlotInPastError,
+    SlotNotBookedError,
+    book_availability_slot,
+    cancel_availability_booking,
+)
 
 NOT_FOUND_DETAIL = {"detail": "Not found."}
 OVERLAP_DETAIL = {"detail": "Availability slot overlaps with an existing slot."}
 PERMISSION_DENIED_DETAIL = {"detail": "You do not have permission to perform this action."}
 
 
-class ProfileByUsernameAPIView(APIView):
+class ProfileLookupMixin:
+    """Shared profile lookup and mentor checks for profile API views."""
+
+    def _get_profile_or_404(self, username: str) -> Profile | None:
+        """Return profile by username when it exists."""
+        try:
+            return Profile.objects.get(username=username)
+        except Profile.DoesNotExist:
+            return None
+
+    def _is_mentor_profile(self, profile: Profile) -> bool:
+        """Return True when profile supports mentoring."""
+        return profile.mentorship_mode in {MentorshipMode.MENTOR, MentorshipMode.BOTH}
+
+
+class AvailabilitySlotLookupMixin(ProfileLookupMixin):
+    """Shared availability slot lookup helper."""
+
+    def _get_slot_or_404(self, profile: Profile, slot_id: str) -> AvailabilitySlot | None:
+        """Return slot when it belongs to provided profile; otherwise None."""
+        try:
+            return AvailabilitySlot.objects.get(id=slot_id, profile=profile)
+        except AvailabilitySlot.DoesNotExist:
+            return None
+
+
+class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
     """Retrieve by username and update own profile by username."""
 
     def get_permissions(self) -> list[BasePermission]:
@@ -38,13 +73,6 @@ class ProfileByUsernameAPIView(APIView):
         """Return profile only if it belongs to current user and username matches."""
         try:
             return Profile.objects.get(user=request.user, username=username)
-        except Profile.DoesNotExist:
-            return None
-
-    def _get_profile_or_404(self, username: str) -> Profile | None:
-        """Return profile by username when it exists."""
-        try:
-            return Profile.objects.get(username=username)
         except Profile.DoesNotExist:
             return None
 
@@ -96,21 +124,10 @@ class ProfileByUsernameAPIView(APIView):
         return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
 
 
-class AvailabilitySlotListCreateAPIView(APIView):
+class AvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
     """Create and list mentor availability slots scoped by username."""
 
     permission_classes = [IsUser, IsNotBanned]
-
-    def _get_profile_or_404(self, username: str) -> Profile | None:
-        """Return profile by username when it exists."""
-        try:
-            return Profile.objects.get(username=username)
-        except Profile.DoesNotExist:
-            return None
-
-    def _is_mentor_profile(self, profile: Profile) -> bool:
-        """Return True when profile supports mentoring."""
-        return profile.mentorship_mode in {MentorshipMode.MENTOR, MentorshipMode.BOTH}
 
     @extend_schema(
         request=AvailabilitySlotWriteSerializer,
@@ -174,28 +191,10 @@ class AvailabilitySlotListCreateAPIView(APIView):
         )
 
 
-class AvailabilitySlotDetailAPIView(APIView):
+class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
     """Retrieve, update, and delete mentor-owned availability slots."""
 
     permission_classes = [IsUser, IsNotBanned]
-
-    def _get_profile_or_404(self, username: str) -> Profile | None:
-        """Return profile by username when it exists."""
-        try:
-            return Profile.objects.get(username=username)
-        except Profile.DoesNotExist:
-            return None
-
-    def _is_mentor_profile(self, profile: Profile) -> bool:
-        """Return True when profile supports mentoring."""
-        return profile.mentorship_mode in {MentorshipMode.MENTOR, MentorshipMode.BOTH}
-
-    def _get_slot_or_404(self, profile: Profile, slot_id: str) -> AvailabilitySlot | None:
-        """Return slot when it belongs to provided profile; otherwise None."""
-        try:
-            return AvailabilitySlot.objects.get(id=slot_id, profile=profile)
-        except AvailabilitySlot.DoesNotExist:
-            return None
 
     @extend_schema(
         responses={
@@ -306,3 +305,75 @@ class AvailabilitySlotDetailAPIView(APIView):
 
         slot.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AvailabilitySlotBookAPIView(ProfileLookupMixin, APIView):
+    """Book an available mentor slot for an authenticated user."""
+
+    permission_classes = [IsUser, IsNotBanned]
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: AvailabilitySlotSerializer,
+            400: OpenApiResponse(description="Booking validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Availability slot not found."),
+        },
+        description="Book a mentor availability slot.",
+        tags=["Profiles"],
+    )
+    def post(self, request: Request, username: str, slot_id: str) -> Response:
+        """Book a slot for requester when business rules permit."""
+        profile = self._get_profile_or_404(username)
+        if profile is None or not self._is_mentor_profile(profile):
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            slot = book_availability_slot(profile=profile, slot_id=slot_id, actor=request.user)
+        except AvailabilitySlot.DoesNotExist:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+        except SlotAlreadyBookedError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except SlotInPastError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except OwnSlotBookingError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+
+        return Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_200_OK)
+
+
+class AvailabilitySlotCancelBookingAPIView(ProfileLookupMixin, APIView):
+    """Cancel an existing slot booking."""
+
+    permission_classes = [IsUser, IsNotBanned]
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: AvailabilitySlotSerializer,
+            400: OpenApiResponse(description="Cancellation validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Availability slot not found."),
+        },
+        description="Cancel a mentor availability slot booking.",
+        tags=["Profiles"],
+    )
+    def post(self, request: Request, username: str, slot_id: str) -> Response:
+        """Cancel an existing booking when requester is permitted."""
+        profile = self._get_profile_or_404(username)
+        if profile is None or not self._is_mentor_profile(profile):
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            slot = cancel_availability_booking(profile=profile, slot_id=slot_id, actor=request.user)
+        except AvailabilitySlot.DoesNotExist:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+        except SlotNotBookedError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except BookingCancelNotAllowedError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+
+        return Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_200_OK)

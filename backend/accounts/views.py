@@ -1,4 +1,5 @@
 from typing import Any, cast
+from uuid import UUID
 
 from django.conf import settings
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -207,8 +208,8 @@ class TokenRefreshAPIView(TokenRefreshView):
         return response
 
 
-class AuthUserByUsernameAPIView(APIView):
-    """Return authenticated user metadata for the matching username route."""
+class AuthUserByIdAPIView(APIView):
+    """Return authenticated user metadata for the matching user id route."""
 
     permission_classes = [IsAuthenticated, IsNotBanned]
 
@@ -219,12 +220,15 @@ class AuthUserByUsernameAPIView(APIView):
             404: OpenApiResponse(description="User not found."),
             403: OpenApiResponse(description="Account banned."),
         },
-        description="Get authenticated user details by own username route.",
+        description="Get authenticated user details by own user id route.",
         tags=["Auth"],
     )
-    def get(self, request: Request, username: str) -> Response:
-        profile = getattr(request.user, "profile", None)
-        if profile is None or profile.username != username:
+    def get(self, request: Request, user_id: UUID) -> Response:
+        request_user_id = getattr(request.user, "id", None)
+        if request_user_id is None:
+            request_user_id = getattr(request.user, "pk", None)
+
+        if str(request_user_id) != str(user_id):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(
@@ -249,6 +253,7 @@ class AdminUsersListAPIView(APIView):
         users = User.objects.all().values(
             "id",
             "email",
+            "username",
             "role",
             "is_banned",
             "is_active",

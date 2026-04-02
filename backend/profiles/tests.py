@@ -435,6 +435,8 @@ class AvailabilitySlotAPIViewTests(TestCase):
         self.assertEqual(body["date"], payload["date"])
         self.assertEqual(body["startTime"], payload["startTime"])
         self.assertEqual(body["endTime"], payload["endTime"])
+        self.assertIsNone(body["bookedBy"])
+        self.assertIsNone(body["bookedAt"])
         self.assertTrue(
             AvailabilitySlot.objects.filter(id=body["id"], profile=self.mentor_profile).exists()
         )
@@ -625,3 +627,213 @@ class AvailabilitySlotAPIViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 401)
+
+
+class AvailabilitySlotBookingAPIViewTests(TestCase):
+    """Integration tests for availability slot booking lifecycle endpoints."""
+
+    def setUp(self) -> None:
+        """Create users/profiles and auth tokens for booking tests."""
+        self.api_client: Any = APIClient()
+
+        self.mentor_user = User.objects.create_user(
+            email="mentor-booking@example.com",
+            password="SecurePass123",
+        )
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            display_name="Mentor Booking",
+            mentorship_mode=MentorshipMode.MENTOR,
+        )
+
+        self.mentee_user = User.objects.create_user(
+            email="mentee-booking@example.com",
+            password="SecurePass123",
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user,
+            display_name="Mentee Booking",
+            mentorship_mode=MentorshipMode.MENTEE,
+        )
+
+        self.other_user = User.objects.create_user(
+            email="other-booking@example.com",
+            password="SecurePass123",
+        )
+        self.other_profile = Profile.objects.create(
+            user=self.other_user,
+            display_name="Other User",
+            mentorship_mode=MentorshipMode.MENTEE,
+        )
+
+        mentor_refresh = RefreshToken.for_user(self.mentor_user)
+        self.mentor_access_token = str(mentor_refresh.access_token)
+
+        mentee_refresh = RefreshToken.for_user(self.mentee_user)
+        self.mentee_access_token = str(mentee_refresh.access_token)
+
+        other_refresh = RefreshToken.for_user(self.other_user)
+        self.other_access_token = str(other_refresh.access_token)
+
+    def test_book_slot_success(self) -> None:
+        """Authenticated user can book an available future slot."""
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+        )
+        book_url = (
+            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/book/"
+        )
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
+        response = self.api_client.post(book_url)
+
+        self.assertEqual(response.status_code, 200)
+        slot.refresh_from_db()
+        self.assertTrue(slot.is_booked)
+        self.assertEqual(slot.booked_by, self.mentee_user)
+        self.assertIsNotNone(slot.booked_at)
+        self.assertEqual(response.json()["bookedBy"], self.mentee_profile.username)
+
+    def test_book_slot_rejects_already_booked(self) -> None:
+        """Booking fails when slot is already booked."""
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+            is_booked=True,
+            booked_by=self.other_user,
+            booked_at=timezone.now(),
+        )
+        book_url = (
+            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/book/"
+        )
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
+        response = self.api_client.post(book_url)
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_book_slot_rejects_past_slot(self) -> None:
+        """Booking fails when slot starts in the past."""
+        slot_start = timezone.now() - timedelta(hours=2)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+        )
+        book_url = (
+            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/book/"
+        )
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
+        response = self.api_client.post(book_url)
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_mentor_cannot_book_own_slot(self) -> None:
+        """Mentor owner cannot book their own availability slot."""
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+        )
+        book_url = (
+            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/book/"
+        )
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        response = self.api_client.post(book_url)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_cancel_booking_by_booking_owner_success(self) -> None:
+        """Booking owner can cancel their booking."""
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+            is_booked=True,
+            booked_by=self.mentee_user,
+            booked_at=timezone.now(),
+        )
+        cancel_url = (
+            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+            "cancel-booking/"
+        )
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
+        response = self.api_client.post(cancel_url)
+
+        self.assertEqual(response.status_code, 200)
+        slot.refresh_from_db()
+        self.assertFalse(slot.is_booked)
+        self.assertIsNone(slot.booked_by)
+        self.assertIsNone(slot.booked_at)
+
+    def test_cancel_booking_by_mentor_owner_success(self) -> None:
+        """Mentor owner can cancel booking on their own slot."""
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+            is_booked=True,
+            booked_by=self.mentee_user,
+            booked_at=timezone.now(),
+        )
+        cancel_url = (
+            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+            "cancel-booking/"
+        )
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        response = self.api_client.post(cancel_url)
+
+        self.assertEqual(response.status_code, 200)
+        slot.refresh_from_db()
+        self.assertFalse(slot.is_booked)
+
+    def test_cancel_booking_rejects_unrelated_user(self) -> None:
+        """Unrelated users cannot cancel someone else's booking."""
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+            is_booked=True,
+            booked_by=self.mentee_user,
+            booked_at=timezone.now(),
+        )
+        cancel_url = (
+            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+            "cancel-booking/"
+        )
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.other_access_token}")
+        response = self.api_client.post(cancel_url)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_cancel_booking_rejects_unbooked_slot(self) -> None:
+        """Cancellation fails when slot is currently not booked."""
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+        )
+        cancel_url = (
+            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+            "cancel-booking/"
+        )
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        response = self.api_client.post(cancel_url)
+
+        self.assertEqual(response.status_code, 400)

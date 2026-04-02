@@ -2,6 +2,7 @@
 import { Link, useRouter, useNavigate, useSearch } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { setDemoAuthRole } from '@/lib/demoAuth'
+import {logout} from "#/lib/queries/Authqueries.ts";
 
 type DashboardMode = 'mentor' | 'mentee'
 type HeaderSearch = {
@@ -9,7 +10,6 @@ type HeaderSearch = {
 }
 
 export function AuthorizedHeader() {
-  const router = useRouter()
   const navigate = useNavigate()
   
   const search = useSearch({ strict: false }) as HeaderSearch  
@@ -18,8 +18,7 @@ export function AuthorizedHeader() {
   const isMenteeMode = currentMode === 'mentee'
 
   const handleLogout = () => {
-    setDemoAuthRole(null)
-    router.navigate({ to: '/login' })
+    logout()
   }
 
   const setMode = (newMode: DashboardMode) => {

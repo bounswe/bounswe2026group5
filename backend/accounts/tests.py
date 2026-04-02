@@ -1,3 +1,4 @@
+import uuid
 from typing import Any
 
 from django.conf import settings
@@ -27,6 +28,21 @@ class UserModelTests(TestCase):
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
         self.assertTrue(user.check_password("SecurePass123"))
+        self.assertEqual(user.username, "test")
+
+    def test_create_user_generates_unique_username(self) -> None:
+        """Test that username generation appends numeric suffix on collision."""
+        first_user = User.objects.create_user(
+            email="same.user@example.com",
+            password="SecurePass123",
+        )
+        second_user = User.objects.create_user(
+            email="same_user@example.com",
+            password="SecurePass123",
+        )
+
+        self.assertEqual(first_user.username, "same_user")
+        self.assertEqual(second_user.username, "same_user_1")
 
     def test_create_user_email_normalized(self) -> None:
         """Test that email is normalized (lowercase)."""
@@ -94,12 +110,14 @@ class RegisterAPIViewTests(TestCase):
         self.assertIn(settings.AUTH_ACCESS_COOKIE_NAME, response.cookies)
         self.assertIn(settings.AUTH_REFRESH_COOKIE_NAME, response.cookies)
         self.assertEqual(data["user"]["email"], "newuser@example.com")
+        self.assertEqual(data["user"]["username"], "newuser")
         self.assertEqual(data["user"]["role"], UserRole.USER)
         self.assertTrue(data["user"]["is_active"])
 
         # Verify user was created in DB
         user = User.objects.get(email="newuser@example.com")
         self.assertTrue(user.check_password("SecurePass123"))
+        self.assertEqual(user.username, "newuser")
         profile = Profile.objects.get(user=user)
         self.assertEqual(profile.username, "newuser")
 
@@ -433,8 +451,8 @@ class LogoutAPIViewTests(TestCase):
         self.assertTrue(BlacklistedToken.objects.filter(token__token=self.refresh_token).exists())
 
 
-class TokenRefreshAndAuthUserByUsernameAPIViewTests(TestCase):
-    """Tests for token refresh and authenticated username auth endpoint."""
+class TokenRefreshAndAuthUserByIdAPIViewTests(TestCase):
+    """Tests for token refresh and authenticated user id auth endpoint."""
 
     def setUp(self) -> None:
         self.api_client: Any = APIClient()
@@ -468,7 +486,7 @@ class TokenRefreshAndAuthUserByUsernameAPIViewTests(TestCase):
         """Test authenticated user details endpoint with bearer authentication."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
 
-        response = self.api_client.get(f"/api/auth/{self.profile.username}/")
+        response = self.api_client.get(f"/api/auth/{self.user.id}/")
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -480,18 +498,18 @@ class TokenRefreshAndAuthUserByUsernameAPIViewTests(TestCase):
         """Test authenticated user details endpoint with cookie authentication."""
         self.api_client.cookies[settings.AUTH_ACCESS_COOKIE_NAME] = self.access_token
 
-        response = self.api_client.get(f"/api/auth/{self.profile.username}/")
+        response = self.api_client.get(f"/api/auth/{self.user.id}/")
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["email"], self.user.email)
         self.assertEqual(data["username"], self.profile.username)
 
-    def test_auth_user_endpoint_with_other_username_returns_not_found(self) -> None:
-        """Test that authenticated users cannot access another username route."""
+    def test_auth_user_endpoint_with_other_id_returns_not_found(self) -> None:
+        """Test that authenticated users cannot access another user id route."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
 
-        response = self.api_client.get("/api/auth/someone_else/")
+        response = self.api_client.get(f"/api/auth/{uuid.uuid4()}/")
 
         self.assertEqual(response.status_code, 404)
 
@@ -553,6 +571,7 @@ class RBACPermissionTests(TestCase):
             first_user = payload["results"][0]
             self.assertIn("id", first_user)
             self.assertIn("email", first_user)
+            self.assertIn("username", first_user)
             self.assertIn("role", first_user)
             self.assertIn("is_banned", first_user)
             self.assertIn("is_active", first_user)
