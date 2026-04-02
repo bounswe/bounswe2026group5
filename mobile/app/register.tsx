@@ -50,6 +50,8 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [skillsError, setSkillsError] = useState('');
+  const [terms, setTerms] = useState(false);
+  const [termsError, setTermsError] = useState('');
 
   const handleConfirmPasswordChange = (text: string) => {
     setConfirmPassword(text);
@@ -65,13 +67,15 @@ export default function RegisterScreen() {
     const pErr = validatePassword(password);
     const cpErr = confirmPassword !== password ? 'Passwords do not match.' : '';
     const sErr = selectedSubjects.length === 0 ? 'Please select at least one skill.' : '';
+    const tErr = !terms ? 'You must agree to the Terms of Service and Privacy Policy.' : '';
 
     setEmailError(eErr);
     setPasswordError(pErr);
     setConfirmPasswordError(cpErr);
     setSkillsError(sErr);
+    setTermsError(tErr);
 
-    if (eErr || pErr || cpErr || sErr) return;
+    if (eErr || pErr || cpErr || sErr || tErr) return;
 
     console.log('TODO: POST /api/auth/register', { role, username, email });
   };
@@ -315,6 +319,41 @@ export default function RegisterScreen() {
               />
               {skillsError ? (
                 <Text className="text-xs text-red-500 ml-1">{skillsError}</Text>
+              ) : null}
+            </View>
+
+            {/* Terms & Conditions */}
+            <View className="gap-1.5">
+              <Pressable
+                onPress={() => {
+                  setTerms((v) => !v);
+                  setTermsError('');
+                }}
+                className="flex-row items-start gap-3"
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: terms }}
+                accessibilityLabel="I agree to the Terms of Service and Privacy Policy"
+              >
+                <View
+                  className="w-5 h-5 rounded mt-0.5 items-center justify-center border"
+                  style={{
+                    backgroundColor: terms ? theme.primary : 'transparent',
+                    borderColor: terms ? theme.primary : theme.textMuted,
+                  }}
+                >
+                  {terms && (
+                    <Ionicons name="checkmark" size={13} color="white" />
+                  )}
+                </View>
+                <Text className="flex-1 text-sm font-medium text-on-surface dark:text-on-surface-dark leading-snug">
+                  I agree to the{' '}
+                  <Text className="text-primary dark:text-primary-dim">Terms of Service</Text>
+                  {' '}and{' '}
+                  <Text className="text-primary dark:text-primary-dim">Privacy Policy</Text>.
+                </Text>
+              </Pressable>
+              {termsError ? (
+                <Text className="text-xs text-red-500 ml-8">{termsError}</Text>
               ) : null}
             </View>
 
