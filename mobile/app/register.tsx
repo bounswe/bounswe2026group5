@@ -253,7 +253,7 @@ export default function RegisterScreen() {
                   accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
                 >
                   <Ionicons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    name={showPassword ? 'eye-outline' : 'eye-off-outline'}
                     size={20}
                     color={theme.textMuted}
                   />
@@ -289,7 +289,7 @@ export default function RegisterScreen() {
                   accessibilityLabel={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
                 >
                   <Ionicons
-                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                    name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
                     size={20}
                     color={theme.textMuted}
                   />
