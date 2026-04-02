@@ -8,12 +8,15 @@
  *   - Reflects selected subjects as removable chips beneath the trigger when the
  *     modal is closed.
  *
+ * Styling convention
+ *   className  — all static design tokens (layout, spacing, border-radius, fixed colors)
+ *   style={{}} — only values that depend on state, props, or runtime calculations
+ *
  * Color tokens used
  *   bg-surface-active / dark:bg-surface-active-dark  — selected row background
  *   bg-surface-input  / dark:bg-surface-input-dark   — unselected row background
  *   bg-primary        / dark:bg-primary-dim          — checkmark circle fill
  *   text-primary      / dark:text-primary-dim        — selected row text & chip text
- *   bg-primary/15     / dark:bg-primary-dim/15       — chip background tint
  *
  * Performance
  *   - ALL_SUBJECTS is a module-level constant (never recreated).
@@ -42,10 +45,6 @@ import { Colors } from '@/constants/theme';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-/**
- * Available subjects — sorted strictly in alphabetical order at module level
- * so the array is a stable reference (no runtime sorting cost).
- */
 const ALL_SUBJECTS: readonly string[] = [
   'Backend',
   'Career Advice',
@@ -91,34 +90,27 @@ const SubjectItem = React.memo(function SubjectItem({
   return (
     <Pressable
       onPress={handlePress}
+      // Static: fixed height, margin, border-radius
+      className="mx-4 mb-2 rounded-2xl"
       style={({ pressed }) => ({
+        // Dynamic: pressed feedback + selection-driven background
         opacity: pressed ? 0.7 : 1,
         height: ITEM_H,
         backgroundColor: isSelected ? theme.surfaceActive : theme.inputBackground,
-        marginHorizontal: 16,
-        marginBottom: ITEM_GAP,
-        borderRadius: 16,
       })}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: isSelected }}
       accessibilityLabel={subject}
     >
-      {/* Inner View owns the row layout so flexDirection:'row' is never
-          inside a style callback — avoids NativeWind v4 layout interference. */}
-      <View
-        style={{
-          flex: 1,
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 16,
-          height: '100%',
-        }}
-      >
+      {/* Inner View owns the row layout — keeps flexDirection:'row' off the
+          Pressable style callback to avoid NativeWind v4 layout interference. */}
+      <View className="flex-1 flex-row items-center px-4 h-full">
+
         {/* Subject label */}
         <Text
+          className="flex-1 text-base"
           style={{
-            flex: 1,
-            fontSize: 16,
+            // Dynamic: weight and color flip on selection
             fontWeight: isSelected ? '600' : '400',
             color: isSelected ? theme.primary : theme.textPrimary,
           }}
@@ -128,13 +120,9 @@ const SubjectItem = React.memo(function SubjectItem({
 
         {/* Circular checkbox — right side, small gap from text */}
         <View
+          className="w-6 h-6 rounded-full items-center justify-center ml-3"
           style={{
-            width: 24,
-            height: 24,
-            borderRadius: 12,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginLeft: 12,
+            // Dynamic: fill and border depend on selection state
             backgroundColor: isSelected ? theme.primary : 'transparent',
             borderWidth: isSelected ? 0 : 1.5,
             borderColor: theme.divider,
@@ -166,7 +154,6 @@ interface SelectedChipProps {
 /**
  * Chip rendered on the register screen for each selected subject.
  * Tapping it deselects the subject immediately.
- * Memoised to prevent re-renders of unrelated chips on each selection change.
  */
 const SelectedChip = React.memo(function SelectedChip({
   label,
@@ -178,42 +165,28 @@ const SelectedChip = React.memo(function SelectedChip({
   return (
     <Pressable
       onPress={handlePress}
+      // Static: layout, spacing, shape — no border
+      className="flex-row items-center gap-1.5 pl-3 pr-[9px] py-[7px] rounded-full"
       style={({ pressed }) => ({
+        // Dynamic: pressed feedback + theme-driven background
         opacity: pressed ? 0.75 : 1,
-        // Chip/tag layout — label + remove icon always on the same row
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingLeft: 12,
-        paddingRight: 9,
-        paddingVertical: 7,
-        borderRadius: 100,
-        // Tinted chip appearance: surfaceActive background with primary text.
-        // Visually reads as an interactive removable tag — distinct from the
-        // solid-primary CTA button further down the screen.
         backgroundColor: theme.surfaceActive,
-        borderWidth: 1,
-        borderColor: theme.primary + '40', // 25 % opacity border ring
       })}
       accessibilityRole="button"
       accessibilityLabel={`Remove ${label}`}
       accessibilityHint="Double-tap to deselect this subject"
     >
       <Text
+        // Static: typography, spacing, shape, overflow
+        className="text-[13px] font-semibold px-2.5 py-1.5 rounded-full overflow-hidden"
         style={{
-          fontSize: 13,
-          fontWeight: '600',
+          // Dynamic: theme-driven foreground and background
           color: theme.cardBackground,
           backgroundColor: theme.primary,
-          paddingHorizontal: 10,
-          paddingVertical: 6,
-          borderRadius: 999,
-          overflow: 'hidden'
         }}
       >
         {label}
       </Text>
-
     </Pressable>
   );
 });
@@ -297,7 +270,7 @@ export function SubjectExpertisePicker({
     [],
   );
 
-  // ── Trigger label ──────────────────────────────────────────────────────────
+  // ── Derived labels ─────────────────────────────────────────────────────────
 
   let triggerLabel = `${selectionCount} subjects selected`;
   if (selectionCount === 0) triggerLabel = 'Select subjects';
@@ -308,8 +281,6 @@ export function SubjectExpertisePicker({
     selectionCount === 0
       ? 'Done, no subjects selected'
       : `Done, ${selectionCount} ${subjectWord} selected`;
-
-  // ── Subtitle inside modal ──────────────────────────────────────────────────
 
   const modalSubtitle =
     role === 'mentor'
@@ -324,8 +295,9 @@ export function SubjectExpertisePicker({
       {/* ── Trigger field ── */}
       <Pressable
         onPress={openModal}
-        style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+        // Static: layout, height, shape, fill
         className="flex-row items-center justify-between h-14 rounded-xl px-4 bg-surface-input dark:bg-surface-input-dark"
+        style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
         accessibilityRole="button"
         accessibilityLabel={
           selectionCount === 0
@@ -334,31 +306,21 @@ export function SubjectExpertisePicker({
         }
       >
         <Text
-          style={{
-            fontSize: 16,
-            fontWeight: '400',
-            color: selectionCount === 0 ? theme.textMuted : theme.textPrimary,
-          }}
+          className="text-base font-normal"
+          style={{ color: selectionCount === 0 ? theme.textMuted : theme.textPrimary }}
         >
           {triggerLabel}
         </Text>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        {/* Static: row layout, gap */}
+        <View className="flex-row items-center gap-1.5">
           {selectionCount > 0 && (
             <View
-              style={{
-                minWidth: 22,
-                height: 22,
-                borderRadius: 11,
-                backgroundColor: theme.primary,
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingHorizontal: 5,
-              }}
+              // Static: size, shape, spacing
+              className="min-w-[22px] h-[22px] rounded-full items-center justify-center px-[5px]"
+              style={{ backgroundColor: theme.primary }}
             >
-              <Text style={{ fontSize: 12, fontWeight: '700', color: 'white' }}>
-                {selectionCount}
-              </Text>
+              <Text className="text-xs font-bold text-white">{selectionCount}</Text>
             </View>
           )}
           <Ionicons name="chevron-down" size={20} color={theme.textMuted} />
@@ -367,7 +329,7 @@ export function SubjectExpertisePicker({
 
       {/* ── Selected subject chips ── */}
       {selectionCount > 0 && (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <View className="flex-row flex-wrap gap-2">
           {selected.map((subject) => (
             <SelectedChip
               key={subject}
@@ -388,15 +350,13 @@ export function SubjectExpertisePicker({
         statusBarTranslucent
       >
         {/* Backdrop — tap to dismiss without losing selection */}
-        <Pressable
-          className="flex-1 justify-end bg-black/50"
-          onPress={closeModal}
-        >
+        <Pressable className="flex-1 justify-end bg-black/50" onPress={closeModal}>
+
           {/* Sheet content — stop propagation so inner taps don't dismiss */}
           <Pressable
             onPress={(e) => e.stopPropagation()}
-            className="rounded-t-3xl bg-surface-card dark:bg-surface-card-dark"
-            style={{ maxHeight: '88%', paddingBottom: 32 }}
+            // Static: shape, fill, max-height, padding
+            className="rounded-t-3xl bg-surface-card dark:bg-surface-card-dark max-h-[88%] pb-8"
           >
             {/* Drag handle */}
             <View className="items-center pt-3 pb-1">
@@ -404,27 +364,18 @@ export function SubjectExpertisePicker({
             </View>
 
             {/* ── Sheet header ── */}
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: 20,
-                paddingTop: 10,
-                paddingBottom: 4,
-              }}
-            >
-              <View style={{ flex: 1 }}>
+            <View className="flex-row items-center px-5 pt-2.5 pb-1">
+              <View className="flex-1">
                 <Text
-                  style={{
-                    fontSize: 18,
-                    fontWeight: '700',
-                    color: theme.textPrimary,
-                    marginBottom: 2,
-                  }}
+                  className="text-lg font-bold mb-0.5"
+                  style={{ color: theme.textPrimary }}
                 >
                   Subject Expertise
                 </Text>
-                <Text style={{ fontSize: 13, color: theme.textSoft }}>
+                <Text
+                  className="text-[13px]"
+                  style={{ color: theme.textSoft }}
+                >
                   {modalSubtitle}
                 </Text>
               </View>
@@ -432,12 +383,8 @@ export function SubjectExpertisePicker({
               {/* Selection counter badge */}
               {selectionCount > 0 && (
                 <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: '600',
-                    color: theme.primary,
-                    marginRight: 12,
-                  }}
+                  className="text-[13px] font-semibold mr-3"
+                  style={{ color: theme.primary }}
                 >
                   {selectionCount}/{totalCount}
                 </Text>
@@ -457,14 +404,8 @@ export function SubjectExpertisePicker({
 
             {/* Divider */}
             <View
-              style={{
-                height: 1,
-                backgroundColor: theme.divider,
-                marginHorizontal: 20,
-                marginTop: 12,
-                marginBottom: 8,
-                opacity: 0.5,
-              }}
+              className="h-px mx-5 mt-3 mb-2 opacity-50"
+              style={{ backgroundColor: theme.divider }}
             />
 
             {/* ── Subject list ── */}
@@ -476,28 +417,24 @@ export function SubjectExpertisePicker({
               extraData={selectedSet}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingTop: 4, paddingBottom: 8 }}
-              // Disable nested scroll bounce so the parent modal sheet handles it
               bounces={false}
             />
 
             {/* ── Done button ── */}
-            <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+            <View className="px-5 pt-2">
               <Pressable
                 onPress={closeModal}
+                // Static: height, shape, row layout
+                className="h-[52px] rounded-2xl flex-row items-center justify-center"
                 style={({ pressed }) => ({
+                  // Dynamic: pressed feedback + theme fill
                   opacity: pressed ? 0.85 : 1,
-                  height: 52,
-                  borderRadius: 16,
                   backgroundColor: theme.primary,
-                  flexDirection: 'row',
-                  
-                  alignItems: 'center',
-                  justifyContent: 'center',
                 })}
                 accessibilityRole="button"
                 accessibilityLabel={doneBtnA11yLabel}
               >
-                <Text style={{ fontSize: 16, fontWeight: '700', color: 'white' }}>
+                <Text className="text-base font-bold text-white">
                   {selectionCount === 0
                     ? 'Done'
                     : `Done  ·  ${selectionCount} selected`}
