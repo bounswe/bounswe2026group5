@@ -132,3 +132,24 @@ export function useRegisterMutation() {
     },
   });
 }
+
+/**
+ * Hook for logout mutation.
+ * Clears auth state and tokens from storage.
+ *
+ * @returns Mutation object with mutate, isPending, error
+ */
+export function useLogoutMutation() {
+  const logout = useAuthStore((state) => state.logout);
+
+  return useMutation({
+    mutationFn: async () => {
+      // Call backend logout endpoint if it exists
+      // For now, we'll just clear local auth state
+      await logout();
+    },
+    onError: (error: Error) => {
+      console.error("Logout failed:", error);
+    },
+  });
+}

@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SettingItem } from '@/components/settings/SettingItem'; 
+import { SettingItem } from '@/components/settings/SettingItem';
+import { useLogoutMutation } from '@/lib/queries/auth';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const logoutMutation = useLogoutMutation();
 
   // TODO: Replace with real user preferences from backend
   const [prefs, setPrefs] = useState({
@@ -20,6 +22,29 @@ export default function SettingsScreen() {
 
   const togglePref = (key: keyof typeof prefs) => {
     setPrefs(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await logoutMutation.mutateAsync();
+              router.replace('/login');
+            } catch (error) {
+              console.error('Logout failed:', error);
+              Alert.alert('Error', 'Failed to log out. Please try again.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleAccountDeletion = () => {
@@ -103,6 +128,26 @@ export default function SettingsScreen() {
         <View className="bg-white border-t border-gray-100">
           <SettingItem icon="lock-closed-outline" label="Privacy Policy" onPress={() => console.log('Open Privacy')} />
           <SettingItem icon="document-text-outline" label="Terms of Service" onPress={() => console.log('Open ToS')} />
+          {logoutMutation.isPending ? (
+            <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-100">
+              <View className="flex-row items-center gap-3">
+                <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+                <Text className="text-base text-red-500 font-medium">Logging Out...</Text>
+              </View>
+              <ActivityIndicator size="small" color="#ef4444" />
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={handleLogout}
+              className="flex-row items-center justify-between px-4 py-4 border-b border-gray-100"
+            >
+              <View className="flex-row items-center gap-3">
+                <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+                <Text className="text-base text-red-500 font-semibold">Log Out</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </TouchableOpacity>
+          )}
           <SettingItem 
             icon="trash-outline" label="Delete Account" 
             isDestructive={true} onPress={handleAccountDeletion} 
