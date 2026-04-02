@@ -19,6 +19,7 @@ import {
 import { useAuthStore } from "@/lib/auth/store";
 
 // Mock Data, we will fetch this data from an API
+// TODO: Implement GET /api/mentorship/sessions/me/ to fetch user's scheduled sessions
 import { MOCK_SESSIONS, MOCK_AVAILABILITY } from "@/constants/mockData";
 
 // This grabs today's date dynamically and formats it as 'YYYY-MM-DD'

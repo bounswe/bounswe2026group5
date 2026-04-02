@@ -47,6 +47,7 @@ const PROPOSED_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
 
 /**
  * Fetch all mentorship requests for the authenticated user.
+ * TODO: Endpoint may not be implemented - verify POST /api/mentorship/requests/me/ exists.
  */
 export function useMentorshipRequestsQuery() {
   return useQuery({
