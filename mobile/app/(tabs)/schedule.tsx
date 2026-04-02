@@ -11,11 +11,12 @@ import { Calendar, DateData } from "react-native-calendars";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { BookingModal } from "@/components/profile/BookingModal";
-import { ENABLE_MOCK_FALLBACK, PROFILE_USERNAME } from "@/lib/api/config";
+import { ENABLE_MOCK_FALLBACK } from "@/lib/api/config";
 import {
   mapAvailabilityToSchedule,
   useAvailabilitySlotsQuery,
 } from "@/lib/queries/mentorship";
+import { useAuthStore } from "@/lib/auth/store";
 
 // Mock Data, we will fetch this data from an API
 import { MOCK_SESSIONS, MOCK_AVAILABILITY } from "@/constants/mockData";
@@ -51,7 +52,8 @@ export default function ScheduleScreen() {
     useState<ScheduleSession | null>(null);
   const [sessionToReschedule, setSessionToReschedule] =
     useState<ScheduleSession | null>(null);
-  const availabilityQuery = useAvailabilitySlotsQuery(PROFILE_USERNAME);
+  const currentUsername = useAuthStore((state) => state.user?.username);
+  const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || '');
 
   const availability = useMemo(() => {
     if (availabilityQuery.data) {

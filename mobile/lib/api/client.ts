@@ -1,4 +1,5 @@
-import { API_ACCESS_TOKEN, API_BASE_URL } from "@/lib/api/config";
+import { API_BASE_URL } from "@/lib/api/config";
+import { useAuthStore } from "@/lib/auth/store";
 
 /**
  * Error type thrown when an API request fails.
@@ -14,17 +15,18 @@ export class ApiError extends Error {
 
 /**
  * Perform a typed GET request against the backend API.
+ * Uses the access token from auth store.
  *
  * @param path Relative API path (e.g. /api/mentorship/requests/me/)
  */
 export async function apiGet<T>(path: string): Promise<T> {
+  const accessToken = useAuthStore.getState().accessToken;
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "GET",
     headers: {
       Accept: "application/json",
-      ...(API_ACCESS_TOKEN
-        ? { Authorization: `Bearer ${API_ACCESS_TOKEN}` }
-        : {}),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
   });
 

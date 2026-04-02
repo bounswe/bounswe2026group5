@@ -20,11 +20,11 @@ import {
 } from "@/components/profile/EditProfileModal";
 import { BookingModal } from "@/components/profile/BookingModal";
 import { ManageOfferingsModal } from "@/components/profile/ManageOfferingsModal";
-import { PROFILE_USERNAME } from "@/lib/api/config";
 import {
   mapAvailabilityToSchedule,
   useAvailabilitySlotsQuery,
 } from "@/lib/queries/mentorship";
+import { useAuthStore } from "@/lib/auth/store";
 
 // Mock Data from centralized file
 import { MOCK_AVAILABILITY, MOCK_OFFERINGS } from "@/constants/mockData";
@@ -50,7 +50,8 @@ export default function ProfileScreen() {
   const { preferences, commonData } = MOCK_PROFILE_DATA;
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const availabilityQuery = useAvailabilitySlotsQuery(PROFILE_USERNAME);
+  const currentUsername = useAuthStore((state) => state.user?.username);
+  const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || '');
 
   const [availabilityData, setAvailabilityData] = useState(MOCK_AVAILABILITY);
   const [offeringsData, setOfferingsData] = useState<Offering[]>(

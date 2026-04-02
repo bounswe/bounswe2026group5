@@ -18,7 +18,7 @@ import {
   MOCK_SESSIONS,
   MOCK_AVAILABILITY,
 } from "@/constants/mockData";
-import { ENABLE_MOCK_FALLBACK, PROFILE_USERNAME } from "@/lib/api/config";
+import { ENABLE_MOCK_FALLBACK } from "@/lib/api/config";
 import {
   mapAvailabilityToSchedule,
   mapRequestsToDashboard,
@@ -26,21 +26,23 @@ import {
   useMentorshipRequestsQuery,
   type DashboardRequestItem,
 } from "@/lib/queries/mentorship";
+import { useAuthStore } from "@/lib/auth/store";
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
+  const currentUsername = useAuthStore((state) => state.user?.username);
   const requestsQuery = useMentorshipRequestsQuery();
-  const availabilityQuery = useAvailabilitySlotsQuery(PROFILE_USERNAME);
+  const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || '');
 
   const requests = useMemo<DashboardRequestItem[]>(() => {
-    if (requestsQuery.data && PROFILE_USERNAME) {
-      return mapRequestsToDashboard(requestsQuery.data, PROFILE_USERNAME);
+    if (requestsQuery.data && currentUsername) {
+      return mapRequestsToDashboard(requestsQuery.data, currentUsername);
     }
 
     return ENABLE_MOCK_FALLBACK ? MOCK_REQUESTS : [];
-  }, [requestsQuery.data]);
+  }, [requestsQuery.data, currentUsername]);
 
   const availability = useMemo(() => {
     if (availabilityQuery.data) {
