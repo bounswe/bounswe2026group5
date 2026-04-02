@@ -32,79 +32,16 @@ Important:
 Run this from repo root:
 
 ```bash
-docker exec mentorship_backend python manage.py shell -c "
-from datetime import timedelta
-from django.utils import timezone
-from accounts.models import User, UserRole
-from profiles.models import Profile, AvailabilitySlot
-from mentorship.models import MentorshipRequest
-
-mentor, _ = User.objects.get_or_create(
-        email='mert.yilmaz@example.com',
-        defaults={'username': 'mert.yilmaz', 'role': UserRole.USER, 'is_active': True},
-)
-mentor.role = UserRole.USER
-mentor.set_password('MertPass123!')
-mentor.save()
-
-mentee, _ = User.objects.get_or_create(
-        email='emma.wilson@example.com',
-        defaults={'username': 'emma.wilson', 'role': UserRole.USER, 'is_active': True},
-)
-mentee.role = UserRole.USER
-mentee.set_password('EmmaPass123!')
-mentee.save()
-
-mentor_profile, _ = Profile.objects.get_or_create(
-        user=mentor,
-        defaults={
-                'username': 'mert.yilmaz',
-                'display_name': 'Mert Yilmaz',
-                'bio': 'Senior CS student helping with algorithms, Django, and system design.',
-                'mentorship_mode': 'BOTH',
-        },
-)
-mentee_profile, _ = Profile.objects.get_or_create(
-        user=mentee,
-        defaults={
-                'username': 'emma.wilson',
-                'display_name': 'Emma Wilson',
-                'bio': 'Junior dev improving backend fundamentals and API design.',
-                'mentorship_mode': 'BOTH',
-        },
-)
-
-mentor_profile.mentorship_mode = 'BOTH'
-mentor_profile.display_name = 'Mert Yilmaz'
-mentor_profile.bio = 'Senior CS student helping with algorithms, Django, and system design.'
-mentor_profile.save()
-
-mentee_profile.mentorship_mode = 'BOTH'
-mentee_profile.display_name = 'Emma Wilson'
-mentee_profile.bio = 'Junior dev improving backend fundamentals and API design.'
-mentee_profile.save()
-
-now = timezone.now()
-for day in (1, 2, 3):
-        for hour in (10, 14):
-                start = now + timedelta(days=day, hours=hour)
-                end = start + timedelta(hours=1)
-                AvailabilitySlot.objects.get_or_create(
-                        profile=mentor_profile,
-                        start_at=start,
-                        defaults={'end_at': end, 'is_booked': False},
-                )
-
-MentorshipRequest.objects.get_or_create(
-        mentor=mentor_profile,
-        mentee=mentee_profile,
-        status='PENDING',
-        defaults={'cover_letter': 'Hi Mert, can we do a session on REST API design and testing strategies this week?'},
-)
-
-print('seed ok')
-"
+docker cp backend/scripts_seed_demo.py mentorship_backend:/tmp/scripts_seed_demo.py
+docker exec mentorship_backend python manage.py shell -c "exec(open('/tmp/scripts_seed_demo.py').read())"
 ```
+
+This seeds realistic demo personas and data:
+- Mert Yilmaz (mentor+mentee profile mode)
+- Emma Wilson, Azra Demir, Jack Turner
+- Expertise fields and profile expertise entries
+- Availability slots for Mert
+- 3 mentorship requests sent to Mert with realistic English/Turkish messages
 
 ## 4) Verify Backend Endpoints (Real Check)
 1) Login:
