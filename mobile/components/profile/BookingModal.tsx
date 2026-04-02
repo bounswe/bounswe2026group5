@@ -12,25 +12,18 @@ interface BookingModalProps {
   onClose: () => void;
   offering: Offering | null;
   availability: AvailabilitySlot[]; 
+  existingSession?: { date: string; time: string };
 }
-
-const UPCOMING_DATES = [
-  { date: 'Oct 26', dayOfWeek: 'Monday' },
-  { date: 'Oct 27', dayOfWeek: 'Tuesday' },
-  { date: 'Oct 28', dayOfWeek: 'Wednesday' },
-  { date: 'Oct 29', dayOfWeek: 'Thursday' },
-  { date: 'Nov 2', dayOfWeek: 'Monday' },
-];
 
 const MAX_COVER_LETTER_LENGTH = 300;
 
-export function BookingModal({ visible, onClose, offering, availability }: BookingModalProps) {
+export function BookingModal({ visible, onClose, offering, availability, existingSession }: BookingModalProps) {
   const insets = useSafeAreaInsets();
   
   const [step, setStep] = useState<1 | 2>(1);
   const [isLoading, setIsLoading] = useState(false);
 
-  const [selectedDateObj, setSelectedDateObj] = useState<{date: string, dayOfWeek: string} | null>(null);
+  const [selectedDateObj, setSelectedDateObj] = useState<{date: string, dayOfWeek: string, rawDate: string} | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null); 
   const [coverLetter, setCoverLetter] = useState('');
   
@@ -51,6 +44,24 @@ export function BookingModal({ visible, onClose, offering, availability }: Booki
     }
   }, [visible]);
 
+  const handleCloseWithWarning = () => {
+    // If they selected a date, proposed a custom time, or wrote a letter, it is "half filled"
+    const hasUnsavedChanges = selectedDateObj !== null || isCustomTime || coverLetter.length > 0;
+    
+    if (hasUnsavedChanges && !isLoading) {
+      Alert.alert(
+        'Discard Request?',
+        'You have unsaved changes. Are you sure you want to discard this and go back?',
+        [
+          { text: 'Keep Editing', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: onClose }
+        ]
+      );
+    } else {
+      onClose();
+    }
+  };
+
   // The Undeletable Colon Formatter
   const handleTimeInput = (text: string, setTime: (val: string) => void) => {
     const cleaned = text.replace(/[^0-9]/g, '');
@@ -61,8 +72,25 @@ export function BookingModal({ visible, onClose, offering, availability }: Booki
     setTime(formatted);
   };
 
+  // Dynamically generate the next 14 days and filter by availability
   const availableDates = useMemo(() => {
-    return UPCOMING_DATES.filter(d => 
+    const dates = [];
+    const today = new Date(); // Dynamically grabs today's date
+    
+    // Generate the next 14 days
+    for (let i = 1; i <= 14; i++) {
+      const nextDate = new Date(today);
+      nextDate.setDate(today.getDate() + i);
+      
+      dates.push({
+        date: nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        dayOfWeek: nextDate.toLocaleDateString('en-US', { weekday: 'long' }),
+        rawDate: nextDate.toISOString().split('T')[0] // Keep the exact YYYY-MM-DD for the reschedule check
+      });
+    }
+
+    // Filter to only show days that match the mentor's availability schedule
+    return dates.filter(d => 
       availability.some(a => a.day === d.dayOfWeek && a.times.length > 0)
     );
   }, [availability]);
@@ -113,6 +141,17 @@ export function BookingModal({ visible, onClose, offering, availability }: Booki
         return;
       }
     }
+    if (existingSession) {
+      const proposedTime = isCustomTime ? `${customStartTime} - ${customEndTime}` : selectedSlot;
+      // FIX: Use rawDate for the strict comparison
+      if (selectedDateObj.rawDate === existingSession.date && proposedTime === existingSession.time) {
+        Alert.alert(
+          'No Change Detected', 
+          'You selected the exact same date and time as your current session. Please select a new slot to reschedule.'
+        );
+        return;
+      }
+    }
     setStep(2);
   };
 
@@ -141,7 +180,7 @@ export function BookingModal({ visible, onClose, offering, availability }: Booki
         {/* Header */}
         <View className="flex-row justify-between items-center px-6 py-4 border-b border-gray-100 mb-2">
           <TouchableOpacity 
-            onPress={() => step === 2 ? setStep(1) : onClose()} 
+            onPress={() => step === 2 ? setStep(1) : handleCloseWithWarning()}            
             className="p-2 -ml-2" 
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             disabled={isLoading}
