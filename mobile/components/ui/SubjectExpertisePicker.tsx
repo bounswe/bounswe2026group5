@@ -93,59 +93,64 @@ const SubjectItem = React.memo(function SubjectItem({
       onPress={handlePress}
       style={({ pressed }) => ({
         opacity: pressed ? 0.7 : 1,
-        // Explicit row layout — indicator always left of the label.
-        // Background uses theme tokens (no hardcoded hex) for the active/inactive
-        // distinction — avoids the NativeWind v4 re-render bug that occurs when a
-        // Pressable's className transitions from "" to a string with dark: variants.
-        flexDirection: 'row',
-        alignItems: 'center',
         height: ITEM_H,
         backgroundColor: isSelected ? theme.surfaceActive : theme.inputBackground,
         marginHorizontal: 16,
         marginBottom: ITEM_GAP,
         borderRadius: 16,
-        paddingHorizontal: 16,
       })}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: isSelected }}
       accessibilityLabel={subject}
     >
-      {/* Circular checkbox indicator — rendered first so it sits to the LEFT */}
+      {/* Inner View owns the row layout so flexDirection:'row' is never
+          inside a style callback — avoids NativeWind v4 layout interference. */}
       <View
         style={{
-          width: 24,
-          height: 24,
-          borderRadius: 12,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginRight: 12,
-          backgroundColor: isSelected ? theme.primary : 'transparent',
-          borderWidth: isSelected ? 0 : 1.5,
-          borderColor: theme.divider,
-        }}
-      >
-        {isSelected && (
-          <Ionicons
-            name="checkmark"
-            size={14}
-            color="white"
-            accessibilityElementsHidden
-            importantForAccessibility="no"
-          />
-        )}
-      </View>
-
-      {/* Subject label — flex:1 fills remaining row space */}
-      <Text
-        style={{
           flex: 1,
-          fontSize: 16,
-          fontWeight: isSelected ? '600' : '400',
-          color: isSelected ? theme.primary : theme.textPrimary,
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 16,
+          height: '100%',
         }}
       >
-        {subject}
-      </Text>
+        {/* Subject label */}
+        <Text
+          style={{
+            flex: 1,
+            fontSize: 16,
+            fontWeight: isSelected ? '600' : '400',
+            color: isSelected ? theme.primary : theme.textPrimary,
+          }}
+        >
+          {subject}
+        </Text>
+
+        {/* Circular checkbox — right side, small gap from text */}
+        <View
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginLeft: 12,
+            backgroundColor: isSelected ? theme.primary : 'transparent',
+            borderWidth: isSelected ? 0 : 1.5,
+            borderColor: theme.divider,
+          }}
+        >
+          {isSelected && (
+            <Ionicons
+              name="checkmark"
+              size={14}
+              color="white"
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+          )}
+        </View>
+      </View>
     </Pressable>
   );
 });

@@ -77,7 +77,8 @@ export default function RegisterScreen() {
 
     if (eErr || pErr || cpErr || sErr || tErr) return;
 
-    console.log('TODO: POST /api/auth/register', { role, username, email });
+    // TODO: POST /api/auth/register
+    router.replace('/(tabs)');
   };
 
   return (
