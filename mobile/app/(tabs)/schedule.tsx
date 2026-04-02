@@ -32,15 +32,25 @@ const formatFriendlyDate = (dateString: string) => {
   });
 };
 
-type SessionItem = (typeof MOCK_SESSIONS)[number];
+type ScheduleSession = {
+  id: string;
+  rawDate: string;
+  date: string;
+  time: string;
+  user: string;
+  status: "Pending" | "Upcoming" | "Completed";
+  topic: string;
+  myRole: string;
+  location?: string;
+  meetingUrl?: string;
+};
 
 export default function ScheduleScreen() {
   const [selectedDate, setSelectedDate] = useState(TODAY);
-  const [selectedSession, setSelectedSession] = useState<SessionItem | null>(
-    null,
-  );
+  const [selectedSession, setSelectedSession] =
+    useState<ScheduleSession | null>(null);
   const [sessionToReschedule, setSessionToReschedule] =
-    useState<SessionItem | null>(null);
+    useState<ScheduleSession | null>(null);
   const availabilityQuery = useAvailabilitySlotsQuery(PROFILE_USERNAME);
 
   const availability = useMemo(() => {
