@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Modal,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+import { DiscoverSearchBar } from "@/components/discover/DiscoverSearchBar";
 
 interface DiscoverFilterModalProps {
   visible: boolean;
@@ -26,16 +28,33 @@ export function DiscoverFilterModal({
   onClear,
   onClose,
 }: Readonly<DiscoverFilterModalProps>) {
+  const [skillQuery, setSkillQuery] = useState("");
+
+  useEffect(() => {
+    if (visible) {
+      setSkillQuery("");
+    }
+  }, [visible]);
+
+  const filteredSkills = useMemo(() => {
+    const normalized = skillQuery.trim().toLowerCase();
+    if (!normalized) {
+      return allSkills;
+    }
+
+    return allSkills.filter((skill) => skill.toLowerCase().includes(normalized));
+  }, [allSkills, skillQuery]);
+
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       transparent
       onRequestClose={onClose}
     >
-      <Pressable className="flex-1 bg-black/35 justify-end" onPress={onClose}>
+      <Pressable className="flex-1 bg-black/40 justify-end" onPress={onClose}>
         <Pressable
-          className="bg-white rounded-t-3xl p-5 pb-8 max-h-[80%]"
+          className="bg-white rounded-t-3xl p-5 pb-8 max-h-[80%] shadow-[0_-8px_30px_rgba(0,0,0,0.12)]"
           onPress={(event) => event.stopPropagation()}
         >
           <View className="flex-row items-center justify-between mb-4">
@@ -50,9 +69,16 @@ export function DiscoverFilterModal({
             </TouchableOpacity>
           </View>
 
+          <DiscoverSearchBar
+            value={skillQuery}
+            onChangeText={setSkillQuery}
+            placeholder="Search skills..."
+            className="h-10 bg-gray-50 mb-4"
+          />
+
           <ScrollView showsVerticalScrollIndicator={false}>
             <View className="flex-row flex-wrap gap-2">
-              {allSkills.map((skill) => {
+              {filteredSkills.map((skill) => {
                 const selected = selectedSkills.has(skill);
 
                 return (
@@ -76,6 +102,13 @@ export function DiscoverFilterModal({
                 );
               })}
             </View>
+            {filteredSkills.length === 0 && (
+              <View className="py-6 items-center">
+                <Text className="text-gray-500 text-sm">
+                  No matching skills found.
+                </Text>
+              </View>
+            )}
           </ScrollView>
 
           <View className="flex-row gap-2 mt-5">
