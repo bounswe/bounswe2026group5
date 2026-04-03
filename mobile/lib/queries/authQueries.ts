@@ -20,6 +20,11 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface Skill {
+  id: string;
+  name: string;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function extractErrorMessage(res: Response, fallback: string): Promise<string> {
@@ -71,6 +76,12 @@ export async function registerFn(credentials: {
   }
 
   return res.json() as Promise<AuthResponse>;
+}
+
+export async function fetchSkillsFn(): Promise<Skill[]> {
+  const res = await fetch(`${API_BASE_URL}/profiles/skills/`);
+  if (!res.ok) throw new Error('Failed to fetch skills.');
+  return res.json() as Promise<Skill[]>;
 }
 
 export async function updateUsageModeFn(params: {

@@ -12,7 +12,7 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
@@ -22,6 +22,7 @@ import {
   updateUsageModeFn,
   updateProfileFn,
   handleAuthSuccess,
+  fetchSkillsFn,
   type AuthResponse,
 } from '@/lib/queries/authQueries';
 
@@ -61,6 +62,16 @@ export default function RegisterScreen() {
   const [terms, setTerms] = useState(false);
   const [termsError, setTermsError] = useState('');
   const [submitError, setSubmitError] = useState('');
+
+  // ── Skills query ───────────────────────────────────────────────────────────
+
+  const { data: skillsData, isLoading: isLoadingSkills } = useQuery({
+    queryKey: ['skills'],
+    queryFn: fetchSkillsFn,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const skillNames = skillsData?.map((s) => s.name) ?? [];
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
@@ -373,6 +384,8 @@ export default function RegisterScreen() {
                   if (subjects.length > 0) setSkillsError('');
                 }}
                 role={role}
+                skills={skillNames}
+                isLoadingSkills={isLoadingSkills}
               />
               {skillsError ? (
                 <Text className="text-xs text-red-500 ml-1">{skillsError}</Text>
