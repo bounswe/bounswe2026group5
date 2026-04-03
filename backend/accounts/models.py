@@ -19,6 +19,11 @@ class AuthProvider(models.TextChoices):
     APPLE = "APPLE", "Apple"
 
 
+class AppUsageMode(models.TextChoices):
+    MENTEE = "MENTEE", "Mentee"
+    MENTOR = "MENTOR", "Mentor"
+
+
 class UserManager(BaseUserManager["User"]):
     use_in_migrations = True
 
@@ -65,6 +70,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         max_length=16,
         choices=AuthProvider.choices,
         default=AuthProvider.LOCAL,
+    )
+    app_usage_mode = models.CharField(
+        max_length=16,
+        choices=AppUsageMode.choices,
+        blank=True,
     )
     is_banned = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)

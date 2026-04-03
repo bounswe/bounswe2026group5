@@ -44,11 +44,15 @@ export default function RootLayout() {
       </View>
     );
   }
+  
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        {/* You may want to change "login" to "index" below if index is your new landing/onboarding page */}
         <Stack initialRouteName={isAuthenticated ? "(tabs)" : "login"}>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="register" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
             name="modal"
