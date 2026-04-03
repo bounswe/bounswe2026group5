@@ -1,0 +1,662 @@
+import { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Pressable,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { router } from 'expo-router';
+import { Calendar, DateData } from 'react-native-calendars';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Colors } from '@/constants/theme';
+
+const GENDER_OPTIONS = ['Female', 'Male', 'Non-binary', 'Prefer not to say'] as const;
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+
+const SUBJECTS = [
+  'Software Engineering',
+  'React',
+  'Backend',
+  'Career Advice',
+  'UI/UX Design',
+  'Data Science',
+  'Machine Learning',
+  'DevOps',
+  'Product Management',
+];
+
+export default function RegisterScreen() {
+  const colorScheme = useColorScheme() ?? 'light';
+  const isDark = colorScheme === 'dark';
+  const theme = Colors[colorScheme];
+  
+  const [role, setRole] = useState<'mentor' | 'mentee'>('mentor');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
+  const [dob, setDob] = useState('');
+  const [gender, setGender] = useState('');
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [genderModalVisible, setGenderModalVisible] = useState(false);
+  const [dobPickerVisible, setDobPickerVisible] = useState(false);
+  const [dobPickerMode, setDobPickerMode] = useState<'calendar' | 'month' | 'year'>('calendar');
+
+  // Today as YYYY-MM-DD — used as the calendar's maxDate (no future birthdays)
+  const today = new Date().toISOString().split('T')[0];
+  // Default calendar month when no date is typed yet (20 years back is a sensible start)
+  const defaultCalendarMonth = `${new Date().getFullYear() - 20}-01-01`;
+  const [displayDate, setDisplayDate] = useState(defaultCalendarMonth);
+
+  /**
+   * Strips non-digits and re-inserts slashes to produce MM/DD/YYYY.
+   * Works naturally on backspace: removing a slash pulls the digit with it
+   * because the slash is re-derived from the remaining digits.
+   */
+  const formatDob = (text: string): string => {
+    const digits = text.replaceAll(/\D/g, '');
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+  };
+
+  const handleDobChange = (text: string): void => {
+    setDob(formatDob(text));
+  };
+
+  /** Converts the display format MM/DD/YYYY to the calendar engine format YYYY-MM-DD. */
+  const dobToCalendarDate = (formatted: string): string | undefined => {
+    if (formatted.length !== 10) return undefined;
+    const [mm, dd, yyyy] = formatted.split('/');
+    if (!mm || !dd || yyyy?.length !== 4) return undefined;
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const handleDaySelect = (day: DateData): void => {
+    const mm = String(day.month).padStart(2, '0');
+    const dd = String(day.day).padStart(2, '0');
+    setDob(`${mm}/${dd}/${day.year}`);
+    setDobPickerVisible(false);
+  };
+
+  // Derived from displayDate so renderHeader and mode grids stay in sync
+  const calendarDate = dobToCalendarDate(dob);
+  const displayYear = parseInt(displayDate.slice(0, 4), 10);
+  const displayMonth = parseInt(displayDate.slice(5, 7), 10); // 1-indexed
+
+  const toggleSubject = (subject: string) => {
+    setSelectedSubjects((prev) =>
+      prev.includes(subject) ? prev.filter((s) => s !== subject) : [...prev, subject]
+    );
+  };
+
+  return (
+    <SafeAreaView className={`flex-1 ${isDark ? 'bg-surface-dark' : 'bg-surface'}`}>
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+
+        {/* ── Top App Bar ── */}
+        <View className="flex-row items-center justify-between px-4 py-3">
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            className="w-10 h-10 rounded-full items-center justify-center"
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.primary} />
+          </Pressable>
+          <Text
+            className="text-2xl font-bold text-on-surface dark:text-on-surface-dark"
+            accessibilityRole="header"
+          >
+            Create Account
+          </Text>
+          {/* Spacer to keep title centred */}
+          <View style={{ width: 40 }} />
+        </View>
+
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 48 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+
+          {/* ── Hero ── */}
+          <View className="mb-8">
+            <Text
+              className="text-4xl font-extrabold leading-tight tracking-tight mb-2"
+              accessibilityRole="header"
+            >
+              <Text className="text-on-surface dark:text-on-surface-dark">Join the </Text>
+              <Text className="text-primary dark:text-primary-dim">Circle.</Text>
+            </Text>
+            <Text className="text-base text-on-surface-soft dark:text-on-surface-soft-dark">
+              Every expert was once a beginner. Start your journey today.
+            </Text>
+          </View>
+
+          {/* ── Form ── */}
+          <View className="gap-5">
+
+            {/* Role Segmented Control */}
+            <View className="gap-1.5">
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                My Role
+              </Text>
+              <View className="flex-row items-center p-1.5 rounded-xl h-14 bg-surface-input dark:bg-surface-input-dark">
+                {/* Active state uses style prop (not className) so NativeWind never
+                    transitions a Pressable from className="" to a dark: variant,
+                    which triggers a broken re-render path in NativeWind v4. */}
+                <Pressable
+                  onPress={() => setRole('mentor')}
+                  className="flex-1 h-full rounded-lg items-center justify-center"
+                  style={role === 'mentor' ? { backgroundColor: theme.cardBackground } : undefined}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: role === 'mentor' }}
+                  accessibilityLabel="I want to be a Mentor"
+                >
+                  <Text
+                    className="text-sm font-semibold"
+                    style={{ color: role === 'mentor' ? theme.primary : theme.textSoft }}
+                  >
+                    Mentor
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setRole('mentee')}
+                  className="flex-1 h-full rounded-lg items-center justify-center"
+                  style={role === 'mentee' ? { backgroundColor: theme.cardBackground } : undefined}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: role === 'mentee' }}
+                  accessibilityLabel="I want to be a Mentee"
+                >
+                  <Text
+                    className="text-sm font-semibold"
+                    style={{ color: role === 'mentee' ? theme.primary : theme.textSoft }}
+                  >
+                    Mentee
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* First Name + Last Name */}
+            <View className="flex-row gap-4">
+              <View className="flex-1 gap-1.5">
+                <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                  First Name
+                </Text>
+                <View className="flex-row items-center h-14 rounded-xl px-4 bg-surface-input dark:bg-surface-input-dark">
+                  <TextInput
+                    className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
+                    placeholder="Alex"
+                    placeholderTextColor={theme.textMuted}
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    autoCapitalize="words"
+                    autoComplete="given-name"
+                    returnKeyType="next"
+                    accessibilityLabel="First name"
+                  />
+                </View>
+              </View>
+              <View className="flex-1 gap-1.5">
+                <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                  Last Name
+                </Text>
+                <View className="flex-row items-center h-14 rounded-xl px-4 bg-surface-input dark:bg-surface-input-dark">
+                  <TextInput
+                    className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
+                    placeholder="Rivers"
+                    placeholderTextColor={theme.textMuted}
+                    value={lastName}
+                    onChangeText={setLastName}
+                    autoCapitalize="words"
+                    autoComplete="family-name"
+                    returnKeyType="next"
+                    accessibilityLabel="Last name"
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Username */}
+            <View className="gap-1.5">
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                Username
+              </Text>
+              <View className="flex-row items-center h-14 rounded-xl px-4 gap-2 bg-surface-input dark:bg-surface-input-dark">
+                <Text className="text-base font-medium text-on-surface-muted dark:text-on-surface-muted-dark">
+                  @
+                </Text>
+                <TextInput
+                  className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
+                  placeholder="arivers_dev"
+                  placeholderTextColor={theme.textMuted}
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                  autoComplete="username"
+                  returnKeyType="next"
+                  accessibilityLabel="Username"
+                />
+              </View>
+            </View>
+
+            {/* Date of Birth */}
+            <View className="gap-1.5">
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                Date of Birth
+              </Text>
+              <View className="flex-row items-center h-14 rounded-xl px-4 gap-3 bg-surface-input dark:bg-surface-input-dark">
+                <TextInput
+                  className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
+                  placeholder="MM/DD/YYYY"
+                  placeholderTextColor={theme.textMuted}
+                  value={dob}
+                  onChangeText={handleDobChange}
+                  keyboardType="number-pad"
+                  returnKeyType="next"
+                  accessibilityLabel="Date of birth"
+                  maxLength={10}
+                />
+                {/* Calendar icon opens the picker; static className avoids NativeWind re-render issue */}
+                <Pressable
+                  onPress={() => {
+                    setDobPickerMode('calendar');
+                    setDisplayDate(dobToCalendarDate(dob) ?? defaultCalendarMonth);
+                    setDobPickerVisible(true);
+                  }}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open calendar to select date of birth"
+                >
+                  <Ionicons name="calendar-outline" size={20} color={theme.textMuted} />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Gender */}
+            <View className="gap-1.5">
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                Gender
+              </Text>
+              <Pressable
+                onPress={() => setGenderModalVisible(true)}
+                style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+                className="flex-row items-center justify-between h-14 rounded-xl px-4 bg-surface-input dark:bg-surface-input-dark"
+                accessibilityRole="button"
+                accessibilityLabel={gender ? `Gender: ${gender}` : 'Select gender'}
+              >
+                <Text
+                  className={`text-base font-medium ${
+                    gender
+                      ? 'text-on-surface dark:text-on-surface-dark'
+                      : 'text-on-surface-muted dark:text-on-surface-muted-dark'
+                  }`}
+                >
+                  {gender || 'Select gender'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color={theme.textMuted} />
+              </Pressable>
+            </View>
+
+            {/* Subject Expertise */}
+            <View className="gap-3 pt-2">
+              <View className="gap-1">
+                <Text className="text-xl font-bold text-on-surface dark:text-on-surface-dark">
+                  Subject Expertise
+                </Text>
+                <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
+                  {role === 'mentor'
+                    ? 'Select subjects you feel confident mentoring others in.'
+                    : 'Select subjects you want to learn about.'}
+                </Text>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingVertical: 4, gap: 10 }}
+              >
+                {SUBJECTS.map((subject) => {
+                  const active = selectedSubjects.includes(subject);
+                  return (
+                    <Pressable
+                      key={subject}
+                      onPress={() => toggleSubject(subject)}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+                      className={`px-5 py-2.5 rounded-full flex-row items-center gap-2 ${
+                        active
+                          ? 'bg-primary dark:bg-primary-dim'
+                          : 'bg-surface-input dark:bg-surface-input-dark'
+                      }`}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: active }}
+                      accessibilityLabel={subject}
+                    >
+                      <Text
+                        className={`text-sm font-semibold ${
+                          active
+                            ? 'text-white'
+                            : 'text-on-surface-soft dark:text-on-surface-soft-dark'
+                        }`}
+                      >
+                        {subject}
+                      </Text>
+                      {active && (
+                        <Ionicons
+                          name="checkmark"
+                          size={14}
+                          color="white"
+                          accessibilityElementsHidden
+                          importantForAccessibility="no"
+                        />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* CTA + Log In link */}
+            <View className="gap-5 pt-4">
+              <TouchableOpacity
+                className="w-full h-16 rounded-xl items-center justify-center flex-row gap-3 bg-primary dark:bg-primary-dim"
+                activeOpacity={0.88}
+                accessibilityRole="button"
+                accessibilityLabel="Complete registration"
+                onPress={() => console.log('TODO: POST /api/auth/register')}
+              >
+                <Text className="text-white font-bold text-lg">Complete Registration</Text>
+                <Ionicons
+                  name="arrow-forward"
+                  size={22}
+                  color="white"
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                />
+              </TouchableOpacity>
+
+              <View className="items-center">
+                <TouchableOpacity
+                  onPress={() => router.replace('/login')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="link"
+                  accessibilityLabel="Already have an account? Log In"
+                >
+                  <Text className="text-base font-bold text-primary dark:text-primary-dim">
+                    Already have an account? Log In
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* ── DOB Calendar Picker ── */}
+      {dobPickerVisible && (
+        <Pressable
+          className="absolute inset-0 bg-black/40 justify-end"
+          style={{ zIndex: 50 }}
+          onPress={() => setDobPickerVisible(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            className="rounded-t-3xl p-6 pb-10 bg-surface-card dark:bg-surface-card-dark"
+          >
+            {/* Drag handle */}
+            <View className="w-10 h-1 rounded-full bg-divider dark:bg-divider-dark self-center mb-4" />
+
+            {/* Sheet header — back arrow + title */}
+            <View className="flex-row items-center mb-3" style={{ gap: 8 }}>
+              {dobPickerMode !== 'calendar' && (
+                <Pressable
+                  onPress={() => setDobPickerMode('calendar')}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to calendar"
+                >
+                  <Ionicons name="arrow-back" size={20} color={theme.primary} />
+                </Pressable>
+              )}
+              <Text className="flex-1 text-lg font-bold text-on-surface dark:text-on-surface-dark">
+                {dobPickerMode === 'calendar' && 'Date of Birth'}
+                {dobPickerMode === 'month' && 'Select Month'}
+                {dobPickerMode === 'year' && 'Select Year'}
+              </Text>
+            </View>
+
+            {/* ── Calendar mode ── */}
+            {dobPickerMode === 'calendar' && (
+              <Calendar
+                current={displayDate}
+                maxDate={today}
+                onDayPress={handleDaySelect}
+                onMonthChange={(month) =>
+                  setDisplayDate(`${month.year}-${String(month.month).padStart(2, '0')}-01`)
+                }
+                markedDates={
+                  calendarDate
+                    ? { [calendarDate]: { selected: true, selectedColor: theme.primary } }
+                    : {}
+                }
+                renderHeader={() => (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {/* Month label — opens month grid */}
+                    <Pressable
+                      onPress={() => setDobPickerMode('month')}
+                      style={({ pressed }) => ({
+                        opacity: pressed ? 0.6 : 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 3,
+                      })}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Select month, currently ${MONTH_NAMES[displayMonth - 1]}`}
+                    >
+                      <Text style={{ color: theme.textPrimary, fontWeight: 'bold', fontSize: 15 }}>
+                        {MONTH_NAMES[displayMonth - 1]}
+                      </Text>
+                      <Ionicons name="chevron-down" size={13} color={theme.textMuted} />
+                    </Pressable>
+                    {/* Year label — opens year list */}
+                    <Pressable
+                      onPress={() => setDobPickerMode('year')}
+                      style={({ pressed }) => ({
+                        opacity: pressed ? 0.6 : 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 3,
+                      })}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Select year, currently ${displayYear}`}
+                    >
+                      <Text style={{ color: theme.textPrimary, fontWeight: 'bold', fontSize: 15 }}>
+                        {displayYear}
+                      </Text>
+                      <Ionicons name="chevron-down" size={13} color={theme.textMuted} />
+                    </Pressable>
+                  </View>
+                )}
+                theme={{
+                  backgroundColor: 'transparent',
+                  calendarBackground: 'transparent',
+                  textSectionTitleColor: theme.textSoft,
+                  selectedDayBackgroundColor: theme.primary,
+                  selectedDayTextColor: '#ffffff',
+                  todayTextColor: theme.primary,
+                  dayTextColor: theme.textPrimary,
+                  textDisabledColor: theme.textMuted,
+                  monthTextColor: theme.textPrimary,
+                  textMonthFontWeight: 'bold',
+                  arrowColor: theme.primary,
+                  textDayFontSize: 14,
+                  textMonthFontSize: 15,
+                  textDayHeaderFontSize: 12,
+                }}
+              />
+            )}
+
+            {/* ── Month grid mode ── */}
+            {dobPickerMode === 'month' && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {MONTH_NAMES.map((name, idx) => {
+                  const monthNum = idx + 1;
+                  const isSelected = monthNum === displayMonth;
+                  return (
+                    <Pressable
+                      key={name}
+                      onPress={() => {
+                        setDisplayDate(`${displayYear}-${String(monthNum).padStart(2, '0')}-01`);
+                        setDobPickerMode('calendar');
+                      }}
+                      style={({ pressed }) => ({
+                        width: '25%',
+                        opacity: pressed ? 0.7 : 1,
+                        backgroundColor: isSelected ? theme.primary : 'transparent',
+                        borderRadius: 10,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 12,
+                        marginBottom: 8,
+                      })}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isSelected }}
+                      accessibilityLabel={name}
+                    >
+                      <Text
+                        style={{
+                          color: isSelected ? '#ffffff' : theme.textPrimary,
+                          fontWeight: isSelected ? 'bold' : 'normal',
+                          fontSize: 14,
+                        }}
+                      >
+                        {name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* ── Year list mode ── */}
+            {dobPickerMode === 'year' && (() => {
+              const currentYear = new Date().getFullYear();
+              const years = Array.from({ length: 100 }, (_, i) => currentYear - i);
+              return (
+                <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+                  {years.map((year) => {
+                    const isSelected = year === displayYear;
+                    return (
+                      <Pressable
+                        key={year}
+                        onPress={() => {
+                          setDisplayDate(`${year}-${String(displayMonth).padStart(2, '0')}-01`);
+                          setDobPickerMode('calendar');
+                        }}
+                        style={({ pressed }) => ({
+                          opacity: pressed ? 0.7 : 1,
+                          backgroundColor: isSelected ? theme.primary : 'transparent',
+                          borderRadius: 10,
+                          height: 48,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginBottom: 4,
+                        })}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
+                        accessibilityLabel={String(year)}
+                      >
+                        <Text
+                          style={{
+                            color: isSelected ? '#ffffff' : theme.textPrimary,
+                            fontWeight: isSelected ? 'bold' : 'normal',
+                            fontSize: 15,
+                          }}
+                        >
+                          {year}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              );
+            })()}
+          </Pressable>
+        </Pressable>
+      )}
+
+      {/* ── Gender Picker ── (absolute overlay — avoids Modal's back-press handler
+           which requires navigation context at the root Stack level) */}
+      {genderModalVisible && (
+        <Pressable
+          className="absolute inset-0 bg-black/40 justify-end"
+          style={{ zIndex: 50 }}
+          onPress={() => setGenderModalVisible(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            className="rounded-t-3xl p-6 pb-10 bg-surface-card dark:bg-surface-card-dark"
+          >
+            {/* Drag handle */}
+            <View className="w-10 h-1 rounded-full bg-divider dark:bg-divider-dark self-center mb-5" />
+            <Text className="text-lg font-bold mb-4 text-on-surface dark:text-on-surface-dark">
+              Select Gender
+            </Text>
+            {GENDER_OPTIONS.map((option) => (
+              <Pressable
+                key={option}
+                onPress={() => {
+                  setGender(option);
+                  setGenderModalVisible(false);
+                }}
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                className={`flex-row items-center justify-between h-14 px-4 rounded-xl mb-2 ${
+                  gender === option
+                    ? 'bg-surface-card dark:bg-surface-card-dark'
+                    : 'bg-surface-input dark:bg-surface-input-dark'
+                }`}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: gender === option }}
+                accessibilityLabel={option}
+              >
+                <Text
+                  className={`text-base ${
+                    gender === option
+                      ? 'font-bold text-primary dark:text-primary-dim'
+                      : 'font-medium text-on-surface dark:text-on-surface-dark'
+                  }`}
+                >
+                  {option}
+                </Text>
+                {gender === option && (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color={theme.primary}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  />
+                )}
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      )}
+    </SafeAreaView>
+  );
+}

@@ -1,14 +1,13 @@
 // web/src/routes/_authorized/route.tsx
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
-import { isAuthenticated } from '@/lib/demoAuth'
 import { AuthorizedHeader } from '@/components/layout/AuthorizedHeader'
+import {getStoredUser} from "#/lib/queries/Authqueries.ts";
 
 export const Route = createFileRoute('/_authorized')({
-  beforeLoad: () => {
-    if (!isAuthenticated()) {
-      throw redirect({ to: '/login' })
-    }
-  },
+    beforeLoad: () => {
+        const user = getStoredUser()
+        if (!user) throw redirect({ to: '/login' })
+    },
   component: AuthorizedLayout,
 })
 

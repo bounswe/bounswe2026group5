@@ -2,8 +2,36 @@
 
 from django.urls import path
 
-from .views import ProfileByUsernameAPIView
+from .views import (
+    AvailabilitySlotBookAPIView,
+    AvailabilitySlotCancelBookingAPIView,
+    AvailabilitySlotDetailAPIView,
+    AvailabilitySlotListCreateAPIView,
+    ProfileByUsernameAPIView,
+    SkillListAPIView,
+)
 
 urlpatterns = [
+    path("skills/", SkillListAPIView.as_view(), name="skill-list"),
+    path(
+        "<str:username>/availability-slots/",
+        AvailabilitySlotListCreateAPIView.as_view(),
+        name="availability-slot-list-create",
+    ),
+    path(
+        "<str:username>/availability-slots/<uuid:slot_id>/",
+        AvailabilitySlotDetailAPIView.as_view(),
+        name="availability-slot-detail",
+    ),
+    path(
+        "<str:username>/availability-slots/<uuid:slot_id>/book/",
+        AvailabilitySlotBookAPIView.as_view(),
+        name="availability-slot-book",
+    ),
+    path(
+        "<str:username>/availability-slots/<uuid:slot_id>/cancel-booking/",
+        AvailabilitySlotCancelBookingAPIView.as_view(),
+        name="availability-slot-cancel-booking",
+    ),
     path("<str:username>/", ProfileByUsernameAPIView.as_view(), name="profile-by-username"),
 ]

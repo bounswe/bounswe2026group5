@@ -4,6 +4,9 @@ from django.contrib.auth import password_validation
 from django.contrib.auth.models import Group
 from django.db import transaction
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import Profile
 
@@ -16,12 +19,20 @@ class UserResponseSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "email",
+            "username",
             "role",
             "auth_provider",
+            "app_usage_mode",
             "is_active",
             "created_at",
         )
         read_only_fields = fields
+
+
+class UserAppUsageModeUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ("app_usage_mode",)
 
 
 class AuthResponseSerializer(serializers.Serializer):
@@ -85,6 +96,7 @@ class RegisterSerializer(serializers.Serializer):
         display_name = email.split("@", 1)[0].replace(".", " ").replace("_", " ").title()
         Profile.objects.create(
             user=user,
+            username=user.username,
             display_name=display_name,
         )
 
@@ -121,3 +133,16 @@ class LoginSerializer(serializers.Serializer):
 
         attrs["user"] = user_obj
         return attrs
+
+
+class BannedAwareTokenRefreshSerializer(TokenRefreshSerializer):
+    """Refresh serializer that blocks token refresh for banned users."""
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        refresh_token = RefreshToken(attrs["refresh"])
+        user_id = refresh_token.payload.get("user_id")
+
+        if user_id is not None and User.objects.filter(id=user_id, is_banned=True).exists():
+            raise PermissionDenied("This account has been banned.")
+
+        return super().validate(attrs)

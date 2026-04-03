@@ -15,6 +15,9 @@ import { Heading, Muted, Body, Display } from "@/components/Typography"
 
 // DEMO BYPASS IMPORT - FUTURE: Delete this once real auth is merged
 import { setDemoAuthRole } from '@/lib/demoAuth'
+import {handleAuthSuccess, loginFn} from "#/lib/queries/Authqueries.ts";
+import {useMutation} from "@tanstack/react-query";
+import {useState} from "react";
 
 const FEATURES = [
     { icon: Search,      title: 'Find tutors',    desc: 'Browse verified tutors from your campus' },
@@ -28,7 +31,21 @@ export const Route = createFileRoute('/_unauthorized/login')({
 
 function RouteComponent() {
     const router = useRouter()
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
 
+    const login = useMutation({
+        mutationFn: loginFn,
+        onSuccess: (data) => {
+            handleAuthSuccess(data)
+            router.navigate({to: '/dashboard', search: { mode: 'mentor' }})
+        }
+    })
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        login.mutate({ email, password })
+    }
     return (
         <div className="grid min-h-screen lg:grid-cols-[5fr_4fr]">
 
@@ -78,16 +95,15 @@ function RouteComponent() {
                             <form
                                 id="login-form"
                                 className="flex flex-col gap-5"
-                                onSubmit={(e) => {
-                                    e.preventDefault()
-                                    console.log('Submit')
-                                }}
+                                onSubmit={handleSubmit}
                             >
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="email">Email</Label>
                                     <Input
                                         id="email"
                                         type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
                                         placeholder="you@university.edu"
                                         required
                                     />
@@ -106,6 +122,8 @@ function RouteComponent() {
                                     <Input
                                         id="password"
                                         type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
                                         placeholder="••••••••"
                                         required
                                     />
@@ -115,9 +133,13 @@ function RouteComponent() {
 
                         <CardFooter className="flex-col gap-3">
                             {/* THE REAL FORM SUBMIT BUTTON */}
-                            <Button type="submit" form="login-form" className="w-full">
-                                Sign in
+                            <Button type="submit" form="login-form" className="w-full" disabled={login.isPending}>
+                                {login.isPending ? 'Signing in...' : 'Sign in'}
                             </Button>
+
+                            {login.isError && (
+                                <p className="text-xs text-destructive">{login.error.message}</p>
+                            )}
 
                             {/* ---------------------------------------------------------
                                     DEMO LOGIN BYPASS BUTTON

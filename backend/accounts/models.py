@@ -1,3 +1,4 @@
+import re
 import uuid
 from typing import Any
 
@@ -7,6 +8,7 @@ from django.db import models
 
 
 class UserRole(models.TextChoices):
+    GUEST = "GUEST", "Guest"
     USER = "USER", "User"
     ADMIN = "ADMIN", "Admin"
 
@@ -15,6 +17,11 @@ class AuthProvider(models.TextChoices):
     LOCAL = "LOCAL", "Local"
     GOOGLE = "GOOGLE", "Google"
     APPLE = "APPLE", "Apple"
+
+
+class AppUsageMode(models.TextChoices):
+    MENTEE = "MENTEE", "Mentee"
+    MENTOR = "MENTOR", "Mentor"
 
 
 class UserManager(BaseUserManager["User"]):
@@ -58,10 +65,16 @@ class User(AbstractBaseUser, PermissionsMixin):
         default=UserRole.USER,
     )
     email = models.EmailField(unique=True)
+    username = models.CharField(max_length=50, unique=True)
     auth_provider = models.CharField(
         max_length=16,
         choices=AuthProvider.choices,
         default=AuthProvider.LOCAL,
+    )
+    app_usage_mode = models.CharField(
+        max_length=16,
+        choices=AppUsageMode.choices,
+        blank=True,
     )
     is_banned = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -79,9 +92,27 @@ class User(AbstractBaseUser, PermissionsMixin):
         ordering = ["-created_at"]
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Ensure email is always stored in lowercase."""
+        """Ensure email is lowercase and generate a unique username when needed."""
         self.email = self.email.lower()
+        if not self.username:
+            email_prefix = (self.email or "").split("@", 1)[0]
+            self.username = self._generate_unique_username(email_prefix)
         super().save(*args, **kwargs)
+
+    @classmethod
+    def _generate_unique_username(cls, source_value: str) -> str:
+        """Build a unique username from a source value."""
+        sanitized_base = re.sub(r"[^a-z0-9_]+", "_", source_value.lower()).strip("_")
+        base_username = (sanitized_base or "user")[:50]
+        candidate = base_username
+        suffix = 1
+
+        while cls.objects.filter(username=candidate).exists():
+            numeric_suffix = f"_{suffix}"
+            candidate = f"{base_username[: 50 - len(numeric_suffix)]}{numeric_suffix}"
+            suffix += 1
+
+        return candidate
 
     def __str__(self):
         return self.email

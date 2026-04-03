@@ -16,6 +16,15 @@ export const Colors = {
     icon: '#687076',
     tabIconDefault: '#687076',
     tabIconSelected: tintColorLight,
+    // Brand tokens — used by login and future auth screens
+    primary: '#004ac6',
+    surfaceBase: '#f7f9fb',
+    inputBackground: '#e6e8ea',
+    cardBackground: '#ffffff',
+    textPrimary: '#191c1e',
+    textSoft: '#434655',
+    textMuted: '#737686',
+    divider: '#c3c6d7',
   },
   dark: {
     text: '#ECEDEE',
@@ -24,6 +33,15 @@ export const Colors = {
     icon: '#9BA1A6',
     tabIconDefault: '#9BA1A6',
     tabIconSelected: tintColorDark,
+    // Brand tokens — used by login and future auth screens
+    primary: '#4a80e8',
+    surfaceBase: '#0f1214',
+    inputBackground: '#1e2530',
+    cardBackground: '#141920',
+    textPrimary: '#e2e8f0',
+    textSoft: '#94a3b8',
+    textMuted: '#4a5568',
+    divider: '#2d3748',
   },
 };
 

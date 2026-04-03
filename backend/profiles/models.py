@@ -6,17 +6,25 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.postgres.constraints import ExclusionConstraint
+from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.fields.ranges import RangeOperators
+from django.contrib.gis.db import models as gis_models
 from django.db import models
 from django.db.models import F, Func, Q, Value
+from django.utils import timezone
 
 
-class MentorshipMode(models.TextChoices):
-    """Supported mentoring participation modes for a profile."""
+class Skill(models.Model):
+    """Catalog of skills available in the system."""
 
-    MENTOR = "MENTOR", "Mentor"
-    MENTEE = "MENTEE", "Mentee"
-    BOTH = "BOTH", "Both"
+    name = models.CharField(max_length=120, unique=True)
+
+    class Meta:
+        db_table = "skills"
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class Profile(models.Model):
@@ -33,14 +41,16 @@ class Profile(models.Model):
     bio = models.TextField(blank=True, default="")
     picture_url = models.URLField(blank=True, default="")
     title = models.CharField(max_length=120, blank=True, default="")
-    location_text = models.CharField(max_length=255, blank=True, default="")
+    location = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     is_visible = models.BooleanField(default=True)
     show_initials_only = models.BooleanField(default=False)
-    mentorship_mode = models.CharField(
-        max_length=16,
-        choices=MentorshipMode.choices,
-        default=MentorshipMode.BOTH,
+    skills = ArrayField(
+        models.CharField(max_length=120),
+        blank=True,
+        default=list,
     )
+    rating = models.PositiveIntegerField(default=0)
+    total_mentee_count = models.PositiveIntegerField(default=0)
     expertise_fields = models.ManyToManyField(
         "ExpertiseField",
         through="ProfileExpertise",
@@ -54,7 +64,6 @@ class Profile(models.Model):
         db_table = "profiles"
         ordering = ["display_name", "-created_at"]
         indexes = [
-            models.Index(fields=["mentorship_mode"]),
             models.Index(fields=["is_visible", "show_initials_only"]),
         ]
 
@@ -173,6 +182,14 @@ class AvailabilitySlot(models.Model):
     start_at = models.DateTimeField()
     end_at = models.DateTimeField()
     is_booked = models.BooleanField(default=False)
+    booked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="booked_availability_slots",
+        null=True,
+        blank=True,
+    )
+    booked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -203,19 +220,24 @@ class AvailabilitySlot(models.Model):
         indexes = [
             models.Index(fields=["profile", "start_at"]),
             models.Index(fields=["is_booked", "start_at"]),
+            models.Index(fields=["booked_by", "start_at"]),
         ]
 
     def __str__(self) -> str:
         return f"{self.profile.display_name}: {self.start_at.isoformat()}"
 
-    def mark_booked(self) -> None:
-        """Mark slot as booked."""
+    def mark_booked(self, user=None) -> None:
+        """Mark slot as booked and optionally track who booked it."""
 
         self.is_booked = True
-        self.save(update_fields=["is_booked", "updated_at"])
+        self.booked_by = user
+        self.booked_at = timezone.now()
+        self.save(update_fields=["is_booked", "booked_by", "booked_at", "updated_at"])
 
     def mark_available(self) -> None:
         """Mark slot as available again."""
 
         self.is_booked = False
-        self.save(update_fields=["is_booked", "updated_at"])
+        self.booked_by = None
+        self.booked_at = None
+        self.save(update_fields=["is_booked", "booked_by", "booked_at", "updated_at"])
