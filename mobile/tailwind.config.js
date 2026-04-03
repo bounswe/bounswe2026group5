@@ -27,6 +27,11 @@ module.exports = {
           muted: '#737686',       // placeholder / icon (light)
           'muted-dark': '#4a5568', // placeholder / icon (dark)
         },
+        // Active / selected state surface — used by pickers and list row highlights
+        'surface-active': {
+          DEFAULT: '#e8eeff', // primary-blue tint at ~8 % on white (light mode)
+          dark: '#1c253d',    // equivalent depth in dark mode
+        },
         // Borders and dividers
         divider: {
           DEFAULT: '#c3c6d7',
