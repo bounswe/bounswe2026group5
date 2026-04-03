@@ -12,10 +12,18 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useMutation } from '@tanstack/react-query';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import { SubjectExpertisePicker } from '@/components/ui/SubjectExpertisePicker';
+import {
+  registerFn,
+  updateUsageModeFn,
+  updateProfileFn,
+  handleAuthSuccess,
+  type AuthResponse,
+} from '@/lib/queries/authQueries';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -52,6 +60,56 @@ export default function RegisterScreen() {
   const [skillsError, setSkillsError] = useState('');
   const [terms, setTerms] = useState(false);
   const [termsError, setTermsError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+
+  const updateProfile = useMutation({
+    mutationFn: updateProfileFn,
+    onSuccess: () => {
+      router.replace('/(tabs)');
+    },
+    onError: (error: Error) => {
+      setSubmitError(error.message);
+    },
+  });
+
+  const updateUsageMode = useMutation({
+    mutationFn: updateUsageModeFn,
+    onSuccess: (_data, variables) => {
+      updateProfile.mutate({
+        username: variables._username,
+        accessToken: variables.accessToken,
+        display_name: displayName.trim(),
+        skills: selectedSubjects,
+      });
+    },
+    onError: (error: Error) => {
+      setSubmitError(error.message);
+    },
+  });
+
+  const register = useMutation({
+    mutationFn: registerFn,
+    onSuccess: async (data: AuthResponse) => {
+      await handleAuthSuccess(data);
+
+      updateUsageMode.mutate({
+        userId: data.user.id,
+        app_usage_mode: role.toUpperCase() as 'MENTOR' | 'MENTEE',
+        accessToken: data.access_token,
+        _username: data.user.username,
+      });
+    },
+    onError: (error: Error) => {
+      setSubmitError(error.message);
+    },
+  });
+
+  const isPending =
+    register.isPending || updateUsageMode.isPending || updateProfile.isPending;
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleConfirmPasswordChange = (text: string) => {
     setConfirmPassword(text);
@@ -74,11 +132,15 @@ export default function RegisterScreen() {
     setConfirmPasswordError(cpErr);
     setSkillsError(sErr);
     setTermsError(tErr);
+    setSubmitError('');
 
     if (eErr || pErr || cpErr || sErr || tErr) return;
 
-    // TODO: POST /api/auth/register
-    router.replace('/(tabs)');
+    register.mutate({
+      email: email.trim(),
+      password,
+      confirm_password: confirmPassword,
+    });
   };
 
   return (
@@ -354,21 +416,30 @@ export default function RegisterScreen() {
 
             {/* CTA + Log In link */}
             <View className="gap-5 pt-4">
+              {submitError ? (
+                <Text className="text-xs text-red-500 text-center">{submitError}</Text>
+              ) : null}
               <TouchableOpacity
                 className="w-full h-16 rounded-xl items-center justify-center flex-row gap-3 bg-primary dark:bg-primary-dim"
                 activeOpacity={0.88}
                 accessibilityRole="button"
                 accessibilityLabel="Complete registration"
+                disabled={isPending}
+                style={isPending ? { opacity: 0.6 } : undefined}
                 onPress={handleSubmit}
               >
-                <Text className="text-white font-bold text-lg">Complete Registration</Text>
-                <Ionicons
-                  name="arrow-forward"
-                  size={22}
-                  color="white"
-                  accessibilityElementsHidden
-                  importantForAccessibility="no"
-                />
+                <Text className="text-white font-bold text-lg">
+                  {isPending ? 'Creating account…' : 'Complete Registration'}
+                </Text>
+                {!isPending && (
+                  <Ionicons
+                    name="arrow-forward"
+                    size={22}
+                    color="white"
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  />
+                )}
               </TouchableOpacity>
 
               <View className="items-center">
