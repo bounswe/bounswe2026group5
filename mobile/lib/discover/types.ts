@@ -5,6 +5,7 @@ export interface DiscoverSkill {
 
 export interface DiscoverMentorProfile {
   id: string;
+  username: string;
   full_name: string;
   bio: string;
   hidden: boolean;
