@@ -21,10 +21,12 @@ describe('AuthorizedHeader Component', () => {
     expect(screen.getByText('Mentorship')).toBeInTheDocument();
   });
 
-  it('renders the dummy navigation links', () => {
+  it('renders the navigation links', () => {
     render(<AuthorizedHeader />);
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    expect(screen.getByText('Schedule')).toBeInTheDocument();
     expect(screen.getByText('Discover')).toBeInTheDocument();
-    expect(screen.getByText('Requests')).toBeInTheDocument();
+    expect(screen.getByText('Connections')).toBeInTheDocument();
   });
 
   it('renders the Demo Logout button', () => {

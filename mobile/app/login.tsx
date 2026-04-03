@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -226,9 +226,7 @@ export default function LoginScreen() {
                 className="font-bold text-primary dark:text-primary-dim"
                 accessibilityRole="link"
                 accessibilityLabel="Sign up"
-                onPress={() =>
-                  console.log('TODO: Navigate to /register screen')
-                }
+                onPress={() => router.push('/register' as Href)}
               >
                 Sign Up
               </Text>
