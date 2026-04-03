@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import AppUsageMode
-from accounts.permissions import IsNotBanned, IsUser
+from accounts.permissions import IsUser
 
 from .models import AvailabilitySlot, Profile, Skill
 from .serializers import (
@@ -87,7 +87,7 @@ class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
         if self.request.method == "GET":
             return [AllowAny()]
 
-        return [IsUser(), IsNotBanned()]
+        return [IsUser()]
 
     def _get_owned_profile_or_404(self, request: Request, username: str) -> Profile | None:
         """Return profile only if it belongs to current user and username matches."""
@@ -157,7 +157,7 @@ class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
 class AvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
     """Create and list mentor availability slots scoped by username."""
 
-    permission_classes = [IsUser, IsNotBanned]
+    permission_classes = [IsUser]
 
     @extend_schema(
         request=AvailabilitySlotWriteSerializer,
@@ -224,7 +224,7 @@ class AvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
 class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
     """Retrieve, update, and delete mentor-owned availability slots."""
 
-    permission_classes = [IsUser, IsNotBanned]
+    permission_classes = [IsUser]
 
     @extend_schema(
         responses={
@@ -340,7 +340,7 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
 class AvailabilitySlotBookAPIView(ProfileLookupMixin, APIView):
     """Book an available mentor slot for an authenticated user."""
 
-    permission_classes = [IsUser, IsNotBanned]
+    permission_classes = [IsUser]
 
     @extend_schema(
         request=None,
@@ -377,7 +377,7 @@ class AvailabilitySlotBookAPIView(ProfileLookupMixin, APIView):
 class AvailabilitySlotCancelBookingAPIView(ProfileLookupMixin, APIView):
     """Cancel an existing slot booking."""
 
-    permission_classes = [IsUser, IsNotBanned]
+    permission_classes = [IsUser]
 
     @extend_schema(
         request=None,
