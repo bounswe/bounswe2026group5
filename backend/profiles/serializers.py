@@ -279,3 +279,65 @@ class AvailabilitySlotWriteSerializer(serializers.Serializer):
         instance.end_at = validated_data["end_at"]
         instance.save(update_fields=["start_at", "end_at", "updated_at"])
         return instance
+
+
+def _get_display_initials(display_name: str) -> str:
+    """Compute up to 2 initials from a display name."""
+    parts = [p for p in display_name.split() if p]
+    initials = "".join(p[0] for p in parts).upper()
+    return initials[:2]
+
+
+class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
+    """
+    Public search result serializer for mentor discovery.
+
+    Notes:
+    - Enforces `show_initials_only` by replacing `full_name` with initials.
+    - Includes `hidden` (inverse of `is_visible`) for compatibility with the
+      existing profile detail endpoints.
+    """
+
+    full_name = serializers.SerializerMethodField()
+    hidden = serializers.BooleanField(source="is_visible", read_only=True)
+    expertises = serializers.ListField(child=serializers.CharField(), source="skills", read_only=True)
+    picture_url = serializers.URLField(read_only=True)
+    location = LocationField(read_only=True)
+    show_initials_only = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = (
+            "id",
+            "full_name",
+            "bio",
+            "hidden",
+            "picture_url",
+            "title",
+            "location",
+            "show_initials_only",
+            "expertises",
+            "rating",
+            "total_mentee_count",
+        )
+        read_only_fields = fields
+
+    def get_full_name(self, obj: Profile) -> str:
+        if obj.show_initials_only:
+            return _get_display_initials(obj.display_name or "")
+        return obj.display_name
+
+    def to_representation(self, instance: Profile) -> dict:
+        ret = super().to_representation(instance)
+        # Invert is_visible to get "hidden" semantics.
+        ret["hidden"] = not instance.is_visible
+        return ret
+
+
+class PublicMentorProfileSearchListResponseSerializer(serializers.Serializer):
+    """Paginated response wrapper for public mentor discovery."""
+
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    pageSize = serializers.IntegerField()
+    results = PublicMentorProfileSearchResultSerializer(many=True)
