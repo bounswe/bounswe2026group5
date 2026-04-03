@@ -11,13 +11,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode
-from profiles.models import (
-    AvailabilitySlot,
-    ExpertiseField,
-    Profile,
-    ProfileExpertise,
-    Skill,
-)
+from profiles.models import AvailabilitySlot, ExpertiseField, Profile, ProfileExpertise, Skill
 
 User: Any = get_user_model()
 
@@ -274,6 +268,7 @@ class ProfileByUsernameAPIViewTests(TestCase):
     def test_get_mentor_profile_returns_mentor_shape(self) -> None:
         """Mentor profile returns mentor-specific fields."""
         self.other_profile.is_visible = True
+        self.other_profile.title = "Senior Backend Mentor"
         self.other_profile.save()
 
         response = self.api_client.get(self.other_url)
@@ -281,6 +276,8 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn("full_name", payload)
+        self.assertIn("title", payload)
+        self.assertEqual(payload["title"], "Senior Backend Mentor")
         self.assertIn("expertises", payload)
         self.assertIn("rating", payload)
         self.assertIn("total_mentee_count", payload)
@@ -341,6 +338,50 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.owner_profile.refresh_from_db()
         self.assertEqual(self.owner_profile.display_name, "Owner Updated")
         self.assertEqual(self.owner_profile.bio, "Updated bio")
+
+    def test_patch_profile_accepts_blank_location(self) -> None:
+        """Blank string location is accepted and normalized to null."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.owner_url,
+            {"location": ""},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertIsNone(self.owner_profile.location)
+
+    def test_patch_mentee_profile_skills_with_eager_to_learn(self) -> None:
+        """Mentees can patch skills using eager_to_learn alias."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.owner_url,
+            {"eager_to_learn": ["Data Science", "Machine Learning"]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertEqual(self.owner_profile.skills, ["Data Science", "Machine Learning"])
+
+    def test_patch_mentor_profile_skills_with_expertises(self) -> None:
+        """Mentors can patch skills using expertises alias."""
+        mentor_refresh = RefreshToken.for_user(self.other_user)
+        mentor_access_token = str(mentor_refresh.access_token)
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {mentor_access_token}")
+
+        response = self.api_client.patch(
+            self.other_url,
+            {"expertises": ["System Design", "Python"]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.other_profile.refresh_from_db()
+        self.assertEqual(self.other_profile.skills, ["System Design", "Python"])
 
     def test_patch_profile_requires_authentication(self) -> None:
         """PATCH endpoint returns 401 when request is unauthenticated."""
@@ -408,7 +449,7 @@ class SkillListAPIViewTests(TestCase):
     def setUp(self) -> None:
         self.api_client: Any = APIClient()
         self.url = "/api/profiles/skills/"
-        
+
         Skill.objects.create(name="Python")
         Skill.objects.create(name="JavaScript")
         Skill.objects.create(name="Django")
@@ -420,12 +461,12 @@ class SkillListAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(len(payload), 3)
-        
+
         # Should be ordered by name
         self.assertEqual(payload[0]["name"], "Django")
         self.assertEqual(payload[1]["name"], "JavaScript")
         self.assertEqual(payload[2]["name"], "Python")
-        
+
         self.assertIn("id", payload[0])
 
 

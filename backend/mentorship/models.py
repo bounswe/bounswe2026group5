@@ -7,7 +7,7 @@ from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
 
-from profiles.models import Profile
+from profiles.models import AvailabilitySlot, Profile
 
 
 class MentorshipRequest(models.Model):
@@ -30,6 +30,13 @@ class MentorshipRequest(models.Model):
         Profile,
         on_delete=models.CASCADE,
         related_name="sent_requests",
+    )
+    slot = models.ForeignKey(
+        AvailabilitySlot,
+        on_delete=models.PROTECT,
+        related_name="mentorship_requests",
+        null=True,
+        blank=True,
     )
     status = models.CharField(
         max_length=16,
