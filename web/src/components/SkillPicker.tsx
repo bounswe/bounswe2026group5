@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Input } from "#/components/ui/input.tsx"
-// I think that component can be used in more places. (Like profile page maybe)
+import { skillsQueryOptions } from "#/lib/queries/ProfileQueries.ts"
+
 type Skill = { name: string }
 
 type SkillPickerProps = {
@@ -8,28 +10,15 @@ type SkillPickerProps = {
     onChange: (skills: Skill[]) => void
 }
 
-// This is the skillSet
-const PREDEFINED_SKILLS: Skill[] = [
-    { name: 'Mathematics' }, { name: 'Calculus' }, { name: 'Linear Algebra' },
-    { name: 'Statistics' }, { name: 'Physics' }, { name: 'Chemistry' },
-    { name: 'Biology' }, { name: 'Computer Science' }, { name: 'TypeScript' },
-    { name: 'Python' }, { name: 'Java' }, { name: 'C++' }, { name: 'React' },
-    { name: 'Data Structures' }, { name: 'Algorithms' }, { name: 'Machine Learning' },
-    { name: 'Economics' }, { name: 'History' }, { name: 'Philosophy' },
-    { name: 'Literature' }, { name: 'English Writing' }, { name: 'Spanish' },
-    { name: 'French' }, { name: 'German' }, { name: 'Music Theory' },
-]
-
-
 export function SkillPicker({ selected, onChange }: SkillPickerProps) {
     const [filter, setFilter] = useState('')
+    const { data: skills = [], isLoading } = useQuery(skillsQueryOptions)
 
-    const filtered = PREDEFINED_SKILLS.filter(s =>
+    const filtered = skills.filter(s =>
         s.name.toLowerCase().includes(filter.toLowerCase())
     )
 
-    const isSelected = (skill: Skill) =>
-        selected.some(s => s.name === skill.name)
+    const isSelected = (skill: Skill) => selected.some(s => s.name === skill.name)
 
     const toggle = (skill: Skill) => {
         if (isSelected(skill)) {
@@ -48,7 +37,9 @@ export function SkillPicker({ selected, onChange }: SkillPickerProps) {
                 onChange={e => setFilter(e.target.value)}
             />
             <div className="island-shell rounded-xl p-4 flex flex-wrap gap-2 max-h-56 overflow-y-auto">
-                {filtered.length === 0 ? (
+                {isLoading ? (
+                    <p className="text-muted-foreground text-sm">Loading skills...</p>
+                ) : filtered.length === 0 ? (
                     <p className="text-muted-foreground text-sm">No skills match your filter.</p>
                 ) : (
                     filtered.map(skill => (

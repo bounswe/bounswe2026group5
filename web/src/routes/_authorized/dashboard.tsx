@@ -1,6 +1,5 @@
 // web/src/routes/_authorized/dashboard.tsx
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { z } from 'zod'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Heading, Body, Muted } from '@/components/Typography'
@@ -10,12 +9,8 @@ import { SessionManagementModal } from '@/components/dashboard/SessionManagement
 import {meQueryOptions} from "#/lib/queries/AuthQueries.ts";
 import {useQuery} from "@tanstack/react-query";
 
-const dashboardSearchSchema = z.object({
-  mode: z.enum(['mentee', 'mentor']).catch('mentee'),
-})
 
 export const Route = createFileRoute('/_authorized/dashboard')({
-  validateSearch: dashboardSearchSchema,
   loader: ({ context }) => context.queryClient.ensureQueryData(meQueryOptions),
   component: DashboardHome,
 })
@@ -71,11 +66,10 @@ function UserAvatar({ name }: { name: string }) {
 // ---------------------------------------------------------------------------
 
 export function DashboardHome() {
-  const { mode } = Route.useSearch()
 
   const { data, isSuccess } = useQuery(meQueryOptions)
 
-
+  const mode = (data?.app_usage_mode?.toLowerCase() as 'mentor' | 'mentee') ?? 'mentee'
   return (
     <div className="page-wrap py-10 rise-in flex flex-col gap-10">
       {isSuccess && (
@@ -144,7 +138,7 @@ function MenteeDashboardView() {
               </Card>
             ))}
 
-            <Link to="/schedule" search={{ mode: 'mentee' }} className="block mt-2">
+            <Link to="/schedule"  className="block mt-2">
               <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
                 View Full Schedule <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
@@ -244,7 +238,7 @@ function MentorDashboardView() {
               </Card>
             ))}
             
-            <Link to="/schedule" search={{ mode: 'mentor' }} className="block mt-2">
+            <Link to="/schedule" className="block mt-2">
               <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
                 View Full Schedule <ArrowRight className="w-4 h-4 ml-2" />
               </Button>

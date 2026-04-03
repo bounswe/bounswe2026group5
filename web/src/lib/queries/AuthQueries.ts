@@ -1,5 +1,5 @@
 // lib/queries/auth.ts
-import { queryOptions, useQuery } from "@tanstack/react-query"
+import {queryOptions, useMutation} from "@tanstack/react-query"
 import { queryClient, router } from "#/router.tsx"
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -10,6 +10,7 @@ export interface User {
     email: string
     role: string
     auth_provider: string
+    app_usage_mode: "MENTEE" | "MENTOR"
     is_active: boolean
     created_at: string
 }
@@ -82,4 +83,24 @@ export async function registerFn(credentials: { email: string; password: string;
     })
     if (!res.ok) throw new Error('Registration failed')
     return res.json() as Promise<AuthResponse>
+}
+
+export async function updateAppUsageModeFn({ userId, app_usage_mode }: {
+    userId: string
+    app_usage_mode: 'MENTEE' | 'MENTOR'
+}) {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`${API_BASE_URL}/auth/${userId}/app-usage-mode/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ app_usage_mode }),
+    })
+    if (!res.ok) throw new Error('Failed to update usage mode')
+    return res.json()
+}
+
+export function useUpdateAppUsageMode() {
+    return useMutation({
+        mutationFn: updateAppUsageModeFn,
+    })
 }
