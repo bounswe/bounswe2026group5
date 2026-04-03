@@ -1,11 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { API_BASE_URL } from "@/constants/api";
-import { AvailabilityPreview, type AvailabilitySlot } from "@/components/profile/AvailabilityPreview";
+import {
+  AvailabilityPreview,
+  type AvailabilitySlot,
+} from "@/components/profile/AvailabilityPreview";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 
@@ -50,7 +59,9 @@ export default function MentorProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ username?: string }>();
-  const username = Array.isArray(params.username) ? params.username[0] : params.username;
+  const username = Array.isArray(params.username)
+    ? params.username[0]
+    : params.username;
 
   const [profile, setProfile] = useState<MentorProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,14 +136,19 @@ export default function MentorProfileScreen() {
     bodyContent = (
       <View className="flex-1 items-center justify-center px-4">
         <View className="bg-white border border-gray-200 rounded-2xl p-5 w-full">
-          <Text className="text-gray-900 font-bold text-base mb-2">Unable to open profile</Text>
+          <Text className="text-gray-900 font-bold text-base mb-2">
+            Unable to open profile
+          </Text>
           <Text className="text-gray-500">{error}</Text>
         </View>
       </View>
     );
   } else if (profile) {
     bodyContent = (
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 140 }}>
+      <ScrollView
+        className="flex-1 bg-white"
+        contentContainerStyle={{ paddingBottom: 160 }}
+      >
         <ProfileHeader
           name={profile.full_name}
           bio={profile.bio}
@@ -141,8 +157,12 @@ export default function MentorProfileScreen() {
           imageUrl={profile.picture_url || undefined}
         />
 
-        <View className="px-4">
-          <SkillsCloud title="Expertise" skills={profile.expertises} variant="mentor" />
+        <View className="px-4 mt-4">
+          <SkillsCloud
+            title="Expertise"
+            skills={profile.expertises}
+            variant="mentor"
+          />
 
           <AvailabilityPreview schedule={availability} />
         </View>
@@ -151,8 +171,11 @@ export default function MentorProfileScreen() {
   }
 
   return (
-    <View className="flex-1 bg-gray-50">
-      <View className="bg-white border-b border-gray-100" style={{ paddingTop: insets.top }}>
+    <View className="flex-1 bg-white">
+      <View
+        className="bg-white border-b border-gray-100"
+        style={{ paddingTop: insets.top }}
+      >
         <View className="flex-row items-center px-4 py-3">
           <TouchableOpacity
             onPress={() => router.back()}
@@ -160,7 +183,9 @@ export default function MentorProfileScreen() {
           >
             <Ionicons name="chevron-back" size={20} color="#111827" />
           </TouchableOpacity>
-          <Text className="text-xl font-extrabold text-gray-900">Mentor Profile</Text>
+          <Text className="text-xl font-extrabold text-gray-900">
+            Mentor Profile
+          </Text>
         </View>
       </View>
 
