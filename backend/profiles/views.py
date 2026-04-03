@@ -439,6 +439,24 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         return deduped
 
     @staticmethod
+    def _skills_match_query(skills: list[str], query: str) -> bool:
+        """Return True when any skill contains the query text (case-insensitive)."""
+        q = query.strip().lower()
+        if not q:
+            return False
+        return any(q in (skill or "").lower() for skill in (skills or []))
+
+    @staticmethod
+    def _has_any_skill(skills: list[str], terms: list[str]) -> bool:
+        """Return True when any skill exactly matches one term (case-insensitive)."""
+        if not terms:
+            return False
+        wanted = {term.strip().lower() for term in terms if term.strip()}
+        if not wanted:
+            return False
+        return any((skill or "").lower() in wanted for skill in (skills or []))
+
+    @staticmethod
     def _parse_mode(request: Request) -> list[str]:
         """Map `mentorshipMode` query param to internal app usage mode values."""
         raw_mode = (
@@ -515,8 +533,7 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         )
         q = q.strip() if isinstance(q, str) else ""
 
-        # Skills/topics are matched only via `ExpertiseField` (through ProfileExpertise)
-        # using case-insensitive exact match (`__iexact`), so behavior matches other filters.
+        # Skills/topics are matched through Profile.skills using case-insensitive checks.
         skill_terms = self._parse_terms(
             request,
             keys=["skill", "skills", "expertise", "topic"],
@@ -535,30 +552,31 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         page_size = max(page_size, 1)
         page_size = min(page_size, 50)
 
-        qs = (
-            Profile.objects.select_related("user")
-            .filter(is_visible=True, user__app_usage_mode__in=mentorship_modes)
-            .prefetch_related("profile_expertise", "profile_expertise__expertise_field")
+        qs = Profile.objects.select_related("user").filter(
+            is_visible=True, user__app_usage_mode__in=mentorship_modes
         )
 
         if q:
-            qs = (
-                qs.filter(
-                    Q(display_name__icontains=q)
-                    | Q(title__icontains=q)
-                    | Q(bio__icontains=q)
-                    | Q(profile_expertise__expertise_field__name__icontains=q)
-                )
-                .distinct()
+            base_qs = qs
+            text_match_ids = set(
+                base_qs.filter(
+                    Q(display_name__icontains=q) | Q(title__icontains=q) | Q(bio__icontains=q)
+                ).values_list("id", flat=True)
             )
+            skill_match_ids = {
+                profile_id
+                for profile_id, profile_skills in base_qs.values_list("id", "skills")
+                if self._skills_match_query(profile_skills or [], q)
+            }
+            qs = qs.filter(id__in=text_match_ids | skill_match_ids)
 
         if skill_terms:
-            expertise_field_q = Q()
-            for term in skill_terms:
-                expertise_field_q |= Q(
-                    profile_expertise__expertise_field__name__iexact=term,
-                )
-            qs = qs.filter(expertise_field_q).distinct()
+            skill_match_ids = {
+                profile_id
+                for profile_id, profile_skills in qs.values_list("id", "skills")
+                if self._has_any_skill(profile_skills or [], skill_terms)
+            }
+            qs = qs.filter(id__in=skill_match_ids)
 
         # Optional: geographical distance filtering (lat/lng + distanceKm)
         try:

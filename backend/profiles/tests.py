@@ -1020,17 +1020,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
             title="Mentee",
         )
 
-        # Skill filter matches via ExpertiseField / ProfileExpertise only (case-insensitive).
-        self.react_expertise, _ = ExpertiseField.objects.get_or_create(
-            name="React",
-            defaults={"description": ""},
-        )
-        ProfileExpertise.objects.create(
-            profile=self.mentor2_profile,
-            expertise_field=self.react_expertise,
-            proficiency_level=3,
-        )
-
     def test_guest_can_access_endpoint(self) -> None:
         """Unauthenticated requests can list public mentors."""
         response = self.api_client.get("/api/profiles/")
@@ -1057,7 +1046,7 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.assertEqual(payload["results"][0]["full_name"], "Alice Mentor")
 
     def test_filter_by_skill_term(self) -> None:
-        """`skill` query param matches expertise via ProfileExpertise."""
+        """`skill` query param matches profile skills."""
         response = self.api_client.get("/api/profiles/", {"skill": "React"})
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -1067,7 +1056,7 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.assertEqual(payload["results"][0]["expertises"], ["React"])
 
     def test_filter_by_skill_term_is_case_insensitive(self) -> None:
-        """Skill filter uses case-insensitive match on ExpertiseField name."""
+        """Skill filter uses case-insensitive match on profile skills."""
         response = self.api_client.get("/api/profiles/", {"skill": "react"})
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -1075,32 +1064,22 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["results"][0]["full_name"], "JD")
 
-    def test_q_search_does_not_duplicate_profiles_with_multiple_expertise_matches(self) -> None:
-        """`q` must not return the same profile twice when multiple expertise rows match."""
+    def test_q_search_matches_profile_skills_without_duplicates(self) -> None:
+        """`q` should match skill strings while returning each profile only once."""
         dup_user = User.objects.create_user(
             email="dup-expertise@example.com",
             password="SecurePass123",
             app_usage_mode=AppUsageMode.MENTOR,
         )
-        dup_profile = Profile.objects.create(
+        Profile.objects.create(
             user=dup_user,
             display_name="Unique Dup Expertise Holder",
             is_visible=True,
             show_initials_only=False,
-            skills=[],
+            skills=["Python Basics", "Python Advanced"],
             title="Mentor",
             bio="No Python in bio text.",
         )
-        py_basic, _ = ExpertiseField.objects.get_or_create(
-            name="Python Basics",
-            defaults={"description": ""},
-        )
-        py_adv, _ = ExpertiseField.objects.get_or_create(
-            name="Python Advanced",
-            defaults={"description": ""},
-        )
-        ProfileExpertise.objects.create(profile=dup_profile, expertise_field=py_basic, proficiency_level=3)
-        ProfileExpertise.objects.create(profile=dup_profile, expertise_field=py_adv, proficiency_level=4)
 
         response = self.api_client.get("/api/profiles/", {"q": "Python"})
         self.assertEqual(response.status_code, 200)
@@ -1109,7 +1088,9 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         result_ids = [p["id"] for p in payload["results"]]
         self.assertEqual(len(result_ids), len(set(result_ids)), "duplicate profile rows in results")
 
-        dup_rows = [p for p in payload["results"] if p["full_name"] == "Unique Dup Expertise Holder"]
+        dup_rows = [
+            p for p in payload["results"] if p["full_name"] == "Unique Dup Expertise Holder"
+        ]
         self.assertEqual(len(dup_rows), 1)
 
     def test_show_initials_only_is_respected(self) -> None:
