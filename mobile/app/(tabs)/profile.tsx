@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, ScrollView, Text, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,6 +20,7 @@ import {
 } from "@/components/profile/EditProfileModal";
 import { BookingModal } from "@/components/profile/BookingModal";
 import { ManageOfferingsModal } from "@/components/profile/ManageOfferingsModal";
+import { API_BASE_URL } from "@/constants/api";
 
 // Mock Data from centralized file
 import { MOCK_AVAILABILITY, MOCK_OFFERINGS } from "@/constants/mockData";
@@ -63,10 +64,40 @@ export default function ProfileScreen() {
   const [selectedOffering, setSelectedOffering] = useState<Offering | null>(
     null,
   );
+  const [availableSkills, setAvailableSkills] = useState<string[]>([]);
   const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
   const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] =
     useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    fetch(`${API_BASE_URL}/api/profiles/skills/`, {
+      headers: {
+        Accept: "application/json",
+      },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load skills.");
+        }
+        const payload = (await response.json()) as Array<{ name: string }>;
+        if (!mounted) {
+          return;
+        }
+        setAvailableSkills(payload.map((skill) => skill.name));
+      })
+      .catch(() => {
+        if (mounted) {
+          setAvailableSkills([]);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const [skillsModalConfig, setSkillsModalConfig] = useState<{
     visible: boolean;
@@ -211,6 +242,7 @@ export default function ProfileScreen() {
         title={editModalConfig.title}
         initialSkills={editModalConfig.skills}
         variant={editModalConfig.variant}
+        availableSkills={availableSkills}
         onSave={editModalConfig.onSave}
         onClose={() =>
           setEditModalConfig((prev) => ({ ...prev, visible: false }))
