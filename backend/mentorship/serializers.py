@@ -2,7 +2,8 @@
 
 from rest_framework import serializers
 
-from profiles.models import MentorshipMode, Profile
+from accounts.models import AppUsageMode
+from profiles.models import Profile
 
 from .models import Match, MentorshipRequest
 
@@ -49,7 +50,7 @@ class MentorshipRequestCreateSerializer(serializers.Serializer):
         except Profile.DoesNotExist:
             raise serializers.ValidationError("Mentor profile not found.")
 
-        if profile.mentorship_mode not in {MentorshipMode.MENTOR, MentorshipMode.BOTH}:
+        if profile.user.app_usage_mode != AppUsageMode.MENTOR:
             raise serializers.ValidationError("This user is not available as a mentor.")
 
         return profile

@@ -8,7 +8,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import AvailabilitySlot, MentorshipMode, Profile
+from .models import AvailabilitySlot, Profile, Skill
 
 
 class LocationField(serializers.Field):
@@ -38,48 +38,13 @@ class LocationField(serializers.Field):
         return Point(lng, lat, srid=4326)
 
 
-class ProfileResponseSerializer(serializers.ModelSerializer):
-    """Read serializer for authenticated user's profile data."""
-
-    location = LocationField(read_only=True)
+class SkillSerializer(serializers.ModelSerializer):
+    """Read serializer for skills."""
 
     class Meta:
-        model = Profile
-        fields = (
-            "id",
-            "username",
-            "display_name",
-            "bio",
-            "picture_url",
-            "title",
-            "location",
-            "is_visible",
-            "show_initials_only",
-            "mentorship_mode",
-            "created_at",
-            "updated_at",
-        )
+        model = Skill
+        fields = ("id", "name")
         read_only_fields = fields
-
-
-class ProfileUpdateSerializer(serializers.ModelSerializer):
-    """Partial update serializer for authenticated user's profile."""
-
-    mentorship_mode = serializers.ChoiceField(choices=MentorshipMode.choices)
-    location = LocationField(required=False, allow_null=True)
-
-    class Meta:
-        model = Profile
-        fields = (
-            "display_name",
-            "bio",
-            "picture_url",
-            "title",
-            "location",
-            "is_visible",
-            "show_initials_only",
-            "mentorship_mode",
-        )
 
 
 class AvailabilitySlotSerializer(serializers.ModelSerializer):
@@ -132,6 +97,122 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
             return None
 
         return booked_profile.username
+
+
+class MenteeProfileResponseSerializer(serializers.ModelSerializer):
+    """Read serializer for mentee profile data."""
+
+    full_name = serializers.CharField(source="display_name", read_only=True)
+    hidden = serializers.BooleanField(source="is_visible", read_only=True)
+    picture_url = serializers.URLField(read_only=True)
+    eager_to_learn = serializers.ListField(
+        child=serializers.CharField(), source="skills", read_only=True
+    )
+
+    class Meta:
+        model = Profile
+        fields = (
+            "id",
+            "full_name",
+            "bio",
+            "hidden",
+            "picture_url",
+            "eager_to_learn",
+        )
+        read_only_fields = fields
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Invert is_visible to get "hidden" semantics
+        ret["hidden"] = not instance.is_visible
+        return ret
+
+
+class MentorProfileResponseSerializer(serializers.ModelSerializer):
+    """Read serializer for mentor profile data."""
+
+    full_name = serializers.CharField(source="display_name", read_only=True)
+    hidden = serializers.BooleanField(source="is_visible", read_only=True)
+    picture_url = serializers.URLField(read_only=True)
+    expertises = serializers.ListField(
+        child=serializers.CharField(), source="skills", read_only=True
+    )
+    rating = serializers.IntegerField(read_only=True)
+    total_mentee_count = serializers.IntegerField(read_only=True)
+    available_slots = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Profile
+        fields = (
+            "id",
+            "full_name",
+            "bio",
+            "hidden",
+            "picture_url",
+            "expertises",
+            "rating",
+            "total_mentee_count",
+            "available_slots",
+        )
+        read_only_fields = fields
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Invert is_visible to get "hidden" semantics
+        ret["hidden"] = not instance.is_visible
+        return ret
+
+    @extend_schema_field(AvailabilitySlotSerializer(many=True))
+    def get_available_slots(self, obj: Profile):
+        """Return upcoming unbooked availability slots."""
+        upcoming_slots = AvailabilitySlot.objects.filter(
+            profile=obj,
+            start_at__gte=timezone.now(),
+            is_booked=False,
+        ).order_by("start_at")
+        return AvailabilitySlotSerializer(upcoming_slots, many=True).data
+
+
+class ProfileResponseSerializer(serializers.ModelSerializer):
+    """Fallback read serializer for profile data (when app_usage_mode is not set)."""
+
+    location = LocationField(read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = (
+            "id",
+            "username",
+            "display_name",
+            "bio",
+            "picture_url",
+            "title",
+            "location",
+            "is_visible",
+            "show_initials_only",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    """Partial update serializer for authenticated user's profile."""
+
+    location = LocationField(required=False, allow_null=True)
+
+    class Meta:
+        model = Profile
+        fields = (
+            "display_name",
+            "bio",
+            "picture_url",
+            "title",
+            "location",
+            "is_visible",
+            "show_initials_only",
+        )
+
 
 
 class AvailabilitySlotWriteSerializer(serializers.Serializer):

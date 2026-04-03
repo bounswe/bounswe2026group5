@@ -10,12 +10,13 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from accounts.models import AppUsageMode
 from profiles.models import (
     AvailabilitySlot,
     ExpertiseField,
-    MentorshipMode,
     Profile,
     ProfileExpertise,
+    Skill,
 )
 
 User: Any = get_user_model()
@@ -29,21 +30,21 @@ class ProfileModelsTests(TestCase):
         self.mentor_user = User.objects.create_user(
             email="mentor@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
         )
         self.mentee_user = User.objects.create_user(
             email="mentee@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
         )
 
         self.mentor_profile = Profile.objects.create(
             user=self.mentor_user,
             display_name="Mentor User",
-            mentorship_mode=MentorshipMode.MENTOR,
         )
         self.mentee_profile = Profile.objects.create(
             user=self.mentee_user,
             display_name="Mentee User",
-            mentorship_mode=MentorshipMode.MENTEE,
         )
 
         self.python_expertise, _ = ExpertiseField.objects.get_or_create(
@@ -51,42 +52,35 @@ class ProfileModelsTests(TestCase):
             defaults={"description": "Backend development"},
         )
 
-    def test_profile_creation_supports_both_mode(self) -> None:
-        """Profile supports users who are both mentors and mentees."""
-        both_user = User.objects.create_user(
-            email="both@example.com",
-            password="SecurePass123",
-        )
+    def test_profile_skills_array(self) -> None:
+        """Profile can store skills as a list of strings."""
+        self.mentor_profile.skills = ["JavaScript", "React"]
+        self.mentor_profile.save()
+        self.mentor_profile.refresh_from_db()
 
-        both_profile = Profile.objects.create(
-            user=both_user,
-            display_name="Both User",
-            mentorship_mode=MentorshipMode.BOTH,
-        )
-
-        self.assertEqual(both_profile.mentorship_mode, MentorshipMode.BOTH)
-        self.assertEqual(both_profile.username, "both")
+        self.assertEqual(len(self.mentor_profile.skills), 2)
+        self.assertIn("JavaScript", self.mentor_profile.skills)
 
     def test_profile_username_is_unique_for_same_email_prefix(self) -> None:
         """Profiles with same email local-part receive unique usernames."""
         first_user = User.objects.create_user(
             email="sam@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
         )
         second_user = User.objects.create_user(
             email="sam@anotherdomain.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
         )
 
         first_profile = Profile.objects.create(
             user=first_user,
             display_name="Sam One",
-            mentorship_mode=MentorshipMode.MENTOR,
         )
         second_profile = Profile.objects.create(
             user=second_user,
             display_name="Sam Two",
-            mentorship_mode=MentorshipMode.MENTEE,
         )
 
         self.assertEqual(first_profile.username, "sam")
@@ -225,35 +219,35 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.owner_user = User.objects.create_user(
             email="owner@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
         )
         self.owner_profile = Profile.objects.create(
             user=self.owner_user,
             username="owner_user",
             display_name="Owner User",
-            mentorship_mode=MentorshipMode.BOTH,
         )
 
         self.other_user = User.objects.create_user(
             email="other@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
         )
         self.other_profile = Profile.objects.create(
             user=self.other_user,
             username="other_user",
             display_name="Other User",
-            mentorship_mode=MentorshipMode.MENTOR,
             is_visible=False,
         )
 
         self.public_user = User.objects.create_user(
             email="public@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
         )
         self.public_profile = Profile.objects.create(
             user=self.public_user,
             username="public_user",
             display_name="Public User",
-            mentorship_mode=MentorshipMode.BOTH,
             is_visible=True,
         )
 
@@ -272,8 +266,25 @@ class ProfileByUsernameAPIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["username"], self.owner_profile.username)
-        self.assertEqual(payload["display_name"], "Owner User")
+        # Mentee profile response shape
+        self.assertIn("full_name", payload)
+        self.assertEqual(payload["full_name"], "Owner User")
+        self.assertIn("eager_to_learn", payload)
+
+    def test_get_mentor_profile_returns_mentor_shape(self) -> None:
+        """Mentor profile returns mentor-specific fields."""
+        self.other_profile.is_visible = True
+        self.other_profile.save()
+
+        response = self.api_client.get(self.other_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("full_name", payload)
+        self.assertIn("expertises", payload)
+        self.assertIn("rating", payload)
+        self.assertIn("total_mentee_count", payload)
+        self.assertIn("available_slots", payload)
 
     def test_get_profile_public_access_without_authentication(self) -> None:
         """Public profile is accessible without authentication."""
@@ -281,7 +292,8 @@ class ProfileByUsernameAPIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["username"], self.public_profile.username)
+        # Mentee profile shape
+        self.assertIn("full_name", payload)
 
     def test_get_profile_private_returns_404_without_authentication(self) -> None:
         """Private profile remains hidden for unauthenticated requests."""
@@ -305,7 +317,7 @@ class ProfileByUsernameAPIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["username"], self.public_profile.username)
+        self.assertIn("full_name", payload)
 
     def test_get_profile_returns_404_for_missing_profile(self) -> None:
         """Endpoint returns 404 when username does not map to owned profile."""
@@ -321,7 +333,6 @@ class ProfileByUsernameAPIViewTests(TestCase):
         payload = {
             "display_name": "Owner Updated",
             "bio": "Updated bio",
-            "mentorship_mode": MentorshipMode.MENTEE,
         }
 
         response = self.api_client.patch(self.owner_url, payload)
@@ -330,7 +341,6 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.owner_profile.refresh_from_db()
         self.assertEqual(self.owner_profile.display_name, "Owner Updated")
         self.assertEqual(self.owner_profile.bio, "Updated bio")
-        self.assertEqual(self.owner_profile.mentorship_mode, MentorshipMode.MENTEE)
 
     def test_patch_profile_requires_authentication(self) -> None:
         """PATCH endpoint returns 401 when request is unauthenticated."""
@@ -354,18 +364,69 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.other_profile.refresh_from_db()
         self.assertEqual(self.other_profile.display_name, "Other User")
 
-    def test_patch_profile_invalid_mentorship_mode(self) -> None:
-        """PATCH returns 400 for invalid mentorship_mode values."""
+    def test_mentee_profile_hidden_field_reflects_visibility(self) -> None:
+        """Mentee profile 'hidden' field is the inverse of is_visible."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
 
-        response = self.api_client.patch(
-            self.owner_url,
-            {"mentorship_mode": "INVALID"},
-        )
-
-        self.assertEqual(response.status_code, 400)
+        response = self.api_client.get(self.owner_url)
         payload = response.json()
-        self.assertIn("mentorship_mode", payload)
+
+        self.assertEqual(response.status_code, 200)
+        # owner_profile has is_visible=True by default, so hidden should be False
+        self.assertFalse(payload["hidden"])
+
+    def test_mentor_profile_includes_skills_as_expertises(self) -> None:
+        """Mentor profile returns skills under 'expertises' key."""
+        self.other_profile.is_visible = True
+        self.other_profile.skills = ["Machine Learning"]
+        self.other_profile.save()
+
+        response = self.api_client.get(self.other_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["expertises"]), 1)
+        self.assertEqual(payload["expertises"][0], "Machine Learning")
+
+    def test_mentee_profile_includes_skills_as_eager_to_learn(self) -> None:
+        """Mentee profile returns skills under 'eager_to_learn' key."""
+        self.owner_profile.skills = ["Data Science"]
+        self.owner_profile.save()
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+        response = self.api_client.get(self.owner_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["eager_to_learn"]), 1)
+        self.assertEqual(payload["eager_to_learn"][0], "Data Science")
+
+
+class SkillListAPIViewTests(TestCase):
+    """Tests for GET /api/profiles/skills/ endpoint."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+        self.url = "/api/profiles/skills/"
+        
+        Skill.objects.create(name="Python")
+        Skill.objects.create(name="JavaScript")
+        Skill.objects.create(name="Django")
+
+    def test_list_skills_success(self) -> None:
+        """Anyone can fetch the list of skills."""
+        response = self.api_client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 3)
+        
+        # Should be ordered by name
+        self.assertEqual(payload[0]["name"], "Django")
+        self.assertEqual(payload[1]["name"], "JavaScript")
+        self.assertEqual(payload[2]["name"], "Python")
+        
+        self.assertIn("id", payload[0])
 
 
 class AvailabilitySlotAPIViewTests(TestCase):
@@ -378,31 +439,31 @@ class AvailabilitySlotAPIViewTests(TestCase):
         self.mentor_user = User.objects.create_user(
             email="mentor-slots@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
         )
         self.mentor_profile = Profile.objects.create(
             user=self.mentor_user,
             display_name="Mentor Slots",
-            mentorship_mode=MentorshipMode.MENTOR,
         )
 
         self.other_mentor_user = User.objects.create_user(
             email="other-mentor@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
         )
         self.other_mentor_profile = Profile.objects.create(
             user=self.other_mentor_user,
             display_name="Other Mentor",
-            mentorship_mode=MentorshipMode.MENTOR,
         )
 
         self.mentee_user = User.objects.create_user(
             email="mentee-slots@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
         )
         self.mentee_profile = Profile.objects.create(
             user=self.mentee_user,
             display_name="Mentee Slots",
-            mentorship_mode=MentorshipMode.MENTEE,
         )
 
         mentor_refresh = RefreshToken.for_user(self.mentor_user)
@@ -639,31 +700,31 @@ class AvailabilitySlotBookingAPIViewTests(TestCase):
         self.mentor_user = User.objects.create_user(
             email="mentor-booking@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
         )
         self.mentor_profile = Profile.objects.create(
             user=self.mentor_user,
             display_name="Mentor Booking",
-            mentorship_mode=MentorshipMode.MENTOR,
         )
 
         self.mentee_user = User.objects.create_user(
             email="mentee-booking@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
         )
         self.mentee_profile = Profile.objects.create(
             user=self.mentee_user,
             display_name="Mentee Booking",
-            mentorship_mode=MentorshipMode.MENTEE,
         )
 
         self.other_user = User.objects.create_user(
             email="other-booking@example.com",
             password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
         )
         self.other_profile = Profile.objects.create(
             user=self.other_user,
             display_name="Other User",
-            mentorship_mode=MentorshipMode.MENTEE,
         )
 
         mentor_refresh = RefreshToken.for_user(self.mentor_user)
