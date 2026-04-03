@@ -39,7 +39,7 @@ export default function RegisterScreen() {
   const theme = Colors[colorScheme];
 
   const [role, setRole] = useState<'mentor' | 'mentee'>('mentor');
-  const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [password, setPassword] = useState('');
@@ -172,25 +172,22 @@ export default function RegisterScreen() {
               </View>
             </View>
 
-            {/* Username */}
+            {/* Display Name */}
             <View className="gap-1.5">
               <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
-                Username
+                Display Name
               </Text>
               <View className="flex-row items-center h-14 rounded-xl px-4 gap-2 bg-surface-input dark:bg-surface-input-dark">
-                <Text className="text-base font-medium text-on-surface-muted dark:text-on-surface-muted-dark">
-                  @
-                </Text>
                 <TextInput
                   className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
-                  placeholder="arivers_dev"
+                  placeholder="John Williams"
                   placeholderTextColor={theme.textMuted}
-                  value={username}
-                  onChangeText={setUsername}
+                  value={displayName}
+                  onChangeText={setDisplayName}
                   autoCapitalize="none"
                   autoComplete="username"
                   returnKeyType="next"
-                  accessibilityLabel="Username"
+                  accessibilityLabel="Display Name"
                 />
               </View>
             </View>
