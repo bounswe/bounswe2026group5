@@ -8,10 +8,15 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 import { DiscoverFilterModal } from "@/components/discover/DiscoverFilterModal";
 import { DiscoverSearchBar } from "@/components/discover/DiscoverSearchBar";
 import { MentorCard } from "@/components/discover/MentorCard";
+import {
+  DEMO_DISCOVER_PROFILES,
+  DEMO_DISCOVER_SKILLS,
+} from "@/constants/discover-demo";
 import {
   fetchDiscoverProfiles,
   fetchDiscoverSkills,
@@ -22,6 +27,7 @@ const PAGE_SIZE = 8;
 
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -124,6 +130,16 @@ export default function DiscoverScreen() {
   }, [page, debouncedQuery, selectedSkillList]);
 
   const hasMore = profiles.length < totalCount;
+  const showDemoContent =
+    profiles.length === 0 &&
+    !loadingProfiles &&
+    !errorText &&
+    page === 1 &&
+    debouncedQuery.length === 0 &&
+    selectedSkillList.length === 0;
+
+  const visibleProfiles = showDemoContent ? DEMO_DISCOVER_PROFILES : profiles;
+  const visibleSkills = skills.length > 0 ? skills : DEMO_DISCOVER_SKILLS;
 
   const toggleSkill = (skill: string) => {
     setPage(1);
@@ -143,6 +159,10 @@ export default function DiscoverScreen() {
     setSelectedSkills(new Set());
   };
 
+  const handleOpenMentorProfile = (profile: DiscoverMentorProfile) => {
+    router.push(`/mentor/${encodeURIComponent(profile.username)}`);
+  };
+
   let bodyContent: React.ReactNode = null;
 
   if (loadingProfiles && page === 1) {
@@ -160,20 +180,33 @@ export default function DiscoverScreen() {
     );
   } else if (profiles.length === 0) {
     bodyContent = (
-      <View className="bg-white border border-gray-200 rounded-xl p-5">
-        <Text className="text-gray-900 font-semibold text-base">
-          No mentors found.
-        </Text>
-        <Text className="text-gray-500 mt-1">
-          Try a different search term or clear filters.
-        </Text>
+      <View>
+        <View className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-3">
+          <Text className="text-indigo-700 text-xs font-semibold uppercase tracking-wide">
+            Demo preview data
+          </Text>
+          <Text className="text-indigo-700/80 text-sm mt-1">
+            Temporary mentors are shown here until backend data is seeded.
+          </Text>
+        </View>
+        {visibleProfiles.map((profile) => (
+          <MentorCard
+            key={profile.id}
+            profile={profile}
+            onPress={handleOpenMentorProfile}
+          />
+        ))}
       </View>
     );
   } else {
     bodyContent = (
       <>
-        {profiles.map((profile) => (
-          <MentorCard key={profile.id} profile={profile} />
+        {visibleProfiles.map((profile) => (
+          <MentorCard
+            key={profile.id}
+            profile={profile}
+            onPress={handleOpenMentorProfile}
+          />
         ))}
 
         {hasMore && (
@@ -208,12 +241,16 @@ export default function DiscoverScreen() {
             </View>
             <TouchableOpacity
               onPress={() => setFilterModalOpen(true)}
-              className="h-11 px-3 bg-indigo-600 rounded-xl justify-center items-center flex-row"
+              className="relative h-12 w-12 bg-indigo-600 rounded-xl justify-center items-center"
             >
               <Ionicons name="options-outline" size={17} color="#ffffff" />
-              <Text className="text-white font-semibold ml-1">
-                {selectedSkills.size > 0 ? `(${selectedSkills.size})` : ""}
-              </Text>
+              {selectedSkills.size > 0 && (
+                <View className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-white items-center justify-center border border-indigo-600">
+                  <Text className="text-[10px] font-bold text-indigo-700">
+                    {selectedSkills.size}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -229,7 +266,7 @@ export default function DiscoverScreen() {
 
       <DiscoverFilterModal
         visible={isFilterModalOpen}
-        allSkills={skills}
+        allSkills={visibleSkills}
         selectedSkills={selectedSkills}
         onToggleSkill={toggleSkill}
         onClear={clearSkills}
