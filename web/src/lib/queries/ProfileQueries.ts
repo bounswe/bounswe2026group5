@@ -59,7 +59,7 @@ export interface UpdateProfileBody {
     location?: string
     is_visible?: boolean
     show_initials_only?: boolean
-    skills?: string[]
+    expertises?: string[]
 }
 
 // ---- Fetchers ----

@@ -3,11 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Input } from "#/components/ui/input.tsx"
 import { skillsQueryOptions } from "#/lib/queries/ProfileQueries.ts"
 
-type Skill = { name: string }
-
 type SkillPickerProps = {
-    selected: Skill[]
-    onChange: (skills: Skill[]) => void
+    selected: string[]
+    onChange: (skills: string[]) => void
 }
 
 export function SkillPicker({ selected, onChange }: SkillPickerProps) {
@@ -18,13 +16,13 @@ export function SkillPicker({ selected, onChange }: SkillPickerProps) {
         s.name.toLowerCase().includes(filter.toLowerCase())
     )
 
-    const isSelected = (skill: Skill) => selected.some(s => s.name === skill.name)
+    const isSelected = (skillName: string) => selected.includes(skillName)
 
-    const toggle = (skill: Skill) => {
-        if (isSelected(skill)) {
-            onChange(selected.filter(s => s.name !== skill.name))
+    const toggle = (skillName: string) => {
+        if (isSelected(skillName)) {
+            onChange(selected.filter(s => s !== skillName))
         } else {
-            onChange([...selected, skill])
+            onChange([...selected, skillName])
         }
     }
 
@@ -45,9 +43,9 @@ export function SkillPicker({ selected, onChange }: SkillPickerProps) {
                     filtered.map(skill => (
                         <button
                             key={skill.name}
-                            onClick={() => toggle(skill)}
+                            onClick={() => toggle(skill.name)}
                             className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all duration-150 ${
-                                isSelected(skill)
+                                isSelected(skill.name)
                                     ? 'bg-primary text-primary-foreground border-primary'
                                     : 'bg-background text-foreground border-border hover:border-primary/60 hover:text-primary'
                             }`}

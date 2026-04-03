@@ -18,15 +18,13 @@ export const Route = createFileRoute('/_onBoarding/gettingToKnowYou')({
 // Types
 // ---------------------------------------------------------------------------
 
-type Skill = { name: string }
-
 type UserAnswers = {
     firstName: string
     lastName: string
     primaryUsage: 'mentee' | 'mentor' | ''
     bio: string
-    learnSkills: Skill[]
-    teachSkills: Skill[]
+    learnSkills: string[]
+    teachSkills: string[]
 }
 
 type Question = {
@@ -154,7 +152,7 @@ function RouteComponent() {
                         {
                             display_name: `${answers.firstName} ${answers.lastName}`.trim(),
                             bio: answers.bio,
-                            skills,
+                            expertises:skills,
                         },
                         {
                             onSuccess: () => {

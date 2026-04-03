@@ -14,11 +14,10 @@ import { useUpdateProfile, useProfile } from '#/lib/queries/ProfileQueries.ts'
 
 // ── Types ─────────────────────────────────────────────────────────
 
-type Skill = { name: string }
 
 export interface EditProfileValues {
     bio: string
-    skills: Skill[]
+    skills: string[]
 }
 
 interface EditProfileModalProps {
@@ -39,7 +38,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
     const queryClient = useQueryClient()
 
     const [bio, setBio] = useState(initialValues.bio)
-    const [skills, setSkills] = useState<Skill[]>(initialValues.skills)
+    const [skills, setSkills] = useState<string[]>(initialValues.skills)
     const [title, setTitle] = useState(initialValues.title ?? '')
     const [hidden, setHidden] = useState(
         profileData && 'hidden' in profileData

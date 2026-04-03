@@ -65,10 +65,11 @@ function PublicProfileRoute() {
             hidden: profile.hidden,
             picture_url: profile.picture_url,
             title: profile.title,
-            expertises: profile.expertises,
+            expertises: profile.expertises ?? [],
             rating: profile.rating,
             total_mentee_count: profile.total_mentee_count,
-            available_slots: profile.available_slots,
+            available_slots: profile.available_slots ?? [],
+            username: username,
         }
         : {
             isMentor: false as const,
@@ -76,7 +77,8 @@ function PublicProfileRoute() {
             bio: profile.bio,
             hidden: profile.hidden,
             picture_url: profile.picture_url,
-            expertises: profile.expertises,
+            expertises: profile.expertises ?? [],
+            username: username
         }
 
     return (

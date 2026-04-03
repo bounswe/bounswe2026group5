@@ -2,11 +2,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Body, Heading, Muted } from '@/components/Typography'
-import { CalendarDays, Star, Sparkles, Pencil, EyeOff } from 'lucide-react'
+import { Star, Sparkles, Pencil, EyeOff } from 'lucide-react'
 import { EditProfileModal } from '#/components/profile/EditProfileModal.tsx'
 import { useState } from 'react'
 import type { AvailabilitySlot } from '#/lib/queries/ProfileQueries.ts'
 import { getInitials } from '#/lib/utils.ts'
+import {AvailabilityCalendar} from "#/components/profile/AvailabilityCalendar.tsx";
 
 interface BaseMappedProfile {
   full_name: string
@@ -14,6 +15,7 @@ interface BaseMappedProfile {
   hidden: boolean
   picture_url: string
   expertises: string[]
+  username: string,
 }
 
 interface MentorMappedProfile extends BaseMappedProfile {
@@ -34,18 +36,6 @@ interface ProfilePageViewProps {
   profile: MappedProfile
   isOwner: boolean
   isAuthenticatedViewer: boolean
-}
-
-function formatSlot(slot: AvailabilitySlot): string {
-  const date = new Date(`${slot.date}T${slot.startTime}`)
-  const end = new Date(`${slot.date}T${slot.endTime}`)
-  const day = date.toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  })
-  const time = `${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-  return `${day} • ${time}`
 }
 
 function HiddenField({ label }: { label: string }) {
@@ -141,7 +131,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
             bio: profile.bio ?? '',
             title: profile.isMentor ? profile.title : undefined,
             hidden: profile.hidden,
-            skills: profile.expertises.map(name => ({ name })),
+            skills: profile.expertises,
           }}
           onClose={() => setEditOpen(false)}
       />
@@ -209,9 +199,19 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                             <Badge key={skill} variant="secondary">{skill}</Badge>
                         ))}
                       </div>
+
                   )}
                 </CardContent>
+
               </Card>
+              {!isHidden && (
+                  <AvailabilityCalendar
+                      username={profile.username}
+                      slots={profile.available_slots}
+                      isOwner={isOwner}
+                      isAuthenticated={isAuthenticatedViewer}
+                  />
+              )}
             </div>
 
             <aside className="space-y-4">
@@ -243,28 +243,6 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                     <Muted className="text-xs uppercase tracking-wider">Open Slots</Muted>
                     <p className="text-2xl font-semibold text-ink mt-1">{openSlots.length}</p>
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-line bg-white/80 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4" />
-                    Availability
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {isHidden ? (
-                      <HiddenField label="Availability" />
-                  ) : openSlots.length === 0 ? (
-                      <Muted>No open slots right now.</Muted>
-                  ) : (
-                      openSlots.slice(0, 4).map(slot => (
-                          <div key={slot.id} className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink-soft">
-                            {formatSlot(slot)}
-                          </div>
-                      ))
-                  )}
                 </CardContent>
               </Card>
 
