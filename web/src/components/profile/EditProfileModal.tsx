@@ -3,9 +3,14 @@ import { createPortal } from 'react-dom'
 import { X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Muted } from '@/components/Typography'
 import { SkillPicker } from '@/components/SkillPicker'
+import { Switch } from '@/components/ui/switch'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
+import { useUpdateProfile, useProfile } from '#/lib/queries/ProfileQueries.ts'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -17,43 +22,57 @@ export interface EditProfileValues {
 }
 
 interface EditProfileModalProps {
-    mode: 'MENTOR' | 'MENTEE' | 'BOTH'
-    initialValues: EditProfileValues
+    mode: 'MENTOR' | 'MENTEE'
+    initialValues: EditProfileValues & {
+        title?: string
+        hidden?: boolean
+    }
     onClose: () => void
-    onSave: (values: EditProfileValues) => Promise<void>
 }
 
 // ── Component ─────────────────────────────────────────────────────
 
-export function EditProfileModal({
-                                     mode,
-                                     initialValues,
-                                     onClose,
-                                     onSave,
-                                 }: EditProfileModalProps) {
+export function EditProfileModal({ mode, initialValues, onClose }: EditProfileModalProps) {
+    const { data: me } = useQuery(meQueryOptions)
+    const { data: profileData } = useProfile(me?.username ?? '')
+    const updateProfile = useUpdateProfile(me?.username ?? '')
+    const queryClient = useQueryClient()
+
     const [bio, setBio] = useState(initialValues.bio)
     const [skills, setSkills] = useState<Skill[]>(initialValues.skills)
-    const [isSaving, setIsSaving] = useState(false)
+    const [title, setTitle] = useState(initialValues.title ?? '')
+    const [hidden, setHidden] = useState(
+        profileData && 'hidden' in profileData
+            ? profileData.hidden
+            : initialValues.hidden ?? false
+    )
 
-    const isMentee = mode === 'MENTEE'
+    const isMentor = mode === 'MENTOR'
 
-    const title = isMentee ? 'Edit Your Profile' : 'Edit Mentor Profile'
-    const subtitle = isMentee
-        ? 'Tell the community about yourself and what you want to learn.'
-        : 'Update your bio and the skills you can mentor others in.'
-    const skillsLabel = isMentee ? 'Eager to Learn' : 'Expertise'
-    const skillsHint = isMentee
-        ? 'Pick the topics you want to explore.'
-        : 'Pick the skills you can teach or guide others through.'
+    const modalTitle = isMentor ? 'Edit Mentor Profile' : 'Edit Your Profile'
+    const subtitle = isMentor
+        ? 'Update your bio and the skills you can mentor others in.'
+        : 'Tell the community about yourself and what you want to learn.'
+    const skillsLabel = isMentor ? 'Expertise' : 'Eager to Learn'
+    const skillsHint = isMentor
+        ? 'Pick the skills you can teach or guide others through.'
+        : 'Pick the topics you want to explore.'
 
-    async function handleSave() {
-        setIsSaving(true)
-        try {
-            await onSave({ bio, skills })
-            onClose()
-        } finally {
-            setIsSaving(false)
-        }
+    const handleSave = () => {
+        updateProfile.mutate(
+            {
+                bio,
+                title: isMentor ? title : undefined,
+                is_visible: !hidden,
+                skills: skills.map(s => s.name),
+            },
+            {
+                onSuccess: () => {
+                    queryClient.invalidateQueries({ queryKey: ['profiles', me?.username] })
+                    onClose()
+                },
+            }
+        )
     }
 
     return createPortal(
@@ -63,11 +82,8 @@ export function EditProfileModal({
             aria-modal="true"
             aria-labelledby="edit-modal-title"
         >
-            {/* Backdrop — no blur so the full page shows normally behind */}
-            <div
-                className="absolute inset-0 bg-black/40"
-                onClick={onClose}
-            />
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
             {/* Panel */}
             <div className="relative z-10 w-full max-w-lg rounded-3xl island-shell shadow-2xl flex flex-col max-h-[90vh]">
@@ -76,7 +92,7 @@ export function EditProfileModal({
                 <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-line shrink-0">
                     <div>
                         <h2 id="edit-modal-title" className="text-xl font-semibold text-ink leading-tight">
-                            {title}
+                            {modalTitle}
                         </h2>
                         <Muted className="text-sm mt-0.5">{subtitle}</Muted>
                     </div>
@@ -91,6 +107,22 @@ export function EditProfileModal({
 
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+                    {/* Title — mentor only */}
+                    {isMentor && (
+                        <div className="space-y-2">
+                            <Label htmlFor="title" className="text-sm font-medium text-ink">
+                                Title
+                            </Label>
+                            <Input
+                                id="title"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                placeholder="e.g. Senior Software Engineer at Acme"
+                                className="bg-background"
+                            />
+                        </div>
+                    )}
 
                     {/* Bio */}
                     <div className="space-y-2">
@@ -115,19 +147,31 @@ export function EditProfileModal({
                         <SkillPicker selected={skills} onChange={setSkills} />
                     </div>
 
+                    {/* Hidden toggle */}
+                    <div className="flex items-center gap-4 rounded-xl border border-line p-4 bg-black/[0.02]">
+                        <Switch
+                            checked={hidden}
+                            onCheckedChange={setHidden}
+                        />
+                        <div>
+                            <p className="text-sm font-medium text-ink">Hide my profile</p>
+                            <Muted className="text-xs">Only your name will be visible to others.</Muted>
+                        </div>
+                    </div>
+
                 </div>
 
                 {/* Footer */}
                 <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line shrink-0">
-                    <Button variant="outline" onClick={onClose} disabled={isSaving}>
+                    <Button variant="outline" onClick={onClose} disabled={updateProfile.isPending}>
                         Cancel
                     </Button>
                     <Button
                         className="bg-accent hover:bg-accent/90 text-white min-w-[90px]"
                         onClick={handleSave}
-                        disabled={isSaving}
+                        disabled={updateProfile.isPending}
                     >
-                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                        {updateProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
                     </Button>
                 </div>
 

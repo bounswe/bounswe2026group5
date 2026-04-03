@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useProfile } from '#/lib/queries/ProfileQueries.ts'
+import { useProfile, isMentorProfile } from '#/lib/queries/ProfileQueries.ts'
 import { useQuery } from '@tanstack/react-query'
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 import { ProfilePageView } from '@/components/profile/ProfilePageView'
@@ -57,27 +57,34 @@ function PublicProfileRoute() {
         )
     }
 
-    const mappedProfile = {
-        id: profile.id,
-        username: profile.username,
-        displayName: profile.display_name,
-        bio: profile.bio,
-        pictureUrl: profile.picture_url,
-        title: profile.title,
-        locationText: profile.location_text,
-        isVisible: profile.is_visible,
-        showInitialsOnly: profile.show_initials_only,
-        mentorshipMode: profile.mentorship_mode,
-        expertise: [],
-        availabilitySlots: [],
-    }
+    const mappedProfile = isMentorProfile(profile)
+        ? {
+            isMentor: true as const,
+            full_name: profile.full_name,
+            bio: profile.bio,
+            hidden: profile.hidden,
+            picture_url: profile.picture_url,
+            title: profile.title,
+            expertises: profile.expertises,
+            rating: profile.rating,
+            total_mentee_count: profile.total_mentee_count,
+            available_slots: profile.available_slots,
+        }
+        : {
+            isMentor: false as const,
+            full_name: profile.full_name,
+            bio: profile.bio,
+            hidden: profile.hidden,
+            picture_url: profile.picture_url,
+            expertises: profile.expertises,
+        }
 
     return (
         <div className="flex min-h-screen flex-col">
             {header}
             <ProfilePageView
                 profile={mappedProfile}
-                isOwner={me?.username === profile.username}
+                isOwner={me?.username === username}
                 isAuthenticatedViewer={isAuthenticated}
             />
             {footer}

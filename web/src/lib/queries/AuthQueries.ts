@@ -38,6 +38,7 @@ export const meQueryOptions = queryOptions({
         return await res.json() as Promise<User>
     },
     staleTime: 5 * 60 * 1000,
+    gcTime: Infinity
 })
 // ---- Plain functions ----
 
@@ -61,6 +62,7 @@ export function logout() {
     localStorage.removeItem('id')
     queryClient.setQueryData(['me'], null)
     router.navigate({ to: '/login' })
+    queryClient.clear()
 }
 
 // ---- API functions (used as mutationFn inside components) ----
