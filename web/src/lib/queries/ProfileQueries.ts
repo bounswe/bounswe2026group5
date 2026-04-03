@@ -60,6 +60,7 @@ export interface UpdateProfileBody {
     is_visible?: boolean
     show_initials_only?: boolean
     expertises?: string[]
+    // eager to learn
 }
 
 // ---- Fetchers ----
