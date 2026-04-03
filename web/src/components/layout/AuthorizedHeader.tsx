@@ -67,10 +67,14 @@ export function AuthorizedHeader() {
             >
               Discover
             </Link>
-            <div className="flex items-center gap-1 opacity-60 cursor-not-allowed">
-              <span className="text-sm font-medium text-ink-soft">Requests</span>
-              <span className="text-[10px] uppercase tracking-wider bg-accent-muted text-ink px-1.5 py-0.5 rounded-sm">Soon</span>
-            </div>
+            <Link
+              to="/connections"
+              search={{ mode: currentMode }}
+              activeProps={{ className: 'text-ink font-semibold' }}
+              className="text-sm font-medium text-ink-soft hover:text-ink transition-colors"
+            >
+              Connections
+            </Link>
           </nav>
         </div>
 

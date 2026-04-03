@@ -7,8 +7,9 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsNotBanned, IsUser
-from profiles.models import MentorshipMode, Profile
+from accounts.models import AppUsageMode
+from accounts.permissions import IsUser
+from profiles.models import Profile
 
 from .models import Match, MentorshipRequest
 from .serializers import (
@@ -29,7 +30,7 @@ _NO_PROFILE = {"detail": "Profile not found."}
 class MyRequestsListAPIView(APIView):
     """List all mentorship requests where the caller is mentor or mentee."""
 
-    permission_classes = [IsUser, IsNotBanned]
+    permission_classes = [IsUser]
 
     @extend_schema(
         responses={
@@ -50,9 +51,13 @@ class MyRequestsListAPIView(APIView):
             return Response([], status=status.HTTP_200_OK)
 
         qs = (
-            MentorshipRequest.objects.filter(mentor=profile)
-            | MentorshipRequest.objects.filter(mentee=profile)
-        ).order_by("-created_at").select_related("mentor", "mentee")
+            (
+                MentorshipRequest.objects.filter(mentor=profile)
+                | MentorshipRequest.objects.filter(mentee=profile)
+            )
+            .order_by("-created_at")
+            .select_related("mentor", "mentee")
+        )
 
         return Response(MentorshipRequestSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
@@ -60,7 +65,7 @@ class MyRequestsListAPIView(APIView):
 class CreateRequestAPIView(APIView):
     """Send a mentorship request to a mentor."""
 
-    permission_classes = [IsUser, IsNotBanned]
+    permission_classes = [IsUser]
 
     @extend_schema(
         request=MentorshipRequestCreateSerializer,
@@ -85,7 +90,7 @@ class CreateRequestAPIView(APIView):
         except Profile.DoesNotExist:
             return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
 
-        if mentee_profile.mentorship_mode not in {MentorshipMode.MENTEE, MentorshipMode.BOTH}:
+        if mentee_profile.user.app_usage_mode != AppUsageMode.MENTEE:
             return Response(_MENTEE_REQUIRED, status=status.HTTP_403_FORBIDDEN)
 
         serializer = MentorshipRequestCreateSerializer(
@@ -108,7 +113,7 @@ class CreateRequestAPIView(APIView):
 class RespondToRequestAPIView(APIView):
     """Accept or reject a pending mentorship request (mentor only)."""
 
-    permission_classes = [IsUser, IsNotBanned]
+    permission_classes = [IsUser]
 
     @extend_schema(
         request=RespondToRequestSerializer,
@@ -134,9 +139,9 @@ class RespondToRequestAPIView(APIView):
             return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            mentorship_request = MentorshipRequest.objects.select_related(
-                "mentor", "mentee"
-            ).get(id=request_id)
+            mentorship_request = MentorshipRequest.objects.select_related("mentor", "mentee").get(
+                id=request_id
+            )
         except MentorshipRequest.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
@@ -168,7 +173,7 @@ class RespondToRequestAPIView(APIView):
 class MyMatchesListAPIView(APIView):
     """List all active matches where the caller is mentor or mentee."""
 
-    permission_classes = [IsUser, IsNotBanned]
+    permission_classes = [IsUser]
 
     @extend_schema(
         responses={
@@ -189,7 +194,9 @@ class MyMatchesListAPIView(APIView):
             return Response([], status=status.HTTP_200_OK)
 
         qs = (
-            Match.objects.filter(mentor=profile) | Match.objects.filter(mentee=profile)
-        ).filter(is_active=True).select_related("mentor", "mentee", "request")
+            (Match.objects.filter(mentor=profile) | Match.objects.filter(mentee=profile))
+            .filter(is_active=True)
+            .select_related("mentor", "mentee", "request")
+        )
 
         return Response(MatchSerializer(qs, many=True).data, status=status.HTTP_200_OK)

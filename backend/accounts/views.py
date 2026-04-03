@@ -20,6 +20,7 @@ from .serializers import (
     LoginSerializer,
     LogoutSerializer,
     RegisterSerializer,
+    UserAppUsageModeUpdateSerializer,
     UserResponseSerializer,
 )
 
@@ -237,8 +238,42 @@ class AuthUserByIdAPIView(APIView):
         )
 
 
+class UserAppUsageModeAPIView(APIView):
+    """Update app usage mode for the authenticated user route."""
+
+    permission_classes = [IsAuthenticated, IsNotBanned]
+
+    @extend_schema(
+        request=UserAppUsageModeUpdateSerializer,
+        responses={
+            200: UserResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="User not found."),
+        },
+        description="Update app usage mode for the authenticated user.",
+        tags=["Auth"],
+    )
+    def patch(self, request: Request, user_id: UUID) -> Response:
+        request_user_id = getattr(request.user, "id", None)
+        if request_user_id is None:
+            request_user_id = getattr(request.user, "pk", None)
+
+        if str(request_user_id) != str(user_id):
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UserAppUsageModeUpdateSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            UserResponseSerializer(cast(User, request.user)).data,
+            status=status.HTTP_200_OK,
+        )
+
+
 class AdminUsersListAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAdmin]
 
     @extend_schema(
         responses={

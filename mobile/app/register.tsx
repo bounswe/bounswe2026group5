@@ -87,7 +87,6 @@ export default function RegisterScreen() {
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-
         {/* ── Top App Bar ── */}
         <View className="flex-row items-center justify-between px-4 py-3">
           <Pressable
@@ -115,7 +114,6 @@ export default function RegisterScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-
           {/* ── Hero ── */}
           <View className="mb-8">
             <Text
@@ -132,7 +130,6 @@ export default function RegisterScreen() {
 
           {/* ── Form ── */}
           <View className="gap-5">
-
             {/* Role Segmented Control */}
             <View className="gap-1.5">
               <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">

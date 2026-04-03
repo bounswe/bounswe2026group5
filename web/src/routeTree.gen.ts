@@ -22,6 +22,7 @@ import { Route as AuthorizedScheduleRouteImport } from './routes/_authorized/sch
 import { Route as AuthorizedProfileRouteImport } from './routes/_authorized/profile'
 import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/discover'
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
+import { Route as AuthorizedConnectionsRouteImport } from './routes/_authorized/connections'
 
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
   id: '/_unauthorized',
@@ -86,9 +87,15 @@ const AuthorizedDashboardRoute = AuthorizedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
+const AuthorizedConnectionsRoute = AuthorizedConnectionsRouteImport.update({
+  id: '/connections',
+  path: '/connections',
+  getParentRoute: () => AuthorizedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
   '/profile': typeof AuthorizedProfileRoute
@@ -101,6 +108,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
   '/profile': typeof AuthorizedProfileRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/_authorized': typeof AuthorizedRouteRouteWithChildren
   '/_onBoarding': typeof OnBoardingRouteRouteWithChildren
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
+  '/_authorized/connections': typeof AuthorizedConnectionsRoute
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
   '/_authorized/discover': typeof AuthorizedDiscoverRoute
   '/_authorized/profile': typeof AuthorizedProfileRoute
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/connections'
     | '/dashboard'
     | '/discover'
     | '/profile'
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/connections'
     | '/dashboard'
     | '/discover'
     | '/profile'
@@ -158,6 +169,7 @@ export interface FileRouteTypes {
     | '/_authorized'
     | '/_onBoarding'
     | '/_unauthorized'
+    | '/_authorized/connections'
     | '/_authorized/dashboard'
     | '/_authorized/discover'
     | '/_authorized/profile'
@@ -270,10 +282,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedDashboardRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
+    '/_authorized/connections': {
+      id: '/_authorized/connections'
+      path: '/connections'
+      fullPath: '/connections'
+      preLoaderRoute: typeof AuthorizedConnectionsRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
   }
 }
 
 interface AuthorizedRouteRouteChildren {
+  AuthorizedConnectionsRoute: typeof AuthorizedConnectionsRoute
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
   AuthorizedDiscoverRoute: typeof AuthorizedDiscoverRoute
   AuthorizedProfileRoute: typeof AuthorizedProfileRoute
@@ -281,6 +301,7 @@ interface AuthorizedRouteRouteChildren {
 }
 
 const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
+  AuthorizedConnectionsRoute: AuthorizedConnectionsRoute,
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,
   AuthorizedDiscoverRoute: AuthorizedDiscoverRoute,
   AuthorizedProfileRoute: AuthorizedProfileRoute,
