@@ -44,7 +44,6 @@ export default function RootLayout() {
       </View>
     );
   }
-
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
