@@ -515,9 +515,8 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         )
         q = q.strip() if isinstance(q, str) else ""
 
-        # Skills/topics are treated as a list of names (chips) that should match either:
-        # - the profile's `skills` array (case-sensitive exact match), or
-        # - the related `ExpertiseField` name via ProfileExpertise (case-insensitive exact match).
+        # Skills/topics are matched only via `ExpertiseField` (through ProfileExpertise)
+        # using case-insensitive exact match (`__iexact`), so behavior matches other filters.
         skill_terms = self._parse_terms(
             request,
             keys=["skill", "skills", "expertise", "topic"],
@@ -543,12 +542,14 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         )
 
         if q:
-            qs = qs.filter(
-                Q(display_name__icontains=q)
-                | Q(title__icontains=q)
-                | Q(bio__icontains=q)
-                | Q(skills__contains=[q])
-                | Q(profile_expertise__expertise_field__name__icontains=q)
+            qs = (
+                qs.filter(
+                    Q(display_name__icontains=q)
+                    | Q(title__icontains=q)
+                    | Q(bio__icontains=q)
+                    | Q(profile_expertise__expertise_field__name__icontains=q)
+                )
+                .distinct()
             )
 
         if skill_terms:
@@ -557,10 +558,7 @@ class PublicMentorProfilesSearchListAPIView(APIView):
                 expertise_field_q |= Q(
                     profile_expertise__expertise_field__name__iexact=term,
                 )
-
-            # ArrayField overlap is case-sensitive, so `skills__overlap` works for exact match.
-            skills_q = Q(skills__overlap=skill_terms)
-            qs = qs.filter(skills_q | expertise_field_q).distinct()
+            qs = qs.filter(expertise_field_q).distinct()
 
         # Optional: geographical distance filtering (lat/lng + distanceKm)
         try:
