@@ -1,17 +1,19 @@
 """Tests for mentorship domain models and API endpoints."""
 
+from datetime import timedelta
 from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode
 from mentorship.models import Match, MentorshipRequest
-from profiles.models import Profile
+from profiles.models import AvailabilitySlot, Profile
 
 User: Any = get_user_model()
 
@@ -134,7 +136,7 @@ class MentorshipRequestModelTests(TestCase):
 
         request_obj.status = MentorshipRequest.Status.ACCEPTED
         request_obj.save()
-        request_obj.refresh_from_db()
+        request_obj.refresh_from_db(from_queryset=None)
 
         self.assertIsNotNone(request_obj.responded_at)
 
@@ -147,7 +149,7 @@ class MentorshipRequestModelTests(TestCase):
 
         request_obj.status = MentorshipRequest.Status.REJECTED
         request_obj.save()
-        request_obj.refresh_from_db()
+        request_obj.refresh_from_db(from_queryset=None)
 
         self.assertIsNotNone(request_obj.responded_at)
 
@@ -162,7 +164,7 @@ class MentorshipRequestModelTests(TestCase):
 
         request_obj.status = MentorshipRequest.Status.PENDING
         request_obj.save()
-        request_obj.refresh_from_db()
+        request_obj.refresh_from_db(from_queryset=None)
 
         self.assertIsNone(request_obj.responded_at)
 
@@ -212,6 +214,20 @@ class MentorshipRequestAPIBaseTestCase(TestCase):
         self.other_profile = Profile.objects.create(
             user=self.other_user,
             display_name="API Other",
+        )
+
+        start_at = timezone.now() + timedelta(days=2)
+        self.mentor_slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=start_at,
+            end_at=start_at + timedelta(hours=1),
+        )
+
+        other_start_at = timezone.now() + timedelta(days=3)
+        self.other_mentor_slot = AvailabilitySlot.objects.create(
+            profile=self.other_profile,
+            start_at=other_start_at,
+            end_at=other_start_at + timedelta(hours=1),
         )
 
         self.mentor_client: Any = APIClient()
@@ -279,52 +295,97 @@ class CreateRequestAPIViewTests(MentorshipRequestAPIBaseTestCase):
 
     def test_unauthenticated_returns_401(self) -> None:
         response = self.anon_client.post(
-            self.REQUESTS_URL, {"mentor_username": self.mentor_profile.username}
+            self.REQUESTS_URL,
+            {
+                "mentor_username": self.mentor_profile.username,
+                "slot_id": str(self.mentor_slot.id),
+            },
         )
         self.assertEqual(response.status_code, 401)
 
     def test_mentee_creates_request_successfully(self) -> None:
         response = self.mentee_client.post(
             self.REQUESTS_URL,
-            {"mentor_username": self.mentor_profile.username, "cover_letter": "Hi!"},
+            {
+                "mentor_username": self.mentor_profile.username,
+                "slot_id": str(self.mentor_slot.id),
+                "cover_letter": "Hi!",
+            },
         )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["status"], "PENDING")
         self.assertEqual(response.data["mentor"]["username"], self.mentor_profile.username)
+        self.assertEqual(str(response.data["slot_id"]), str(self.mentor_slot.id))
         self.assertEqual(response.data["cover_letter"], "Hi!")
 
     def test_mentor_only_profile_cannot_send_request(self) -> None:
         response = self.mentor_client.post(
-            self.REQUESTS_URL, {"mentor_username": self.other_profile.username}
+            self.REQUESTS_URL,
+            {
+                "mentor_username": self.other_profile.username,
+                "slot_id": str(self.other_mentor_slot.id),
+            },
         )
         self.assertEqual(response.status_code, 403)
 
     def test_nonexistent_mentor_username_returns_400(self) -> None:
-        response = self.mentee_client.post(self.REQUESTS_URL, {"mentor_username": "does_not_exist"})
+        response = self.mentee_client.post(
+            self.REQUESTS_URL,
+            {"mentor_username": "does_not_exist", "slot_id": str(self.mentor_slot.id)},
+        )
         self.assertEqual(response.status_code, 400)
 
     def test_target_without_mentor_mode_returns_400(self) -> None:
         """Cannot send a request to a MENTEE-only profile."""
         response = self.mentee_client.post(
-            self.REQUESTS_URL, {"mentor_username": self.mentee_profile.username}
+            self.REQUESTS_URL,
+            {
+                "mentor_username": self.mentee_profile.username,
+                "slot_id": str(self.mentor_slot.id),
+            },
         )
         self.assertEqual(response.status_code, 400)
 
     def test_duplicate_pending_returns_400(self) -> None:
         self.mentee_client.post(
-            self.REQUESTS_URL, {"mentor_username": self.mentor_profile.username}
+            self.REQUESTS_URL,
+            {
+                "mentor_username": self.mentor_profile.username,
+                "slot_id": str(self.mentor_slot.id),
+            },
         )
         response = self.mentee_client.post(
-            self.REQUESTS_URL, {"mentor_username": self.mentor_profile.username}
+            self.REQUESTS_URL,
+            {
+                "mentor_username": self.mentor_profile.username,
+                "slot_id": str(self.mentor_slot.id),
+            },
         )
         self.assertEqual(response.status_code, 400)
 
     def test_cover_letter_optional(self) -> None:
         response = self.mentee_client.post(
-            self.REQUESTS_URL, {"mentor_username": self.mentor_profile.username}
+            self.REQUESTS_URL,
+            {
+                "mentor_username": self.mentor_profile.username,
+                "slot_id": str(self.mentor_slot.id),
+            },
         )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["cover_letter"], "")
+
+    def test_slot_belongs_to_requested_mentor(self) -> None:
+        """Selected slot must belong to the mentor in mentor_username."""
+        response = self.mentee_client.post(
+            self.REQUESTS_URL,
+            {
+                "mentor_username": self.mentor_profile.username,
+                "slot_id": str(self.other_mentor_slot.id),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("slot_id", response.data)
 
 
 class RespondToRequestAPIViewTests(MentorshipRequestAPIBaseTestCase):
@@ -335,6 +396,7 @@ class RespondToRequestAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.pending_request = MentorshipRequest.objects.create(
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
+            slot=self.mentor_slot,
         )
         self.respond_url = self._respond_url(self.pending_request.id)
 
@@ -354,6 +416,9 @@ class RespondToRequestAPIViewTests(MentorshipRequestAPIBaseTestCase):
         response = self.mentor_client.post(self.respond_url, {"action": "accept"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], "ACCEPTED")
+        self.mentor_slot.refresh_from_db(from_queryset=None)
+        self.assertTrue(self.mentor_slot.is_booked)
+        self.assertEqual(self.mentor_slot.booked_by, self.mentee_user)
         self.assertTrue(Match.objects.filter(request=self.pending_request).exists())
 
     def test_mentor_rejects_request(self) -> None:

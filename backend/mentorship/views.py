@@ -1,5 +1,7 @@
 """Views for mentorship request and match API endpoints."""
 
+from typing import Any, cast
+
 from django.db import IntegrityError, transaction
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -9,7 +11,13 @@ from rest_framework.views import APIView
 
 from accounts.models import AppUsageMode
 from accounts.permissions import IsUser
-from profiles.models import Profile
+from profiles.models import AvailabilitySlot, Profile
+from profiles.services import (
+    OwnSlotBookingError,
+    SlotAlreadyBookedError,
+    SlotInPastError,
+    book_availability_slot,
+)
 
 from .models import Match, MentorshipRequest
 from .serializers import (
@@ -25,6 +33,7 @@ _DUPLICATE_PENDING = {"detail": "You already have a pending request with this me
 _NOT_PENDING = {"detail": "Only pending requests can be accepted or rejected."}
 _MENTEE_REQUIRED = {"detail": "You need a MENTEE or BOTH profile to send mentorship requests."}
 _NO_PROFILE = {"detail": "Profile not found."}
+_SLOT_BOOKING_FAILED = {"detail": "Selected slot could not be booked while accepting this request."}
 
 
 class MyRequestsListAPIView(APIView):
@@ -56,7 +65,7 @@ class MyRequestsListAPIView(APIView):
                 | MentorshipRequest.objects.filter(mentee=profile)
             )
             .order_by("-created_at")
-            .select_related("mentor", "mentee")
+            .select_related("mentor", "mentee", "slot")
         )
 
         return Response(MentorshipRequestSerializer(qs, many=True).data, status=status.HTTP_200_OK)
@@ -139,9 +148,9 @@ class RespondToRequestAPIView(APIView):
             return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            mentorship_request = MentorshipRequest.objects.select_related("mentor", "mentee").get(
-                id=request_id
-            )
+            mentorship_request = MentorshipRequest.objects.select_related(
+                "mentor", "mentee", "slot"
+            ).get(id=request_id)
         except MentorshipRequest.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
@@ -153,14 +162,34 @@ class RespondToRequestAPIView(APIView):
 
         serializer = RespondToRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict[str, Any], serializer.validated_data)
+        action = validated_data.get("action")
 
         new_status = (
             MentorshipRequest.Status.ACCEPTED
-            if serializer.validated_data["action"] == "accept"
+            if action == "accept"
             else MentorshipRequest.Status.REJECTED
         )
 
         with transaction.atomic():
+            if new_status == MentorshipRequest.Status.ACCEPTED:
+                selected_slot = mentorship_request.slot
+                if selected_slot is None:
+                    return Response(_SLOT_BOOKING_FAILED, status=status.HTTP_400_BAD_REQUEST)
+
+                try:
+                    book_availability_slot(
+                        profile=mentorship_request.mentor,
+                        slot_id=selected_slot.id,
+                        actor=mentorship_request.mentee.user,
+                    )
+                except (SlotAlreadyBookedError, SlotInPastError):
+                    return Response(_SLOT_BOOKING_FAILED, status=status.HTTP_400_BAD_REQUEST)
+                except OwnSlotBookingError:
+                    return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+                except AvailabilitySlot.DoesNotExist:
+                    return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
             mentorship_request.status = new_status
             mentorship_request.save()
 

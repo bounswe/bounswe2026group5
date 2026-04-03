@@ -1,6 +1,9 @@
 """Views for profile self-service API endpoints."""
 
+from django.contrib.gis.geos import Point
+from django.contrib.gis.measure import D
 from django.db import IntegrityError
+from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -20,6 +23,8 @@ from .serializers import (
     MentorProfileResponseSerializer,
     ProfileResponseSerializer,
     ProfileUpdateSerializer,
+    PublicMentorProfileSearchListResponseSerializer,
+    PublicMentorProfileSearchResultSerializer,
     SkillSerializer,
 )
 from .services import (
@@ -407,3 +412,200 @@ class AvailabilitySlotCancelBookingAPIView(ProfileLookupMixin, APIView):
             return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
 
         return Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_200_OK)
+
+
+class PublicMentorProfilesSearchListAPIView(APIView):
+    """Public listing of visible mentor profiles with search and filtering."""
+
+    permission_classes = [AllowAny]
+
+    @staticmethod
+    def _parse_terms(request: Request, keys: list[str]) -> list[str]:
+        """Parse terms from comma-separated or repeated query params."""
+        terms: list[str] = []
+        for key in keys:
+            for raw in request.query_params.getlist(key):
+                for part in raw.split(","):
+                    value = part.strip()
+                    if value:
+                        terms.append(value)
+        # Keep stable order while deduplicating.
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for t in terms:
+            if t.lower() not in seen:
+                seen.add(t.lower())
+                deduped.append(t)
+        return deduped
+
+    @staticmethod
+    def _skills_match_query(skills: list[str], query: str) -> bool:
+        """Return True when any skill contains the query text (case-insensitive)."""
+        q = query.strip().lower()
+        if not q:
+            return False
+        return any(q in (skill or "").lower() for skill in (skills or []))
+
+    @staticmethod
+    def _has_any_skill(skills: list[str], terms: list[str]) -> bool:
+        """Return True when any skill exactly matches one term (case-insensitive)."""
+        if not terms:
+            return False
+        wanted = {term.strip().lower() for term in terms if term.strip()}
+        if not wanted:
+            return False
+        return any((skill or "").lower() in wanted for skill in (skills or []))
+
+    @staticmethod
+    def _parse_mode(request: Request) -> list[str]:
+        """Map `mentorshipMode` query param to internal app usage mode values."""
+        raw_mode = (
+            request.query_params.get("mentorshipMode")
+            or request.query_params.get("mentorship_mode")
+            or request.query_params.get("mode")
+        )
+        if not raw_mode:
+            return [AppUsageMode.MENTOR]
+
+        mode = raw_mode.strip().upper()
+        if mode == AppUsageMode.MENTOR:
+            return [AppUsageMode.MENTOR]
+        if mode == AppUsageMode.MENTEE:
+            return [AppUsageMode.MENTEE]
+
+        # "BOTH" isn't a first-class value in our backend, but we treat it as mentor.
+        if mode == "BOTH":
+            return [AppUsageMode.MENTOR]
+
+        raise ValueError("Invalid mentorshipMode. Expected MENTOR, MENTEE, or BOTH.")
+
+    @staticmethod
+    def _maybe_parse_coordinates(request: Request) -> tuple[float, float] | None:
+        """Parse lat/lng query params if present."""
+        lat_raw = request.query_params.get("lat") or request.query_params.get("latitude")
+        lng_raw = request.query_params.get("lng") or request.query_params.get("longitude")
+        if lat_raw is None and lng_raw is None:
+            return None
+        if lat_raw is None or lng_raw is None:
+            raise ValueError("Both `lat`/`latitude` and `lng`/`longitude` are required.")
+
+        try:
+            lat = float(lat_raw)
+            lng = float(lng_raw)
+        except (TypeError, ValueError):
+            raise ValueError("`lat`/`lng` must be valid numbers.")
+
+        if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+            raise ValueError("`lat` must be between -90 and 90; `lng` between -180 and 180.")
+        return lat, lng
+
+    @staticmethod
+    def _maybe_parse_distance_km(request: Request) -> float | None:
+        for key in ("distanceKm", "maxDistanceKm", "radiusKm", "distance_km", "radius_km"):
+            raw = request.query_params.get(key)
+            if raw is None:
+                continue
+            try:
+                return float(raw)
+            except (TypeError, ValueError):
+                raise ValueError(f"`{key}` must be a valid number.")
+        return None
+
+    @extend_schema(
+        operation_id="profiles_public_mentor_search",
+        responses={200: PublicMentorProfileSearchListResponseSerializer},
+        description=(
+            "Public listing of visible mentor profiles with optional search and filters. "
+            "Supports pagination via `page` and `pageSize` query params."
+        ),
+        tags=["Profiles"],
+    )
+    def get(self, request: Request) -> Response:
+        try:
+            mentorship_modes = self._parse_mode(request)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        q = (
+            request.query_params.get("q")
+            or request.query_params.get("name")
+            or request.query_params.get("keyword")
+        )
+        q = q.strip() if isinstance(q, str) else ""
+
+        # Skills/topics are matched through Profile.skills using case-insensitive checks.
+        skill_terms = self._parse_terms(
+            request,
+            keys=["skill", "skills", "expertise", "topic"],
+        )
+
+        try:
+            page = int(request.query_params.get("page", 1))
+            page_size = int(request.query_params.get("pageSize", 6))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "`page` and `pageSize` must be integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        page = max(page, 1)
+        page_size = max(page_size, 1)
+        page_size = min(page_size, 50)
+
+        qs = Profile.objects.select_related("user").filter(
+            is_visible=True, user__app_usage_mode__in=mentorship_modes
+        )
+
+        if q:
+            base_qs = qs
+            text_match_ids = set(
+                base_qs.filter(
+                    Q(display_name__icontains=q) | Q(title__icontains=q) | Q(bio__icontains=q)
+                ).values_list("id", flat=True)
+            )
+            skill_match_ids = {
+                profile_id
+                for profile_id, profile_skills in base_qs.values_list("id", "skills")
+                if self._skills_match_query(profile_skills or [], q)
+            }
+            qs = qs.filter(id__in=text_match_ids | skill_match_ids)
+
+        if skill_terms:
+            skill_match_ids = {
+                profile_id
+                for profile_id, profile_skills in qs.values_list("id", "skills")
+                if self._has_any_skill(profile_skills or [], skill_terms)
+            }
+            qs = qs.filter(id__in=skill_match_ids)
+
+        # Optional: geographical distance filtering (lat/lng + distanceKm)
+        try:
+            coords = self._maybe_parse_coordinates(request)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        distance_km = None
+        try:
+            distance_km = self._maybe_parse_distance_km(request)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if coords is not None and distance_km is not None:
+            lat, lng = coords
+            point = Point(lng, lat, srid=4326)
+            qs = qs.filter(location__distance_lte=(point, D(km=distance_km)))
+
+        total = qs.count()
+        offset = (page - 1) * page_size
+        items = qs[offset : offset + page_size]
+
+        serializer = PublicMentorProfileSearchResultSerializer(items, many=True)
+        return Response(
+            {
+                "count": total,
+                "page": page,
+                "pageSize": page_size,
+                "results": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )

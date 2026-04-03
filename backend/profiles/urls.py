@@ -7,11 +7,13 @@ from .views import (
     AvailabilitySlotCancelBookingAPIView,
     AvailabilitySlotDetailAPIView,
     AvailabilitySlotListCreateAPIView,
+    PublicMentorProfilesSearchListAPIView,
     ProfileByUsernameAPIView,
     SkillListAPIView,
 )
 
 urlpatterns = [
+    path("", PublicMentorProfilesSearchListAPIView.as_view(), name="mentor-profiles-search"),
     path("skills/", SkillListAPIView.as_view(), name="skill-list"),
     path(
         "<str:username>/availability-slots/",
