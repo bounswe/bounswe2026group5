@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -55,16 +56,16 @@ export function EditProfileModal({
         }
     }
 
-    return (
+    return createPortal(
         <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-modal-title"
         >
-            {/* Backdrop */}
+            {/* Backdrop — no blur so the full page shows normally behind */}
             <div
-                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                className="absolute inset-0 bg-black/40"
                 onClick={onClose}
             />
 
@@ -131,6 +132,7 @@ export function EditProfileModal({
                 </div>
 
             </div>
-        </div>
+        </div>,
+        document.body
     )
 }

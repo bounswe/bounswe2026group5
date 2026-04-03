@@ -3,9 +3,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Body, Heading, Muted } from '@/components/Typography'
 import type { MockAvailabilitySlot, MockProfileDetails } from '@/lib/mocks/profiles'
-import { CalendarDays, MapPin, Star, Sparkles } from 'lucide-react'
-import {EditProfileModal} from "#/components/profile/EditProfileModal.tsx";
-import {useState} from "react";
+import { CalendarDays, MapPin, Star, Sparkles, Pencil } from 'lucide-react'
+import { EditProfileModal } from '#/components/profile/EditProfileModal.tsx'
+import { useState } from 'react'
 
 interface ProfilePageViewProps {
   profile: MockProfileDetails
@@ -75,6 +75,15 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
             {!profile.isVisible && (
                 <Badge variant="secondary">Private</Badge>
             )}
+            {isOwner && (
+                <button
+                    onClick={() => setEditOpen(true)}
+                    className="rounded-lg p-1.5 text-ink-soft hover:text-ink hover:bg-accent-muted transition-colors"
+                    aria-label="Edit profile"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+            )}
           </div>
 
           {profile.title && <Body className="text-ink-soft">{profile.title}</Body>}
@@ -106,8 +115,8 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
       <Card className="border-line bg-white/80 shadow-sm">
         <CardContent className="pt-4 space-y-2">
           {isOwner ? (
-              <Button className="w-full" variant="default" onClick={() => {setEditOpen(true)}}>
-                Edit Profile (Soon)
+              <Button className="w-full" variant="default" onClick={() => setEditOpen(true)}>
+                Edit Profile
               </Button>
           ) : isAuthenticatedViewer ? (
               <Button className="w-full bg-accent hover:bg-accent/90 text-white">
@@ -122,6 +131,17 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
       </Card>
   )
 
+  const editModal = editOpen && (
+      <EditProfileModal
+          mode={profile.mentorshipMode}
+          initialValues={{ bio: profile.bio ?? '', skills: profile.expertise.map(e => ({ name: e.name })) }}
+          onClose={() => setEditOpen(false)}
+          onSave={async (_values) => {
+            // call your API here
+          }}
+      />
+  )
+
   // ── MENTEE layout ──────────────────────────────────────────────
   if (isMentee) {
     return (
@@ -132,7 +152,6 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                 {avatarBlock}
                 {bioCard}
 
-                {/* Eager to Learn */}
                 <Card className="border-line bg-white/70 shadow-sm">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
@@ -145,10 +164,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                         <Muted>No learning interests listed yet.</Muted>
                     )}
                     {profile.expertise.map((item) => (
-                        <article
-                            key={item.id}
-                            className="rounded-xl border border-line p-4 bg-white"
-                        >
+                        <article key={item.id} className="rounded-xl border border-line p-4 bg-white">
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
                               <h3 className="text-base font-semibold text-ink">{item.name}</h3>
@@ -167,16 +183,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
               </aside>
             </div>
           </section>
-          {editOpen && (
-              <EditProfileModal
-                  mode={profile.mentorshipMode}
-                  initialValues={{ bio: profile.bio ?? '', skills: profile.expertise.map(e => ({ name: e.name })) }}
-                  onClose={() => setEditOpen(false)}
-                  onSave={async (values) => {
-                    // call your API here
-                  }}
-              />
-          )}
+          {editModal}
         </main>
     )
   }
@@ -199,10 +206,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                       <Muted>No expertise fields are listed yet.</Muted>
                   )}
                   {profile.expertise.map((item) => (
-                      <article
-                          key={item.id}
-                          className="rounded-xl border border-line p-4 bg-white"
-                      >
+                      <article key={item.id} className="rounded-xl border border-line p-4 bg-white">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
                             <h3 className="text-base font-semibold text-ink">{item.name}</h3>
@@ -264,16 +268,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
             </aside>
           </div>
         </section>
-        {editOpen && (
-            <EditProfileModal
-                mode={profile.mentorshipMode}
-                initialValues={{ bio: profile.bio ?? '', skills: profile.expertise.map(e => ({ name: e.name })) }}
-                onClose={() => setEditOpen(false)}
-                onSave={async (values) => {
-                  // call your API here
-                }}
-            />
-        )}
+        {editModal}
       </main>
   )
 }
