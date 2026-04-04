@@ -47,21 +47,24 @@ class MentorshipRequestSerializer(serializers.ModelSerializer):
 
     def get_slot_date(self, obj: MentorshipRequest) -> str | None:
         """Return selected slot date in local timezone."""
-        if obj.slot is None:
+        slot_start_at = obj.slot.start_at if obj.slot is not None else obj.initial_session_start_at
+        if slot_start_at is None:
             return None
-        return timezone.localtime(obj.slot.start_at).date().isoformat()
+        return timezone.localtime(slot_start_at).date().isoformat()
 
     def get_slot_start_time(self, obj: MentorshipRequest) -> str | None:
         """Return selected slot start time in local timezone."""
-        if obj.slot is None:
+        slot_start_at = obj.slot.start_at if obj.slot is not None else obj.initial_session_start_at
+        if slot_start_at is None:
             return None
-        return timezone.localtime(obj.slot.start_at).time().replace(microsecond=0).isoformat()
+        return timezone.localtime(slot_start_at).time().replace(microsecond=0).isoformat()
 
     def get_slot_end_time(self, obj: MentorshipRequest) -> str | None:
         """Return selected slot end time in local timezone."""
-        if obj.slot is None:
+        slot_end_at = obj.slot.end_at if obj.slot is not None else obj.initial_session_end_at
+        if slot_end_at is None:
             return None
-        return timezone.localtime(obj.slot.end_at).time().replace(microsecond=0).isoformat()
+        return timezone.localtime(slot_end_at).time().replace(microsecond=0).isoformat()
 
 
 class MentorshipRequestCreateSerializer(serializers.Serializer):

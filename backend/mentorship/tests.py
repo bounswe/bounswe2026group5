@@ -289,6 +289,36 @@ class MyRequestsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 2)
 
+    def test_slot_time_fields_fallback_to_snapshot_when_slot_unlinked(self) -> None:
+        """Request response keeps first-session time values after slot unlink."""
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=self.mentor_slot,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        request_obj.slot = None
+        request_obj.save(update_fields=["slot"])
+
+        response = self.mentee_client.get(self.REQUESTS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(str(response.data[0]["id"]), str(request_obj.id))
+        slot_id_value = response.data[0].get("slot_id", response.data[0].get("slotId"))
+        self.assertIsNone(slot_id_value)
+        self.assertEqual(
+            response.data[0]["slot_date"],
+            timezone.localtime(self.mentor_slot.start_at).date().isoformat(),
+        )
+        self.assertEqual(
+            response.data[0]["slot_start_time"],
+            timezone.localtime(self.mentor_slot.start_at).time().replace(microsecond=0).isoformat(),
+        )
+        self.assertEqual(
+            response.data[0]["slot_end_time"],
+            timezone.localtime(self.mentor_slot.end_at).time().replace(microsecond=0).isoformat(),
+        )
+
 
 class CreateRequestAPIViewTests(MentorshipRequestAPIBaseTestCase):
     """Tests for POST /api/mentorship/requests/."""

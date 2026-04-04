@@ -2,8 +2,9 @@
 
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q
+from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -338,7 +339,61 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
         if slot is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
-        slot.delete()
+        try:
+            from mentorship.models import MentorshipRequest
+
+            with transaction.atomic():
+                locked_slot = AvailabilitySlot.objects.select_for_update().get(id=slot.id)
+
+                if locked_slot.is_booked:
+                    return Response(
+                        {"detail": ("Cannot delete a booked slot. Cancel the booking first.")},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                has_pending_requests = MentorshipRequest.objects.filter(
+                    slot=locked_slot,
+                    status=MentorshipRequest.Status.PENDING,
+                ).exists()
+                if has_pending_requests:
+                    return Response(
+                        {
+                            "detail": (
+                                "Cannot delete this slot while it has pending mentorship "
+                                "requests."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                non_pending_requests = MentorshipRequest.objects.select_for_update().filter(
+                    slot=locked_slot
+                )
+                for request_obj in non_pending_requests:
+                    if request_obj.initial_session_start_at is None:
+                        request_obj.initial_session_start_at = locked_slot.start_at
+                    if request_obj.initial_session_end_at is None:
+                        request_obj.initial_session_end_at = locked_slot.end_at
+                    request_obj.slot = None
+                    request_obj.save(
+                        update_fields=[
+                            "slot",
+                            "initial_session_start_at",
+                            "initial_session_end_at",
+                        ]
+                    )
+
+                locked_slot.delete()
+        except ProtectedError:
+            return Response(
+                {
+                    "detail": (
+                        "Cannot delete this slot while it is still referenced by an "
+                        "existing mentorship request."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
