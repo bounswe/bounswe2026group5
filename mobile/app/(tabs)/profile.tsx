@@ -56,10 +56,15 @@ export default function ProfileScreen() {
   const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
   const updateProfileMutation = useUpdateOwnProfileMutation();
 
-  const showExpertise = useProfileVisibilityStore((state) => state.showExpertise);
-  const showEagerToLearn = useProfileVisibilityStore((state) => state.showEagerToLearn);
-  const showAvailability = useProfileVisibilityStore((state) => state.showAvailability);
-  const showOfferings = useProfileVisibilityStore((state) => state.showOfferings);
+  const showExpertise = useProfileVisibilityStore(
+    (state) => state.showExpertise,
+  );
+  const showEagerToLearn = useProfileVisibilityStore(
+    (state) => state.showEagerToLearn,
+  );
+  const showAvailability = useProfileVisibilityStore(
+    (state) => state.showAvailability,
+  );
 
   const [availabilityData, setAvailabilityData] = useState<
     { day: string; times: string[] }[]
@@ -89,8 +94,10 @@ export default function ProfileScreen() {
 
   const hasExpertiseData = expertiseData.length > 0;
   const hasEagerToLearnData = eagerToLearnData.length > 0;
-  const isMentorMode = includesMentor(appUsageMode) || (!appUsageMode && hasExpertiseData);
-  const isMenteeMode = includesMentee(appUsageMode) || (!appUsageMode && hasEagerToLearnData);
+  const isMentorMode =
+    includesMentor(appUsageMode) || (!appUsageMode && hasExpertiseData);
+  const isMenteeMode =
+    includesMentee(appUsageMode) || (!appUsageMode && hasEagerToLearnData);
 
   useEffect(() => {
     let mounted = true;
@@ -101,11 +108,14 @@ export default function ProfileScreen() {
       };
     }
 
-    fetch(`${API_BASE_URL}/api/profiles/${encodeURIComponent(currentUsername)}/`, {
-      headers: {
-        Accept: "application/json",
+    fetch(
+      `${API_BASE_URL}/api/profiles/${encodeURIComponent(currentUsername)}/`,
+      {
+        headers: {
+          Accept: "application/json",
+        },
       },
-    })
+    )
       .then(async (response) => {
         if (!response.ok) {
           throw new Error("Failed to load profile.");
@@ -238,7 +248,9 @@ export default function ProfileScreen() {
     } catch (error) {
       Alert.alert(
         "Profile Update Failed",
-        error instanceof Error ? error.message : "Could not update profile details.",
+        error instanceof Error
+          ? error.message
+          : "Could not update profile details.",
       );
     }
   };
@@ -305,32 +317,16 @@ export default function ProfileScreen() {
         <ProfileHeader
           name={userData.name}
           bio={userData.bio}
+          roleBadges={[
+            ...(isMentorMode ? (["MENTOR"] as const) : []),
+            ...(isMenteeMode ? (["MENTEE"] as const) : []),
+          ]}
           rating={PROFILE_DEFAULTS.rating}
           reviewCount={PROFILE_DEFAULTS.reviewCount}
           onEdit={() => setEditProfileModalOpen(true)}
         />
 
         <View className="px-4 mt-4">
-          <View className="mb-4">
-            <Text className="text-lg font-bold text-gray-900 mb-2">Profile Role</Text>
-            <View className="flex-row gap-2">
-              {isMentorMode && (
-                <View className="px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-100">
-                  <Text className="text-indigo-700 font-semibold text-xs uppercase tracking-wide">
-                    Mentor
-                  </Text>
-                </View>
-              )}
-              {isMenteeMode && (
-                <View className="px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100">
-                  <Text className="text-emerald-700 font-semibold text-xs uppercase tracking-wide">
-                    Mentee
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-
           <View className="mb-6">
             {isMentorMode && showExpertise && (
               <SkillsCloud
@@ -380,20 +376,6 @@ export default function ProfileScreen() {
               schedule={availabilityData}
               onEdit={() => setAvailabilityModalOpen(true)}
             />
-          )}
-
-          {!showOfferings && (
-            <View className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-              <Text className="text-amber-800 font-semibold text-sm">
-                Mentorship offerings are hidden in MVP and will return in a later release.
-              </Text>
-            </View>
-          )}
-
-          {showOfferings && (
-            <View className="-mx-4">
-              <Text className="px-4 text-gray-500">Offerings are currently disabled.</Text>
-            </View>
           )}
         </View>
       </ScrollView>

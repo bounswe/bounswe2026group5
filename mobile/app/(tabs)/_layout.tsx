@@ -42,18 +42,18 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="discover"
-        options={{
-          title: "Discover",
-          tabBarIcon: renderDiscoverIcon,
-        }}
-      />
-
-      <Tabs.Screen
         name="schedule"
         options={{
           title: "Schedule",
           tabBarIcon: renderScheduleIcon,
+        }}
+      />
+
+      <Tabs.Screen
+        name="discover"
+        options={{
+          title: "Discover",
+          tabBarIcon: renderDiscoverIcon,
         }}
       />
 

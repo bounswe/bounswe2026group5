@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 interface ProfileHeaderProps {
   name: string;
   bio: string;
+  roleBadges?: Array<"MENTOR" | "MENTEE">;
   rating?: number;
   reviewCount?: number;
   // NEW: Impact Stats
@@ -18,6 +19,7 @@ interface ProfileHeaderProps {
 export function ProfileHeader({
   name,
   bio,
+  roleBadges = [],
   rating,
   reviewCount,
   totalSessions = 24, // Mock default
@@ -74,9 +76,27 @@ export function ProfileHeader({
         </View>
       </View>
 
-      {/* 3. Name */}
+      {/* 3. Name + Role badges */}
       <View className="px-4 mt-2 items-start">
-        <Text className="text-2xl font-extrabold text-gray-900">{name}</Text>
+        <View className="flex-row items-center flex-wrap gap-2">
+          <Text className="text-2xl font-extrabold text-gray-900">{name}</Text>
+
+          {roleBadges.includes("MENTOR") && (
+            <View className="px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100">
+              <Text className="text-indigo-700 font-semibold text-xs uppercase tracking-wide">
+                Mentor
+              </Text>
+            </View>
+          )}
+
+          {roleBadges.includes("MENTEE") && (
+            <View className="px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100">
+              <Text className="text-emerald-700 font-semibold text-xs uppercase tracking-wide">
+                Mentee
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* 4. Bio */}

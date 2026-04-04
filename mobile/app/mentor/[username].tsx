@@ -7,6 +7,7 @@ import {
   Platform,
   ScrollView,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -19,10 +20,6 @@ import {
 } from "@/components/profile/AvailabilityPreview";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
-import {
-  SlotRequestComposer,
-  type RequestableSlot,
-} from "@/components/profile/SlotRequestComposer";
 import { useCreateMentorshipRequestMutation } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
 
@@ -63,6 +60,12 @@ function groupSlotsByWeekday(
   return Array.from(grouped.entries()).map(([day, times]) => ({ day, times }));
 }
 
+type SelectedSlot = {
+  id: string;
+  day: string;
+  label: string;
+};
+
 export default function MentorProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -77,6 +80,8 @@ export default function MentorProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requestFeedback, setRequestFeedback] = useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
+  const [coverLetter, setCoverLetter] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -134,12 +139,39 @@ export default function MentorProfileScreen() {
     [profile?.available_slots],
   );
 
-  const canRequestMentorship = appUsageMode === "MENTEE" || appUsageMode === "BOTH";
+  const canRequestMentorship =
+    appUsageMode === "MENTEE" || appUsageMode === "BOTH";
 
-  const requestableSlots = useMemo<RequestableSlot[]>(
-    () => profile?.available_slots ?? [],
-    [profile?.available_slots],
-  );
+  const slotLookup = useMemo(() => {
+    const lookup = new Map<string, string>();
+    (profile?.available_slots ?? []).forEach((slot) => {
+      const day = WEEKDAY_FORMATTER.format(new Date(`${slot.date}T00:00:00`));
+      const range = `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`;
+      lookup.set(`${day}|${range}`, slot.id);
+    });
+    return lookup;
+  }, [profile?.available_slots]);
+
+  const handleSelectSlot = (payload: { day: string; time: string }) => {
+    if (!canRequestMentorship) {
+      setRequestFeedback("Enable mentee mode in Settings to send requests.");
+      return;
+    }
+
+    const slotId = slotLookup.get(`${payload.day}|${payload.time}`);
+    if (!slotId) {
+      setRequestFeedback(
+        "Selected slot could not be resolved. Please refresh and try again.",
+      );
+      return;
+    }
+
+    setSelectedSlot({
+      id: slotId,
+      day: payload.day,
+      label: payload.time,
+    });
+  };
 
   const handleCreateRequest = async (payload: {
     slotId: string;
@@ -167,6 +199,8 @@ export default function MentorProfileScreen() {
           : prev,
       );
       setRequestFeedback("Request sent successfully.");
+      setSelectedSlot(null);
+      setCoverLetter("");
     } catch (mutationError) {
       setRequestFeedback(
         mutationError instanceof Error
@@ -174,6 +208,24 @@ export default function MentorProfileScreen() {
           : "Failed to send mentorship request.",
       );
     }
+  };
+
+  const submitCoverLetter = async () => {
+    if (!selectedSlot) {
+      return;
+    }
+
+    if (coverLetter.trim().length < 10) {
+      setRequestFeedback(
+        "Please provide at least 10 characters about what you want to discuss.",
+      );
+      return;
+    }
+
+    await handleCreateRequest({
+      slotId: selectedSlot.id,
+      coverLetter,
+    });
   };
 
   let bodyContent: React.ReactNode = null;
@@ -217,15 +269,74 @@ export default function MentorProfileScreen() {
             variant="mentor"
           />
 
-          <AvailabilityPreview schedule={availability} />
+          {!canRequestMentorship && (
+            <View className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">
+              <Text className="text-amber-800 text-sm font-semibold">
+                Enable mentee mode in Settings to send requests.
+              </Text>
+            </View>
+          )}
 
-          <SlotRequestComposer
-            canRequest={canRequestMentorship}
-            slots={requestableSlots}
-            isSubmitting={createRequestMutation.isPending}
-            feedbackMessage={requestFeedback}
-            onSubmit={handleCreateRequest}
+          {!!requestFeedback && (
+            <Text className="text-sm text-gray-600 mb-4">
+              {requestFeedback}
+            </Text>
+          )}
+
+          <AvailabilityPreview
+            schedule={availability}
+            selectedSlot={
+              selectedSlot
+                ? {
+                    day: selectedSlot.day,
+                    time: selectedSlot.label,
+                  }
+                : null
+            }
+            onSelectSlot={handleSelectSlot}
           />
+
+          {selectedSlot && canRequestMentorship && (
+            <View className="mb-6 bg-gray-50 border border-gray-200 rounded-2xl p-4">
+              <Text className="text-lg font-bold text-gray-900 mb-3">
+                Request a Session
+              </Text>
+
+              <View className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-3">
+                <Text className="text-indigo-700 font-semibold">
+                  {selectedSlot.day}
+                </Text>
+                <Text className="text-gray-900 font-bold mt-1">
+                  {selectedSlot.label}
+                </Text>
+              </View>
+
+              <TextInput
+                value={coverLetter}
+                onChangeText={setCoverLetter}
+                placeholder="Describe what you want to learn in this session"
+                multiline
+                textAlignVertical="top"
+                className="bg-white border border-gray-200 rounded-xl px-3 py-3 min-h-[120px] text-gray-900"
+              />
+
+              <TouchableOpacity
+                disabled={createRequestMutation.isPending}
+                onPress={submitCoverLetter}
+                className={`mt-4 rounded-xl py-3 items-center ${
+                  createRequestMutation.isPending
+                    ? "bg-gray-300"
+                    : "bg-indigo-600"
+                }`}
+              >
+                <Text className="text-white font-semibold">
+                  {createRequestMutation.isPending
+                    ? "Sending..."
+                    : "Send Request"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </ScrollView>
     );

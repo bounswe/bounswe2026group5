@@ -10,6 +10,8 @@ export interface AvailabilitySlot {
 interface AvailabilityPreviewProps {
   schedule: AvailabilitySlot[];
   onEdit?: () => void;
+  onSelectSlot?: (payload: { day: string; time: string }) => void;
+  selectedSlot?: { day: string; time: string } | null;
 }
 
 const WEEK_DAYS = [
@@ -25,6 +27,8 @@ const WEEK_DAYS = [
 export function AvailabilityPreview({
   schedule = [],
   onEdit,
+  onSelectSlot,
+  selectedSlot = null,
 }: Readonly<AvailabilityPreviewProps>) {
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
 
@@ -97,7 +101,9 @@ export function AvailabilityPreview({
                   {day.substring(0, 3)}
                 </Text>
 
-                <View className={`w-1 h-1 rounded-full mt-1.5 ${dotClassByAvailability(hasSlots, isExpanded)}`} />
+                <View
+                  className={`w-1 h-1 rounded-full mt-1.5 ${dotClassByAvailability(hasSlots, isExpanded)}`}
+                />
               </TouchableOpacity>
             );
           })}
@@ -121,16 +127,38 @@ export function AvailabilityPreview({
             </View>
           ) : (
             <View className="gap-y-3">
-              {currentSlots.map((time) => (
-                <View
-                  key={`${expandedDay}-${time}`}
-                  className="bg-white border border-gray-200 rounded-xl py-4 items-center justify-center shadow-sm"
-                >
-                  <Text className="text-base font-bold text-gray-900">
-                    {time}
-                  </Text>
-                </View>
-              ))}
+              {currentSlots.map((time) => {
+                const isSelected =
+                  selectedSlot?.day === expandedDay &&
+                  selectedSlot?.time === time;
+
+                return (
+                  <TouchableOpacity
+                    key={`${expandedDay}-${time}`}
+                    onPress={() =>
+                      expandedDay &&
+                      onSelectSlot?.({
+                        day: expandedDay,
+                        time,
+                      })
+                    }
+                    activeOpacity={onSelectSlot ? 0.85 : 1}
+                    className={`rounded-xl py-4 items-center justify-center shadow-sm border ${
+                      isSelected
+                        ? "bg-indigo-600 border-indigo-600"
+                        : "bg-white border-gray-200"
+                    }`}
+                  >
+                    <Text
+                      className={`text-base font-bold ${
+                        isSelected ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      {time}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
         </View>
