@@ -10,6 +10,7 @@ import {
   RegisterCredentials,
 } from "../auth/types";
 import { useAuthStore } from "../auth/store";
+import { API_BASE_URL } from "@/lib/api/config";
 
 const AUTH_BASE_PATH = "/api/auth";
 
@@ -36,19 +37,39 @@ async function postAuthEndpoint<TPayload>(
   payload: TPayload,
   fallbackError: string,
 ): Promise<AuthResponse> {
-  const response = await fetch(
-    `${process.env.EXPO_PUBLIC_API_BASE_URL}${AUTH_BASE_PATH}/${endpoint}/`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    },
-  );
+  const url = `${API_BASE_URL}${AUTH_BASE_PATH}/${endpoint}/`;
+
+  if (__DEV__) {
+    console.log("[Auth] Request", {
+      endpoint,
+      url,
+      payloadPreview:
+        typeof payload === "object" && payload !== null
+          ? { ...payload, password: "***" }
+          : payload,
+    });
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "omit",
+    body: JSON.stringify(payload),
+  });
 
   if (!response.ok) {
     const errorData = await response
       .json()
       .catch(() => ({}) as Record<string, string[]>);
+
+    if (__DEV__) {
+      console.error("[Auth] Error response", {
+        endpoint,
+        url,
+        status: response.status,
+        errorData,
+      });
+    }
 
     throw new Error(
       getAuthErrorMessage(
