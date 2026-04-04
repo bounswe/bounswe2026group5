@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, ScrollView, Text, TouchableOpacity } from "react-native";
+import { Alert, View, ScrollView, Text, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -22,6 +22,7 @@ import {
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
 import { useProfileVisibilityStore } from "@/lib/profile/preferences";
+import { useUpdateOwnProfileMutation } from "@/lib/queries/profile";
 
 const PROFILE_DEFAULTS = {
   rating: 0,
@@ -53,6 +54,7 @@ export default function ProfileScreen() {
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const currentUsername = useAuthStore((state) => state.user?.username);
   const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
+  const updateProfileMutation = useUpdateOwnProfileMutation();
 
   const showExpertise = useProfileVisibilityStore((state) => state.showExpertise);
   const showEagerToLearn = useProfileVisibilityStore((state) => state.showEagerToLearn);
@@ -152,7 +154,7 @@ export default function ProfileScreen() {
           throw new Error("Failed to load skills.");
         }
         const payload = (await response.json()) as
-          | Array<{ name: string }>
+          | { name: string }[]
           | string[];
         if (!mounted) {
           return;
@@ -215,6 +217,59 @@ export default function ProfileScreen() {
       variant,
       onSave: saveHandler,
     });
+  };
+
+  const handleSaveProfileHeader = async (updatedData: UserProfileData) => {
+    if (!currentUsername) {
+      setUserData(updatedData);
+      return;
+    }
+
+    try {
+      const response = await updateProfileMutation.mutateAsync({
+        username: currentUsername,
+        display_name: updatedData.name,
+        bio: updatedData.bio,
+      });
+      setUserData({
+        name: response.display_name || updatedData.name,
+        bio: response.bio || updatedData.bio,
+      });
+    } catch (error) {
+      Alert.alert(
+        "Profile Update Failed",
+        error instanceof Error ? error.message : "Could not update profile details.",
+      );
+    }
+  };
+
+  const handleSaveSkills = async (
+    variant: "mentor" | "mentee",
+    nextSkills: string[],
+  ) => {
+    if (variant === "mentor") {
+      setExpertiseData(nextSkills);
+    } else {
+      setEagerToLearnData(nextSkills);
+    }
+
+    if (!currentUsername) {
+      return;
+    }
+
+    try {
+      await updateProfileMutation.mutateAsync({
+        username: currentUsername,
+        ...(variant === "mentor"
+          ? { expertises: nextSkills }
+          : { eager_to_learn: nextSkills }),
+      });
+    } catch (error) {
+      Alert.alert(
+        "Skill Update Failed",
+        error instanceof Error ? error.message : "Could not update skills.",
+      );
+    }
   };
 
   const openSkillsModal = (
@@ -287,7 +342,9 @@ export default function ProfileScreen() {
                     "Expertise",
                     expertiseData,
                     "mentor",
-                    setExpertiseData,
+                    (newSkills) => {
+                      void handleSaveSkills("mentor", newSkills);
+                    },
                   )
                 }
                 onViewAll={() =>
@@ -306,7 +363,9 @@ export default function ProfileScreen() {
                     "Eager to Learn",
                     eagerToLearnData,
                     "mentee",
-                    setEagerToLearnData,
+                    (newSkills) => {
+                      void handleSaveSkills("mentee", newSkills);
+                    },
                   )
                 }
                 onViewAll={() =>
@@ -370,7 +429,7 @@ export default function ProfileScreen() {
         onClose={() => setEditProfileModalOpen(false)}
         initialData={userData}
         onSave={(updatedData) => {
-          setUserData(updatedData);
+          void handleSaveProfileHeader(updatedData);
           setEditProfileModalOpen(false);
         }}
       />

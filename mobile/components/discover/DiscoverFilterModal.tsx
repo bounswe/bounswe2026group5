@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { DiscoverSearchBar } from "@/components/discover/DiscoverSearchBar";
+import { SkillsCloud } from "@/components/profile/SkillsCloud";
 
 interface DiscoverFilterModalProps {
   visible: boolean;
@@ -31,6 +32,10 @@ export function DiscoverFilterModal({
   onClose,
 }: Readonly<DiscoverFilterModalProps>) {
   const [skillQuery, setSkillQuery] = useState("");
+  const selectedList = useMemo(
+    () => Array.from(selectedSkills).sort((a, b) => a.localeCompare(b)),
+    [selectedSkills],
+  );
 
   useEffect(() => {
     if (visible) {
@@ -83,6 +88,14 @@ export function DiscoverFilterModal({
               placeholder="Search skills..."
               className="h-10 bg-gray-50 mb-4"
             />
+
+            {selectedList.length > 0 && (
+              <SkillsCloud
+                title="Selected Skills"
+                skills={selectedList}
+                variant="mentor"
+              />
+            )}
 
             <ScrollView
               showsVerticalScrollIndicator={false}

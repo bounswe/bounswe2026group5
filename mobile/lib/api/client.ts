@@ -73,6 +73,37 @@ export async function apiPost<TResponse, TPayload = unknown>(
   return (await response.json()) as TResponse;
 }
 
+/**
+ * Perform a typed PATCH request against the backend API.
+ * Uses the access token from auth store.
+ *
+ * @param path Relative API path (e.g. /api/profiles/<username>/)
+ * @param payload JSON payload
+ */
+export async function apiPatch<TResponse, TPayload>(
+  path: string,
+  payload: TPayload,
+): Promise<TResponse> {
+  const accessToken = useAuthStore.getState().accessToken;
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  return (await response.json()) as TResponse;
+}
+
 async function readErrorMessage(response: Response): Promise<string> {
   try {
     const payload = (await response.json()) as {
