@@ -1,4 +1,4 @@
-"""Seed demo data for mentorship discovery and profile flows."""
+"""Seed deterministic demo data for two-phone mentorship flow verification."""
 
 from __future__ import annotations
 
@@ -6,32 +6,29 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 
-REACT_NATIVE = "React Native"
-SYSTEM_DESIGN = "System Design"
 TEST_SECRET_SUFFIX = "-2026!"
 
-ALL_SKILLS = [
+CORE_SKILLS = [
     "Django",
     "Docker",
     "GraphQL",
     "JavaScript",
     "Machine Learning",
     "PostgreSQL",
-    REACT_NATIVE,
+    "React Native",
     "SQL",
-    SYSTEM_DESIGN,
+    "System Design",
     "TypeScript",
+    "German Conversation",
+    "Public Speaking",
+    "Interview Practice",
 ]
-
-
-def make_login_secret(username: str) -> str:
-    """Build a deterministic login secret for a demo user."""
-    return f"{username}{TEST_SECRET_SUFFIX}"
 
 
 @dataclass(frozen=True)
 class SeedUser:
     """Container for seeded user credentials and profile data."""
+
     email: str
     username: str
     login_secret: str
@@ -41,56 +38,94 @@ class SeedUser:
     skills: list[str]
     mode: str
     show_initials_only: bool = False
+    rating: int = 0
+    total_mentee_count: int = 0
+
+
+def make_login_secret(username: str) -> str:
+    """Build a deterministic login secret for a demo user."""
+
+    return f"{username}{TEST_SECRET_SUFFIX}"
 
 
 MENTORS: list[SeedUser] = [
     SeedUser(
-        email="mentor1@example.com",
-        username="mentor1",
-        login_secret=make_login_secret("mentor1"),
-        display_name="Metin Yildiz",
-        title="Mobile Engineer",
-        bio="Helps students build clean React Native apps and practical mentoring flows.",
-        skills=[REACT_NATIVE, "TypeScript", SYSTEM_DESIGN],
+        email="lena.schmidt@example.com",
+        username="lena-schmidt",
+        login_secret=make_login_secret("lena-schmidt"),
+        display_name="Lena Schmidt",
+        title="Language Mentor",
+        bio="Supports students with speaking confidence and structured language plans.",
+        skills=["German Conversation", "Public Speaking", "Interview Practice"],
         mode="MENTOR",
+        rating=5,
+        total_mentee_count=18,
     ),
     SeedUser(
-        email="mentor2@example.com",
-        username="mentor2",
-        login_secret=make_login_secret("mentor2"),
+        email="can.ozkan@example.com",
+        username="can-ozkan",
+        login_secret=make_login_secret("can-ozkan"),
+        display_name="Can Ozkan",
+        title="Engineering Mentor",
+        bio="Helps students with software architecture, testing strategy, and delivery plans.",
+        skills=["Docker", "GraphQL", "System Design", "JavaScript"],
+        mode="MENTOR",
+        rating=5,
+        total_mentee_count=22,
+    ),
+    SeedUser(
+        email="elif.kaya@example.com",
+        username="elif-kaya",
+        login_secret=make_login_secret("elif-kaya"),
         display_name="Elif Kaya",
         title="Backend Mentor",
-        bio="Focuses on Django, APIs, and making backend contracts easy to consume.",
+        bio="Focuses on APIs, database modeling, and practical backend debugging.",
         skills=["Django", "PostgreSQL", "SQL"],
         mode="MENTOR",
         show_initials_only=True,
+        rating=4,
+        total_mentee_count=15,
     ),
     SeedUser(
-        email="mentor3@example.com",
-        username="mentor3",
-        login_secret=make_login_secret("mentor3"),
-        display_name="Can Ozkan",
-        title="Engineering Mentor",
-        bio="Supports code review, testing strategy, and team-ready project planning.",
-        skills=["Docker", "GraphQL", SYSTEM_DESIGN],
+        email="metin.yildiz@example.com",
+        username="metin-yildiz",
+        login_secret=make_login_secret("metin-yildiz"),
+        display_name="Metin Yildiz",
+        title="Mobile Mentor",
+        bio="Guides teams from quick prototypes to maintainable React Native products.",
+        skills=["React Native", "TypeScript", "System Design"],
         mode="MENTOR",
+        rating=5,
+        total_mentee_count=21,
     ),
 ]
 
-MENTEE = SeedUser(
-    email="student@example.com",
-    username="student",
-    login_secret=make_login_secret("student"),
-    display_name="Student User",
-    title="CS Student",
-    bio="Uses the app to find mentors and manage mentorship requests.",
-    skills=[REACT_NATIVE, "Machine Learning"],
+PRIMARY_MENTEE = SeedUser(
+    email="mert.aydin@example.com",
+    username="mert-aydin",
+    login_secret=make_login_secret("mert-aydin"),
+    display_name="Mert Aydin",
+    title="Computer Science Student",
+    bio="Looking for mentorship on communication and software project growth.",
+    skills=["React Native", "TypeScript", "German Conversation"],
+    mode="MENTEE",
+)
+
+SECONDARY_MENTEE = SeedUser(
+    email="ayse.demir@example.com",
+    username="ayse-demir",
+    login_secret=make_login_secret("ayse-demir"),
+    display_name="Ayse Demir",
+    title="Junior Developer",
+    bio="Improving test quality and backend confidence.",
+    skills=["Django", "System Design"],
     mode="MENTEE",
 )
 
 
-def upsert_user(email: str, username: str, password: str, mode: str = None):
-    """Create or update a user for the demo flow."""
+def upsert_user(email: str, username: str, password: str, mode: str | None = None):
+    """Create or update a user for demo flow."""
+
     from accounts.models import AuthProvider, User, UserRole
 
     user, _ = User.objects.get_or_create(
@@ -100,18 +135,19 @@ def upsert_user(email: str, username: str, password: str, mode: str = None):
     user.username = username
     user.role = UserRole.USER
     user.is_active = True
-    
+
     if mode:
         user.app_usage_mode = mode
         user.auth_provider = AuthProvider.LOCAL
-        
+
     user.set_password(password)
     user.save()
     return user
 
 
 def upsert_profile(user, seed: SeedUser):
-    """Create or update a profile for the demo flow."""
+    """Create or update a profile for demo flow."""
+
     from profiles.models import Profile
 
     profile, _ = Profile.objects.get_or_create(user=user)
@@ -123,232 +159,194 @@ def upsert_profile(user, seed: SeedUser):
     profile.is_visible = True
     profile.show_initials_only = seed.show_initials_only
     profile.skills = seed.skills
-    profile.rating = 5 if seed.mode == "MENTOR" else 0
-    profile.total_mentee_count = 12 if seed.mode == "MENTOR" else 0
+    profile.rating = seed.rating
+    profile.total_mentee_count = seed.total_mentee_count
     profile.save()
     return profile
 
 
 def seed_skill_catalog() -> None:
-    """Ensure discovery skill catalog contains values used by the UI."""
+    """Ensure skill catalog includes values used in the scenario."""
+
     from profiles.models import Skill
 
-    for name in ALL_SKILLS:
+    values = set(CORE_SKILLS)
+    values.update(skill for mentor in MENTORS for skill in mentor.skills)
+    values.update(skill for skill in PRIMARY_MENTEE.skills)
+    values.update(skill for skill in SECONDARY_MENTEE.skills)
+
+    for name in sorted(values):
         Skill.objects.get_or_create(name=name)
 
 
+def reset_profile_slots(profile) -> None:
+    """Delete all requests attached to profile slots, then replace slots deterministically."""
+
+    from mentorship.models import MentorshipRequest
+    from profiles.models import AvailabilitySlot
+
+    MentorshipRequest.objects.filter(slot__profile=profile).delete()
+    AvailabilitySlot.objects.filter(profile=profile).delete()
+
+
 def seed_availability(profile, offset_days: int) -> None:
-    """Replace a mentor's availability with a deterministic set of future slots."""
+    """Create deterministic future availability slots for one mentor profile."""
+
     from django.utils import timezone
     from profiles.models import AvailabilitySlot
 
-    AvailabilitySlot.objects.filter(profile=profile).delete()
+    reset_profile_slots(profile)
 
     base_date = timezone.localdate() + timedelta(days=offset_days)
-    current_timezone = timezone.get_current_timezone()
+    tz = timezone.get_current_timezone()
     slot_ranges = [
         (9, 0, 10, 0),
-        (13, 0, 14, 0),
-        (16, 0, 17, 0),
+        (11, 30, 12, 30),
+        (14, 0, 15, 0),
+        (18, 30, 19, 30),
     ]
 
     for start_hour, start_minute, end_hour, end_minute in slot_ranges:
         start_at = timezone.make_aware(
             datetime.combine(base_date, time(hour=start_hour, minute=start_minute)),
-            current_timezone,
+            tz,
         )
         end_at = timezone.make_aware(
             datetime.combine(base_date, time(hour=end_hour, minute=end_minute)),
-            current_timezone,
+            tz,
         )
-
         AvailabilitySlot.objects.create(
             profile=profile,
             start_at=start_at,
             end_at=end_at,
+            is_booked=False,
         )
 
 
-def seed_react_query_data() -> None:
-    """Seed explicit data needed for the mobile React Query backend wireup."""
+def hide_non_scenario_mentors(active_usernames: set[str]) -> None:
+    """Keep discover clean by hiding mentor profiles outside the active scenario."""
+
+    from accounts.models import AppUsageMode
+    from profiles.models import Profile
+
+    Profile.objects.filter(user__app_usage_mode=AppUsageMode.MENTOR).exclude(
+        username__in=active_usernames
+    ).update(is_visible=False)
+
+
+def seed_requests_and_matches(profile_map: dict[str, object], user_map: dict[str, object]) -> None:
+    """Seed pending/accepted/rejected requests and one existing session relation."""
+
+    from django.db.models import Q
     from django.utils import timezone
-    from profiles.models import AvailabilitySlot, ExpertiseField, Profile, ProfileExpertise
-    from mentorship.models import Match, MentorshipRequest
+    from mentorship.models import MentorshipRequest
+    from profiles.models import AvailabilitySlot
 
-    mert = upsert_user("mert.yilmaz@example.com", "mert.yilmaz", "MertPass123!")
-    emma = upsert_user("emma.wilson@example.com", "emma.wilson", "EmmaPass123!")
-    azra = upsert_user("azra.demir@example.com", "azra.demir", "AzraPass123!")
-    jack = upsert_user("jack.turner@example.com", "jack.turner", "JackPass123!")
-
-    p_mert, _ = Profile.objects.get_or_create(
-        user=mert,
-        defaults={
-            "username": "mert.yilmaz",
-            "display_name": "Mert Yilmaz",
-            "bio": "Senior CS student helping with algorithms, Django, and system design.",
-            "mentorship_mode": "BOTH",
-        },
-    )
-    p_mert.username = "mert.yilmaz"
-    p_mert.display_name = "Mert Yilmaz"
-    p_mert.bio = "Senior CS student helping with algorithms, Django, and system design."
-    p_mert.title = "CS Senior | Backend Mentor"
-    p_mert.mentorship_mode = "BOTH"
-    p_mert.is_visible = True
-    p_mert.show_initials_only = False
-    p_mert.save()
-
-    p_emma, _ = Profile.objects.get_or_create(
-        user=emma,
-        defaults={
-            "username": "emma.wilson",
-            "display_name": "Emma Wilson",
-            "bio": "Junior dev improving backend fundamentals and API design.",
-            "mentorship_mode": "BOTH",
-        },
-    )
-    p_emma.username = "emma.wilson"
-    p_emma.display_name = "Emma Wilson"
-    p_emma.bio = "Junior dev improving backend fundamentals and API design."
-    p_emma.title = "Junior Developer"
-    p_emma.mentorship_mode = "BOTH"
-    p_emma.is_visible = True
-    p_emma.show_initials_only = False
-    p_emma.save()
-
-    p_azra, _ = Profile.objects.get_or_create(
-        user=azra,
-        defaults={
-            "username": "azra.demir",
-            "display_name": "Azra Demir",
-            "bio": "Interested in data structures, clean architecture, and test automation.",
-            "mentorship_mode": "BOTH",
-        },
-    )
-    p_azra.username = "azra.demir"
-    p_azra.display_name = "Azra Demir"
-    p_azra.bio = "Interested in data structures, clean architecture, and test automation."
-    p_azra.title = "Software Engineering Student"
-    p_azra.mentorship_mode = "BOTH"
-    p_azra.is_visible = True
-    p_azra.show_initials_only = False
-    p_azra.save()
-
-    p_jack, _ = Profile.objects.get_or_create(
-        user=jack,
-        defaults={
-            "username": "jack.turner",
-            "display_name": "Jack Turner",
-            "bio": "Focusing on React Native performance and REST API integrations.",
-            "mentorship_mode": "BOTH",
-        },
-    )
-    p_jack.username = "jack.turner"
-    p_jack.display_name = "Jack Turner"
-    p_jack.bio = "Focusing on React Native performance and REST API integrations."
-    p_jack.title = "Mobile Developer"
-    p_jack.mentorship_mode = "BOTH"
-    p_jack.is_visible = True
-    p_jack.show_initials_only = False
-    p_jack.save()
-
-    for name in ["Django REST", "System Design", "React Native", "Testing", "PostgreSQL"]:
-        ExpertiseField.objects.get_or_create(
-            name=name,
-            defaults={"description": f"{name} knowledge area"},
-        )
-
-    expertise_map = {
-        p_mert: ["Django REST", "System Design", "PostgreSQL"],
-        p_emma: ["React Native", "Testing"],
-        p_azra: ["Testing", "System Design"],
-        p_jack: ["React Native", "Django REST"],
+    demo_usernames = {
+        *[seed.username for seed in MENTORS],
+        PRIMARY_MENTEE.username,
+        SECONDARY_MENTEE.username,
     }
 
-    for profile, names in expertise_map.items():
-        for i, name in enumerate(names, start=3):
-            field = ExpertiseField.objects.get(name=name)
-            pe, _ = ProfileExpertise.objects.get_or_create(
-                profile=profile,
-                expertise_field=field,
-                defaults={"proficiency_level": min(i, 5)},
-            )
-            if pe.proficiency_level != min(i, 5):
-                pe.proficiency_level = min(i, 5)
-                pe.save(update_fields=["proficiency_level", "updated_at"])
+    MentorshipRequest.objects.filter(
+        Q(mentor__username__in=demo_usernames) | Q(mentee__username__in=demo_usernames)
+    ).delete()
 
-    # Reset unbooked demo slots for deterministic UI output.
-    AvailabilitySlot.objects.filter(profile=p_mert, is_booked=False).delete()
+    lena = profile_map["lena-schmidt"]
+    can_profile = profile_map["can-ozkan"]
+    elif_profile = profile_map["elif-kaya"]
+    metin = profile_map["metin-yildiz"]
 
-    slot_template = {
-        1: [(9, 30, 10, 30), (14, 0, 15, 0), (19, 0, 20, 0)],
-        2: [(11, 0, 12, 0), (16, 30, 17, 30)],
-        3: [(10, 0, 11, 0), (13, 30, 14, 30), (18, 0, 19, 0)],
-        4: [(9, 0, 10, 0), (15, 0, 16, 0)],
-    }
+    mert = profile_map["mert-aydin"]
+    ayse = profile_map["ayse-demir"]
 
-    for day_offset, slots in slot_template.items():
-        slot_date = timezone.localdate() + timedelta(days=day_offset)
-        for sh, sm, eh, em in slots:
-            start_naive = datetime.combine(slot_date, time(hour=sh, minute=sm))
-            end_naive = datetime.combine(slot_date, time(hour=eh, minute=em))
-            start = timezone.make_aware(start_naive, timezone.get_current_timezone())
-            end = timezone.make_aware(end_naive, timezone.get_current_timezone())
-            AvailabilitySlot.objects.create(
-                profile=p_mert,
-                start_at=start,
-                end_at=end,
-                is_booked=False,
-            )
+    lena_slots = list(AvailabilitySlot.objects.filter(profile=lena).order_by("start_at"))
+    can_slots = list(AvailabilitySlot.objects.filter(profile=can_profile).order_by("start_at"))
+    elif_slots = list(AvailabilitySlot.objects.filter(profile=elif_profile).order_by("start_at"))
+    metin_slots = list(AvailabilitySlot.objects.filter(profile=metin).order_by("start_at"))
 
-    requests_data = [
-        (p_mert, p_emma, "PENDING", "Hi Mert, can we review DRF serializers and validation strategy for my project?"),
-        (p_mert, p_azra, "ACCEPTED", "Merhaba Mert, system design interview prep konusunda mentorluğa ihtiyacım var."),
-        (p_mert, p_jack, "REJECTED", "Could we have a session on API error handling and auth best practices?"),
-        (p_emma, p_mert, "PENDING", "Hi Emma, I would like a reverse-mentoring chat about mobile accessibility patterns."),
-    ]
+    MentorshipRequest.objects.create(
+        mentor=lena,
+        mentee=mert,
+        slot=lena_slots[0],
+        status=MentorshipRequest.Status.PENDING,
+        cover_letter="Hi Lena, I would like weekly speaking practice and feedback.",
+    )
 
-    for mentor, mentee, status, message in requests_data:
-        request, _ = MentorshipRequest.objects.get_or_create(
-            mentor=mentor,
-            mentee=mentee,
-            defaults={"status": status, "cover_letter": message},
-        )
-        if request.status != status or request.cover_letter != message:
-            request.status = status
-            request.cover_letter = message
-            request.save(update_fields=["status", "cover_letter"])
+    MentorshipRequest.objects.create(
+        mentor=can_profile,
+        mentee=ayse,
+        slot=can_slots[0],
+        status=MentorshipRequest.Status.PENDING,
+        cover_letter="Could we review my architecture and testing plan this week?",
+    )
 
-    print("\n--- React Query Wireup Seed Complete ---")
-    print("login: mert.yilmaz@example.com / MertPass123!")
-    print("requests_for_mert=", MentorshipRequest.objects.filter(mentor=p_mert).count())
-    print("matches_for_mert=", Match.objects.filter(mentor=p_mert).count())
-    print("availability_for_mert=", AvailabilitySlot.objects.filter(profile=p_mert, is_booked=False).count())
+    accepted = MentorshipRequest.objects.create(
+        mentor=metin,
+        mentee=mert,
+        slot=metin_slots[1],
+        status=MentorshipRequest.Status.ACCEPTED,
+        cover_letter="Can we do a focused mobile architecture review session?",
+    )
+    accepted.slot.mark_booked(user=user_map["mert-aydin"])
+
+    MentorshipRequest.objects.create(
+        mentor=elif_profile,
+        mentee=mert,
+        slot=elif_slots[2],
+        status=MentorshipRequest.Status.REJECTED,
+        cover_letter="I wanted to discuss migration rollback safety and release process.",
+    )
+
+    historical_start = timezone.now() - timedelta(days=7)
+    MentorshipRequest.objects.create(
+        mentor=metin,
+        mentee=ayse,
+        slot=None,
+        initial_session_start_at=historical_start,
+        initial_session_end_at=historical_start + timedelta(hours=1),
+        status=MentorshipRequest.Status.ACCEPTED,
+        cover_letter="Thanks for the previous debugging session; it was very helpful.",
+    )
 
 
 def seed_demo_data() -> None:
-    """Seed mentors, mentees, skills, and query wireup data."""
+    """Seed full two-phone scenario dataset."""
+
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
     import django
+
     django.setup()
 
-    # 1. Seed Discovery Flow Data
     seed_skill_catalog()
+
+    profile_map: dict[str, object] = {}
+    user_map: dict[str, object] = {}
+
     for index, seed in enumerate(MENTORS, start=1):
         user = upsert_user(seed.email, seed.username, seed.login_secret, mode=seed.mode)
         profile = upsert_profile(user, seed)
         seed_availability(profile, offset_days=index)
+        profile_map[seed.username] = profile
+        user_map[seed.username] = user
 
-    mentee_user = upsert_user(MENTEE.email, MENTEE.username, MENTEE.login_secret, mode=MENTEE.mode)
-    upsert_profile(mentee_user, MENTEE)
+    for seed in [PRIMARY_MENTEE, SECONDARY_MENTEE]:
+        user = upsert_user(seed.email, seed.username, seed.login_secret, mode=seed.mode)
+        profile = upsert_profile(user, seed)
+        profile_map[seed.username] = profile
+        user_map[seed.username] = user
 
-    print("\n--- Discovery Profile Seed Complete ---")
-    print(f"demo_login_email={MENTEE.email}")
-    print(f"demo_login_password={MENTEE.login_secret}")
-    print("seeded_mentors=", ", ".join(seed.display_name for seed in MENTORS))
+    hide_non_scenario_mentors(active_usernames={seed.username for seed in MENTORS})
+    seed_requests_and_matches(profile_map=profile_map, user_map=user_map)
 
-    # 2. Seed React Query Wireup Data
-    seed_react_query_data()
+    print("\n--- Demo Seed Complete (Two-Phone Scenario) ---")
+    print("phone1_mentee_email=mert.aydin@example.com")
+    print("phone1_mentee_password=mert-aydin-2026!")
+    print("phone2_mentor_email=can.ozkan@example.com")
+    print("phone2_mentor_password=can-ozkan-2026!")
+    print("backup_mentor_email=lena.schmidt@example.com")
+    print("backup_mentor_password=lena-schmidt-2026!")
+    print("seeded_mentor_usernames=lena-schmidt,can-ozkan,elif-kaya,metin-yildiz")
 
 
 if __name__ == "__main__":
