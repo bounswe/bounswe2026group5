@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -47,13 +48,19 @@ const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", { weekday: "long" });
 function groupSlotsByWeekday(
   slots: MentorProfileResponse["available_slots"],
 ): AvailabilitySlot[] {
-  const grouped = new Map<string, string[]>();
+  const grouped = new Map<
+    string,
+    Array<{ id: string; label: string; isBooked?: boolean }>
+  >();
 
   slots.forEach((slot) => {
     const day = WEEKDAY_FORMATTER.format(new Date(`${slot.date}T00:00:00`));
-    const range = `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`;
     const dayTimes = grouped.get(day) ?? [];
-    dayTimes.push(range);
+    dayTimes.push({
+      id: slot.id,
+      label: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
+      isBooked: slot.is_booked,
+    });
     grouped.set(day, dayTimes);
   });
 
@@ -142,24 +149,17 @@ export default function MentorProfileScreen() {
   const canRequestMentorship =
     appUsageMode === "MENTEE" || appUsageMode === "BOTH";
 
-  const slotLookup = useMemo(() => {
-    const lookup = new Map<string, string>();
-    (profile?.available_slots ?? []).forEach((slot) => {
-      const day = WEEKDAY_FORMATTER.format(new Date(`${slot.date}T00:00:00`));
-      const range = `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`;
-      lookup.set(`${day}|${range}`, slot.id);
-    });
-    return lookup;
-  }, [profile?.available_slots]);
-
-  const handleSelectSlot = (payload: { day: string; time: string }) => {
+  const handleSelectSlot = (payload: {
+    day: string;
+    time: string;
+    slotId?: string;
+  }) => {
     if (!canRequestMentorship) {
       setRequestFeedback("Enable mentee mode in Settings to send requests.");
       return;
     }
 
-    const slotId = slotLookup.get(`${payload.day}|${payload.time}`);
-    if (!slotId) {
+    if (!payload.slotId) {
       setRequestFeedback(
         "Selected slot could not be resolved. Please refresh and try again.",
       );
@@ -167,7 +167,7 @@ export default function MentorProfileScreen() {
     }
 
     setSelectedSlot({
-      id: slotId,
+      id: payload.slotId,
       day: payload.day,
       label: payload.time,
     });
@@ -199,6 +199,7 @@ export default function MentorProfileScreen() {
           : prev,
       );
       setRequestFeedback("Request sent successfully.");
+      Alert.alert("Request Sent", "Your mentorship request was sent successfully.");
       setSelectedSlot(null);
       setCoverLetter("");
     } catch (mutationError) {

@@ -4,13 +4,17 @@ import { Ionicons } from "@expo/vector-icons";
 
 export interface AvailabilitySlot {
   day: string;
-  times: string[];
+  times: (string | { id: string; label: string; isBooked?: boolean })[];
 }
 
 interface AvailabilityPreviewProps {
   schedule: AvailabilitySlot[];
   onEdit?: () => void;
-  onSelectSlot?: (payload: { day: string; time: string }) => void;
+  onSelectSlot?: (payload: {
+    day: string;
+    time: string;
+    slotId?: string;
+  }) => void;
   selectedSlot?: { day: string; time: string } | null;
 }
 
@@ -127,35 +131,48 @@ export function AvailabilityPreview({
             </View>
           ) : (
             <View className="gap-y-3">
-              {currentSlots.map((time) => {
+              {currentSlots.map((entry) => {
+                const time = typeof entry === "string" ? entry : entry.label;
+                const slotId = typeof entry === "string" ? undefined : entry.id;
+                const isBooked =
+                  typeof entry === "string" ? false : Boolean(entry.isBooked);
                 const isSelected =
                   selectedSlot?.day === expandedDay &&
                   selectedSlot?.time === time;
+                let slotContainerClass = "bg-white border-gray-200";
+                let slotTextClass = "text-gray-900";
+
+                if (isBooked) {
+                  slotContainerClass = "bg-gray-100 border-gray-200";
+                  slotTextClass = "text-gray-400";
+                } else if (isSelected) {
+                  slotContainerClass = "bg-indigo-600 border-indigo-600";
+                  slotTextClass = "text-white";
+                }
 
                 return (
                   <TouchableOpacity
-                    key={`${expandedDay}-${time}`}
+                    key={`${expandedDay}-${slotId ?? time}`}
                     onPress={() =>
                       expandedDay &&
                       onSelectSlot?.({
                         day: expandedDay,
                         time,
+                        slotId,
                       })
                     }
-                    activeOpacity={onSelectSlot ? 0.85 : 1}
-                    className={`rounded-xl py-4 items-center justify-center shadow-sm border ${
-                      isSelected
-                        ? "bg-indigo-600 border-indigo-600"
-                        : "bg-white border-gray-200"
-                    }`}
+                    activeOpacity={onSelectSlot && !isBooked ? 0.85 : 1}
+                    disabled={isBooked}
+                    className={`rounded-xl py-4 items-center justify-center shadow-sm border ${slotContainerClass}`}
                   >
-                    <Text
-                      className={`text-base font-bold ${
-                        isSelected ? "text-white" : "text-gray-900"
-                      }`}
-                    >
+                    <Text className={`text-base font-bold ${slotTextClass}`}>
                       {time}
                     </Text>
+                    {isBooked ? (
+                      <Text className="text-xs text-gray-400 mt-1 font-medium">
+                        Booked
+                      </Text>
+                    ) : null}
                   </TouchableOpacity>
                 );
               })}
