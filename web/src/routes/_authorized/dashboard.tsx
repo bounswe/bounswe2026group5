@@ -4,14 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button'
 import { Heading, Body, Muted } from '@/components/Typography'
 import { MOCK_REQUESTS, MOCK_SESSIONS} from '@/lib/mocks/loggedInHome' // FUTURE: Replace with real API calls once backend is ready
-import { CalendarDays, Clock, CheckCircle2, XCircle, ArrowRight } from 'lucide-react'
+import {CalendarDays, Clock, CheckCircle2, XCircle, ArrowRight, Loader2} from 'lucide-react'
 import { SessionManagementModal } from '@/components/dashboard/SessionManagementModal'
 import {meQueryOptions} from "#/lib/queries/AuthQueries.ts";
-import {useQuery} from "@tanstack/react-query";
+import {useQuery, useQueryClient} from "@tanstack/react-query";
+import {useMyRequests, useRespondToRequest} from "#/lib/queries/MentorshipQueries.ts";
+import {useState} from "react";
+import { Check, X as XIcon } from 'lucide-react'
 
 
 export const Route = createFileRoute('/_authorized/dashboard')({
-  loader: ({ context }) => context.queryClient.ensureQueryData(meQueryOptions),
   component: DashboardHome,
 })
 
@@ -192,106 +194,197 @@ function MenteeDashboardView() {
 // ---------------------------------------------------------------------------
 
 function MentorDashboardView() {
-  const incomingRequests = MOCK_REQUESTS.filter(req => req.direction === 'incoming')
-  
-  const displaySessions = MOCK_SESSIONS.slice(0, 3)
-  const displayRequests = incomingRequests.slice(0, 3)
+  const queryClient = useQueryClient()
+  const { data: allRequests = [], isLoading } = useMyRequests()
+  const respondToRequest = useRespondToRequest()
+
+  // Only show pending requests where I am the mentor
+  const { data: me } = useQuery(meQueryOptions)
+  const pendingRequests = allRequests.filter(
+      req => req.status === 'PENDING' && req.mentor.username === me?.username
+  )
+  const displayRequests = pendingRequests.slice(0, 3)
+
+  // Track locally responded requests to show status until refresh
+  const [respondedIds, setRespondedIds] = useState<Record<string, 'ACCEPTED' | 'REJECTED'>>({})
+
+  const handleRespond = (requestId: string, action: 'accept' | 'reject') => {
+    respondToRequest.mutate(
+        { requestId, action },
+        {
+          onSuccess: () => {
+            setRespondedIds(prev => ({
+              ...prev,
+              [requestId]: action === 'accept' ? 'ACCEPTED' : 'REJECTED',
+            }))
+            queryClient.invalidateQueries({ queryKey: ['mentorship', 'requests'] })
+            queryClient.invalidateQueries({ queryKey: ['mentorship', 'matches'] })
+            if (me?.username) {
+              queryClient.invalidateQueries({ queryKey: ['profiles', me.username] })
+            }
+          },
+        }
+    )
+  }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[5fr_4fr] gap-8 items-start">
-      
-      {/* LEFT COLUMN: Sessions & Expertise */}
-      <div className="flex flex-col gap-10">
-        
-        {/* Sessions Section */}
-        <section className="space-y-5">
-          <div className="flex items-center justify-between">
+      <div className="grid grid-cols-1 lg:grid-cols-[5fr_4fr] gap-8 items-start">
+
+        {/* LEFT COLUMN: Sessions */}
+        <div className="flex flex-col gap-10">
+          <section className="space-y-5">
             <Heading as="h3" className="text-xl flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
-            </Heading>            
-          </div>
-          
-          <div className="flex flex-col gap-4">
-            {displaySessions.map(session => (
-              <Card key={session.id} className="island-shell border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
-                <div className="bg-accent h-1.5 w-full" />
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start gap-4">
-                    <CardTitle className="text-lg leading-tight">{session.title}</CardTitle>
-                    <StatusBadge status={session.status} />
-                  </div>
-                </CardHeader>
-                <CardContent className="flex items-center gap-4">
-                  <UserAvatar name="Student Name" /> 
-                  <div>
-                    <Body className="font-medium">With Student Name</Body>
-                    <Muted className="text-sm flex items-center gap-1.5 mt-0.5">
-                      <Clock className="w-3.5 h-3.5" />
-                      Tomorrow, 10:00 AM
-                    </Muted>
-                  </div>
-                </CardContent>
-                <CardFooter className="pt-4 pb-5 bg-black/[0.02]">
-                  <SessionManagementModal session={session} />
-                </CardFooter>
-              </Card>
-            ))}
-            
-            <Link to="/schedule" className="block mt-2">
-              <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
-                View Full Schedule <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-            
-          </div>
-        </section>
-      </div>
+            </Heading>
+            <div className="flex flex-col gap-4">
+              {MOCK_SESSIONS.slice(0, 3).map(session => (
+                  <Card key={session.id} className="island-shell border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
+                    <div className="bg-accent h-1.5 w-full" />
+                    <CardHeader className="pb-3">
+                      <div className="flex justify-between items-start gap-4">
+                        <CardTitle className="text-lg leading-tight">{session.title}</CardTitle>
+                        <StatusBadge status={session.status} />
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex items-center gap-4">
+                      <UserAvatar name="Student Name" />
+                      <div>
+                        <Body className="font-medium">With Student Name</Body>
+                        <Muted className="text-sm flex items-center gap-1.5 mt-0.5">
+                          <Clock className="w-3.5 h-3.5" />
+                          Tomorrow, 10:00 AM
+                        </Muted>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="pt-4 pb-5 bg-black/[0.02]">
+                      <SessionManagementModal session={session} />
+                    </CardFooter>
+                  </Card>
+              ))}
+              <Link to="/schedule" className="block mt-2">
+                <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
+                  View Full Schedule <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            </div>
+          </section>
+        </div>
 
-      {/* RIGHT COLUMN: Requests */}
-      <div className="flex flex-col gap-10">
-        <section className="space-y-5">
-          <Heading as="h3" className="text-xl">Incoming Requests</Heading>
-          <div className="flex flex-col gap-4">
-            {displayRequests.map(req => (
-              <Card key={req.id} className="island-shell border-line border-l-4 border-l-accent shadow-sm hover:shadow-md transition-shadow bg-white">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-3">
-                    <UserAvatar name={req.mentee.displayName} />
-                    <div>
-                      <CardTitle className="text-base">{req.mentee.displayName}</CardTitle>
-                      <Muted className="text-xs">{req.mentee.title}</Muted>
-                    </div>
+        {/* RIGHT COLUMN: Requests */}
+        <div className="flex flex-col gap-10">
+          <section className="space-y-5">
+            <Heading as="h3" className="text-xl">Incoming Requests</Heading>
+            <div className="flex flex-col gap-4">
+              {isLoading && (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
                   </div>
-                </CardHeader>
-                <CardContent className="pb-5">
-                  <div className="bg-black/[0.03] p-4 rounded-lg border border-line/50 mb-5">
-                    <Body className="text-ink-soft text-sm leading-relaxed italic">
-                      "{req.coverLetter}"
-                    </Body>
-                  </div>
-                  <div className="flex gap-3">
-                    {/* FUTURE: Triggers TanStack Query mutation to Django API */}
-                    <Button className="flex-1 bg-accent hover:bg-accent/90 text-white shadow-sm" size="sm">
-                      Accept
-                    </Button>
-                    <Button variant="outline" className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" size="sm">
-                      Decline
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-            
-            {incomingRequests.length > 3 && (
-              <Button variant="ghost" className="w-full text-accent hover:bg-accent/10 mt-2">
-                View all {incomingRequests.length} requests <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            )}
-          </div>
-        </section>
-      </div>
+              )}
 
-    </div>
+              {!isLoading && displayRequests.length === 0 && (
+                  <Card className="island-shell border-line bg-white shadow-sm">
+                    <CardContent className="py-8 text-center">
+                      <Muted>No pending requests right now.</Muted>
+                    </CardContent>
+                  </Card>
+              )}
+
+              {displayRequests.map(req => {
+                const responded = respondedIds[req.id]
+                return (
+                    <Card key={req.id} className="island-shell border-line border-l-4 border-l-accent shadow-sm hover:shadow-md transition-shadow bg-white">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <UserAvatar name={req.mentee.display_name} />
+                            <div>
+                              <CardTitle className="text-base">{req.mentee.display_name}</CardTitle>
+                              <Muted className="text-xs">{req.mentee.title}</Muted>
+                              {/* ADDED */}
+                              <p className="text-xs text-ink-soft mt-0.5">
+                                {req.mentee.display_name} wants to be your mentee.
+                              </p>
+                            </div>
+                          </div>
+                          <Link
+                              to="/profiles/$username"
+                              params={{ username: req.mentee.username }}
+                              className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
+                          >
+                            View profile
+                          </Link>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pb-5 space-y-3">
+                        {/* Slot details */}
+                        <p className="text-xs text-ink-soft">
+                          They wanted to do your first lecture on:
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-ink-soft bg-accent-muted/40 rounded-lg px-3 py-2 border border-line">
+                          <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+                          <span>
+                                                {new Date(`${req.slot_date}T00:00:00`).toLocaleDateString('en-GB', {
+                                                  weekday: 'short', day: 'numeric', month: 'short'
+                                                })}
+                            {' · '}
+                            {req.slot_start_time?.slice(0, 5)} – {req.slot_end_time?.slice(0, 5)}
+                                            </span>
+                        </div>
+
+                        {/* Cover letter */}
+                        {req.cover_letter && (
+                            <div className="bg-black/[0.03] p-4 rounded-lg border border-line/50">
+                              <Body className="text-ink-soft text-sm leading-relaxed italic">
+                                "{req.cover_letter}"
+                              </Body>
+                            </div>
+                        )}
+
+                        {/* Action buttons or responded status */}
+                        {responded ? (
+                            <StatusBadge status={responded} />
+                        ) : (
+                            <div className="flex gap-3">
+                              <Button
+                                  className="flex-1 bg-accent hover:bg-accent/90 text-white shadow-sm"
+                                  size="sm"
+                                  onClick={() => handleRespond(req.id, 'accept')}
+                                  disabled={respondToRequest.isPending}
+                              >
+                                {respondToRequest.isPending
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <><Check className="w-3.5 h-3.5 mr-1.5" /> Accept</>
+                                }
+                              </Button>
+                              <Button
+                                  variant="outline"
+                                  className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                  size="sm"
+                                  onClick={() => handleRespond(req.id, 'reject')}
+                                  disabled={respondToRequest.isPending}
+                              >
+                                {respondToRequest.isPending
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <><XIcon className="w-3.5 h-3.5 mr-1.5" /> Decline</>
+                                }
+                              </Button>
+                            </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                )
+              })}
+
+              {pendingRequests.length > 3 && (
+                  <Button variant="ghost" className="w-full text-accent hover:bg-accent/10 mt-2">
+                    View all {pendingRequests.length} requests <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+              )}
+            </div>
+          </section>
+        </div>
+
+      </div>
   )
 }

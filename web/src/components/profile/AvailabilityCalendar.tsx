@@ -1,30 +1,27 @@
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Muted } from '@/components/Typography'
-import { ChevronLeft, ChevronRight, CalendarDays, Plus, Trash2, X, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarDays, Loader2, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
-import type { AvailabilitySlot } from '#/lib/queries/ProfileQueries.ts'
-import { useBookSlot, useCreateSlot, useDeleteSlot } from '#/lib/queries/ProfileTimeSlotQueries.ts'
+    useCreateSlot,
+    useDeleteSlot,
+    useCancelBooking,
+    useAvailabilitySlots
+} from '#/lib/queries/ProfileTimeSlotQueries.ts'
+import type { AvailabilitySlot } from '#/lib/queries/ProfileTimeSlotQueries.ts'
 import { useQueryClient } from '@tanstack/react-query'
-
+import { useMyMatches, useSendMentorshipRequest } from '#/lib/queries/MentorshipQueries.ts'
+import { useBookSlot } from '#/lib/queries/ProfileTimeSlotQueries.ts'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 interface AvailabilityCalendarProps {
     username: string
-    slots: AvailabilitySlot[]
     isOwner: boolean
     isAuthenticated: boolean
 }
@@ -49,7 +46,10 @@ function addDays(date: Date, days: number): Date {
 }
 
 function toDateString(date: Date): string {
-    return date.toISOString().split('T')[0]
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
 }
 
 function formatDayHeader(date: Date): { weekday: string; date: string } {
@@ -59,46 +59,96 @@ function formatDayHeader(date: Date): { weekday: string; date: string } {
     }
 }
 
-function formatTime(timeStr: string): string {
-    const [h, m] = timeStr.split(':')
-    const date = new Date()
-    date.setHours(parseInt(h), parseInt(m))
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-function generate30MinSlots(): string[] {
-    const slots: string[] = []
-    for (let h = 0; h < 24; h++) {
-        for (let m = 0; m < 60; m += 30) {
-            slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
-        }
-    }
-    return slots
-}
-
-const TIME_SLOTS = generate30MinSlots()
+const HOURS = Array.from({ length: 14 }, (_, i) => i + 8) // 8am to 9pm
 const TODAY = toDateString(new Date())
 
+function formatHour(h: number): string {
+    return new Date(0, 0, 0, h).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 // ---------------------------------------------------------------------------
-// Book Modal
+// Cancel Confirm Modal
 // ---------------------------------------------------------------------------
 
-interface BookModalProps {
+interface CancelModalProps {
     slot: AvailabilitySlot
     username: string
     onClose: () => void
     onSuccess: () => void
 }
 
-function BookModal({ slot, username, onClose, onSuccess }: BookModalProps) {
-    const [message, setMessage] = useState('')
-    const bookSlot = useBookSlot(username)
+function CancelModal({ slot, username, onClose, onSuccess }: CancelModalProps) {
+    const cancelBooking = useCancelBooking(username)
 
-    const handleBook = () => {
-        bookSlot.mutate(
-            { slotId: slot.id, message: message.trim() || undefined },
-            { onSuccess }
-        )
+    return createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+            <div className="relative z-10 w-full max-w-sm rounded-3xl island-shell shadow-2xl flex flex-col">
+                <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-line">
+                    <h2 className="text-lg font-semibold text-ink">Cancel booking?</h2>
+                    <button onClick={onClose} className="rounded-xl p-1.5 hover:bg-accent-muted transition-colors text-ink-soft hover:text-ink">
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
+                <div className="px-6 py-5">
+                    <Muted className="text-sm">
+                        This slot is already booked. Cancelling will remove the booking and make the slot available again.
+                    </Muted>
+                    {cancelBooking.isError && (
+                        <p className="text-xs text-destructive mt-3">{cancelBooking.error.message}</p>
+                    )}
+                </div>
+                <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line">
+                    <Button variant="outline" onClick={onClose} disabled={cancelBooking.isPending}>
+                        Keep booking
+                    </Button>
+                    <Button
+                        className="bg-red-500 hover:bg-red-600 text-white min-w-[90px]"
+                        onClick={() => cancelBooking.mutate(slot.id, { onSuccess })}
+                        disabled={cancelBooking.isPending}
+                    >
+                        {cancelBooking.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Cancel booking'}
+                    </Button>
+                </div>
+            </div>
+        </div>,
+        document.body
+    )
+}
+
+
+// ---------------------------------------------------------------------------
+// Booking Modal (mentee)
+// ---------------------------------------------------------------------------
+
+interface BookingModalProps {
+    slot: AvailabilitySlot
+    mentorUsername: string
+    isFirstTime: boolean
+    onClose: () => void
+    onSuccess: () => void
+}
+
+function BookingModal({ slot, mentorUsername, isFirstTime, onClose, onSuccess }: BookingModalProps) {
+    const [coverLetter, setCoverLetter] = useState('')
+    const bookSlot = useBookSlot(mentorUsername)
+    const sendRequest = useSendMentorshipRequest()
+
+    const isPending = bookSlot.isPending || sendRequest.isPending
+    const error = bookSlot.error?.message || sendRequest.error?.message
+
+    const handleSubmit = () => {
+        if (isFirstTime) {
+            sendRequest.mutate(
+                { mentor_username: mentorUsername, slot_id: slot.id, cover_letter: coverLetter },
+                { onSuccess }
+            )
+        } else {
+            bookSlot.mutate(
+                { slotId: slot.id },
+                { onSuccess }
+            )
+        }
     }
 
     return createPortal(
@@ -107,42 +157,58 @@ function BookModal({ slot, username, onClose, onSuccess }: BookModalProps) {
             <div className="relative z-10 w-full max-w-md rounded-3xl island-shell shadow-2xl flex flex-col">
                 <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-line">
                     <div>
-                        <h2 className="text-lg font-semibold text-ink">Book this slot</h2>
+                        <h2 className="text-lg font-semibold text-ink">
+                            {isFirstTime ? 'Send Mentorship Request' : 'Book this slot'}
+                        </h2>
                         <Muted className="text-sm mt-0.5">
-                            {slot.date} • {formatTime(slot.startTime)} – {formatTime(slot.endTime)}
+                            {isFirstTime
+                                ? 'This will be your first session with this mentor. Send a request to get started.'
+                                : 'You already have a match with this mentor — book directly.'}
                         </Muted>
                     </div>
                     <button onClick={onClose} className="rounded-xl p-1.5 hover:bg-accent-muted transition-colors text-ink-soft hover:text-ink">
                         <X className="h-5 w-5" />
                     </button>
                 </div>
+
                 <div className="px-6 py-5 space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="message" className="text-sm font-medium text-ink">
-                            Message <span className="text-ink-soft font-normal">(optional)</span>
-                        </Label>
-                        <Textarea
-                            id="message"
-                            value={message}
-                            onChange={e => setMessage(e.target.value)}
-                            placeholder="Introduce yourself or describe what you'd like to work on..."
-                            className="bg-background resize-none min-h-[100px]"
-                            maxLength={500}
-                        />
-                        <Muted className="text-xs text-right">{message.length} / 500</Muted>
+                    <div className="rounded-lg bg-accent-muted/40 px-4 py-3 border border-line text-sm text-ink-soft">
+                        {new Date(`${slot.date}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+                        {' · '}
+                        {slot.startTime.slice(0, 5)} – {slot.endTime.slice(0, 5)}
                     </div>
-                    {bookSlot.isError && (
-                        <p className="text-xs text-destructive">{bookSlot.error.message}</p>
+
+                    {isFirstTime && (
+                        <div className="space-y-2">
+                            <Label htmlFor="cover_letter" className="text-sm font-medium text-ink">
+                                Cover Letter <span className="text-ink-soft font-normal">(optional)</span>
+                            </Label>
+                            <Textarea
+                                id="cover_letter"
+                                value={coverLetter}
+                                onChange={e => setCoverLetter(e.target.value)}
+                                placeholder="Introduce yourself and tell the mentor what you'd like to work on..."
+                                className="bg-background resize-none min-h-[110px]"
+                                maxLength={500}
+                            />
+                            <Muted className="text-xs text-right">{coverLetter.length} / 500</Muted>
+                        </div>
                     )}
+
+                    {error && <p className="text-xs text-destructive">{error}</p>}
                 </div>
+
                 <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line">
-                    <Button variant="outline" onClick={onClose} disabled={bookSlot.isPending}>Cancel</Button>
+                    <Button variant="outline" onClick={onClose} disabled={isPending}>Cancel</Button>
                     <Button
                         className="bg-accent hover:bg-accent/90 text-white min-w-[90px]"
-                        onClick={handleBook}
-                        disabled={bookSlot.isPending}
+                        onClick={handleSubmit}
+                        disabled={isPending}
                     >
-                        {bookSlot.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Book Slot'}
+                        {isPending
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : isFirstTime ? 'Send Request' : 'Book Slot'
+                        }
                     </Button>
                 </div>
             </div>
@@ -150,218 +216,68 @@ function BookModal({ slot, username, onClose, onSuccess }: BookModalProps) {
         document.body
     )
 }
-
-// ---------------------------------------------------------------------------
-// Create Slot Modal
-// ---------------------------------------------------------------------------
-
-interface CreateSlotModalProps {
-    date: string
-    username: string
-    onClose: () => void
-    onSuccess: () => void
-}
-
-function CreateSlotModal({ date, username, onClose, onSuccess }: CreateSlotModalProps) {
-    const [startTime, setStartTime] = useState('09:00')
-    const [endTime, setEndTime] = useState('09:30')
-    const createSlot = useCreateSlot(username)
-
-    const endTimeOptions = TIME_SLOTS.filter(t => t > startTime)
-
-    const handleCreate = () => {
-        if (endTime <= startTime) return
-        createSlot.mutate(
-            { date, startTime, endTime },
-            { onSuccess }
-        )
-    }
-
-    return createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-            <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-            <div className="relative z-10 w-full max-w-md rounded-3xl island-shell shadow-2xl flex flex-col">
-                <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-line">
-                    <div>
-                        <h2 className="text-lg font-semibold text-ink">Add Availability Slot</h2>
-                        <Muted className="text-sm mt-0.5">{new Date(date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</Muted>
-                    </div>
-                    <button onClick={onClose} className="rounded-xl p-1.5 hover:bg-accent-muted transition-colors text-ink-soft hover:text-ink">
-                        <X className="h-5 w-5" />
-                    </button>
-                </div>
-                <div className="px-6 py-5 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label className="text-sm font-medium text-ink">Start Time</Label>
-                            <Select value={startTime} onValueChange={v => { setStartTime(v); if (endTime <= v) setEndTime(TIME_SLOTS[TIME_SLOTS.indexOf(v) + 1] ?? v) }}>
-                                <SelectTrigger className="bg-background">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {TIME_SLOTS.map(t => (
-                                        <SelectItem key={t} value={t}>{formatTime(t)}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-sm font-medium text-ink">End Time</Label>
-                            <Select value={endTime} onValueChange={setEndTime}>
-                                <SelectTrigger className="bg-background">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {endTimeOptions.map(t => (
-                                        <SelectItem key={t} value={t}>{formatTime(t)}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    {createSlot.isError && (
-                        <p className="text-xs text-destructive">{createSlot.error.message}</p>
-                    )}
-                </div>
-                <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line">
-                    <Button variant="outline" onClick={onClose} disabled={createSlot.isPending}>Cancel</Button>
-                    <Button
-                        className="bg-accent hover:bg-accent/90 text-white min-w-[90px]"
-                        onClick={handleCreate}
-                        disabled={createSlot.isPending}
-                    >
-                        {createSlot.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add Slot'}
-                    </Button>
-                </div>
-            </div>
-        </div>,
-        document.body
-    )
-}
-
-// ---------------------------------------------------------------------------
-// Day Column
-// ---------------------------------------------------------------------------
-
-interface DayColumnProps {
-    date: Date
-    slots: AvailabilitySlot[]
-    isOwner: boolean
-    isAuthenticated: boolean
-    isToday: boolean
-    onSlotClick: (slot: AvailabilitySlot) => void
-    onAddSlot: (dateStr: string) => void
-    onDeleteSlot: (slotId: string) => void
-    isDeletingSlotId: string | null
-}
-
-function DayColumn({ date, slots, isOwner, isAuthenticated, isToday, onSlotClick, onAddSlot, onDeleteSlot, isDeletingSlotId }: DayColumnProps) {
-    const { weekday, date: dateLabel } = formatDayHeader(date)
-    const dateStr = toDateString(date)
-    const isPast = dateStr < TODAY
-
-    return (
-        <div className={`flex flex-col gap-2 min-w-0 ${isPast ? 'opacity-60' : ''}`}>
-            {/* Day header */}
-            <div className={`text-center py-2 px-1 rounded-xl ${isToday ? 'bg-accent text-white' : 'bg-accent-muted/40'}`}>
-                <p className={`text-xs font-semibold uppercase tracking-wider ${isToday ? 'text-white' : 'text-ink-soft'}`}>{weekday}</p>
-                <p className={`text-sm font-bold mt-0.5 ${isToday ? 'text-white' : 'text-ink'}`}>{dateLabel}</p>
-            </div>
-
-            {/* Slots */}
-            <div className="flex flex-col gap-1.5 flex-1">
-                {slots.length === 0 && (
-                    <div className="flex items-center justify-center h-12 rounded-lg border border-dashed border-line">
-                        <Muted className="text-xs">No slots</Muted>
-                    </div>
-                )}
-
-                {slots.map(slot => (
-                    <div
-                        key={slot.id}
-                        className={`relative group rounded-lg border px-2 py-1.5 text-xs transition-all ${
-                            slot.is_booked
-                                ? 'bg-black/[0.04] border-line text-ink-soft cursor-default'
-                                : isAuthenticated && !isOwner && !isPast
-                                    ? 'bg-accent/10 border-accent/30 text-accent cursor-pointer hover:bg-accent/20'
-                                    : 'bg-green-50 border-green-200 text-green-700'
-                        }`}
-                        onClick={() => !slot.is_booked && isAuthenticated && !isOwner && !isPast && onSlotClick(slot)}
-                    >
-                        <p className="font-medium">{formatTime(slot.startTime)}</p>
-                        <p className="text-[10px] opacity-70">{formatTime(slot.endTime)}</p>
-                        {slot.is_booked && (
-                            <Badge variant="secondary" className="text-[9px] px-1 py-0 mt-1">Booked</Badge>
-                        )}
-
-                        {/* Delete button for owner */}
-                        {isOwner && !slot.is_booked && (
-                            <button
-                                onClick={e => { e.stopPropagation(); onDeleteSlot(slot.id) }}
-                                disabled={isDeletingSlotId === slot.id}
-                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 rounded p-0.5 hover:bg-red-100 hover:text-red-600 transition-all"
-                            >
-                                {isDeletingSlotId === slot.id
-                                    ? <Loader2 className="h-3 w-3 animate-spin" />
-                                    : <Trash2 className="h-3 w-3" />
-                                }
-                            </button>
-                        )}
-                    </div>
-                ))}
-
-                {/* Add slot button for owner */}
-                {isOwner && !isPast && (
-                    <button
-                        onClick={() => onAddSlot(dateStr)}
-                        className="flex items-center justify-center gap-1 h-8 rounded-lg border border-dashed border-accent/40 text-accent/60 hover:border-accent hover:text-accent hover:bg-accent/5 transition-all text-xs"
-                    >
-                        <Plus className="h-3 w-3" />
-                        Add
-                    </button>
-                )}
-            </div>
-        </div>
-    )
-}
-
 // ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
 
-export function AvailabilityCalendar({ username, slots, isOwner, isAuthenticated }: AvailabilityCalendarProps) {
+export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: AvailabilityCalendarProps) {
+    const { data: slots = [] } = useAvailabilitySlots(username)
     const queryClient = useQueryClient()
+    const NOW_HOUR = new Date().getHours()
     const [weekOffset, setWeekOffset] = useState(0)
+    const [cancellingSlot, setCancellingSlot] = useState<AvailabilitySlot | null>(null)
     const [bookingSlot, setBookingSlot] = useState<AvailabilitySlot | null>(null)
-    const [creatingForDate, setCreatingForDate] = useState<string | null>(null)
-    const [deletingSlotId, setDeletingSlotId] = useState<string | null>(null)
+    const [togglingSlotKey, setTogglingSlotKey] = useState<string | null>(null)
 
+    const createSlot = useCreateSlot(username)
     const deleteSlot = useDeleteSlot(username)
 
-    const monday = addDays(getMonday(new Date()), weekOffset * 7)
+    const { data: matches = [] } = useMyMatches()
+    const isMatched = matches.some(m => m.mentor.username === username || m.mentee.username === username)
+
+    const monday = getMonday(addDays(new Date(), weekOffset * 7))
     const weekDays = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
 
-    const slotsByDate = slots.reduce<Record<string, AvailabilitySlot[]>>((acc, slot) => {
-        if (!acc[slot.date]) acc[slot.date] = []
-        acc[slot.date].push(slot)
-        return acc
-    }, {})
+    const slotsByDateHour: Record<string, AvailabilitySlot> = {}
+    for (const slot of slots) {
+        const hour = parseInt(slot.startTime.split(':')[0])
+        slotsByDateHour[`${slot.date}-${hour}`] = slot
+    }
+    console.log('slots prop:', slots)
+    console.log('slotsByDateHour:', slotsByDateHour)
 
     const weekLabel = `${monday.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${addDays(monday, 6).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
 
-    const invalidateProfile = () => {
+    const invalidate = () => {
+        queryClient.refetchQueries({ queryKey: ['availability-slots', username] })
         queryClient.invalidateQueries({ queryKey: ['profiles', username] })
     }
 
-    const handleDeleteSlot = (slotId: string) => {
-        setDeletingSlotId(slotId)
-        deleteSlot.mutate(slotId, {
-            onSuccess: () => {
-                invalidateProfile()
-                setDeletingSlotId(null)
-            },
-            onError: () => setDeletingSlotId(null),
-        })
+    const handleCellClick = (dateStr: string, hour: number, existing: AvailabilitySlot | undefined) => {
+        const key = `${dateStr}-${hour}`
+        if (togglingSlotKey === key) return
+
+        if (existing) {
+            if (existing.is_booked) return
+            setTogglingSlotKey(key)
+            deleteSlot.mutate(existing.id, {
+                onSuccess: () => { invalidate(); setTogglingSlotKey(null) },
+                onError: () => setTogglingSlotKey(null),
+            })
+        } else {
+            setTogglingSlotKey(key)
+            createSlot.mutate(
+                {
+                    date: dateStr,
+                    startTime: `${String(hour).padStart(2, '0')}:00:00`,
+                    endTime: `${String(hour + 1).padStart(2, '0')}:00:00`,
+                },
+                {
+                    onSuccess: () => { invalidate(); setTogglingSlotKey(null) },
+                    onError: () => setTogglingSlotKey(null),
+                }
+            )
+        }
     }
 
     return (
@@ -375,8 +291,7 @@ export function AvailabilityCalendar({ username, slots, isOwner, isAuthenticated
                         </CardTitle>
                         <div className="flex items-center gap-2">
                             <Button
-                                variant="ghost"
-                                size="sm"
+                                variant="ghost" size="sm"
                                 onClick={() => setWeekOffset(o => Math.max(o - 1, -4))}
                                 disabled={weekOffset <= -4}
                                 className="h-7 w-7 p-0"
@@ -385,8 +300,7 @@ export function AvailabilityCalendar({ username, slots, isOwner, isAuthenticated
                             </Button>
                             <span className="text-xs text-ink-soft min-w-[140px] text-center">{weekLabel}</span>
                             <Button
-                                variant="ghost"
-                                size="sm"
+                                variant="ghost" size="sm"
                                 onClick={() => setWeekOffset(o => Math.min(o + 1, 4))}
                                 disabled={weekOffset >= 4}
                                 className="h-7 w-7 p-0"
@@ -395,47 +309,143 @@ export function AvailabilityCalendar({ username, slots, isOwner, isAuthenticated
                             </Button>
                         </div>
                     </div>
+
+                    {isOwner ? (
+                        <p className="text-xs text-ink-soft mt-2">
+                            Click any empty slot to mark yourself as available. Click an available slot to remove it. Booked slots are locked until cancelled.
+                        </p>
+                    ) : (
+                        <p className="text-xs text-ink-soft mt-2">
+                            Green slots are available to book. Click a slot to request a session with this mentor.
+                        </p>
+                    )}
                 </CardHeader>
+
                 <CardContent>
-                    <div className="grid grid-cols-7 gap-2">
-                        {weekDays.map(day => (
-                            <DayColumn
-                                key={toDateString(day)}
-                                date={day}
-                                slots={slotsByDate[toDateString(day)] ?? []}
-                                isOwner={isOwner}
-                                isAuthenticated={isAuthenticated}
-                                isToday={toDateString(day) === TODAY}
-                                onSlotClick={setBookingSlot}
-                                onAddSlot={setCreatingForDate}
-                                onDeleteSlot={handleDeleteSlot}
-                                isDeletingSlotId={deletingSlotId}
-                            />
-                        ))}
+                    <div className="overflow-auto" style={{ maxHeight: '400px' }}>
+                        <div className="grid" style={{ gridTemplateColumns: '48px repeat(7, 1fr)', minWidth: '560px' }}>
+
+                            {/* Header row */}
+                            <div className="sticky top-0 bg-white/90 z-10" />
+                            {weekDays.map(day => {
+                                const { weekday, date } = formatDayHeader(day)
+                                const dateStr = toDateString(day)
+                                const isToday = dateStr === TODAY
+                                return (
+                                    <div
+                                        key={dateStr}
+                                        className={`sticky top-0 z-10 text-center py-2 px-1 text-xs font-semibold border-b border-line ${
+                                            isToday ? 'bg-accent text-white' : 'bg-white/90 text-ink-soft'
+                                        }`}
+                                    >
+                                        <p className="uppercase tracking-wider">{weekday}</p>
+                                        <p className={`font-bold mt-0.5 ${isToday ? 'text-white' : 'text-ink'}`}>{date}</p>
+                                    </div>
+                                )
+                            })}
+
+                            {/* Hour rows */}
+                            {HOURS.map(hour => (
+                                <>
+                                    <div
+                                        key={`label-${hour}`}
+                                        className="flex items-center justify-end pr-2 text-xs text-ink-soft border-b border-line/50 h-14"
+                                    >
+                                        {formatHour(hour)}
+                                    </div>
+
+                                    {weekDays.map(day => {
+                                        const dateStr = toDateString(day)
+                                        const isPast = dateStr < TODAY || (dateStr === TODAY && hour < NOW_HOUR)
+                                        const key = `${dateStr}-${hour}`
+                                        const slot = slotsByDateHour[key]
+                                        const isToggling = togglingSlotKey === key
+
+                                        let cellContent = null
+                                        let cellClass = 'border border-line/30 h-14 relative transition-all '
+
+                                        if (isPast) {
+                                            cellClass += 'bg-black/[0.02] opacity-50'
+                                        } else if (slot?.is_booked) {
+                                            cellClass += 'bg-violet-50 border-violet-200'
+                                            cellContent = (
+                                                <div className="flex flex-col items-center justify-center h-full gap-0.5">
+                                                    <span className="text-violet-700 font-semibold text-xs">Booked</span>
+                                                    {(isOwner || isAuthenticated) && (
+                                                        <button
+                                                            onClick={e => { e.stopPropagation(); setCancellingSlot(slot) }}
+                                                            className="text-red-500 hover:text-red-700 underline text-[10px]"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )
+                                        } else if (slot) {
+                                            if (isOwner) {
+                                                cellClass += 'bg-accent/10 border-accent/30 cursor-pointer hover:bg-red-50 hover:border-red-200'
+                                                cellContent = isToggling
+                                                    ? <div className="flex items-center justify-center h-full"><Loader2 className="h-3 w-3 animate-spin text-ink-soft" /></div>
+                                                    : <div className="flex items-center justify-center h-full">
+                                                        <span className="text-accent font-medium text-xs">Available ✕</span>
+                                                    </div>
+                                            } else if (isAuthenticated) {
+                                                cellClass += 'bg-accent/10 border-accent/30 cursor-pointer hover:bg-accent/20'
+                                                cellContent = <div className="flex items-center justify-center h-full text-accent font-medium text-xs">Book</div>
+                                            } else {
+                                                cellClass += 'bg-accent/10 border-accent/30'
+                                                cellContent = <div className="flex items-center justify-center h-full text-accent font-medium text-xs">Available</div>
+                                            }
+                                        } else {
+                                            if (isOwner) {
+                                                cellClass += 'cursor-pointer hover:bg-accent/5'
+                                                cellContent = isToggling
+                                                    ? <div className="flex items-center justify-center h-full"><Loader2 className="h-3 w-3 animate-spin text-ink-soft" /></div>
+                                                    : <div className="flex items-center justify-center h-full text-ink-soft/30 text-xs">+</div>
+                                            }
+                                        }
+
+                                        return (
+                                            <div
+                                                key={key}
+                                                className={cellClass}
+                                                onClick={() => {
+                                                    if (isPast) return
+                                                    if (isOwner && !slot?.is_booked) {
+                                                        handleCellClick(dateStr, hour, slot)
+                                                    } else if (!isOwner && isAuthenticated && slot && !slot.is_booked) {
+                                                        setBookingSlot(slot)
+                                                    }
+                                                }}
+                                            >
+                                                {cellContent}
+                                            </div>
+                                        )
+                                    })}
+                                </>
+                            ))}
+                        </div>
                     </div>
                 </CardContent>
             </Card>
 
-            {bookingSlot && (
-                <BookModal
-                    slot={bookingSlot}
+            {cancellingSlot && (
+                <CancelModal
+                    slot={cancellingSlot}
                     username={username}
-                    onClose={() => setBookingSlot(null)}
-                    onSuccess={() => {
-                        invalidateProfile()
-                        setBookingSlot(null)
-                    }}
+                    onClose={() => setCancellingSlot(null)}
+                    onSuccess={() => { invalidate(); setCancellingSlot(null) }}
                 />
             )}
-
-            {creatingForDate && (
-                <CreateSlotModal
-                    date={creatingForDate}
-                    username={username}
-                    onClose={() => setCreatingForDate(null)}
+            {bookingSlot && (
+                <BookingModal
+                    slot={bookingSlot}
+                    mentorUsername={username}
+                    isFirstTime={!isMatched}
+                    onClose={() => setBookingSlot(null)}
                     onSuccess={() => {
-                        invalidateProfile()
-                        setCreatingForDate(null)
+                        invalidate()
+                        setBookingSlot(null)
                     }}
                 />
             )}

@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import {queryOptions, useMutation, useQuery, useQueryClient} from "@tanstack/react-query"
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -55,6 +55,16 @@ async function deleteSlot(username: string, slotId: string): Promise<void> {
     if (!res.ok) throw new Error('Failed to delete slot')
 }
 
+async function cancelBooking(username: string, slotId: string): Promise<void> {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`${API_BASE_URL}/profiles/${username}/availability-slots/${slotId}/cancel-booking/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    })
+    if (!res.ok) throw new Error('Failed to cancel booking')
+}
+
+
 // ---- Hooks ----
 
 export function useBookSlot(username: string) {
@@ -74,4 +84,30 @@ export function useDeleteSlot(username: string) {
     return useMutation({
         mutationFn: (slotId: string) => deleteSlot(username, slotId),
     })
+}
+
+export function useCancelBooking(username: string) {
+    return useMutation({
+        mutationFn: (slotId: string) => cancelBooking(username, slotId),
+    })
+}
+
+// to be deleted later maybe
+export const availabilitySlotsQueryOptions = (username: string) =>
+    queryOptions({
+        queryKey: ['availability-slots', username],
+        queryFn: async () => {
+            const token = localStorage.getItem('access_token')
+            const res = await fetch(`${API_BASE_URL}/profiles/${username}/availability-slots/`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            })
+            if (!res.ok) throw new Error(`${res.status}`)
+            return res.json() as Promise<AvailabilitySlot[]>
+        },
+        staleTime: 60 * 1000,
+        gcTime: Infinity,
+    })
+
+export function useAvailabilitySlots(username: string) {
+    return useQuery(availabilitySlotsQueryOptions(username))
 }

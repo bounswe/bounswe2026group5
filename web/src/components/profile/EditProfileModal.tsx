@@ -63,7 +63,8 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                 bio,
                 title: isMentor ? title : undefined,
                 is_visible: !hidden,
-                skills: skills.map(s => s.name),
+                expertises: isMentor ? skills : undefined,
+                eager_to_learn: !isMentor ? skills : undefined,
             },
             {
                 onSuccess: () => {
@@ -143,7 +144,11 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                     <div className="space-y-2">
                         <Label className="text-sm font-medium text-ink">{skillsLabel}</Label>
                         <Muted className="text-xs block">{skillsHint}</Muted>
-                        <SkillPicker selected={skills} onChange={setSkills} />
+                        <SkillPicker
+                            selected={skills}
+                            onChange={setSkills}
+                            mode={isMentor ? 'mentor' : 'mentee'}
+                        />
                     </div>
 
                     {/* Hidden toggle */}

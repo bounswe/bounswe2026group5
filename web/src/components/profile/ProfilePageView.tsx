@@ -1,5 +1,4 @@
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Body, Heading, Muted } from '@/components/Typography'
 import { Star, Sparkles, Pencil, EyeOff } from 'lucide-react'
@@ -108,22 +107,6 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
       </Card>
   )
 
-  const ctaCard = !isOwner && (
-      <Card className="border-line bg-white/80 shadow-sm">
-        <CardContent className="pt-4 space-y-2">
-          {isAuthenticatedViewer ? (
-              <Button className="w-full bg-accent hover:bg-accent/90 text-white">
-                Send Mentorship Request (Soon)
-              </Button>
-          ) : (
-              <Button className="w-full" variant="outline">
-                Login to Connect
-              </Button>
-          )}
-        </CardContent>
-      </Card>
-  )
-
   const editModal = editOpen && (
       <EditProfileModal
           mode={profile.isMentor ? 'MENTOR' : 'MENTEE'}
@@ -160,14 +143,18 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                     ) : (
                         <div className="flex flex-wrap gap-2">
                           {profile.expertises.map(skill => (
-                              <Badge key={skill} variant="secondary">{skill}</Badge>
+                              <span
+                                  key={skill}
+                                  className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+                              >
+    {skill}
+</span>
                           ))}
                         </div>
                     )}
                   </CardContent>
                 </Card>
               </div>
-              <aside className="space-y-4">{ctaCard}</aside>
             </div>
           </section>
           {editModal}
@@ -177,80 +164,86 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
 
   const openSlots = profile.available_slots.filter(s => !s.is_booked)
 
-  return (
-      <main className="page-wrap py-10 sm:py-12 rise-in">
-        <section className="island-shell rounded-3xl p-6 sm:p-8 lg:p-10">
-          <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
-            <div className="space-y-6">
-              {avatarBlock}
-              {bioCard}
-              <Card className="border-line bg-white/70 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-lg">Expertise</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {isHidden ? (
-                      <HiddenField label="Expertise" />
-                  ) : profile.expertises.length === 0 ? (
-                      <Muted>No expertise listed yet.</Muted>
-                  ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {profile.expertises.map(skill => (
-                            <Badge key={skill} variant="secondary">{skill}</Badge>
-                        ))}
-                      </div>
+    // MENTOR layout — restructure to put calendar full width below
+    return (
+        <main className="page-wrap py-10 sm:py-12 rise-in">
+            <section className="island-shell rounded-3xl p-6 sm:p-8 lg:p-10 space-y-8">
 
-                  )}
-                </CardContent>
+                {/* Top 2-col grid: left content + right snapshot */}
+                <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
+                    <div className="space-y-6">
+                        {avatarBlock}
+                        {bioCard}
+                        <Card className="border-line bg-white/70 shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-lg">Expertise</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {isHidden ? (
+                                    <HiddenField label="Expertise" />
+                                ) : profile.expertises.length === 0 ? (
+                                    <Muted>No expertise listed yet.</Muted>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2">
+                                        {profile.expertises.map(skill => (
+                                            <span
+                                                key={skill}
+                                                className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors"
+                                            >
+                                            {skill}
+                                        </span>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
 
-              </Card>
-              {!isHidden && (
-                  <AvailabilityCalendar
-                      username={profile.username}
-                      slots={profile.available_slots}
-                      isOwner={isOwner}
-                      isAuthenticated={isAuthenticatedViewer}
-                  />
-              )}
-            </div>
+                    <aside className="space-y-4">
+                        <Card className="border-line bg-white/80 shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-lg">Snapshot</CardTitle>
+                            </CardHeader>
+                            <CardContent className="grid gap-3">
+                                <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
+                                    <Muted className="text-xs uppercase tracking-wider">Average Rating</Muted>
+                                    {isHidden ? (
+                                        <HiddenField label="Rating" />
+                                    ) : (
+                                        <p className="text-2xl font-semibold text-ink mt-1 flex items-center gap-1">
+                                            <Star className="h-4 w-4 fill-current text-amber-500" />
+                                            {profile.rating.toFixed(1)}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
+                                    <Muted className="text-xs uppercase tracking-wider">Total Mentees</Muted>
+                                    {isHidden ? (
+                                        <HiddenField label="Mentee count" />
+                                    ) : (
+                                        <p className="text-2xl font-semibold text-ink mt-1">{profile.total_mentee_count}</p>
+                                    )}
+                                </div>
+                                <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
+                                    <Muted className="text-xs uppercase tracking-wider">Open Slots</Muted>
+                                    <p className="text-2xl font-semibold text-ink mt-1">{openSlots.length}</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </aside>
+                </div>
 
-            <aside className="space-y-4">
-              <Card className="border-line bg-white/80 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-lg">Snapshot</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
-                    <Muted className="text-xs uppercase tracking-wider">Average Rating</Muted>
-                    {isHidden ? (
-                        <HiddenField label="Rating" />
-                    ) : (
-                        <p className="text-2xl font-semibold text-ink mt-1 flex items-center gap-1">
-                          <Star className="h-4 w-4 fill-current text-amber-500" />
-                          {profile.rating.toFixed(1)}
-                        </p>
-                    )}
-                  </div>
-                  <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
-                    <Muted className="text-xs uppercase tracking-wider">Total Mentees</Muted>
-                    {isHidden ? (
-                        <HiddenField label="Mentee count" />
-                    ) : (
-                        <p className="text-2xl font-semibold text-ink mt-1">{profile.total_mentee_count}</p>
-                    )}
-                  </div>
-                  <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
-                    <Muted className="text-xs uppercase tracking-wider">Open Slots</Muted>
-                    <p className="text-2xl font-semibold text-ink mt-1">{openSlots.length}</p>
-                  </div>
-                </CardContent>
-              </Card>
+                {/* Full width calendar below */}
+                {!isHidden && (
+                    <AvailabilityCalendar
+                        username={profile.username}
+                        isOwner={isOwner}
+                        isAuthenticated={isAuthenticatedViewer}
+                    />
+                )}
 
-              {ctaCard}
-            </aside>
-          </div>
-        </section>
-        {editModal}
-      </main>
-  )
+            </section>
+            {editModal}
+        </main>
+    )
 }

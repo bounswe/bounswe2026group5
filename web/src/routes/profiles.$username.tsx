@@ -77,9 +77,11 @@ function PublicProfileRoute() {
             bio: profile.bio,
             hidden: profile.hidden,
             picture_url: profile.picture_url,
-            expertises: profile.expertises ?? [],
+            expertises: profile.eager_to_learn ?? [],
             username: username
         }
+
+    console.log('profile from cache:', profile)
 
     return (
         <div className="flex min-h-screen flex-col">

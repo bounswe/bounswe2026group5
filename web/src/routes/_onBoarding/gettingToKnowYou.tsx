@@ -152,7 +152,8 @@ function RouteComponent() {
                         {
                             display_name: `${answers.firstName} ${answers.lastName}`.trim(),
                             bio: answers.bio,
-                            expertises:skills,
+                            expertises: answers.primaryUsage === 'mentor' ? skills : undefined,
+                            eager_to_learn: answers.primaryUsage === 'mentee' ? skills : undefined,
                         },
                         {
                             onSuccess: () => {
@@ -257,9 +258,8 @@ function RouteComponent() {
                     {current.type === 'skills' && current.skillsKey && (
                         <SkillPicker
                             selected={answers[current.skillsKey]}
-                            onChange={skills =>
-                                setAnswers(prev => ({ ...prev, [current.skillsKey!]: skills }))
-                            }
+                            onChange={skills => setAnswers(prev => ({ ...prev, [current.skillsKey!]: skills }))}
+                            mode={answers.primaryUsage === 'mentor' ? 'mentor' : 'mentee'}
                         />
                     )}
 
