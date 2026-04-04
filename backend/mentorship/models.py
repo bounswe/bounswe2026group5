@@ -38,6 +38,8 @@ class MentorshipRequest(models.Model):
         null=True,
         blank=True,
     )
+    initial_session_start_at = models.DateTimeField(null=True, blank=True)
+    initial_session_end_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
@@ -85,6 +87,12 @@ class MentorshipRequest(models.Model):
                 self.responded_at = timezone.now()
         elif self.status == self.Status.PENDING:
             self.responded_at = None
+
+        if self.status == self.Status.ACCEPTED and self.slot is not None:
+            if self.initial_session_start_at is None:
+                self.initial_session_start_at = self.slot.start_at
+            if self.initial_session_end_at is None:
+                self.initial_session_end_at = self.slot.end_at
 
         super().save(*args, **kwargs)
 

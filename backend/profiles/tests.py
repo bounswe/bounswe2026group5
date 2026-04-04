@@ -11,6 +11,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode
+from mentorship.models import MentorshipRequest
 from profiles.models import AvailabilitySlot, ExpertiseField, Profile, ProfileExpertise, Skill
 
 User: Any = get_user_model()
@@ -642,6 +643,95 @@ class AvailabilitySlotAPIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 204)
         self.assertFalse(AvailabilitySlot.objects.filter(id=slot.id).exists())
+
+    def test_delete_slot_after_canceling_accepted_first_session(self) -> None:
+        """Mentor can delete first-session slot after booking cancellation."""
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+            is_booked=True,
+            booked_by=self.mentee_user,
+            booked_at=timezone.now(),
+        )
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=slot,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+
+        cancel_url = (
+            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+            "cancel-booking/"
+        )
+        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
+        cancel_response = self.api_client.post(cancel_url)
+        self.assertEqual(cancel_response.status_code, 200)
+
+        request_obj.refresh_from_db()
+        self.assertIsNone(request_obj.slot)
+        self.assertEqual(request_obj.initial_session_start_at, slot.start_at)
+        self.assertEqual(request_obj.initial_session_end_at, slot.end_at)
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        delete_response = self.api_client.delete(detail_url)
+
+        self.assertEqual(delete_response.status_code, 204)
+        self.assertFalse(AvailabilitySlot.objects.filter(id=slot.id).exists())
+
+    def test_delete_slot_unlinks_accepted_request_without_cancel_step(self) -> None:
+        """Delete can unlink stale accepted references when slot is not booked."""
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+            is_booked=False,
+        )
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=slot,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+
+        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        delete_response = self.api_client.delete(detail_url)
+
+        self.assertEqual(delete_response.status_code, 204)
+        request_obj.refresh_from_db()
+        self.assertIsNone(request_obj.slot)
+        self.assertEqual(request_obj.initial_session_start_at, slot.start_at)
+        self.assertEqual(request_obj.initial_session_end_at, slot.end_at)
+        self.assertFalse(AvailabilitySlot.objects.filter(id=slot.id).exists())
+
+    def test_delete_slot_with_pending_request_returns_400(self) -> None:
+        """Delete is blocked when slot is still referenced by pending requests."""
+        slot_start = timezone.now() + timedelta(days=1)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+        )
+        MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=slot,
+            status=MentorshipRequest.Status.PENDING,
+        )
+
+        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        delete_response = self.api_client.delete(detail_url)
+
+        self.assertEqual(delete_response.status_code, 400)
+        self.assertIn("pending mentorship requests", delete_response.json()["detail"])
+        self.assertTrue(AvailabilitySlot.objects.filter(id=slot.id).exists())
 
     def test_delete_other_mentor_slot_returns_404(self) -> None:
         """Mentors cannot delete slots that belong to another mentor."""
