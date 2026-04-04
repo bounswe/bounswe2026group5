@@ -8,11 +8,9 @@ interface RequestCardProps {
   onPress?: () => void;
 }
 
-// FIX: Added `isReschedule` to the destructured props
 export function RequestCard({ user, topic, type, isReschedule, onPress }: Readonly<RequestCardProps>) {
   const isIncoming = type === 'incoming';
   
-  // Define what the USER's role is in this specific relationship
   const myRole = isIncoming ? 'Mentor' : 'Mentee';
   const badgeColor = isIncoming ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700';
 
@@ -20,7 +18,6 @@ export function RequestCard({ user, topic, type, isReschedule, onPress }: Readon
     <TouchableOpacity 
       activeOpacity={0.7}
       onPress={onPress}
-      // FIX: Apply amber styling if it's a reschedule request
       className={`p-4 rounded-xl shadow-sm border mb-3 ${isReschedule ? 'bg-amber-50/30 border-amber-200' : 'bg-white border-gray-100'}`}
     >
       

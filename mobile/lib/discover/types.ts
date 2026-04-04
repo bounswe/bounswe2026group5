@@ -1,6 +1,6 @@
 export type DiscoverSkill =
   | {
-      id?: string;
+      id?: number | string;
       name: string;
     }
   | string;

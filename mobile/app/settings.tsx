@@ -27,14 +27,30 @@ export default function SettingsScreen() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const updateUser = useAuthStore((state) => state.updateUser);
 
-  const showExpertise = useProfileVisibilityStore((state) => state.showExpertise);
-  const showEagerToLearn = useProfileVisibilityStore((state) => state.showEagerToLearn);
-  const showAvailability = useProfileVisibilityStore((state) => state.showAvailability);
-  const showOfferings = useProfileVisibilityStore((state) => state.showOfferings);
-  const setShowExpertise = useProfileVisibilityStore((state) => state.setShowExpertise);
-  const setShowEagerToLearn = useProfileVisibilityStore((state) => state.setShowEagerToLearn);
-  const setShowAvailability = useProfileVisibilityStore((state) => state.setShowAvailability);
-  const setShowOfferings = useProfileVisibilityStore((state) => state.setShowOfferings);
+  const showExpertise = useProfileVisibilityStore(
+    (state) => state.showExpertise,
+  );
+  const showEagerToLearn = useProfileVisibilityStore(
+    (state) => state.showEagerToLearn,
+  );
+  const showAvailability = useProfileVisibilityStore(
+    (state) => state.showAvailability,
+  );
+  const showOfferings = useProfileVisibilityStore(
+    (state) => state.showOfferings,
+  );
+  const setShowExpertise = useProfileVisibilityStore(
+    (state) => state.setShowExpertise,
+  );
+  const setShowEagerToLearn = useProfileVisibilityStore(
+    (state) => state.setShowEagerToLearn,
+  );
+  const setShowAvailability = useProfileVisibilityStore(
+    (state) => state.setShowAvailability,
+  );
+  const setShowOfferings = useProfileVisibilityStore(
+    (state) => state.setShowOfferings,
+  );
 
   const [roleState, setRoleState] = useState({
     mentor: includesMentor(authUser?.app_usage_mode),
@@ -75,7 +91,9 @@ export default function SettingsScreen() {
     );
 
     if (!response.ok) {
-      const payload = (await response.json().catch(() => ({}))) as { detail?: string };
+      const payload = (await response.json().catch(() => ({}))) as {
+        detail?: string;
+      };
       throw new Error(payload.detail || "Failed to update app usage mode.");
     }
 

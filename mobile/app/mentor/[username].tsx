@@ -3,9 +3,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -18,6 +19,10 @@ import {
 } from "@/components/profile/AvailabilityPreview";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
+import {
+  SlotRequestComposer,
+  type RequestableSlot,
+} from "@/components/profile/SlotRequestComposer";
 import { useCreateMentorshipRequestMutation } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
 
@@ -71,8 +76,6 @@ export default function MentorProfileScreen() {
   const [profile, setProfile] = useState<MentorProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
-  const [coverLetter, setCoverLetter] = useState("");
   const [requestFeedback, setRequestFeedback] = useState<string | null>(null);
 
   useEffect(() => {
@@ -133,17 +136,16 @@ export default function MentorProfileScreen() {
 
   const canRequestMentorship = appUsageMode === "MENTEE" || appUsageMode === "BOTH";
 
-  const upcomingSlotCards = useMemo(
-    () =>
-      (profile?.available_slots ?? []).map((slot) => ({
-        id: slot.id,
-        label: `${slot.date}  ${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
-      })),
+  const requestableSlots = useMemo<RequestableSlot[]>(
+    () => profile?.available_slots ?? [],
     [profile?.available_slots],
   );
 
-  const handleCreateRequest = async () => {
-    if (!username || !selectedSlotId) {
+  const handleCreateRequest = async (payload: {
+    slotId: string;
+    coverLetter: string;
+  }) => {
+    if (!username) {
       return;
     }
 
@@ -151,22 +153,20 @@ export default function MentorProfileScreen() {
     try {
       await createRequestMutation.mutateAsync({
         mentor_username: username,
-        slot_id: selectedSlotId,
-        cover_letter: coverLetter.trim(),
+        slot_id: payload.slotId,
+        cover_letter: payload.coverLetter,
       });
       setProfile((prev) =>
         prev
           ? {
               ...prev,
               available_slots: prev.available_slots.filter(
-                (slot) => slot.id !== selectedSlotId,
+                (slot) => slot.id !== payload.slotId,
               ),
             }
           : prev,
       );
       setRequestFeedback("Request sent successfully.");
-      setSelectedSlotId(null);
-      setCoverLetter("");
     } catch (mutationError) {
       setRequestFeedback(
         mutationError instanceof Error
@@ -219,72 +219,13 @@ export default function MentorProfileScreen() {
 
           <AvailabilityPreview schedule={availability} />
 
-          <View className="mb-6">
-            <Text className="text-lg font-bold text-gray-900 mb-3">Request a Session</Text>
-
-            {!canRequestMentorship && (
-              <View className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-3">
-                <Text className="text-amber-800 text-sm font-semibold">
-                  Enable mentee mode in Settings to send requests.
-                </Text>
-              </View>
-            )}
-
-            {upcomingSlotCards.length === 0 ? (
-              <View className="bg-gray-50 border border-gray-200 rounded-xl p-3">
-                <Text className="text-gray-600 text-sm">No upcoming slots available.</Text>
-              </View>
-            ) : (
-              <View className="gap-2 mb-3">
-                {upcomingSlotCards.map((slot) => {
-                  const isSelected = selectedSlotId === slot.id;
-                  return (
-                    <TouchableOpacity
-                      key={slot.id}
-                      disabled={!canRequestMentorship}
-                      onPress={() => setSelectedSlotId(slot.id)}
-                      className={`rounded-xl border p-3 ${
-                        isSelected
-                          ? "bg-indigo-600 border-indigo-600"
-                          : "bg-white border-gray-200"
-                      }`}
-                    >
-                      <Text className={isSelected ? "text-white font-semibold" : "text-gray-900 font-semibold"}>
-                        {slot.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-
-            <TextInput
-              value={coverLetter}
-              onChangeText={setCoverLetter}
-              placeholder="Optional cover letter"
-              multiline
-              textAlignVertical="top"
-              className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 min-h-[88px] text-gray-900"
-            />
-
-            <TouchableOpacity
-              disabled={!canRequestMentorship || !selectedSlotId || createRequestMutation.isPending}
-              onPress={handleCreateRequest}
-              className={`mt-3 rounded-xl py-3 items-center ${
-                !canRequestMentorship || !selectedSlotId || createRequestMutation.isPending
-                  ? "bg-gray-300"
-                  : "bg-indigo-600"
-              }`}
-            >
-              <Text className="text-white font-semibold">
-                {createRequestMutation.isPending ? "Sending..." : "Send Request"}
-              </Text>
-            </TouchableOpacity>
-
-            {!!requestFeedback && (
-              <Text className="text-sm text-gray-600 mt-2">{requestFeedback}</Text>
-            )}
-          </View>
+          <SlotRequestComposer
+            canRequest={canRequestMentorship}
+            slots={requestableSlots}
+            isSubmitting={createRequestMutation.isPending}
+            feedbackMessage={requestFeedback}
+            onSubmit={handleCreateRequest}
+          />
         </View>
       </ScrollView>
     );
@@ -309,7 +250,12 @@ export default function MentorProfileScreen() {
         </View>
       </View>
 
-      {bodyContent}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        className="flex-1"
+      >
+        {bodyContent}
+      </KeyboardAvoidingView>
     </View>
   );
 }

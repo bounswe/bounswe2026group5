@@ -21,11 +21,11 @@ jest.mock("@/lib/queries/mentorship", () => {
   };
 });
 
-jest.mock('@/lib/auth/store', () => ({
+jest.mock("@/lib/auth/store", () => ({
   useAuthStore: (selector: (state: any) => unknown) =>
     selector({
       user: {
-        username: 'student',
+        username: "student",
       },
     }),
 }));
