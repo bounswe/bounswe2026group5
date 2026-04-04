@@ -13,13 +13,12 @@ import { Route as UnauthorizedRouteRouteImport } from './routes/_unauthorized/ro
 import { Route as OnBoardingRouteRouteImport } from './routes/_onBoarding/route'
 import { Route as AuthorizedRouteRouteImport } from './routes/_authorized/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ProfilesProfileIdRouteImport } from './routes/profiles.$profileId'
+import { Route as ProfilesUsernameRouteImport } from './routes/profiles.$username'
 import { Route as UnauthorizedRegisterRouteImport } from './routes/_unauthorized/register'
 import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/login'
 import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/about'
 import { Route as OnBoardingGettingToKnowYouRouteImport } from './routes/_onBoarding/gettingToKnowYou'
 import { Route as AuthorizedScheduleRouteImport } from './routes/_authorized/schedule'
-import { Route as AuthorizedProfileRouteImport } from './routes/_authorized/profile'
 import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/discover'
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 import { Route as AuthorizedConnectionsRouteImport } from './routes/_authorized/connections'
@@ -41,9 +40,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProfilesProfileIdRoute = ProfilesProfileIdRouteImport.update({
-  id: '/profiles/$profileId',
-  path: '/profiles/$profileId',
+const ProfilesUsernameRoute = ProfilesUsernameRouteImport.update({
+  id: '/profiles/$username',
+  path: '/profiles/$username',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UnauthorizedRegisterRoute = UnauthorizedRegisterRouteImport.update({
@@ -72,11 +71,6 @@ const AuthorizedScheduleRoute = AuthorizedScheduleRouteImport.update({
   path: '/schedule',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
-const AuthorizedProfileRoute = AuthorizedProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => AuthorizedRouteRoute,
-} as any)
 const AuthorizedDiscoverRoute = AuthorizedDiscoverRouteImport.update({
   id: '/discover',
   path: '/discover',
@@ -98,26 +92,24 @@ export interface FileRoutesByFullPath {
   '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
-  '/profile': typeof AuthorizedProfileRoute
   '/schedule': typeof AuthorizedScheduleRoute
   '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/about': typeof UnauthorizedAboutRoute
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
-  '/profiles/$profileId': typeof ProfilesProfileIdRoute
+  '/profiles/$username': typeof ProfilesUsernameRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
-  '/profile': typeof AuthorizedProfileRoute
   '/schedule': typeof AuthorizedScheduleRoute
   '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/about': typeof UnauthorizedAboutRoute
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
-  '/profiles/$profileId': typeof ProfilesProfileIdRoute
+  '/profiles/$username': typeof ProfilesUsernameRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -128,13 +120,12 @@ export interface FileRoutesById {
   '/_authorized/connections': typeof AuthorizedConnectionsRoute
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
   '/_authorized/discover': typeof AuthorizedDiscoverRoute
-  '/_authorized/profile': typeof AuthorizedProfileRoute
   '/_authorized/schedule': typeof AuthorizedScheduleRoute
   '/_onBoarding/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/_unauthorized/about': typeof UnauthorizedAboutRoute
   '/_unauthorized/login': typeof UnauthorizedLoginRoute
   '/_unauthorized/register': typeof UnauthorizedRegisterRoute
-  '/profiles/$profileId': typeof ProfilesProfileIdRoute
+  '/profiles/$username': typeof ProfilesUsernameRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -143,26 +134,24 @@ export interface FileRouteTypes {
     | '/connections'
     | '/dashboard'
     | '/discover'
-    | '/profile'
     | '/schedule'
     | '/gettingToKnowYou'
     | '/about'
     | '/login'
     | '/register'
-    | '/profiles/$profileId'
+    | '/profiles/$username'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/connections'
     | '/dashboard'
     | '/discover'
-    | '/profile'
     | '/schedule'
     | '/gettingToKnowYou'
     | '/about'
     | '/login'
     | '/register'
-    | '/profiles/$profileId'
+    | '/profiles/$username'
   id:
     | '__root__'
     | '/'
@@ -172,13 +161,12 @@ export interface FileRouteTypes {
     | '/_authorized/connections'
     | '/_authorized/dashboard'
     | '/_authorized/discover'
-    | '/_authorized/profile'
     | '/_authorized/schedule'
     | '/_onBoarding/gettingToKnowYou'
     | '/_unauthorized/about'
     | '/_unauthorized/login'
     | '/_unauthorized/register'
-    | '/profiles/$profileId'
+    | '/profiles/$username'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -186,7 +174,7 @@ export interface RootRouteChildren {
   AuthorizedRouteRoute: typeof AuthorizedRouteRouteWithChildren
   OnBoardingRouteRoute: typeof OnBoardingRouteRouteWithChildren
   UnauthorizedRouteRoute: typeof UnauthorizedRouteRouteWithChildren
-  ProfilesProfileIdRoute: typeof ProfilesProfileIdRoute
+  ProfilesUsernameRoute: typeof ProfilesUsernameRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -219,11 +207,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/profiles/$profileId': {
-      id: '/profiles/$profileId'
-      path: '/profiles/$profileId'
-      fullPath: '/profiles/$profileId'
-      preLoaderRoute: typeof ProfilesProfileIdRouteImport
+    '/profiles/$username': {
+      id: '/profiles/$username'
+      path: '/profiles/$username'
+      fullPath: '/profiles/$username'
+      preLoaderRoute: typeof ProfilesUsernameRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_unauthorized/register': {
@@ -261,13 +249,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedScheduleRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
-    '/_authorized/profile': {
-      id: '/_authorized/profile'
-      path: '/profile'
-      fullPath: '/profile'
-      preLoaderRoute: typeof AuthorizedProfileRouteImport
-      parentRoute: typeof AuthorizedRouteRoute
-    }
     '/_authorized/discover': {
       id: '/_authorized/discover'
       path: '/discover'
@@ -296,7 +277,6 @@ interface AuthorizedRouteRouteChildren {
   AuthorizedConnectionsRoute: typeof AuthorizedConnectionsRoute
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
   AuthorizedDiscoverRoute: typeof AuthorizedDiscoverRoute
-  AuthorizedProfileRoute: typeof AuthorizedProfileRoute
   AuthorizedScheduleRoute: typeof AuthorizedScheduleRoute
 }
 
@@ -304,7 +284,6 @@ const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
   AuthorizedConnectionsRoute: AuthorizedConnectionsRoute,
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,
   AuthorizedDiscoverRoute: AuthorizedDiscoverRoute,
-  AuthorizedProfileRoute: AuthorizedProfileRoute,
   AuthorizedScheduleRoute: AuthorizedScheduleRoute,
 }
 
@@ -344,7 +323,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthorizedRouteRoute: AuthorizedRouteRouteWithChildren,
   OnBoardingRouteRoute: OnBoardingRouteRouteWithChildren,
   UnauthorizedRouteRoute: UnauthorizedRouteRouteWithChildren,
-  ProfilesProfileIdRoute: ProfilesProfileIdRoute,
+  ProfilesUsernameRoute: ProfilesUsernameRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

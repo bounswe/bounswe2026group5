@@ -1,21 +1,30 @@
-import {createFileRoute, Link} from '@tanstack/react-router'
+import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { Heading, Subheading, Muted } from "#/components/Typography.tsx"
 import { Input } from "#/components/ui/input.tsx"
 import { Button } from "#/components/ui/button.tsx"
+import { Textarea } from "#/components/ui/textarea.tsx"
 import { SkillPicker } from "#/components/SkillPicker.tsx"
+import {useQuery, useQueryClient} from "@tanstack/react-query"
+import { meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/AuthQueries.ts"
+import { useUpdateProfile } from "#/lib/queries/ProfileQueries.ts"
 
 export const Route = createFileRoute('/_onBoarding/gettingToKnowYou')({
+    loader: ({ context }) => context.queryClient.ensureQueryData(meQueryOptions),
     component: RouteComponent,
 })
 
-type Skill = { name: string }
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 type UserAnswers = {
-    username: string
+    firstName: string
+    lastName: string
     primaryUsage: 'mentee' | 'mentor' | ''
-    learnSkills: Skill[]
-    teachSkills: Skill[]
+    bio: string
+    learnSkills: string[]
+    teachSkills: string[]
 }
 
 type Question = {
@@ -23,28 +32,47 @@ type Question = {
     question: string
     clarification: string
     mutedText?: string
-    type: 'text' | 'choice' | 'skills'
+    type: 'text' | 'textarea' | 'choice' | 'skills'
     skillsKey?: 'learnSkills' | 'teachSkills'
     validate: (answers: UserAnswers) => string | null
 }
 
+// ---------------------------------------------------------------------------
+// Questions
+// ---------------------------------------------------------------------------
+
 const BASE_QUESTIONS: Question[] = [
     {
-        key: 'username',
-        question: "What should we call you?",
-        clarification: "Pick a username. It's how other users will find you.",
+        key: 'firstName',
+        question: "What's your first name?",
+        clarification: "This will appear on your profile.",
         type: 'text',
-        validate: ({ username }) =>
-            username.trim().length < 3 ? "Username must be at least 3 characters." : null,
+        validate: ({ firstName }) =>
+            firstName.trim().length < 2 ? "First name must be at least 2 characters." : null,
+    },
+    {
+        key: 'lastName',
+        question: "What's your last name?",
+        clarification: "This will appear on your profile.",
+        type: 'text',
+        validate: ({ lastName }) =>
+            lastName.trim().length < 2 ? "Last name must be at least 2 characters." : null,
     },
     {
         key: 'primaryUsage',
-        question: "How will you use Campus Tutor Primarily?",
-        clarification: "This helps us personalize your experience. ",
-        mutedText: "Selecting mentor does not disable your use of the app as mentee, and vice versa.",
+        question: "How will you use Campus Tutor ?",
+        clarification: "This helps us personalize your experience.",
         type: 'choice',
         validate: ({ primaryUsage }) =>
             !primaryUsage ? "Please select an option." : null,
+    },
+    {
+        key: 'bio',
+        question: "Tell us a bit about yourself.",
+        clarification: "This will be visible on your profile.",
+        type: 'textarea',
+        validate: ({ bio }) =>
+            bio.trim().length < 10 ? "Bio must be at least 10 characters." : null,
     },
 ]
 
@@ -74,38 +102,80 @@ const MENTOR_QUESTIONS: Question[] = [
 
 function getQuestions(primaryUsage: UserAnswers['primaryUsage']): Question[] {
     if (primaryUsage === 'mentor') return [...BASE_QUESTIONS, ...MENTOR_QUESTIONS]
-    if (primaryUsage === 'mentee') return [...BASE_QUESTIONS, ...MENTEE_QUESTIONS]
     return [...BASE_QUESTIONS, ...MENTEE_QUESTIONS]
 }
 
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 function RouteComponent() {
+    const router = useRouter()
+    const { data: me } = useQuery(meQueryOptions)
+    const queryClient = useQueryClient();
+
     const [activeIndex, setActiveIndex] = useState(0)
     const [answers, setAnswers] = useState<UserAnswers>({
-        username: '',
+        firstName: '',
+        lastName: '',
         primaryUsage: '',
+        bio: '',
         learnSkills: [],
         teachSkills: [],
     })
     const [error, setError] = useState<string | null>(null)
-    const [done, setDone] = useState(false)
 
     const questions = getQuestions(answers.primaryUsage)
     const current = questions[activeIndex]
 
+    const updateUsageMode = useUpdateAppUsageMode()
+    const updateProfile = useUpdateProfile(me?.username ?? '')
+
+    const isSubmitting = updateUsageMode.isPending || updateProfile.isPending
+    const submitError = updateUsageMode.error?.message || updateProfile.error?.message
+
+    const handleFinish = () => {
+        if (!me?.id || !me?.username) return
+
+        const skills = answers.primaryUsage === 'mentor'
+            ? answers.teachSkills
+            : answers.learnSkills
+
+        updateUsageMode.mutate(
+            {
+                userId: me.id,
+                app_usage_mode: answers.primaryUsage.toUpperCase() as 'MENTEE' | 'MENTOR',
+            },
+            {
+                onSuccess: () => {
+                    updateProfile.mutate(
+                        {
+                            display_name: `${answers.firstName} ${answers.lastName}`.trim(),
+                            bio: answers.bio,
+                            expertises: answers.primaryUsage === 'mentor' ? skills : undefined,
+                            eager_to_learn: answers.primaryUsage === 'mentee' ? skills : undefined,
+                        },
+                        {
+                            onSuccess: () => {
+                                queryClient.invalidateQueries({ queryKey: ['me'] })
+                                router.navigate({ to: '/dashboard' })
+                            },
+                        }
+                    )
+                },
+            }
+        )
+    }
+
     const handleNext = () => {
         const validationError = current.validate(answers)
-        if (validationError) {
-            setError(validationError)
-            return
-        }
+        if (validationError) { setError(validationError); return }
         setError(null)
 
-        // When advancing past the choice question, re-derive the list
-        // so the progress bar immediately reflects the correct total
         if (activeIndex < questions.length - 1) {
             setActiveIndex(i => i + 1)
         } else {
-            setDone(true)
+            handleFinish()
         }
     }
 
@@ -114,24 +184,11 @@ function RouteComponent() {
         setActiveIndex(i => i - 1)
     }
 
-    if (done) {
-        return (
-            <div className="min-h-screen page-wrap flex flex-col gap-4 mt-10 items-center">
-                <Heading as="h1" className="text-4xl font-extralight">
-                    You're all set, {answers.username}! 
-                </Heading>
-                <Subheading>Your profile has been saved.</Subheading>
-
-                <Link to="/dashboard" replace={true}>Go To Dashboard. (To be changed by api wait, and automatic redirection</Link>
-            </div>
-        )
-    }
-
     return (
         <div className="min-h-screen page-wrap flex flex-col items-center">
             <div className="island-shell rounded-2xl px-10 py-10 rise-in w-full max-w-xl flex flex-col gap-6 mt-10">
 
-                {/* Progress bar — length updates once primaryUsage is chosen */}
+                {/* Progress bar */}
                 <div className="flex gap-2">
                     {questions.map((_, i) => (
                         <div
@@ -143,15 +200,13 @@ function RouteComponent() {
                     ))}
                 </div>
 
-                {/* Question text */}
+                {/* Question */}
                 <div className="flex flex-col gap-1">
                     <Heading as="h1" className="text-4xl font-extralight">
                         {current.question}
                     </Heading>
                     <Subheading>{current.clarification}</Subheading>
-                    {current.mutedText && (
-                        <Muted>{current.mutedText}</Muted>
-                    )}
+                    {current.mutedText && <Muted>{current.mutedText}</Muted>}
                 </div>
 
                 {/* Input area */}
@@ -168,12 +223,26 @@ function RouteComponent() {
                         />
                     )}
 
+                    {current.type === 'textarea' && (
+                        <Textarea
+                            className="bg-background resize-none"
+                            placeholder="Write a short bio..."
+                            rows={4}
+                            value={answers.bio}
+                            onChange={e =>
+                                setAnswers(prev => ({ ...prev, bio: e.target.value }))
+                            }
+                        />
+                    )}
+
                     {current.type === 'choice' && (
                         <div className="flex gap-3">
                             {(['mentee', 'mentor'] as const).map(option => (
                                 <button
                                     key={option}
-                                    onClick={() => setAnswers(prev => ({ ...prev, primaryUsage: option }))}
+                                    onClick={() =>
+                                        setAnswers(prev => ({ ...prev, primaryUsage: option }))
+                                    }
                                     className={`flex-1 py-4 rounded-xl border-2 capitalize text-lg font-medium transition-all ${
                                         answers.primaryUsage === option
                                             ? 'border-primary bg-primary text-primary-foreground'
@@ -189,29 +258,35 @@ function RouteComponent() {
                     {current.type === 'skills' && current.skillsKey && (
                         <SkillPicker
                             selected={answers[current.skillsKey]}
-                            onChange={skills =>
-                                setAnswers(prev => ({ ...prev, [current.skillsKey!]: skills }))
-                            }
+                            onChange={skills => setAnswers(prev => ({ ...prev, [current.skillsKey!]: skills }))}
+                            mode={answers.primaryUsage === 'mentor' ? 'mentor' : 'mentee'}
                         />
                     )}
 
-                    {error && (
-                        <p className="text-destructive text-sm">{error}</p>
-                    )}
+                    {error && <p className="text-destructive text-sm">{error}</p>}
+                    {submitError && <p className="text-destructive text-sm">{submitError}</p>}
                 </div>
 
-                {/* Navigation buttons */}
+                {/* Navigation */}
                 <div className="flex items-center justify-between pt-2">
                     <Button
                         variant="ghost"
                         onClick={handleBack}
-                        disabled={activeIndex === 0}
+                        disabled={activeIndex === 0 || isSubmitting}
                         className="text-muted-foreground"
                     >
                         ← Back
                     </Button>
-                    <Button className="px-8" onClick={handleNext}>
-                        {activeIndex < questions.length - 1 ? 'Continue →' : 'Finish'}
+                    <Button
+                        className="px-8"
+                        onClick={handleNext}
+                        disabled={isSubmitting}
+                    >
+                        {isSubmitting
+                            ? 'Saving...'
+                            : activeIndex < questions.length - 1
+                                ? 'Continue →'
+                                : 'Finish'}
                     </Button>
                 </div>
 

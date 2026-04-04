@@ -81,7 +81,7 @@ describe('SchedulePage', () => {
     expect(screen.getByText('Database Systems')).toBeInTheDocument()
     
     // The Header should update to show the filter is active
-    expect(screen.getByText(/Sessions for 28 March 2026/i)).toBeInTheDocument()
+    expect(screen.getByText(/Sessions for 28 April 2026/i)).toBeInTheDocument()
     
     // 4. Clear the Filter (Click the "Clear Filter" button)
     const clearButton = screen.getByRole('button', { name: /Clear Filter/i })

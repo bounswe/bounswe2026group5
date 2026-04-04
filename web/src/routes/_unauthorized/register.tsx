@@ -14,7 +14,7 @@ import { Heading, Body, Display } from "@/components/Typography"
 import { User, Mail } from 'lucide-react'
 import {setDemoAuthRole} from "#/lib/demoAuth.ts";
 import {useMutation} from "@tanstack/react-query";
-import {handleAuthSuccess, registerFn} from "#/lib/queries/Authqueries.ts";
+import {handleAuthSuccess, registerFn} from "#/lib/queries/AuthQueries.ts";
 
 
 
