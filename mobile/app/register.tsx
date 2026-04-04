@@ -64,9 +64,13 @@ export default function RegisterScreen() {
   const [submitError, setSubmitError] = useState('');
 
   // ── Skills query ───────────────────────────────────────────────────────────
+  // queryKey matches the backend field name used in each role's profile serializer:
+  // MentorProfileResponseSerializer exposes skills as "expertises"
+  // MenteeProfileResponseSerializer exposes skills as "eager_to_learn"
+  const skillsQueryKey = role === 'mentor' ? 'expertises' : 'eager_to_learn';
 
   const { data: skillsData, isLoading: isLoadingSkills } = useQuery({
-    queryKey: ['skills'],
+    queryKey: [skillsQueryKey],
     queryFn: fetchSkillsFn,
     staleTime: 10 * 60 * 1000,
   });
@@ -92,6 +96,7 @@ export default function RegisterScreen() {
         username: variables._username,
         accessToken: variables.accessToken,
         display_name: displayName.trim(),
+        role: variables.app_usage_mode,
         skills: selectedSubjects,
       });
     },

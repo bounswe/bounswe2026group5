@@ -113,9 +113,19 @@ export async function updateProfileFn(params: {
   accessToken: string;
   display_name: string;
   bio?: string;
+  role?: 'MENTOR' | 'MENTEE';
   skills?: string[];
 }): Promise<unknown> {
-  const { username, accessToken, ...payload } = params;
+  const { username, accessToken, role, skills, ...rest } = params;
+
+  const payload: Record<string, unknown> = { ...rest };
+  if (skills !== undefined) {
+    if (role === 'MENTOR') {
+      payload.expertises = skills;
+    } else {
+      payload.eager_to_learn = skills;
+    }
+  }
 
   const res = await fetch(`${API_BASE_URL}/profiles/${username}/`, {
     method: 'PATCH',
