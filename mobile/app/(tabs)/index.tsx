@@ -27,8 +27,8 @@ export default function DashboardScreen() {
 
   const currentUsername = useAuthStore((state) => state.user?.username);
 
-  const requestsQuery = useMentorshipRequestsQuery();
-  const matchesQuery = useMentorshipMatchesQuery();
+  const requestsQuery = useMentorshipRequestsQuery(currentUsername);
+  const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const respondMutation = useRespondToMentorshipRequestMutation();
 
   // Debug logging
@@ -94,7 +94,9 @@ export default function DashboardScreen() {
   // State for Modals
   const [selectedRequest, setSelectedRequest] =
     useState<DashboardRequestItem | null>(null);
-  const [selectedSession, setSelectedSession] = useState<(typeof sessions)[0] | null>(null);
+  const [selectedSession, setSelectedSession] = useState<
+    (typeof sessions)[0] | null
+  >(null);
   const [isViewAllRequestsOpen, setViewAllRequestsOpen] = useState(false);
 
   const handleRespond = async (action: "accept" | "reject") => {
@@ -113,7 +115,9 @@ export default function DashboardScreen() {
     } catch (error) {
       Alert.alert(
         "Request Action Failed",
-        error instanceof Error ? error.message : "Could not update request status.",
+        error instanceof Error
+          ? error.message
+          : "Could not update request status.",
       );
     }
   };
@@ -181,8 +185,7 @@ export default function DashboardScreen() {
             </Text>
             <TouchableOpacity onPress={() => router.push("/schedule")}>
               <Text className="text-blue-600 font-semibold text-sm">
-                View All{" "}
-                {sessions.length > 0 ? `(${sessions.length})` : ""}
+                View All {sessions.length > 0 ? `(${sessions.length})` : ""}
               </Text>
             </TouchableOpacity>
           </View>
@@ -190,7 +193,8 @@ export default function DashboardScreen() {
           {sessions.length === 0 ? (
             <View className="bg-white p-4 rounded-xl border border-gray-100">
               <Text className="text-gray-500 font-medium">
-                No sessions yet. Session data will appear when the backend sessions endpoint is wired.
+                No sessions yet. Session data will appear when the backend
+                sessions endpoint is wired.
               </Text>
             </View>
           ) : (

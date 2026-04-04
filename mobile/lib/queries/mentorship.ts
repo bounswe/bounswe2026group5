@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiGet, apiPost } from "@/lib/api/client";
 
@@ -98,18 +98,22 @@ function toProposedDate(value: BackendMentorshipRequest): string | undefined {
   const date = new Date(`${value.slot_date}T00:00:00`);
   const label = PROPOSED_DATE_FORMATTER.format(date);
   const start = toDisplayTime(value.slot_start_time);
-  const end = value.slot_end_time ? toDisplayTime(value.slot_end_time) : undefined;
+  const end = value.slot_end_time
+    ? toDisplayTime(value.slot_end_time)
+    : undefined;
   return end ? `${label} ${start}-${end}` : `${label} ${start}`;
 }
 
 /**
  * Fetch all mentorship requests for the authenticated user.
  */
-export function useMentorshipRequestsQuery() {
+export function useMentorshipRequestsQuery(currentUsername?: string) {
   return useQuery({
-    queryKey: ["mentorship", "requests", "me"],
+    queryKey: ["mentorship", "requests", "me", currentUsername ?? "anonymous"],
     queryFn: () =>
       apiGet<BackendMentorshipRequest[]>("/api/mentorship/requests/me/"),
+    enabled: Boolean(currentUsername),
+    refetchOnMount: "always",
     staleTime: 60_000,
   });
 }
@@ -117,10 +121,12 @@ export function useMentorshipRequestsQuery() {
 /**
  * Fetch all active mentorship matches for the authenticated user.
  */
-export function useMentorshipMatchesQuery() {
+export function useMentorshipMatchesQuery(currentUsername?: string) {
   return useQuery({
-    queryKey: ["mentorship", "matches", "me"],
+    queryKey: ["mentorship", "matches", "me", currentUsername ?? "anonymous"],
     queryFn: () => apiGet<BackendMatch[]>("/api/mentorship/matches/me/"),
+    enabled: Boolean(currentUsername),
+    refetchOnMount: "always",
     staleTime: 60_000,
   });
 }
@@ -135,12 +141,19 @@ interface CreateMentorshipRequestPayload {
  * Create a mentorship request for a selected mentor slot.
  */
 export function useCreateMentorshipRequestMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: (payload: CreateMentorshipRequestPayload) =>
       apiPost<BackendMentorshipRequest, CreateMentorshipRequestPayload>(
         "/api/mentorship/requests/",
         payload,
       ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["mentorship", "requests", "me"],
+      });
+    },
   });
 }
 
@@ -153,6 +166,8 @@ interface RespondToMentorshipRequestPayload {
  * Accept or reject a pending mentorship request.
  */
 export function useRespondToMentorshipRequestMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: ({ requestId, action }: RespondToMentorshipRequestPayload) =>
       apiPost<
@@ -161,6 +176,16 @@ export function useRespondToMentorshipRequestMutation() {
           action: "accept" | "reject";
         }
       >(`/api/mentorship/requests/${requestId}/respond/`, { action }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "requests", "me"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "matches", "me"],
+        }),
+      ]);
+    },
   });
 }
 
@@ -243,7 +268,9 @@ export function mapMatchesToSessions(
       const isMentor = match.mentor.username === currentUsername;
       const peer = isMentor ? match.mentee : match.mentor;
 
-      const sessionDate = new Date(`${request.slot_date}T${request.slot_start_time}`);
+      const sessionDate = new Date(
+        `${request.slot_date}T${request.slot_start_time}`,
+      );
       const status: DashboardSessionItem["status"] =
         sessionDate < now ? "Completed" : "Upcoming";
 

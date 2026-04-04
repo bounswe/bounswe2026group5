@@ -48,8 +48,8 @@ export default function ScheduleScreen() {
   const [selectedSession, setSelectedSession] =
     useState<ScheduleSession | null>(null);
   const currentUsername = useAuthStore((state) => state.user?.username);
-  const requestsQuery = useMentorshipRequestsQuery();
-  const matchesQuery = useMentorshipMatchesQuery();
+  const requestsQuery = useMentorshipRequestsQuery(currentUsername);
+  const matchesQuery = useMentorshipMatchesQuery(currentUsername);
 
   const sessions = useMemo(() => {
     if (!currentUsername || !requestsQuery.data || !matchesQuery.data) {
@@ -147,6 +147,7 @@ export default function ScheduleScreen() {
                 onPress={() =>
                   setSelectedSession({
                     id: session.id,
+                    requestId: session.requestId,
                     user: session.user,
                     date: formatFriendlyDate(session.rawDate),
                     rawDate: session.rawDate,
@@ -154,8 +155,6 @@ export default function ScheduleScreen() {
                     status: session.status,
                     topic: session.topic,
                     myRole: session.myRole,
-                    location: session.location,
-                    meetingUrl: session.meetingUrl,
                   })
                 }
               />
