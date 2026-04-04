@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from accounts.models import AppUsageMode
 from django.contrib.gis.geos import Point
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -22,9 +23,11 @@ class LocationField(serializers.Field):
     def to_internal_value(self, data):
         if data is None:
             return None
+        if isinstance(data, str) and not data.strip():
+            return None
         if not isinstance(data, dict) or "latitude" not in data or "longitude" not in data:
             raise serializers.ValidationError(
-                "Expected {\"latitude\": <float>, \"longitude\": <float>}."
+                'Expected {"latitude": <float>, "longitude": <float>}.'
             )
         try:
             lat = float(data["latitude"])
@@ -132,6 +135,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     """Read serializer for mentor profile data."""
 
     full_name = serializers.CharField(source="display_name", read_only=True)
+    title = serializers.CharField(read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
     picture_url = serializers.URLField(read_only=True)
     expertises = serializers.ListField(
@@ -146,6 +150,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "full_name",
+            "title",
             "bio",
             "hidden",
             "picture_url",
@@ -200,6 +205,16 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
     """Partial update serializer for authenticated user's profile."""
 
     location = LocationField(required=False, allow_null=True)
+    eager_to_learn = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        write_only=True,
+    )
+    expertises = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        write_only=True,
+    )
 
     class Meta:
         model = Profile
@@ -211,8 +226,44 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
             "location",
             "is_visible",
             "show_initials_only",
+            "eager_to_learn",
+            "expertises",
         )
 
+    def validate(self, attrs: dict) -> dict:
+        """Validate role-specific aliases for profile skills updates."""
+        profile = self.instance
+        if profile is None:
+            return attrs
+
+        user_mode = profile.user.app_usage_mode
+        has_eager_to_learn = "eager_to_learn" in attrs
+        has_expertises = "expertises" in attrs
+
+        if has_eager_to_learn and user_mode != AppUsageMode.MENTEE:
+            raise serializers.ValidationError(
+                {"eager_to_learn": "Only mentee profiles can update eager_to_learn."}
+            )
+
+        if has_expertises and user_mode != AppUsageMode.MENTOR:
+            raise serializers.ValidationError(
+                {"expertises": "Only mentor profiles can update expertises."}
+            )
+
+        return attrs
+
+    def update(self, instance: Profile, validated_data: dict) -> Profile:
+        """Apply partial updates and map role aliases to the shared skills field."""
+        eager_to_learn = validated_data.pop("eager_to_learn", None)
+        expertises = validated_data.pop("expertises", None)
+
+        if eager_to_learn is not None:
+            validated_data["skills"] = eager_to_learn
+
+        if expertises is not None:
+            validated_data["skills"] = expertises
+
+        return super().update(instance, validated_data)
 
 
 class AvailabilitySlotWriteSerializer(serializers.Serializer):
@@ -279,3 +330,69 @@ class AvailabilitySlotWriteSerializer(serializers.Serializer):
         instance.end_at = validated_data["end_at"]
         instance.save(update_fields=["start_at", "end_at", "updated_at"])
         return instance
+
+
+def _get_display_initials(display_name: str) -> str:
+    """Compute up to 2 initials from a display name."""
+    parts = [p for p in display_name.split() if p]
+    initials = "".join(p[0] for p in parts).upper()
+    return initials[:2]
+
+
+class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
+    """
+    Public search result serializer for mentor discovery.
+
+    Notes:
+    - Enforces `show_initials_only` by replacing `full_name` with initials.
+    - Includes `hidden` (inverse of `is_visible`) for compatibility with the
+      existing profile detail endpoints.
+    """
+
+    full_name = serializers.SerializerMethodField()
+    username = serializers.CharField(read_only=True)
+    hidden = serializers.BooleanField(source="is_visible", read_only=True)
+    expertises = serializers.ListField(
+        child=serializers.CharField(), source="skills", read_only=True
+    )
+    picture_url = serializers.URLField(read_only=True)
+    location = LocationField(read_only=True)
+    show_initials_only = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = (
+            "id",
+            "username",
+            "full_name",
+            "bio",
+            "hidden",
+            "picture_url",
+            "title",
+            "location",
+            "show_initials_only",
+            "expertises",
+            "rating",
+            "total_mentee_count",
+        )
+        read_only_fields = fields
+
+    def get_full_name(self, obj: Profile) -> str:
+        if obj.show_initials_only:
+            return _get_display_initials(obj.display_name or "")
+        return obj.display_name
+
+    def to_representation(self, instance: Profile) -> dict:
+        ret = super().to_representation(instance)
+        # Invert is_visible to get "hidden" semantics.
+        ret["hidden"] = not instance.is_visible
+        return ret
+
+
+class PublicMentorProfileSearchListResponseSerializer(serializers.Serializer):
+    """Paginated response wrapper for public mentor discovery."""
+
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    pageSize = serializers.IntegerField()
+    results = PublicMentorProfileSearchResultSerializer(many=True)

@@ -11,13 +11,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode
-from profiles.models import (
-    AvailabilitySlot,
-    ExpertiseField,
-    Profile,
-    ProfileExpertise,
-    Skill,
-)
+from profiles.models import AvailabilitySlot, ExpertiseField, Profile, ProfileExpertise, Skill
 
 User: Any = get_user_model()
 
@@ -274,6 +268,7 @@ class ProfileByUsernameAPIViewTests(TestCase):
     def test_get_mentor_profile_returns_mentor_shape(self) -> None:
         """Mentor profile returns mentor-specific fields."""
         self.other_profile.is_visible = True
+        self.other_profile.title = "Senior Backend Mentor"
         self.other_profile.save()
 
         response = self.api_client.get(self.other_url)
@@ -281,6 +276,8 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn("full_name", payload)
+        self.assertIn("title", payload)
+        self.assertEqual(payload["title"], "Senior Backend Mentor")
         self.assertIn("expertises", payload)
         self.assertIn("rating", payload)
         self.assertIn("total_mentee_count", payload)
@@ -341,6 +338,50 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.owner_profile.refresh_from_db()
         self.assertEqual(self.owner_profile.display_name, "Owner Updated")
         self.assertEqual(self.owner_profile.bio, "Updated bio")
+
+    def test_patch_profile_accepts_blank_location(self) -> None:
+        """Blank string location is accepted and normalized to null."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.owner_url,
+            {"location": ""},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertIsNone(self.owner_profile.location)
+
+    def test_patch_mentee_profile_skills_with_eager_to_learn(self) -> None:
+        """Mentees can patch skills using eager_to_learn alias."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.owner_url,
+            {"eager_to_learn": ["Data Science", "Machine Learning"]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertEqual(self.owner_profile.skills, ["Data Science", "Machine Learning"])
+
+    def test_patch_mentor_profile_skills_with_expertises(self) -> None:
+        """Mentors can patch skills using expertises alias."""
+        mentor_refresh = RefreshToken.for_user(self.other_user)
+        mentor_access_token = str(mentor_refresh.access_token)
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {mentor_access_token}")
+
+        response = self.api_client.patch(
+            self.other_url,
+            {"expertises": ["System Design", "Python"]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.other_profile.refresh_from_db()
+        self.assertEqual(self.other_profile.skills, ["System Design", "Python"])
 
     def test_patch_profile_requires_authentication(self) -> None:
         """PATCH endpoint returns 401 when request is unauthenticated."""
@@ -408,7 +449,7 @@ class SkillListAPIViewTests(TestCase):
     def setUp(self) -> None:
         self.api_client: Any = APIClient()
         self.url = "/api/profiles/skills/"
-        
+
         Skill.objects.create(name="Python")
         Skill.objects.create(name="JavaScript")
         Skill.objects.create(name="Django")
@@ -420,12 +461,12 @@ class SkillListAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(len(payload), 3)
-        
+
         # Should be ordered by name
         self.assertEqual(payload[0]["name"], "Django")
         self.assertEqual(payload[1]["name"], "JavaScript")
         self.assertEqual(payload[2]["name"], "Python")
-        
+
         self.assertIn("id", payload[0])
 
 
@@ -898,3 +939,189 @@ class AvailabilitySlotBookingAPIViewTests(TestCase):
         response = self.api_client.post(cancel_url)
 
         self.assertEqual(response.status_code, 400)
+
+
+class PublicMentorProfilesSearchListAPIViewTests(TestCase):
+    """Tests for public mentor discovery endpoint GET /api/profiles/."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+
+        self.mentor1_user = User.objects.create_user(
+            email="mentor1@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor1_profile = Profile.objects.create(
+            user=self.mentor1_user,
+            display_name="Alice Mentor",
+            is_visible=True,
+            show_initials_only=False,
+            skills=["Python", "Django"],
+            title="Backend Mentor",
+            bio="Mentors backend folks.",
+        )
+
+        self.mentor2_user = User.objects.create_user(
+            email="mentor2@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor2_profile = Profile.objects.create(
+            user=self.mentor2_user,
+            display_name="John Doe",
+            is_visible=True,
+            show_initials_only=True,
+            skills=["React"],
+            title="Frontend Mentor",
+            bio="Mentors frontend devs.",
+        )
+
+        self.mentor3_user = User.objects.create_user(
+            email="mentor3@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor3_profile = Profile.objects.create(
+            user=self.mentor3_user,
+            display_name="Bob Zed",
+            is_visible=True,
+            show_initials_only=False,
+            skills=["Go"],
+            title="Go Mentor",
+            bio="Mentors Go services.",
+        )
+
+        self.private_mentor_user = User.objects.create_user(
+            email="private-mentor@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.private_mentor_profile = Profile.objects.create(
+            user=self.private_mentor_user,
+            display_name="Private Mentor",
+            is_visible=False,
+            show_initials_only=False,
+            skills=["Python"],
+            title="Hidden",
+        )
+
+        self.mentee_user = User.objects.create_user(
+            email="mentee@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user,
+            display_name="Mentee Person",
+            is_visible=True,
+            show_initials_only=False,
+            skills=["Python"],
+            title="Mentee",
+        )
+
+    def test_guest_can_access_endpoint(self) -> None:
+        """Unauthenticated requests can list public mentors."""
+        response = self.api_client.get("/api/profiles/")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("results", payload)
+
+        returned_names = {p["full_name"] for p in payload["results"]}
+        # Only visible mentors should be included.
+        self.assertIn("Alice Mentor", returned_names)
+        self.assertIn("JD", returned_names)  # initials due to show_initials_only
+        self.assertIn("Bob Zed", returned_names)
+        self.assertNotIn("Private Mentor", returned_names)
+        # Default discovery is mentors only.
+        self.assertNotIn("Mentee Person", returned_names)
+
+    def test_search_by_q_matches_display_name(self) -> None:
+        """`q` filters by name/keyword fields."""
+        response = self.api_client.get("/api/profiles/", {"q": "Alice"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["full_name"], "Alice Mentor")
+
+    def test_filter_by_skill_term(self) -> None:
+        """`skill` query param matches profile skills."""
+        response = self.api_client.get("/api/profiles/", {"skill": "React"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["full_name"], "JD")
+        self.assertEqual(payload["results"][0]["expertises"], ["React"])
+
+    def test_filter_by_skill_term_is_case_insensitive(self) -> None:
+        """Skill filter uses case-insensitive match on profile skills."""
+        response = self.api_client.get("/api/profiles/", {"skill": "react"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["full_name"], "JD")
+
+    def test_q_search_matches_profile_skills_without_duplicates(self) -> None:
+        """`q` should match skill strings while returning each profile only once."""
+        dup_user = User.objects.create_user(
+            email="dup-expertise@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        Profile.objects.create(
+            user=dup_user,
+            display_name="Unique Dup Expertise Holder",
+            is_visible=True,
+            show_initials_only=False,
+            skills=["Python Basics", "Python Advanced"],
+            title="Mentor",
+            bio="No Python in bio text.",
+        )
+
+        response = self.api_client.get("/api/profiles/", {"q": "Python"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        result_ids = [p["id"] for p in payload["results"]]
+        self.assertEqual(len(result_ids), len(set(result_ids)), "duplicate profile rows in results")
+
+        dup_rows = [
+            p for p in payload["results"] if p["full_name"] == "Unique Dup Expertise Holder"
+        ]
+        self.assertEqual(len(dup_rows), 1)
+
+    def test_show_initials_only_is_respected(self) -> None:
+        """When show_initials_only is set, full_name becomes initials."""
+        response = self.api_client.get("/api/profiles/", {"q": "John"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["full_name"], "JD")
+
+    def test_pagination_page_and_pageSize(self) -> None:
+        """Pagination slices results deterministically."""
+        # Profiles are ordered by display_name asc.
+        response = self.api_client.get(
+            "/api/profiles/",
+            {"page": 1, "pageSize": 1},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 3)  # visible mentors only
+        self.assertEqual(payload["page"], 1)
+        self.assertEqual(payload["pageSize"], 1)
+        self.assertEqual(len(payload["results"]), 1)
+        first_name = payload["results"][0]["full_name"]
+
+        response2 = self.api_client.get(
+            "/api/profiles/",
+            {"page": 2, "pageSize": 1},
+        )
+        payload2 = response2.json()
+        second_name = payload2["results"][0]["full_name"]
+
+        self.assertNotEqual(first_name, second_name)

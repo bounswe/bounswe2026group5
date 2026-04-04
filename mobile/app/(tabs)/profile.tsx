@@ -20,6 +20,9 @@ import {
 } from "@/components/profile/EditProfileModal";
 import { BookingModal } from "@/components/profile/BookingModal";
 import { ManageOfferingsModal } from "@/components/profile/ManageOfferingsModal";
+
+// Combined imports from both branches
+import { API_BASE_URL } from "@/constants/api";
 import {
   mapAvailabilityToSchedule,
   useAvailabilitySlotsQuery,
@@ -71,11 +74,43 @@ export default function ProfileScreen() {
   const [selectedOffering, setSelectedOffering] = useState<Offering | null>(
     null,
   );
+  const [availableSkills, setAvailableSkills] = useState<string[]>([]);
   const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
   const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] =
     useState(false);
 
+  // From feat/mobile-discovery-profile-skills: Load available skills
+  useEffect(() => {
+    let mounted = true;
+
+    fetch(`${API_BASE_URL}/api/profiles/skills/`, {
+      headers: {
+        Accept: "application/json",
+      },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load skills.");
+        }
+        const payload = (await response.json()) as Array<{ name: string }>;
+        if (!mounted) {
+          return;
+        }
+        setAvailableSkills(payload.map((skill) => skill.name));
+      })
+      .catch(() => {
+        if (mounted) {
+          setAvailableSkills([]);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // From feat/mobile-react-query-backend-wireup: Sync availability data
   useEffect(() => {
     if (availabilityQuery.data) {
       setAvailabilityData(mapAvailabilityToSchedule(availabilityQuery.data));
@@ -225,6 +260,7 @@ export default function ProfileScreen() {
         title={editModalConfig.title}
         initialSkills={editModalConfig.skills}
         variant={editModalConfig.variant}
+        availableSkills={availableSkills}
         onSave={editModalConfig.onSave}
         onClose={() =>
           setEditModalConfig((prev) => ({ ...prev, visible: false }))

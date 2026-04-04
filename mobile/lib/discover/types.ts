@@ -1,0 +1,25 @@
+export interface DiscoverSkill {
+  id: string;
+  name: string;
+}
+
+export interface DiscoverMentorProfile {
+  id: string;
+  username: string;
+  full_name: string;
+  bio: string;
+  hidden: boolean;
+  picture_url: string;
+  title: string;
+  show_initials_only: boolean;
+  expertises: string[];
+  rating: number;
+  total_mentee_count: number;
+}
+
+export interface DiscoverProfilesResponse {
+  count: number;
+  page: number;
+  pageSize: number;
+  results: DiscoverMentorProfile[];
+}
