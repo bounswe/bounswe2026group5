@@ -30,16 +30,17 @@ export const Route = createFileRoute('/_authorized/schedule')({
 // ---------------------------------------------------------------------------
 // MOCK DATA
 // ---------------------------------------------------------------------------
+// In schedule.tsx — update MOCK_MENTOR_SCHEDULE dates
 const MOCK_MENTOR_SCHEDULE = [
-  { id: '1', date: 'Mar 24, 2026', isoDate: '2026-03-24', time: '14:00 - 15:00', peer: 'Ayşe Y.', subject: 'Data Structures', status: 'Upcoming' },
-  { id: '6', date: 'Mar 24, 2026', isoDate: '2026-03-24', time: '16:00 - 17:00', peer: 'Mehmet K.', subject: 'System Design', status: 'Upcoming' },
-  { id: '3', date: 'Mar 28, 2026', isoDate: '2026-03-28', time: '16:00 - 17:00', peer: 'Zeynep B.', subject: 'Database Systems', status: 'Upcoming' },
-  { id: '4', date: 'Mar 10, 2026', isoDate: '2026-03-10', time: '13:00 - 14:00', peer: 'Ali M.', subject: 'Algorithms', status: 'Completed' },
+  { id: '1', date: 'Apr 24, 2026', isoDate: '2026-04-24', time: '14:00 - 15:00', peer: 'Ayşe Y.', subject: 'Data Structures', status: 'Upcoming' },
+  { id: '6', date: 'Apr 24, 2026', isoDate: '2026-04-24', time: '16:00 - 17:00', peer: 'Mehmet K.', subject: 'System Design', status: 'Upcoming' },
+  { id: '3', date: 'Apr 28, 2026', isoDate: '2026-04-28', time: '16:00 - 17:00', peer: 'Zeynep B.', subject: 'Database Systems', status: 'Upcoming' },
+  { id: '4', date: 'Apr 10, 2026', isoDate: '2026-04-10', time: '13:00 - 14:00', peer: 'Ali M.', subject: 'Algorithms', status: 'Completed' },
 ]
 
 const MOCK_MENTEE_SCHEDULE = [
-  { id: '2', date: 'Mar 25, 2026', isoDate: '2026-03-25', time: '10:00 - 11:30', peer: 'Can K.', subject: 'Calculus II', status: 'Upcoming' },
-  { id: '5', date: 'Mar 05, 2026', isoDate: '2026-03-05', time: '09:00 - 10:00', peer: 'Elif T.', subject: 'Physics I', status: 'Canceled' },
+  { id: '2', date: 'Apr 25, 2026', isoDate: '2026-04-25', time: '10:00 - 11:30', peer: 'Can K.', subject: 'Calculus II', status: 'Upcoming' },
+  { id: '5', date: 'Apr 05, 2026', isoDate: '2026-04-05', time: '09:00 - 10:00', peer: 'Elif T.', subject: 'Physics I', status: 'Canceled' },
 ]
 
 // ---------------------------------------------------------------------------

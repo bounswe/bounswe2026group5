@@ -1,7 +1,7 @@
-// web/src/components/layout/__test__/AuthorizedHeader.test.tsx
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
-import { AuthorizedHeader } from '../AuthorizedHeader';
+import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AuthorizedHeader } from '../AuthorizedHeader'
 
 // Mock TanStack Router hooks
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -9,28 +9,66 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   return {
     ...actual,
     Link: ({ children, to, className }: any) => <a href={to} className={className}>{children}</a>,
-    useRouter: () => ({ navigate: vi.fn() }),
     useNavigate: () => vi.fn(),
-    useSearch: () => ({ mode: 'mentee' }),
     useLocation: () => ({ pathname: '/dashboard' }),
   }
-});
+})
+
+// Mock queries — header uses meQueryOptions and useProfile
+vi.mock('#/lib/queries/AuthQueries.ts', () => ({
+  meQueryOptions: { queryKey: ['me'], queryFn: () => null },
+  logout: vi.fn(),
+}))
+
+vi.mock('#/lib/queries/ProfileQueries.ts', () => ({
+  useProfile: () => ({ data: null }),
+}))
+
+function renderWithClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return render(
+      <QueryClientProvider client={queryClient}>
+        {ui}
+      </QueryClientProvider>
+  )
+}
+
 describe('AuthorizedHeader Component', () => {
   it('renders the branding text', () => {
-    render(<AuthorizedHeader />);
-    expect(screen.getByText('Mentorship')).toBeInTheDocument();
-  });
+    renderWithClient(<AuthorizedHeader />)
+    expect(screen.getByText('Mentorship')).toBeInTheDocument()
+  })
 
   it('renders the navigation links', () => {
-    render(<AuthorizedHeader />);
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Schedule')).toBeInTheDocument();
-    expect(screen.getByText('Discover')).toBeInTheDocument();
-    expect(screen.getByText('Connections')).toBeInTheDocument();
-  });
+    renderWithClient(<AuthorizedHeader />)
+    expect(screen.getByText('Dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Schedule')).toBeInTheDocument()
+    expect(screen.getByText('Discover')).toBeInTheDocument()
+    expect(screen.getByText('Connections')).toBeInTheDocument()
+  })
 
-  it('renders the Demo Logout button', () => {
-    render(<AuthorizedHeader />);
-    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
-  });
-});
+  it('renders the Sign out button', () => {
+    renderWithClient(<AuthorizedHeader />)
+    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument()
+  })
+
+  it('renders user initials from username when no profile', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    queryClient.setQueryData(['me'], {
+      id: '1',
+      username: 'kazanciinan7',
+      email: 'test@test.com',
+      app_usage_mode: 'MENTOR',
+    })
+    render(
+        <QueryClientProvider client={queryClient}>
+          <AuthorizedHeader />
+        </QueryClientProvider>
+    )
+    expect(screen.getByText('KA')).toBeInTheDocument()
+  })
+})
