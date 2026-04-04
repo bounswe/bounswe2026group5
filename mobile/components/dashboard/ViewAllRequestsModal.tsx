@@ -3,27 +3,18 @@ import { View, Text, Modal, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RequestCard } from './RequestCard';
-
-interface Request {
-  id: string;
-  user: string;
-  topic: string;
-  type: 'incoming' | 'outgoing';
-  message?: string;
-  proposedDate?: string;
-  isReschedule?: boolean;
-}
+import { type DashboardRequestItem } from '@/lib/queries/mentorship';
 
 interface ViewAllRequestsModalProps {
   visible: boolean;
-  requests: Request[];
+  requests: DashboardRequestItem[];
   onClose: () => void;
-  onSelectRequest: (request: Request) => void;
+  onSelectRequest: (request: DashboardRequestItem) => void;
 }
 
 export function ViewAllRequestsModal({ 
   visible, requests, onClose, onSelectRequest 
-}: ViewAllRequestsModalProps) {
+}: Readonly<ViewAllRequestsModalProps>) {
   const insets = useSafeAreaInsets();
 
   const incomingRequests = requests.filter(r => r.type === 'incoming');

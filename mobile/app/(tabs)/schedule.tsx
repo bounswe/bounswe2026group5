@@ -5,19 +5,17 @@
  */
 
 import React, { useState, useMemo } from "react";
-import { View, Text, ScrollView } from "react-native";
+import { Alert, View, Text, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Calendar, DateData } from "react-native-calendars";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
-import { BookingModal } from "@/components/profile/BookingModal";
 import {
-  mapAvailabilityToSchedule,
-  useAvailabilitySlotsQuery,
+  mapMatchesToSessions,
+  useMentorshipMatchesQuery,
+  useMentorshipRequestsQuery,
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
-
-// TODO: Implement GET /api/mentorship/sessions/me/ to fetch user's scheduled sessions
 
 // This grabs today's date dynamically and formats it as 'YYYY-MM-DD'
 const TODAY = new Date().toISOString().split("T")[0];
@@ -33,6 +31,7 @@ const formatFriendlyDate = (dateString: string) => {
 
 type ScheduleSession = {
   id: string;
+  requestId: string;
   rawDate: string;
   date: string;
   time: string;
@@ -48,21 +47,21 @@ export default function ScheduleScreen() {
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [selectedSession, setSelectedSession] =
     useState<ScheduleSession | null>(null);
-  const [sessionToReschedule, setSessionToReschedule] =
-    useState<ScheduleSession | null>(null);
   const currentUsername = useAuthStore((state) => state.user?.username);
-  const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || '');
+  const requestsQuery = useMentorshipRequestsQuery();
+  const matchesQuery = useMentorshipMatchesQuery();
 
-  const availability = useMemo(() => {
-    if (availabilityQuery.data) {
-      return mapAvailabilityToSchedule(availabilityQuery.data);
+  const sessions = useMemo(() => {
+    if (!currentUsername || !requestsQuery.data || !matchesQuery.data) {
+      return [];
     }
 
-    return [];
-  }, [availabilityQuery.data]);
-
-  // TODO: Replace with API-driven sessions once endpoint is ready.
-  const sessions: ScheduleSession[] = [];
+    return mapMatchesToSessions(
+      requestsQuery.data,
+      matchesQuery.data,
+      currentUsername,
+    );
+  }, [currentUsername, requestsQuery.data, matchesQuery.data]);
 
   const markedDates = useMemo(() => {
     const marks: any = {};
@@ -171,34 +170,12 @@ export default function ScheduleScreen() {
         visible={!!selectedSession}
         onClose={() => setSelectedSession(null)}
         session={selectedSession}
-        onReschedule={() => setSessionToReschedule(selectedSession)}
-      />
-
-      {/* The Reschedule Flow */}
-      <BookingModal
-        visible={!!sessionToReschedule}
-        onClose={() => setSessionToReschedule(null)}
-        availability={availability}
-        existingSession={
-          sessionToReschedule
-            ? {
-                date: sessionToReschedule.rawDate,
-                time: sessionToReschedule.time,
-              }
-            : undefined
-        }
-        offering={
-          sessionToReschedule
-            ? {
-                id: "reschedule-temp",
-                title: sessionToReschedule.topic,
-                duration: "60 min",
-                level: "Previous Session Level",
-                icon: "calendar-outline",
-                description: `You are requesting to reschedule your session with ${sessionToReschedule.user}.`,
-              }
-            : null
-        }
+        onReschedule={() => {
+          Alert.alert(
+            "Coming Soon",
+            "Rescheduling will be wired after the dedicated API endpoint is finalized.",
+          );
+        }}
       />
     </SafeAreaView>
   );

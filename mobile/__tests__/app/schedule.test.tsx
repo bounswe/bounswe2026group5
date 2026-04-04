@@ -16,9 +16,19 @@ jest.mock("@/lib/queries/mentorship", () => {
   const actual = jest.requireActual("@/lib/queries/mentorship");
   return {
     ...actual,
-    useAvailabilitySlotsQuery: jest.fn(() => ({ data: undefined })),
+    useMentorshipRequestsQuery: jest.fn(() => ({ data: [] })),
+    useMentorshipMatchesQuery: jest.fn(() => ({ data: [] })),
   };
 });
+
+jest.mock('@/lib/auth/store', () => ({
+  useAuthStore: (selector: (state: any) => unknown) =>
+    selector({
+      user: {
+        username: 'student',
+      },
+    }),
+}));
 
 describe("ScheduleScreen Layout", () => {
   it("renders the page headers correctly", () => {

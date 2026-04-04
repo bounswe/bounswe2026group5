@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { Alert, View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -10,13 +10,13 @@ import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
 import { ViewAllRequestsModal } from "@/components/dashboard/ViewAllRequestsModal";
-import { BookingModal } from "@/components/profile/BookingModal";
 
 import {
-  mapAvailabilityToSchedule,
+  mapMatchesToSessions,
   mapRequestsToDashboard,
-  useAvailabilitySlotsQuery,
+  useMentorshipMatchesQuery,
   useMentorshipRequestsQuery,
+  useRespondToMentorshipRequestMutation,
   type DashboardRequestItem,
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
@@ -26,26 +26,30 @@ export default function DashboardScreen() {
   const router = useRouter();
 
   const currentUsername = useAuthStore((state) => state.user?.username);
-  const accessToken = useAuthStore((state) => state.accessToken);
 
   const requestsQuery = useMentorshipRequestsQuery();
-  const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
+  const matchesQuery = useMentorshipMatchesQuery();
+  const respondMutation = useRespondToMentorshipRequestMutation();
 
   // Debug logging
   React.useEffect(() => {
     console.log("[Dashboard] Auth State:", {
       username: currentUsername,
-      hasAccessToken: !!accessToken,
       requestsLoading: requestsQuery.isLoading,
       requestsError: requestsQuery.error?.message,
       requestsData: requestsQuery.data?.length,
+      matchesLoading: matchesQuery.isLoading,
+      matchesError: matchesQuery.error?.message,
+      matchesData: matchesQuery.data?.length,
     });
   }, [
     currentUsername,
-    accessToken,
     requestsQuery.isLoading,
     requestsQuery.error,
     requestsQuery.data,
+    matchesQuery.isLoading,
+    matchesQuery.error,
+    matchesQuery.data,
   ]);
 
   const requests = useMemo<DashboardRequestItem[]>(() => {
@@ -75,34 +79,44 @@ export default function DashboardScreen() {
     currentUsername,
   ]);
 
-  const availability = useMemo(() => {
-    if (availabilityQuery.data) {
-      return mapAvailabilityToSchedule(availabilityQuery.data);
+  const sessions = useMemo(() => {
+    if (!currentUsername || !requestsQuery.data || !matchesQuery.data) {
+      return [];
     }
 
-    return [];
-  }, [availabilityQuery.data]);
-
-  // TODO: Replace with API-driven sessions from GET /api/mentorship/sessions/me/
-  const sessions: {
-    id: string;
-    user: string;
-    date: string;
-    time: string;
-    status: "Pending" | "Upcoming" | "Completed";
-    rawDate: string;
-    topic: string;
-    myRole: string;
-    location?: string;
-    meetingUrl?: string;
-  }[] = [];
+    return mapMatchesToSessions(
+      requestsQuery.data,
+      matchesQuery.data,
+      currentUsername,
+    );
+  }, [currentUsername, requestsQuery.data, matchesQuery.data]);
 
   // State for Modals
   const [selectedRequest, setSelectedRequest] =
     useState<DashboardRequestItem | null>(null);
   const [selectedSession, setSelectedSession] = useState<(typeof sessions)[0] | null>(null);
   const [isViewAllRequestsOpen, setViewAllRequestsOpen] = useState(false);
-  const [sessionToReschedule, setSessionToReschedule] = useState<(typeof sessions)[0] | null>(null);
+
+  const handleRespond = async (action: "accept" | "reject") => {
+    if (!selectedRequest) {
+      return;
+    }
+
+    try {
+      await respondMutation.mutateAsync({
+        requestId: selectedRequest.requestId,
+        action,
+      });
+      setSelectedRequest(null);
+      requestsQuery.refetch();
+      matchesQuery.refetch();
+    } catch (error) {
+      Alert.alert(
+        "Request Action Failed",
+        error instanceof Error ? error.message : "Could not update request status.",
+      );
+    }
+  };
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -199,49 +213,37 @@ export default function DashboardScreen() {
         visible={!!selectedRequest}
         request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
+        onAccept={() => handleRespond("accept")}
+        onReject={() => handleRespond("reject")}
+        onCancelOutgoing={() => {
+          Alert.alert(
+            "Not Supported Yet",
+            "Outgoing request cancellation is not available on the current API.",
+          );
+        }}
+        isSubmitting={respondMutation.isPending}
       />
 
       <SessionDetailsModal
         visible={!!selectedSession}
         session={selectedSession}
         onClose={() => setSelectedSession(null)}
-        onReschedule={() => setSessionToReschedule(selectedSession)}
+        onReschedule={() => {
+          Alert.alert(
+            "Coming Soon",
+            "Rescheduling will be wired after the dedicated API endpoint is finalized.",
+          );
+        }}
       />
 
       <ViewAllRequestsModal
         visible={isViewAllRequestsOpen}
         requests={requests}
         onClose={() => setViewAllRequestsOpen(false)}
-        onSelectRequest={(req) => {
+        onSelectRequest={(req: DashboardRequestItem) => {
           setViewAllRequestsOpen(false);
           setTimeout(() => setSelectedRequest(req), 300);
         }}
-      />
-
-      <BookingModal
-        visible={!!sessionToReschedule}
-        onClose={() => setSessionToReschedule(null)}
-        availability={availability}
-        existingSession={
-          sessionToReschedule
-            ? {
-                date: sessionToReschedule.rawDate,
-                time: sessionToReschedule.time,
-              }
-            : undefined
-        }
-        offering={
-          sessionToReschedule
-            ? {
-                id: "reschedule-temp",
-                title: sessionToReschedule.topic,
-                duration: "60 min",
-                level: "Previous Session Level",
-                icon: "calendar-outline",
-                description: `You are requesting to reschedule your session with ${sessionToReschedule.user}.`,
-              }
-            : null
-        }
       />
     </View>
   );
