@@ -4,6 +4,24 @@ import ProfileScreen from '@/app/(tabs)/profile';
 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: 'View' }));
 
+jest.mock('@/lib/queries/mentorship', () => {
+  const actual = jest.requireActual('@/lib/queries/mentorship');
+  return {
+    ...actual,
+    useAvailabilitySlotsQuery: jest.fn(() => ({ data: undefined })),
+  };
+});
+
+jest.mock('@/lib/auth/store', () => ({
+  useAuthStore: (selector: (state: any) => unknown) =>
+    selector({
+      user: {
+        username: 'Ali Aydin',
+        app_usage_mode: 'BOTH',
+      },
+    }),
+}));
+
 // We must mock expo-router because the Settings icon uses router.push()
 jest.mock('expo-router', () => ({
   useRouter: () => ({
@@ -19,10 +37,10 @@ describe('ProfileScreen Layout', () => {
     expect(getByText('Profile')).toBeTruthy();
 
     // Check that the mock user data rendered
-    expect(getByText('Ali Aydın')).toBeTruthy();
+    expect(getByText('Ali Aydin')).toBeTruthy();
     
     // Check that the main sections rendered
     expect(getByText('Expertise')).toBeTruthy();
-    expect(getByText('Learning Goals')).toBeTruthy();
+    expect(getByText('Eager to Learn')).toBeTruthy();
   });
 });

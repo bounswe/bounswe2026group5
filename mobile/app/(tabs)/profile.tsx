@@ -8,55 +8,65 @@ import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { AvailabilityPreview } from "@/components/profile/AvailabilityPreview";
-import {
-  MentorshipOfferings,
-  Offering,
-} from "@/components/profile/MentorshipOfferings";
 import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { EditAvailabilityModal } from "@/components/profile/EditAvailabilityModal";
 import {
   EditProfileModal,
   UserProfileData,
 } from "@/components/profile/EditProfileModal";
-import { BookingModal } from "@/components/profile/BookingModal";
-import { ManageOfferingsModal } from "@/components/profile/ManageOfferingsModal";
 
-// Combined imports from both branches
 import { API_BASE_URL } from "@/constants/api";
 import {
   mapAvailabilityToSchedule,
   useAvailabilitySlotsQuery,
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
+import { useProfileVisibilityStore } from "@/lib/profile/preferences";
 
 const PROFILE_DEFAULTS = {
   rating: 0,
   reviewCount: 0,
   expertise: [] as string[],
-  learningGoals: [] as string[],
-  preferences: {
-    showAvailability: true,
-    showOfferings: true,
-  },
+  eagerToLearn: [] as string[],
 };
 
+interface OwnProfileResponse {
+  full_name: string;
+  bio: string;
+  picture_url: string;
+  expertises?: string[];
+  eager_to_learn?: string[];
+}
+
+function includesMentor(mode?: string): boolean {
+  return mode === "MENTOR" || mode === "BOTH";
+}
+
+function includesMentee(mode?: string): boolean {
+  return mode === "MENTEE" || mode === "BOTH";
+}
+
 export default function ProfileScreen() {
-  const { preferences } = PROFILE_DEFAULTS;
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const authUser = useAuthStore((state) => state.user);
+  const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const currentUsername = useAuthStore((state) => state.user?.username);
   const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
+
+  const showExpertise = useProfileVisibilityStore((state) => state.showExpertise);
+  const showEagerToLearn = useProfileVisibilityStore((state) => state.showEagerToLearn);
+  const showAvailability = useProfileVisibilityStore((state) => state.showAvailability);
+  const showOfferings = useProfileVisibilityStore((state) => state.showOfferings);
 
   const [availabilityData, setAvailabilityData] = useState<
     { day: string; times: string[] }[]
   >([]);
-  const [offeringsData, setOfferingsData] = useState<Offering[]>([]);
   const [expertiseData, setExpertiseData] = useState<string[]>(
     PROFILE_DEFAULTS.expertise,
   );
-  const [learningGoalsData, setLearningGoalsData] = useState<string[]>(
-    PROFILE_DEFAULTS.learningGoals,
+  const [eagerToLearnData, setEagerToLearnData] = useState<string[]>(
+    PROFILE_DEFAULTS.eagerToLearn,
   );
 
   const [userData, setUserData] = useState<UserProfileData>({
@@ -71,16 +81,64 @@ export default function ProfileScreen() {
     }));
   }, [authUser?.username]);
 
-  const [selectedOffering, setSelectedOffering] = useState<Offering | null>(
-    null,
-  );
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
   const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
-  const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] =
-    useState(false);
 
-  // From feat/mobile-discovery-profile-skills: Load available skills
+  const hasExpertiseData = expertiseData.length > 0;
+  const hasEagerToLearnData = eagerToLearnData.length > 0;
+  const isMentorMode = includesMentor(appUsageMode) || (!appUsageMode && hasExpertiseData);
+  const isMenteeMode = includesMentee(appUsageMode) || (!appUsageMode && hasEagerToLearnData);
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (!currentUsername) {
+      return () => {
+        mounted = false;
+      };
+    }
+
+    fetch(`${API_BASE_URL}/api/profiles/${encodeURIComponent(currentUsername)}/`, {
+      headers: {
+        Accept: "application/json",
+      },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load profile.");
+        }
+
+        const payload = (await response.json()) as OwnProfileResponse;
+        if (!mounted) {
+          return;
+        }
+
+        setUserData((prev) => ({
+          ...prev,
+          name: payload.full_name || prev.name,
+          bio: payload.bio || "",
+        }));
+
+        if (Array.isArray(payload.expertises)) {
+          setExpertiseData(payload.expertises);
+        }
+
+        if (Array.isArray(payload.eager_to_learn)) {
+          setEagerToLearnData(payload.eager_to_learn);
+        }
+      })
+      .catch(() => {
+        if (!mounted) {
+          return;
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentUsername]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -93,11 +151,18 @@ export default function ProfileScreen() {
         if (!response.ok) {
           throw new Error("Failed to load skills.");
         }
-        const payload = (await response.json()) as Array<{ name: string }>;
+        const payload = (await response.json()) as
+          | Array<{ name: string }>
+          | string[];
         if (!mounted) {
           return;
         }
-        setAvailableSkills(payload.map((skill) => skill.name));
+
+        const normalized = payload
+          .map((skill) => (typeof skill === "string" ? skill : skill.name))
+          .filter(Boolean);
+
+        setAvailableSkills(normalized);
       })
       .catch(() => {
         if (mounted) {
@@ -110,7 +175,6 @@ export default function ProfileScreen() {
     };
   }, []);
 
-  // From feat/mobile-react-query-backend-wireup: Sync availability data
   useEffect(() => {
     if (availabilityQuery.data) {
       setAvailabilityData(mapAvailabilityToSchedule(availabilityQuery.data));
@@ -192,55 +256,84 @@ export default function ProfileScreen() {
         />
 
         <View className="px-4 mt-4">
-          <View className="mb-6">
-            <SkillsCloud
-              title="Expertise"
-              skills={expertiseData}
-              variant="mentor"
-              onEdit={() =>
-                openEditModal(
-                  "Expertise",
-                  expertiseData,
-                  "mentor",
-                  setExpertiseData,
-                )
-              }
-              onViewAll={() =>
-                openSkillsModal("Expertise", expertiseData, "mentor")
-              }
-            />
-            <SkillsCloud
-              title="Learning Goals"
-              skills={learningGoalsData}
-              variant="mentee"
-              onEdit={() =>
-                openEditModal(
-                  "Learning Goals",
-                  learningGoalsData,
-                  "mentee",
-                  setLearningGoalsData,
-                )
-              }
-              onViewAll={() =>
-                openSkillsModal("Learning Goals", learningGoalsData, "mentee")
-              }
-            />
+          <View className="mb-4">
+            <Text className="text-lg font-bold text-gray-900 mb-2">Profile Role</Text>
+            <View className="flex-row gap-2">
+              {isMentorMode && (
+                <View className="px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-100">
+                  <Text className="text-indigo-700 font-semibold text-xs uppercase tracking-wide">
+                    Mentor
+                  </Text>
+                </View>
+              )}
+              {isMenteeMode && (
+                <View className="px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100">
+                  <Text className="text-emerald-700 font-semibold text-xs uppercase tracking-wide">
+                    Mentee
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
 
-          {preferences.showAvailability && (
+          <View className="mb-6">
+            {isMentorMode && showExpertise && (
+              <SkillsCloud
+                title="Expertise"
+                skills={expertiseData}
+                variant="mentor"
+                onEdit={() =>
+                  openEditModal(
+                    "Expertise",
+                    expertiseData,
+                    "mentor",
+                    setExpertiseData,
+                  )
+                }
+                onViewAll={() =>
+                  openSkillsModal("Expertise", expertiseData, "mentor")
+                }
+              />
+            )}
+
+            {isMenteeMode && showEagerToLearn && (
+              <SkillsCloud
+                title="Eager to Learn"
+                skills={eagerToLearnData}
+                variant="mentee"
+                onEdit={() =>
+                  openEditModal(
+                    "Eager to Learn",
+                    eagerToLearnData,
+                    "mentee",
+                    setEagerToLearnData,
+                  )
+                }
+                onViewAll={() =>
+                  openSkillsModal("Eager to Learn", eagerToLearnData, "mentee")
+                }
+              />
+            )}
+          </View>
+
+          {isMentorMode && showAvailability && (
             <AvailabilityPreview
               schedule={availabilityData}
               onEdit={() => setAvailabilityModalOpen(true)}
             />
           )}
 
-          {preferences.showOfferings && (
+          {!showOfferings && (
+            <View className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+              <Text className="text-amber-800 font-semibold text-sm">
+                Mentorship offerings are hidden in MVP and will return in a later release.
+              </Text>
+            </View>
+          )}
+
+          {showOfferings && (
             <View className="-mx-4">
-              <MentorshipOfferings
-                offerings={offeringsData}
-                onEdit={() => setManageOfferingsModalOpen(true)}
-                onSelectOffering={(offering) => setSelectedOffering(offering)}
-              />
+              <Text className="px-4 text-gray-500">Offerings are currently disabled.</Text>
             </View>
           )}
         </View>
@@ -280,24 +373,6 @@ export default function ProfileScreen() {
           setUserData(updatedData);
           setEditProfileModalOpen(false);
         }}
-      />
-      <ManageOfferingsModal
-        visible={isManageOfferingsModalOpen}
-        offerings={offeringsData}
-        onClose={() => setManageOfferingsModalOpen(false)}
-        onAdd={(newOffering) =>
-          setOfferingsData([...offeringsData, newOffering])
-        }
-        onDelete={(id) =>
-          setOfferingsData(offeringsData.filter((o) => o.id !== id))
-        }
-        onReorder={(newOrder) => setOfferingsData(newOrder)}
-      />
-      <BookingModal
-        visible={!!selectedOffering}
-        offering={selectedOffering}
-        availability={availabilityData}
-        onClose={() => setSelectedOffering(null)}
       />
     </View>
   );
