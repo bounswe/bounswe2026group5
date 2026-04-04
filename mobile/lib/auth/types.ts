@@ -11,6 +11,7 @@ export interface AuthUser {
   email: string;
   username: string;
   role: string;
+  app_usage_mode?: "MENTOR" | "MENTEE" | "BOTH" | "";
   auth_provider: string;
   is_active: boolean;
   created_at: string;

@@ -47,6 +47,11 @@ interface AuthStore extends AuthState {
    * Set loading state.
    */
   setLoading: (isLoading: boolean) => void;
+
+  /**
+   * Patch local user fields after profile/account updates.
+   */
+  updateUser: (patch: Partial<AuthUser>) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
@@ -152,5 +157,20 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   setLoading: (isLoading: boolean) => {
     set({ isLoading });
+  },
+
+  updateUser: async (patch: Partial<AuthUser>) => {
+    const state = get();
+    if (!state.user) {
+      return;
+    }
+
+    const nextUser = {
+      ...state.user,
+      ...patch,
+    };
+
+    await storeUser(nextUser);
+    set({ user: nextUser });
   },
 }));

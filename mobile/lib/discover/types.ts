@@ -1,7 +1,9 @@
-export interface DiscoverSkill {
-  id: string;
-  name: string;
-}
+export type DiscoverSkill =
+  | {
+      id?: string;
+      name: string;
+    }
+  | string;
 
 export interface DiscoverMentorProfile {
   id: string;

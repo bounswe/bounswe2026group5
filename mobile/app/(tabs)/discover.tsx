@@ -63,7 +63,8 @@ export default function DiscoverScreen() {
           return;
         }
         const sortedSkills = list
-          .map((item) => item.name)
+          .map((item) => (typeof item === "string" ? item : item.name))
+          .filter(Boolean)
           .sort((a, b) => a.localeCompare(b));
         setSkills(sortedSkills);
       })
