@@ -92,12 +92,16 @@ export default function RegisterScreen() {
   const updateUsageMode = useMutation({
     mutationFn: updateUsageModeFn,
     onSuccess: (_data, variables) => {
+      const skillsPayload =
+        variables.app_usage_mode === 'MENTOR'
+          ? { expertises: selectedSubjects }
+          : { eager_to_learn: selectedSubjects };
+
       updateProfile.mutate({
         username: variables._username,
         accessToken: variables.accessToken,
         display_name: displayName.trim(),
-        role: variables.app_usage_mode,
-        skills: selectedSubjects,
+        ...skillsPayload,
       });
     },
     onError: (error: Error) => {
@@ -126,6 +130,13 @@ export default function RegisterScreen() {
     register.isPending || updateUsageMode.isPending || updateProfile.isPending;
 
   // ── Handlers ───────────────────────────────────────────────────────────────
+
+  const handleRoleChange = (newRole: 'mentor' | 'mentee') => {
+    if (newRole === role) return;
+    setRole(newRole);
+    setSelectedSubjects([]);
+    setSkillsError('');
+  };
 
   const handleConfirmPasswordChange = (text: string) => {
     setConfirmPassword(text);
@@ -215,7 +226,7 @@ export default function RegisterScreen() {
               </Text>
               <View className="flex-row items-center p-1.5 rounded-xl h-14 bg-surface-input dark:bg-surface-input-dark">
                 <Pressable
-                  onPress={() => setRole('mentor')}
+                  onPress={() => handleRoleChange('mentor')}
                   className="flex-1 h-full rounded-lg items-center justify-center"
                   style={role === 'mentor' ? { backgroundColor: theme.cardBackground } : undefined}
                   accessibilityRole="button"
@@ -230,7 +241,7 @@ export default function RegisterScreen() {
                   </Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => setRole('mentee')}
+                  onPress={() => handleRoleChange('mentee')}
                   className="flex-1 h-full rounded-lg items-center justify-center"
                   style={role === 'mentee' ? { backgroundColor: theme.cardBackground } : undefined}
                   accessibilityRole="button"
