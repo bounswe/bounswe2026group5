@@ -3,7 +3,8 @@
 from typing import Any, cast
 
 from django.db import IntegrityError, transaction
-from django.db.models import OuterRef, Subquery
+from django.db.models import CharField, OuterRef, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -270,13 +271,17 @@ class MyUpcomingSessionsListAPIView(APIView):
                 start_at__gte=timezone.now(),
             )
             .annotate(
-                request_status=Subquery(
-                    MentorshipRequest.objects.filter(
-                        slot_id=OuterRef("pk"),
-                        mentee=profile,
-                    )
-                    .order_by("-created_at")
-                    .values("status")[:1]
+                request_status=Coalesce(
+                    Subquery(
+                        MentorshipRequest.objects.filter(
+                            slot_id=OuterRef("pk"),
+                            mentee=profile,
+                        )
+                        .order_by("-created_at")
+                        .values("status")[:1]
+                    ),
+                    Value(MentorshipRequest.Status.ACCEPTED),
+                    output_field=CharField(),
                 )
             )
             .select_related("profile")
