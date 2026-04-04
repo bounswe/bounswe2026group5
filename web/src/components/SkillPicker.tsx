@@ -1,43 +1,39 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Input } from "#/components/ui/input.tsx"
-// I think that component can be used in more places. (Like profile page maybe)
-type Skill = { name: string }
+import { skillsQueryOptions } from "#/lib/queries/ProfileQueries.ts"
 
 type SkillPickerProps = {
-    selected: Skill[]
-    onChange: (skills: Skill[]) => void
+    selected: string[]
+    onChange: (skills: string[]) => void
+    mode?: 'mentor' | 'mentee'
 }
 
-// This is the skillSet
-const PREDEFINED_SKILLS: Skill[] = [
-    { name: 'Mathematics' }, { name: 'Calculus' }, { name: 'Linear Algebra' },
-    { name: 'Statistics' }, { name: 'Physics' }, { name: 'Chemistry' },
-    { name: 'Biology' }, { name: 'Computer Science' }, { name: 'TypeScript' },
-    { name: 'Python' }, { name: 'Java' }, { name: 'C++' }, { name: 'React' },
-    { name: 'Data Structures' }, { name: 'Algorithms' }, { name: 'Machine Learning' },
-    { name: 'Economics' }, { name: 'History' }, { name: 'Philosophy' },
-    { name: 'Literature' }, { name: 'English Writing' }, { name: 'Spanish' },
-    { name: 'French' }, { name: 'German' }, { name: 'Music Theory' },
-]
-
-
-export function SkillPicker({ selected, onChange }: SkillPickerProps) {
+export function SkillPicker({ selected, onChange, mode = 'mentee' }: SkillPickerProps) {
     const [filter, setFilter] = useState('')
+    const { data: skills = [], isLoading } = useQuery(skillsQueryOptions)
 
-    const filtered = PREDEFINED_SKILLS.filter(s =>
+    const filtered = skills.filter(s =>
         s.name.toLowerCase().includes(filter.toLowerCase())
     )
 
-    const isSelected = (skill: Skill) =>
-        selected.some(s => s.name === skill.name)
+    const isSelected = (skillName: string) => selected.includes(skillName)
 
-    const toggle = (skill: Skill) => {
-        if (isSelected(skill)) {
-            onChange(selected.filter(s => s.name !== skill.name))
+    const toggle = (skillName: string) => {
+        if (isSelected(skillName)) {
+            onChange(selected.filter(s => s !== skillName))
         } else {
-            onChange([...selected, skill])
+            onChange([...selected, skillName])
         }
     }
+
+    const selectedStyle = mode === 'mentor'
+        ? 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100'
+        : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+
+    const hoverStyle = mode === 'mentor'
+        ? 'hover:bg-violet-50 hover:text-violet-700 hover:border-violet-200'
+        : 'hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200'
 
     return (
         <div className="flex flex-col gap-3">
@@ -48,17 +44,19 @@ export function SkillPicker({ selected, onChange }: SkillPickerProps) {
                 onChange={e => setFilter(e.target.value)}
             />
             <div className="island-shell rounded-xl p-4 flex flex-wrap gap-2 max-h-56 overflow-y-auto">
-                {filtered.length === 0 ? (
+                {isLoading ? (
+                    <p className="text-muted-foreground text-sm">Loading skills...</p>
+                ) : filtered.length === 0 ? (
                     <p className="text-muted-foreground text-sm">No skills match your filter.</p>
                 ) : (
                     filtered.map(skill => (
                         <button
                             key={skill.name}
-                            onClick={() => toggle(skill)}
+                            onClick={() => toggle(skill.name)}
                             className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all duration-150 ${
-                                isSelected(skill)
-                                    ? 'bg-primary text-primary-foreground border-primary'
-                                    : 'bg-background text-foreground border-border hover:border-primary/60 hover:text-primary'
+                                isSelected(skill.name)
+                                    ? selectedStyle
+                                    : `bg-background text-foreground border-border ${hoverStyle}`
                             }`}
                         >
                             {skill.name}

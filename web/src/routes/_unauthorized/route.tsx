@@ -1,7 +1,7 @@
 import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
 import {UnauthorizedHeader} from "#/components/layout/UnauthorizedHeader.tsx";
 import {UnauthorizedFooter} from "#/components/layout/UnauthorizedFooter.tsx";
-import {getStoredUser} from "#/lib/queries/Authqueries.ts";
+import {getStoredUser} from "#/lib/queries/AuthQueries.ts";
 
 export const Route = createFileRoute('/_unauthorized')({
     beforeLoad: () => {
