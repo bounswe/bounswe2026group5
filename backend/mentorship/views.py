@@ -3,6 +3,8 @@
 from typing import Any, cast
 
 from django.db import IntegrityError, transaction
+from django.db.models import OuterRef, Subquery
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.request import Request
@@ -25,6 +27,7 @@ from .serializers import (
     MentorshipRequestCreateSerializer,
     MentorshipRequestSerializer,
     RespondToRequestSerializer,
+    UpcomingMenteeSessionSerializer,
 )
 
 _NOT_FOUND = {"detail": "Not found."}
@@ -229,3 +232,58 @@ class MyMatchesListAPIView(APIView):
         )
 
         return Response(MatchSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+
+class MyUpcomingSessionsListAPIView(APIView):
+    """List upcoming booked sessions for the authenticated mentee."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: UpcomingMenteeSessionSerializer(many=True),
+            401: OpenApiResponse(description="Authentication required."),
+        },
+        description=(
+            "List upcoming booked sessions for the authenticated user as mentee. "
+            "Sessions are resolved from active matches and mentor availability slots "
+            "booked by the current user."
+        ),
+        tags=["Mentorship"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return future booked slots by mentors who have an active match with caller."""
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response([], status=status.HTTP_200_OK)
+
+        mentor_profile_ids = Match.objects.filter(mentee=profile, is_active=True).values_list(
+            "mentor_id", flat=True
+        )
+
+        upcoming_slots = (
+            AvailabilitySlot.objects.filter(
+                profile_id__in=mentor_profile_ids,
+                is_booked=True,
+                booked_by=request.user,
+                start_at__gte=timezone.now(),
+            )
+            .annotate(
+                request_status=Subquery(
+                    MentorshipRequest.objects.filter(
+                        slot_id=OuterRef("pk"),
+                        mentee=profile,
+                    )
+                    .order_by("-created_at")
+                    .values("status")[:1]
+                )
+            )
+            .select_related("profile")
+            .order_by("start_at")
+        )
+
+        return Response(
+            UpcomingMenteeSessionSerializer(upcoming_slots, many=True).data,
+            status=status.HTTP_200_OK,
+        )
