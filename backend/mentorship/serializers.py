@@ -158,3 +158,39 @@ class MatchSerializer(serializers.ModelSerializer):
         model = Match
         fields = ("id", "mentor", "mentee", "request_id", "is_active")
         read_only_fields = fields
+
+
+class UpcomingMenteeSessionSerializer(serializers.ModelSerializer):
+    """Read serializer for upcoming sessions booked by the current mentee."""
+
+    slot_id = serializers.UUIDField(source="id", read_only=True)
+    mentor = ProfileSummarySerializer(source="profile", read_only=True)
+    slot_date = serializers.SerializerMethodField()
+    slot_start_time = serializers.SerializerMethodField()
+    slot_end_time = serializers.SerializerMethodField()
+    status = serializers.CharField(source="request_status", read_only=True)
+
+    class Meta:
+        model = AvailabilitySlot
+        fields = (
+            "slot_id",
+            "mentor",
+            "slot_date",
+            "slot_start_time",
+            "slot_end_time",
+            "status",
+            "booked_at",
+        )
+        read_only_fields = fields
+
+    def get_slot_date(self, obj: AvailabilitySlot) -> str:
+        """Return session date in local timezone."""
+        return timezone.localtime(obj.start_at).date().isoformat()
+
+    def get_slot_start_time(self, obj: AvailabilitySlot) -> str:
+        """Return session start time in local timezone."""
+        return timezone.localtime(obj.start_at).time().replace(microsecond=0).isoformat()
+
+    def get_slot_end_time(self, obj: AvailabilitySlot) -> str:
+        """Return session end time in local timezone."""
+        return timezone.localtime(obj.end_at).time().replace(microsecond=0).isoformat()
