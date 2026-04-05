@@ -9,7 +9,7 @@ import { DiscoverSearchBar } from '@/components/features/discover/DiscoverSearch
 import { DiscoverFilterPanel } from '@/components/features/discover/DiscoverFilterPanel'
 import { mentorSearchInfiniteQueryOptions, allSkillsQueryOptions } from '@/lib/queries/DiscoverQueries.ts'
 
-const PAGE_SIZE = 3
+const PAGE_SIZE = 6
 
 export const Route = createFileRoute('/_authorized/discover')({
     component: DiscoverPage,
