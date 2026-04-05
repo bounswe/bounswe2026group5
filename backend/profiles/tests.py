@@ -1116,13 +1116,19 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn("results", payload)
+        self.assertTrue(all("username" in profile for profile in payload["results"]))
 
         returned_names = {p["full_name"] for p in payload["results"]}
+        returned_usernames = {p["username"] for p in payload["results"]}
         # Only visible mentors should be included.
         self.assertIn("Alice Mentor", returned_names)
         self.assertIn("JD", returned_names)  # initials due to show_initials_only
         self.assertIn("Bob Zed", returned_names)
         self.assertNotIn("Private Mentor", returned_names)
+        self.assertIn(self.mentor1_profile.username, returned_usernames)
+        self.assertIn(self.mentor2_profile.username, returned_usernames)
+        self.assertIn(self.mentor3_profile.username, returned_usernames)
+        self.assertNotIn(self.private_mentor_profile.username, returned_usernames)
         # Default discovery is mentors only.
         self.assertNotIn("Mentee Person", returned_names)
 
@@ -1134,6 +1140,7 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
 
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["results"][0]["full_name"], "Alice Mentor")
+        self.assertEqual(payload["results"][0]["username"], self.mentor1_profile.username)
 
     def test_filter_by_skill_term(self) -> None:
         """`skill` query param matches profile skills."""
