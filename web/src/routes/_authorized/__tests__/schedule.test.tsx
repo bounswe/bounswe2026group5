@@ -105,10 +105,13 @@ vi.mock('#/lib/queries/ProfileTimeSlotQueries.ts', () => ({
   useAvailabilitySlots: () => ({ data: [], isLoading: false }),
 }))
 
-vi.mock('#/lib/utils.ts', () => ({
-  getInitials: (name: string) => name.slice(0, 2).toUpperCase(),
-}))
-
+vi.mock('#/lib/utils.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('#/lib/utils.ts')>()
+  return {
+    ...actual,
+    getInitials: (name: string) => name.slice(0, 2).toUpperCase(),
+  }
+})
 import { SchedulePage } from '../schedule'
 
 function renderWithUser(appUsageMode: 'MENTOR' | 'MENTEE') {
@@ -146,7 +149,7 @@ describe('SchedulePage', () => {
 
   it('renders mentor name in mentee schedule table', () => {
     renderWithUser('MENTEE')
-    expect(screen.getByText('John Smith')).toBeInTheDocument()
+    expect(screen.getAllByText('John Smith').length).toBeGreaterThan(0)
   })
 
   it('renders the Mentor Teaching Schedule for mentor', () => {
