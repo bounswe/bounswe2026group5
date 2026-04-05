@@ -1,8 +1,6 @@
-import { queryOptions } from '@tanstack/react-query'
+import { queryOptions, infiniteQueryOptions } from '@tanstack/react-query'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
-
-// ---- Types ----
 
 export interface PublicMentorProfile {
     id: string
@@ -29,7 +27,6 @@ export interface MentorSearchResponse {
 export interface MentorSearchParams {
     q?: string
     skills?: string[]
-    page?: number
     pageSize?: number
 }
 
@@ -38,9 +35,9 @@ export interface Skill {
     name: string
 }
 
-// ---- Fetchers ----
-
-export async function fetchMentors(params: MentorSearchParams): Promise<MentorSearchResponse> {
+export async function fetchMentors(
+    params: MentorSearchParams & { page: number }
+): Promise<MentorSearchResponse> {
     const url = new URL(`${API_BASE_URL}/profiles/`, window.location.origin)
 
     if (params.q)              url.searchParams.set('q', params.q)
@@ -59,18 +56,20 @@ export async function fetchAllSkills(): Promise<Skill[]> {
     return res.json()
 }
 
-// ---- Query Options ----
-
-export const mentorSearchQueryOptions = (params: MentorSearchParams) =>
-    queryOptions({
+export const mentorSearchInfiniteQueryOptions = (params: MentorSearchParams) =>
+    infiniteQueryOptions({
         queryKey: ['mentors', 'search', params],
-        queryFn: () => fetchMentors(params),
-        staleTime: 30 * 1000,
-        placeholderData: (prev) => prev,
+        queryFn: ({ pageParam }) =>
+            fetchMentors({ ...params, page: pageParam as number }),
+        initialPageParam: 1,
+        getNextPageParam: (lastPage) => {
+            const fetched = lastPage.page * lastPage.pageSize
+            return fetched < lastPage.count ? lastPage.page + 1 : undefined
+        },
     })
 
 export const allSkillsQueryOptions = queryOptions({
     queryKey: ['profiles', 'skills'],
     queryFn: fetchAllSkills,
-    staleTime: 5 * 60 * 1000,
+    staleTime: Infinity,
 })
