@@ -1,4 +1,4 @@
-import {queryOptions, useMutation, useQueries, useQuery, useQueryClient} from "@tanstack/react-query"
+import {queryOptions, useMutation, useQueries, useQuery } from "@tanstack/react-query"
 import {profileQueryOptions} from "#/lib/queries/ProfileQueries.ts";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
