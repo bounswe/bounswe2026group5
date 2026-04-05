@@ -11,9 +11,12 @@ import { Calendar, DateData } from "react-native-calendars";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import {
+  type DashboardSessionItem,
   mapMatchesToSessions,
+  mapUpcomingSessionsToDashboard,
   useMentorshipMatchesQuery,
   useMentorshipRequestsQuery,
+  useMentorshipUpcomingSessionsQuery,
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
 
@@ -48,20 +51,61 @@ export default function ScheduleScreen() {
   const [selectedSession, setSelectedSession] =
     useState<ScheduleSession | null>(null);
   const currentUsername = useAuthStore((state) => state.user?.username);
+  const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
+  const upcomingSessionsQuery = useMentorshipUpcomingSessionsQuery(currentUsername);
+
+  const isMenteeOnly = appUsageMode === "MENTEE";
+  const isMentorOnly = appUsageMode === "MENTOR";
 
   const sessions = useMemo(() => {
-    if (!currentUsername || !requestsQuery.data || !matchesQuery.data) {
+    if (!currentUsername) {
       return [];
     }
 
-    return mapMatchesToSessions(
-      requestsQuery.data,
-      matchesQuery.data,
-      currentUsername,
+    if (isMenteeOnly) {
+      return mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []);
+    }
+
+    if (isMentorOnly) {
+      return mapMatchesToSessions(
+        requestsQuery.data ?? [],
+        matchesQuery.data ?? [],
+        currentUsername,
+      );
+    }
+
+    const byKey = new Map<string, DashboardSessionItem>();
+
+    mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []).forEach(
+      (session) => {
+        byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
+      },
     );
-  }, [currentUsername, requestsQuery.data, matchesQuery.data]);
+
+    mapMatchesToSessions(
+      requestsQuery.data ?? [],
+      matchesQuery.data ?? [],
+      currentUsername,
+    ).forEach((session) => {
+      byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
+    });
+
+    return Array.from(byKey.values()).sort((a, b) => {
+      const aKey = `${a.rawDate}T${a.time.split(" - ")[0] ?? "00:00"}`;
+      const bKey = `${b.rawDate}T${b.time.split(" - ")[0] ?? "00:00"}`;
+      return aKey.localeCompare(bKey);
+    });
+  }, [
+    currentUsername,
+    appUsageMode,
+    isMenteeOnly,
+    isMentorOnly,
+    upcomingSessionsQuery.data,
+    requestsQuery.data,
+    matchesQuery.data,
+  ]);
 
   const markedDates = useMemo(() => {
     const marks: any = {};

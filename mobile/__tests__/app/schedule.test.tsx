@@ -18,6 +18,7 @@ jest.mock("@/lib/queries/mentorship", () => {
     ...actual,
     useMentorshipRequestsQuery: jest.fn(() => ({ data: [] })),
     useMentorshipMatchesQuery: jest.fn(() => ({ data: [] })),
+    useMentorshipUpcomingSessionsQuery: jest.fn(() => ({ data: [] })),
   };
 });
 
@@ -26,6 +27,7 @@ jest.mock("@/lib/auth/store", () => ({
     selector({
       user: {
         username: "student",
+        app_usage_mode: "MENTEE",
       },
     }),
 }));

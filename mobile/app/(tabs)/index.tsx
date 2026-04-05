@@ -13,11 +13,14 @@ import { ViewAllRequestsModal } from "@/components/dashboard/ViewAllRequestsModa
 
 import {
   mapMatchesToSessions,
+  mapUpcomingSessionsToDashboard,
   mapRequestsToDashboard,
   useMentorshipMatchesQuery,
+  useMentorshipUpcomingSessionsQuery,
   useMentorshipRequestsQuery,
   useRespondToMentorshipRequestMutation,
   type DashboardRequestItem,
+  type DashboardSessionItem,
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
 
@@ -26,10 +29,15 @@ export default function DashboardScreen() {
   const router = useRouter();
 
   const currentUsername = useAuthStore((state) => state.user?.username);
+  const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
 
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
+  const upcomingSessionsQuery = useMentorshipUpcomingSessionsQuery(currentUsername);
   const respondMutation = useRespondToMentorshipRequestMutation();
+
+  const isMenteeOnly = appUsageMode === "MENTEE";
+  const isMentorOnly = appUsageMode === "MENTOR";
 
   // Debug logging
   React.useEffect(() => {
@@ -41,6 +49,9 @@ export default function DashboardScreen() {
       matchesLoading: matchesQuery.isLoading,
       matchesError: matchesQuery.error?.message,
       matchesData: matchesQuery.data?.length,
+      sessionsLoading: upcomingSessionsQuery.isLoading,
+      sessionsError: upcomingSessionsQuery.error?.message,
+      sessionsData: upcomingSessionsQuery.data?.length,
     });
   }, [
     currentUsername,
@@ -50,6 +61,9 @@ export default function DashboardScreen() {
     matchesQuery.isLoading,
     matchesQuery.error,
     matchesQuery.data,
+    upcomingSessionsQuery.isLoading,
+    upcomingSessionsQuery.error,
+    upcomingSessionsQuery.data,
   ]);
 
   const requests = useMemo<DashboardRequestItem[]>(() => {
@@ -80,16 +94,52 @@ export default function DashboardScreen() {
   ]);
 
   const sessions = useMemo(() => {
-    if (!currentUsername || !requestsQuery.data || !matchesQuery.data) {
+    if (!currentUsername) {
       return [];
     }
 
-    return mapMatchesToSessions(
-      requestsQuery.data,
-      matchesQuery.data,
-      currentUsername,
+    if (isMenteeOnly) {
+      return mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []);
+    }
+
+    if (isMentorOnly) {
+      return mapMatchesToSessions(
+        requestsQuery.data ?? [],
+        matchesQuery.data ?? [],
+        currentUsername,
+      );
+    }
+
+    const byKey = new Map<string, DashboardSessionItem>();
+
+    mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []).forEach(
+      (session) => {
+        byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
+      },
     );
-  }, [currentUsername, requestsQuery.data, matchesQuery.data]);
+
+    mapMatchesToSessions(
+      requestsQuery.data ?? [],
+      matchesQuery.data ?? [],
+      currentUsername,
+    ).forEach((session) => {
+      byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
+    });
+
+    return Array.from(byKey.values()).sort((a, b) => {
+      const aKey = `${a.rawDate}T${a.time.split(" - ")[0] ?? "00:00"}`;
+      const bKey = `${b.rawDate}T${b.time.split(" - ")[0] ?? "00:00"}`;
+      return aKey.localeCompare(bKey);
+    });
+  }, [
+    currentUsername,
+    appUsageMode,
+    isMenteeOnly,
+    isMentorOnly,
+    upcomingSessionsQuery.data,
+    requestsQuery.data,
+    matchesQuery.data,
+  ]);
 
   // State for Modals
   const [selectedRequest, setSelectedRequest] =
@@ -112,6 +162,7 @@ export default function DashboardScreen() {
       setSelectedRequest(null);
       requestsQuery.refetch();
       matchesQuery.refetch();
+      upcomingSessionsQuery.refetch();
     } catch (error) {
       Alert.alert(
         "Request Action Failed",
@@ -193,8 +244,7 @@ export default function DashboardScreen() {
           {sessions.length === 0 ? (
             <View className="bg-white p-4 rounded-xl border border-gray-100">
               <Text className="text-gray-500 font-medium">
-                No sessions yet. Session data will appear when the backend
-                sessions endpoint is wired.
+                No upcoming sessions yet.
               </Text>
             </View>
           ) : (

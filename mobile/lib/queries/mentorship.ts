@@ -17,6 +17,8 @@ export interface DashboardRequestItem {
   isReschedule?: boolean;
 }
 
+type BackendRequestStatus = "PENDING" | "ACCEPTED" | "REJECTED";
+
 export interface DashboardSessionItem {
   id: string;
   requestId: string;
@@ -50,7 +52,7 @@ interface BackendMentorshipRequest {
   slot_date: string | null;
   slot_start_time: string | null;
   slot_end_time: string | null;
-  status: "PENDING" | "ACCEPTED" | "REJECTED";
+  status: BackendRequestStatus;
   cover_letter: string;
   created_at: string;
   responded_at: string | null;
@@ -62,6 +64,16 @@ interface BackendMatch {
   mentee: BackendProfileSummary;
   request_id: string;
   is_active: boolean;
+}
+
+interface BackendUpcomingSession {
+  slot_id: string;
+  mentor: BackendProfileSummary;
+  slot_date: string;
+  slot_start_time: string;
+  slot_end_time: string;
+  status: BackendRequestStatus;
+  booked_at: string;
 }
 
 interface BackendAvailabilitySlot {
@@ -88,6 +100,20 @@ function toDisplayTime(value: string | null): string {
     return "TBD";
   }
   return value.slice(0, 5);
+}
+
+function parseLocalDateTime(dateValue: string, timeValue: string): Date {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const [hours, minutes, seconds = "0"] = timeValue.split(":");
+
+  return new Date(
+    year,
+    (month || 1) - 1,
+    day || 1,
+    Number(hours),
+    Number(minutes),
+    Number(seconds),
+  );
 }
 
 function toProposedDate(value: BackendMentorshipRequest): string | undefined {
@@ -125,6 +151,20 @@ export function useMentorshipMatchesQuery(currentUsername?: string) {
   return useQuery({
     queryKey: ["mentorship", "matches", "me", currentUsername ?? "anonymous"],
     queryFn: () => apiGet<BackendMatch[]>("/api/mentorship/matches/me/"),
+    enabled: Boolean(currentUsername),
+    refetchOnMount: "always",
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Fetch upcoming sessions for the authenticated mentee.
+ */
+export function useMentorshipUpcomingSessionsQuery(currentUsername?: string) {
+  return useQuery({
+    queryKey: ["mentorship", "sessions", "me", "upcoming", currentUsername ?? "anonymous"],
+    queryFn: () =>
+      apiGet<BackendUpcomingSession[]>("/api/mentorship/sessions/me/upcoming/"),
     enabled: Boolean(currentUsername),
     refetchOnMount: "always",
     staleTime: 60_000,
@@ -183,6 +223,9 @@ export function useRespondToMentorshipRequestMutation() {
         }),
         queryClient.invalidateQueries({
           queryKey: ["mentorship", "matches", "me"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "sessions", "me", "upcoming"],
         }),
       ]);
     },
@@ -268,8 +311,9 @@ export function mapMatchesToSessions(
       const isMentor = match.mentor.username === currentUsername;
       const peer = isMentor ? match.mentee : match.mentor;
 
-      const sessionDate = new Date(
-        `${request.slot_date}T${request.slot_start_time}`,
+      const sessionDate = parseLocalDateTime(
+        request.slot_date,
+        request.slot_start_time,
       );
       const status: DashboardSessionItem["status"] =
         sessionDate < now ? "Completed" : "Upcoming";
@@ -290,10 +334,50 @@ export function mapMatchesToSessions(
     });
 
   return sessionItems.sort((a, b) => {
-    const aKey = `${a.rawDate}T${a.time.slice(0, 5)}`;
-    const bKey = `${b.rawDate}T${b.time.slice(0, 5)}`;
-    return aKey.localeCompare(bKey);
+    const aStartTime = a.time.split(" - ")[0] ?? "00:00";
+    const bStartTime = b.time.split(" - ")[0] ?? "00:00";
+    return (
+      parseLocalDateTime(a.rawDate, `${aStartTime}:00`).getTime() -
+      parseLocalDateTime(b.rawDate, `${bStartTime}:00`).getTime()
+    );
   });
+}
+
+/**
+ * Build session cards from dedicated upcoming sessions endpoint.
+ */
+export function mapUpcomingSessionsToDashboard(
+  sessions: BackendUpcomingSession[],
+): DashboardSessionItem[] {
+  return sessions
+    .map((session) => {
+      const sessionDate = parseLocalDateTime(
+        session.slot_date,
+        session.slot_start_time,
+      );
+      const uiStatus: DashboardSessionItem["status"] =
+        session.status === "PENDING" ? "Pending" : "Upcoming";
+
+      return {
+        id: session.slot_id,
+        requestId: session.slot_id,
+        user: session.mentor.display_name || session.mentor.username,
+        date: SESSION_DATE_FORMATTER.format(sessionDate),
+        rawDate: session.slot_date,
+        time: `${toDisplayTime(session.slot_start_time)} - ${toDisplayTime(session.slot_end_time)}`,
+        status: uiStatus,
+        topic: "Mentorship Session",
+        myRole: "Mentee" as const,
+      };
+    })
+    .sort((a, b) => {
+      const aStartTime = a.time.split(" - ")[0] ?? "00:00";
+      const bStartTime = b.time.split(" - ")[0] ?? "00:00";
+      return (
+        parseLocalDateTime(a.rawDate, `${aStartTime}:00`).getTime() -
+        parseLocalDateTime(b.rawDate, `${bStartTime}:00`).getTime()
+      );
+    });
 }
 
 /**
