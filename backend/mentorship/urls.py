@@ -6,6 +6,7 @@ from .views import (
     CreateRequestAPIView,
     MyMatchesListAPIView,
     MyRequestsListAPIView,
+    MyUpcomingSessionsListAPIView,
     RespondToRequestAPIView,
 )
 
@@ -18,4 +19,9 @@ urlpatterns = [
         name="mentorship-request-respond",
     ),
     path("matches/me/", MyMatchesListAPIView.as_view(), name="mentorship-match-list"),
+    path(
+        "sessions/me/upcoming/",
+        MyUpcomingSessionsListAPIView.as_view(),
+        name="mentorship-upcoming-session-list",
+    ),
 ]
