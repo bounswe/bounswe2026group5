@@ -1,4 +1,5 @@
-import {queryOptions, useMutation, useQuery, useQueryClient} from "@tanstack/react-query"
+import {queryOptions, useMutation, useQueries, useQuery } from "@tanstack/react-query"
+import {profileQueryOptions} from "#/lib/queries/ProfileQueries.ts";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -90,6 +91,48 @@ export function useCancelBooking(username: string) {
     return useMutation({
         mutationFn: (slotId: string) => cancelBooking(username, slotId),
     })
+}
+
+export function useMentorUpcomingSessions(username: string) {
+    const { data: allSlots = [], isLoading: slotsLoading } = useAvailabilitySlots(username)
+
+    console.log('allSlots:', allSlots)
+    console.log('username:', username)
+
+    const in7Days = new Date()
+    in7Days.setDate(in7Days.getDate() + 7)
+
+    const upcomingBookedSlots = allSlots
+        .filter(slot => {
+            if (!slot.is_booked || !slot.bookedBy) return false
+            const slotDateTime = new Date(`${slot.date}T${slot.startTime}`)
+            return slotDateTime >= new Date() && slotDateTime <= in7Days
+        })
+        .sort((a, b) => a.date.localeCompare(b.date))
+
+    console.log('upcomingBookedSlots:', upcomingBookedSlots)
+    const uniqueMenteeUsernames = [...new Set(
+        upcomingBookedSlots.map(s => s.bookedBy).filter(Boolean) as string[]
+    )]
+
+    const profileQueries = useQueries({
+        queries: uniqueMenteeUsernames.map(u => ({
+            ...profileQueryOptions(u),
+            enabled: !!u,
+        })),
+    })
+
+    const profilesByUsername: Record<string, any> = Object.fromEntries(
+        profileQueries
+            .map((q, i) => [uniqueMenteeUsernames[i], q.data])
+            .filter(([, data]) => !!data)
+    )
+
+    return {
+        sessions: upcomingBookedSlots,
+        profilesByUsername,
+        isLoading: slotsLoading || profileQueries.some(q => q.isLoading),
+    }
 }
 
 // to be deleted later maybe

@@ -34,6 +34,16 @@ export interface MentorshipRequest {
     responded_at: string | null
 }
 
+export interface UpcomingSession { // for mentee
+    slot_id: string
+    mentor: MatchUser
+    slot_date: string
+    slot_start_time: string
+    slot_end_time: string
+    status: string
+    booked_at: string
+}
+
 // ---- Fetchers ----
 
 async function fetchMyMatches(): Promise<Match[]> {
@@ -85,6 +95,15 @@ async function respondToRequest(requestId: string, action: 'accept' | 'reject'):
     return res.json()
 }
 
+async function fetchUpcomingSessions(): Promise<UpcomingSession[]> {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`${API_BASE_URL}/mentorship/sessions/me/upcoming/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('Failed to fetch upcoming sessions')
+    return res.json()
+}
+
 
 // ---- Query Options ----
 
@@ -98,6 +117,13 @@ export const myRequestsQueryOptions = queryOptions({
     queryKey: ['mentorship', 'requests'],
     queryFn: fetchMyRequests,
     staleTime: 2 * 60 * 1000,
+    gcTime: Infinity,
+})
+
+export const upcomingSessionsQueryOptions = queryOptions({
+    queryKey: ['mentorship', 'sessions', 'upcoming'],
+    queryFn: fetchUpcomingSessions,
+    staleTime: 0,
     gcTime: Infinity,
 })
 
@@ -121,4 +147,8 @@ export function useRespondToRequest() {
         mutationFn: ({ requestId, action }: { requestId: string; action: 'accept' | 'reject' }) =>
             respondToRequest(requestId, action),
     })
+}
+
+export function useUpcomingSessions() {
+    return useQuery(upcomingSessionsQueryOptions)
 }

@@ -22,8 +22,19 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 vi.mock('#/lib/queries/MentorshipQueries.ts', () => ({
   useMyRequests: () => ({ data: [], isLoading: false }),
   useRespondToRequest: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpcomingSessions: () => ({ data: [], isLoading: false }),
+  myRequestsQueryOptions: { queryKey: ['mentorship', 'requests'], queryFn: () => null },
+  myMatchesQueryOptions: { queryKey: ['mentorship', 'matches'], queryFn: () => null },
 }))
 
+vi.mock('#/lib/queries/ProfileTimeSlotQueries.ts', () => ({
+  useMentorUpcomingSessions: () => ({
+    sessions: [],
+    profilesByUsername: {},
+    isLoading: false,
+  }),
+  useAvailabilitySlots: () => ({ data: [], isLoading: false }),
+}))
 import { DashboardHome } from '../dashboard'
 
 function renderWithUser(appUsageMode: 'MENTOR' | 'MENTEE') {

@@ -251,6 +251,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
     const invalidate = () => {
         queryClient.refetchQueries({ queryKey: ['availability-slots', username] })
         queryClient.invalidateQueries({ queryKey: ['profiles', username] })
+        queryClient.invalidateQueries({ queryKey: ['mentorship', 'sessions', 'upcoming'] })
     }
 
     const handleCellClick = (dateStr: string, hour: number, existing: AvailabilitySlot | undefined) => {
