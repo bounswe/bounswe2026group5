@@ -351,8 +351,11 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
     """
 
     full_name = serializers.SerializerMethodField()
+    username = serializers.CharField(read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
-    expertises = serializers.ListField(child=serializers.CharField(), source="skills", read_only=True)
+    expertises = serializers.ListField(
+        child=serializers.CharField(), source="skills", read_only=True
+    )
     picture_url = serializers.URLField(read_only=True)
     location = LocationField(read_only=True)
     show_initials_only = serializers.BooleanField(read_only=True)
@@ -361,6 +364,7 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
         model = Profile
         fields = (
             "id",
+            "username",
             "full_name",
             "bio",
             "hidden",
