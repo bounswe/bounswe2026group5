@@ -9,7 +9,6 @@ import { RequestCard } from "@/components/dashboard/RequestCard";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
-import { ViewAllRequestsModal } from "@/components/dashboard/ViewAllRequestsModal";
 
 import {
   mapMatchesToSessions,
@@ -33,7 +32,8 @@ export default function DashboardScreen() {
 
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
-  const upcomingSessionsQuery = useMentorshipUpcomingSessionsQuery(currentUsername);
+  const upcomingSessionsQuery =
+    useMentorshipUpcomingSessionsQuery(currentUsername);
   const respondMutation = useRespondToMentorshipRequestMutation();
 
   const isMenteeOnly = appUsageMode === "MENTEE";
@@ -114,7 +114,10 @@ export default function DashboardScreen() {
 
     mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []).forEach(
       (session) => {
-        byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
+        byKey.set(
+          `${session.rawDate}|${session.time}|${session.user}`,
+          session,
+        );
       },
     );
 
@@ -133,7 +136,6 @@ export default function DashboardScreen() {
     });
   }, [
     currentUsername,
-    appUsageMode,
     isMenteeOnly,
     isMentorOnly,
     upcomingSessionsQuery.data,
@@ -147,7 +149,6 @@ export default function DashboardScreen() {
   const [selectedSession, setSelectedSession] = useState<
     (typeof sessions)[0] | null
   >(null);
-  const [isViewAllRequestsOpen, setViewAllRequestsOpen] = useState(false);
 
   const handleRespond = async (action: "accept" | "reject") => {
     if (!selectedRequest) {
@@ -209,23 +210,32 @@ export default function DashboardScreen() {
                 </View>
               )}
             </View>
-            <TouchableOpacity onPress={() => setViewAllRequestsOpen(true)}>
+            <TouchableOpacity onPress={() => router.push("/connections")}>
               <Text className="text-indigo-600 font-semibold text-sm">
                 View All
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Show the first 2 requests on the dashboard */}
-          {requests.slice(0, 2).map((req) => (
-            <RequestCard
-              key={req.id}
-              user={req.user}
-              topic={req.topic}
-              type={req.type}
-              onPress={() => setSelectedRequest(req)}
-            />
-          ))}
+          {requests.length === 0 ? (
+            <View className="bg-white p-4 rounded-xl border border-gray-100">
+              <Text className="text-gray-500 font-medium">
+                No pending requests.
+              </Text>
+            </View>
+          ) : (
+            requests
+              .slice(0, 2)
+              .map((req) => (
+                <RequestCard
+                  key={req.id}
+                  user={req.user}
+                  topic={req.topic}
+                  type={req.type}
+                  onPress={() => setSelectedRequest(req)}
+                />
+              ))
+          )}
         </View>
 
         {/* Sessions Section */}
@@ -287,16 +297,6 @@ export default function DashboardScreen() {
             "Coming Soon",
             "Rescheduling will be wired after the dedicated API endpoint is finalized.",
           );
-        }}
-      />
-
-      <ViewAllRequestsModal
-        visible={isViewAllRequestsOpen}
-        requests={requests}
-        onClose={() => setViewAllRequestsOpen(false)}
-        onSelectRequest={(req: DashboardRequestItem) => {
-          setViewAllRequestsOpen(false);
-          setTimeout(() => setSelectedRequest(req), 300);
         }}
       />
     </View>

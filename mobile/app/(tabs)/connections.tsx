@@ -259,8 +259,45 @@ function MentorConnections() {
         </ScrollView>
       </View>
 
-      {/* Section: Active Mentees */}
+      {/* Section: Pending Requests */}
       <View className="mb-8">
+        <View className="mb-3.5">
+          <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
+            New Inbound
+          </Text>
+          <Text className="text-[22px] font-extrabold text-on-surface mt-0.5">
+            Pending Requests
+          </Text>
+        </View>
+
+        {requestsLoading && <ActivityIndicator className="mt-4" />}
+        {requestsError && (
+          <Text className="text-[13px] text-error text-center mt-2">
+            Failed to load requests.
+          </Text>
+        )}
+        {pendingRequests.map((req) => {
+          const cardProps = mapRequestToCardProps(req);
+          return (
+            <PendingRequestCard
+              key={req.id}
+              {...cardProps}
+              onPress={() => setSelectedRequest(cardProps)}
+              onAccept={() => handleAccept(req.id)}
+              onDecline={() => setDeclineTargetId(req.id)}
+              disabled={respondMutation.isPending}
+            />
+          );
+        })}
+        {!requestsLoading && !requestsError && pendingRequests.length === 0 && (
+          <Text className="text-[13px] text-on-surface-muted text-center mt-2">
+            No pending requests.
+          </Text>
+        )}
+      </View>
+
+      {/* Section: Active Mentees */}
+      <View className="mb-10">
         <View className="flex-row justify-between items-end mb-3.5">
           <View>
             <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
@@ -298,43 +335,6 @@ function MentorConnections() {
         {!matchesLoading && !matchesError && mentees.length === 0 && (
           <Text className="text-[13px] text-on-surface-muted text-center mt-2">
             No active mentees yet.
-          </Text>
-        )}
-      </View>
-
-      {/* Section: Pending Requests */}
-      <View className="mb-10">
-        <View className="mb-3.5">
-          <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
-            New Inbound
-          </Text>
-          <Text className="text-[22px] font-extrabold text-on-surface mt-0.5">
-            Pending Requests
-          </Text>
-        </View>
-
-        {requestsLoading && <ActivityIndicator className="mt-4" />}
-        {requestsError && (
-          <Text className="text-[13px] text-error text-center mt-2">
-            Failed to load requests.
-          </Text>
-        )}
-        {pendingRequests.map((req) => {
-          const cardProps = mapRequestToCardProps(req);
-          return (
-            <PendingRequestCard
-              key={req.id}
-              {...cardProps}
-              onPress={() => setSelectedRequest(cardProps)}
-              onAccept={() => handleAccept(req.id)}
-              onDecline={() => setDeclineTargetId(req.id)}
-              disabled={respondMutation.isPending}
-            />
-          );
-        })}
-        {!requestsLoading && !requestsError && pendingRequests.length === 0 && (
-          <Text className="text-[13px] text-on-surface-muted text-center mt-2">
-            No pending requests.
           </Text>
         )}
       </View>
