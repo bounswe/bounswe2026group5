@@ -29,7 +29,7 @@
  *     state changed without rebuilding the entire list.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from "react";
 import {
   FlatList,
   ListRenderItemInfo,
@@ -37,24 +37,24 @@ import {
   Pressable,
   Text,
   View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Colors } from "@/constants/theme";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const ALL_SUBJECTS: readonly string[] = [
-  'Backend',
-  'Career Advice',
-  'Data Science',
-  'DevOps',
-  'Machine Learning',
-  'Product Management',
-  'React',
-  'Software Engineering',
-  'UI/UX Design',
+  "Backend",
+  "Career Advice",
+  "Data Science",
+  "DevOps",
+  "Machine Learning",
+  "Product Management",
+  "React",
+  "Software Engineering",
+  "UI/UX Design",
 ];
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ interface SubjectItemProps {
   subject: string;
   isSelected: boolean;
   onToggle: (subject: string) => void;
-  theme: (typeof Colors)['light'];
+  theme: (typeof Colors)["light"];
 }
 
 /**
@@ -96,7 +96,9 @@ const SubjectItem = React.memo(function SubjectItem({
         // Dynamic: pressed feedback + selection-driven background
         opacity: pressed ? 0.7 : 1,
         height: ITEM_H,
-        backgroundColor: isSelected ? theme.surfaceActive : theme.inputBackground,
+        backgroundColor: isSelected
+          ? theme.surfaceActive
+          : theme.inputBackground,
       })}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: isSelected }}
@@ -105,13 +107,12 @@ const SubjectItem = React.memo(function SubjectItem({
       {/* Inner View owns the row layout — keeps flexDirection:'row' off the
           Pressable style callback to avoid NativeWind v4 layout interference. */}
       <View className="flex-1 flex-row items-center px-4 h-full">
-
         {/* Subject label */}
         <Text
           className="flex-1 text-base"
           style={{
             // Dynamic: weight and color flip on selection
-            fontWeight: isSelected ? '600' : '400',
+            fontWeight: isSelected ? "600" : "400",
             color: isSelected ? theme.primary : theme.textPrimary,
           }}
         >
@@ -123,7 +124,7 @@ const SubjectItem = React.memo(function SubjectItem({
           className="w-6 h-6 rounded-full items-center justify-center ml-3"
           style={{
             // Dynamic: fill and border depend on selection state
-            backgroundColor: isSelected ? theme.primary : 'transparent',
+            backgroundColor: isSelected ? theme.primary : "transparent",
             borderWidth: isSelected ? 0 : 1.5,
             borderColor: theme.divider,
           }}
@@ -148,7 +149,7 @@ const SubjectItem = React.memo(function SubjectItem({
 interface SelectedChipProps {
   label: string;
   onRemove: (label: string) => void;
-  theme: (typeof Colors)['light'];
+  theme: (typeof Colors)["light"];
 }
 
 /**
@@ -199,7 +200,7 @@ export interface SubjectExpertisePickerProps {
   /** Called with the new selection array on every toggle. */
   onChange: (selected: string[]) => void;
   /** Drives the contextual subtitle text shown inside the modal. */
-  role: 'mentor' | 'mentee';
+  role: "mentor" | "mentee";
 }
 
 /**
@@ -211,7 +212,7 @@ export function SubjectExpertisePicker({
   onChange,
   role,
 }: Readonly<SubjectExpertisePickerProps>) {
-  const colorScheme = useColorScheme() ?? 'light';
+  const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -273,25 +274,24 @@ export function SubjectExpertisePicker({
   // ── Derived labels ─────────────────────────────────────────────────────────
 
   let triggerLabel = `${selectionCount} subjects selected`;
-  if (selectionCount === 0) triggerLabel = 'Select subjects';
-  else if (selectionCount === 1) triggerLabel = '1 subject selected';
+  if (selectionCount === 0) triggerLabel = "Select subjects";
+  else if (selectionCount === 1) triggerLabel = "1 subject selected";
 
-  const subjectWord = selectionCount === 1 ? 'subject' : 'subjects';
+  const subjectWord = selectionCount === 1 ? "subject" : "subjects";
   const doneBtnA11yLabel =
     selectionCount === 0
-      ? 'Done, no subjects selected'
+      ? "Done, no subjects selected"
       : `Done, ${selectionCount} ${subjectWord} selected`;
 
   const modalSubtitle =
-    role === 'mentor'
-      ? 'Pick the subjects you feel confident mentoring.'
-      : 'Pick the subjects you want to learn about.';
+    role === "mentor"
+      ? "Pick the subjects you feel confident mentoring."
+      : "Pick the subjects you want to learn about.";
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <View className="gap-3">
-
       {/* ── Trigger field ── */}
       <Pressable
         onPress={openModal}
@@ -301,13 +301,15 @@ export function SubjectExpertisePicker({
         accessibilityRole="button"
         accessibilityLabel={
           selectionCount === 0
-            ? 'Select subject expertise. No subjects selected.'
+            ? "Select subject expertise. No subjects selected."
             : `Subject expertise. ${triggerLabel}. Tap to edit.`
         }
       >
         <Text
           className="text-base font-normal"
-          style={{ color: selectionCount === 0 ? theme.textMuted : theme.textPrimary }}
+          style={{
+            color: selectionCount === 0 ? theme.textMuted : theme.textPrimary,
+          }}
         >
           {triggerLabel}
         </Text>
@@ -320,7 +322,9 @@ export function SubjectExpertisePicker({
               className="min-w-[22px] h-[22px] rounded-full items-center justify-center px-[5px]"
               style={{ backgroundColor: theme.primary }}
             >
-              <Text className="text-xs font-bold text-white">{selectionCount}</Text>
+              <Text className="text-xs font-bold text-white">
+                {selectionCount}
+              </Text>
             </View>
           )}
           <Ionicons name="chevron-down" size={20} color={theme.textMuted} />
@@ -345,13 +349,15 @@ export function SubjectExpertisePicker({
       <Modal
         visible={modalVisible}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={closeModal}
         statusBarTranslucent
       >
         {/* Backdrop — tap to dismiss without losing selection */}
-        <Pressable className="flex-1 justify-end bg-black/50" onPress={closeModal}>
-
+        <Pressable
+          className="flex-1 justify-end bg-black/50"
+          onPress={closeModal}
+        >
           {/* Sheet content — stop propagation so inner taps don't dismiss */}
           <Pressable
             onPress={(e) => e.stopPropagation()}
@@ -372,10 +378,7 @@ export function SubjectExpertisePicker({
                 >
                   Subject Expertise
                 </Text>
-                <Text
-                  className="text-[13px]"
-                  style={{ color: theme.textSoft }}
-                >
+                <Text className="text-[13px]" style={{ color: theme.textSoft }}>
                   {modalSubtitle}
                 </Text>
               </View>
@@ -436,7 +439,7 @@ export function SubjectExpertisePicker({
               >
                 <Text className="text-base font-bold text-white">
                   {selectionCount === 0
-                    ? 'Done'
+                    ? "Done"
                     : `Done  ·  ${selectionCount} selected`}
                 </Text>
               </Pressable>

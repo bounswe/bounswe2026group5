@@ -7,6 +7,7 @@ Database is cleaned and seeded with realistic demo data:
 - **Phone 1 (Mentee):** Mert Aydin - looking for mentorship on React Native & System Design
 - **Phone 2 (Mentor):** Can Ozkan - Engineering Mentor specializing in Docker, GraphQL, System Design
 - **Backup Mentors:** Lena Schmidt, Elif Kaya, Metin Yildiz
+- **Registration Slot:** Secondary mentee is intentionally omitted so you can test fresh sign-up
 - **Scenario:** Multiple mentors visible in Discover, some with availability slots, various request states
 
 ### 2) Demo Credentials
@@ -22,6 +23,11 @@ password: mert-aydin-2026!
 email:    can.ozkan@example.com
 password: can-ozkan-2026!
 ```
+
+**New Registration Test Account:**
+- Create a fresh mentee account from the register screen after reseed.
+- Use an email not already in the demo seed.
+- Password only needs to be at least 8 characters and must match confirmation.
 
 **Backup Mentor (if testing multiple requests):**
 ```
@@ -44,7 +50,7 @@ Open Expo on two simulators/devices (iPhone simulators recommended on macOS).
 
 ### Phase 1: Login & Dashboard Check
 
-**Phone 1 (Mentee):**
+**Phone 1 (Seeded Mentee):**
 1. Launch app → tap "Log In"
 2. Enter: `mert.aydin@example.com` / `mert-aydin-2026!`
 3. ✓ Should land on **Dashboard** (Home tab)
@@ -55,6 +61,16 @@ Open Expo on two simulators/devices (iPhone simulators recommended on macOS).
 2. Enter: `can.ozkan@example.com` / `can-ozkan-2026!`
 3. ✓ Should land on **Dashboard** (Home tab)
 4. Expected: Profile data showing "Can Özkan" with mentor role badge near name
+
+### Phase 1B: Fresh Register Check
+
+**Phone 1 or a clean simulator session:**
+1. Open the Register screen.
+2. Create a new mentee account with a unique email.
+3. Use an 8+ character password and matching confirmation.
+4. Pick at least one skill and accept the terms.
+5. ✓ Should land in the app with usage mode set and a populated profile shell.
+6. Log out and log back in with the new credentials to confirm persistence.
 
 ---
 

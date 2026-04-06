@@ -17,6 +17,8 @@ const AUTH_BASE_PATH = "/api/auth";
 function getAuthErrorMessage(
   errorData: {
     detail?: string;
+    username?: string[];
+    display_name?: string[];
     email?: string[];
     password?: string[];
     non_field_errors?: string[];
@@ -25,6 +27,8 @@ function getAuthErrorMessage(
 ): string {
   return (
     errorData.detail ||
+    errorData.username?.[0] ||
+    errorData.display_name?.[0] ||
     errorData.email?.[0] ||
     errorData.password?.[0] ||
     errorData.non_field_errors?.[0] ||
@@ -75,6 +79,8 @@ async function postAuthEndpoint<TPayload>(
       getAuthErrorMessage(
         errorData as {
           detail?: string;
+          username?: string[];
+          display_name?: string[];
           email?: string[];
           password?: string[];
           non_field_errors?: string[];
