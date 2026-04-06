@@ -2,6 +2,12 @@ name: Mobile APK Build
 
 on:
   workflow_dispatch:
+    inputs:
+      run_prebuild:
+        description: "Run expo prebuild before Gradle build"
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [main, dev]
     paths:
@@ -44,18 +50,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Write mobile env file
-        run: |
-          if [ -n "${{ secrets.EXPO_PUBLIC_API_BASE_URL }}" ]; then
-            echo "EXPO_PUBLIC_API_BASE_URL=${{ secrets.EXPO_PUBLIC_API_BASE_URL }}" > .env
-          else
-            echo "EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000" > .env
-          fi
-
-      - name: Generate native Android project
+      - name: Generate native Android project (optional)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_prebuild }}
+        env:
+          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.EXPO_PUBLIC_API_BASE_URL }}
         run: npx expo prebuild --platform android --non-interactive
 
       - name: Build debug APK
+        env:
+          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.EXPO_PUBLIC_API_BASE_URL }}
         run: |
           chmod +x android/gradlew
           cd android
@@ -64,8 +67,7 @@ jobs:
       - name: Prepare renamed APK
         run: |
           mkdir -p apk-out
-          SAFE_REF=$(echo "${GITHUB_REF_NAME}" | tr '/\\' '-' | tr -cd '[:alnum:]._-')
-          APK_NAME="mentorship-mobile-${SAFE_REF}-${GITHUB_RUN_NUMBER}.apk"
+          APK_NAME="neighborship-mobile-arm64-debug.apk"
           ARM64_APK="android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk"
           DEFAULT_APK="android/app/build/outputs/apk/debug/app-debug.apk"
 
@@ -82,7 +84,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mobile-apk-debug
+          name: neighborship-mobile-apk-debug
           path: mobile/apk-out/*.apk
           if-no-files-found: error
           retention-days: 14
