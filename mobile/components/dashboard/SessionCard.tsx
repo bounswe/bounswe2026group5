@@ -8,7 +8,7 @@ interface SessionCardProps {
   onPress?: () => void;
 }
 
-export function SessionCard({ user, date, time, status, onPress }: SessionCardProps) {
+export function SessionCard({ user, date, time, status, onPress }: Readonly<SessionCardProps>) {
   
   // 1. Logic: Determine badge colors
   const getStatusStyles = () => {
