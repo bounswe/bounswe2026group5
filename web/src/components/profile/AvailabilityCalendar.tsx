@@ -11,11 +11,12 @@ import {
     useAvailabilitySlots
 } from '#/lib/queries/ProfileTimeSlotQueries.ts'
 import type { AvailabilitySlot } from '#/lib/queries/ProfileTimeSlotQueries.ts'
-import { useQueryClient } from '@tanstack/react-query'
+import {useQuery, useQueryClient} from '@tanstack/react-query'
 import { useMyMatches, useSendMentorshipRequest } from '#/lib/queries/MentorshipQueries.ts'
 import { useBookSlot } from '#/lib/queries/ProfileTimeSlotQueries.ts'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import {meQueryOptions} from "#/lib/queries/AuthQueries.ts";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -222,6 +223,7 @@ function BookingModal({ slot, mentorUsername, isFirstTime, onClose, onSuccess }:
 
 export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: AvailabilityCalendarProps) {
     const { data: slots = [] } = useAvailabilitySlots(username)
+    const { data: myData, isSuccess } = useQuery(meQueryOptions)
     const queryClient = useQueryClient()
     const NOW_HOUR = new Date().getHours()
     const [weekOffset, setWeekOffset] = useState(0)
@@ -372,7 +374,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                             cellContent = (
                                                 <div className="flex flex-col items-center justify-center h-full gap-0.5">
                                                     <span className="text-violet-700 font-semibold text-xs">Booked</span>
-                                                    {(isOwner || isAuthenticated) && (
+                                                    {(isOwner || (slot.bookedBy == myData?.id)) && (
                                                         <button
                                                             onClick={e => { e.stopPropagation(); setCancellingSlot(slot) }}
                                                             className="text-red-500 hover:text-red-700 underline text-[10px]"
