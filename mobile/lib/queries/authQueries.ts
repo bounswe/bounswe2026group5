@@ -61,8 +61,6 @@ export async function handleAuthSuccess(data: AuthResponse): Promise<void> {
 // ── Mutation functions ────────────────────────────────────────────────────────
 
 export async function registerFn(credentials: {
-  username: string;
-  display_name: string;
   email: string;
   password: string;
   confirm_password: string;

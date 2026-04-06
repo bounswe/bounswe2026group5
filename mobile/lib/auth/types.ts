@@ -58,8 +58,6 @@ export interface LoginCredentials {
  * Registration credentials for new accounts.
  */
 export interface RegisterCredentials {
-  username: string;
-  display_name: string;
   email: string;
   password: string;
   confirm_password: string;
