@@ -17,8 +17,6 @@ jobs:
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest
-    env:
-      APK_NAME: mentorship-mobile-${{ github.ref_name }}-${{ github.run_number }}.apk
 
     defaults:
       run:
@@ -39,7 +37,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -67,6 +64,8 @@ jobs:
       - name: Prepare renamed APK
         run: |
           mkdir -p apk-out
+          SAFE_REF=$(echo "${GITHUB_REF_NAME}" | tr '/\\' '-' | tr -cd '[:alnum:]._-')
+          APK_NAME="mentorship-mobile-${SAFE_REF}-${GITHUB_RUN_NUMBER}.apk"
           ARM64_APK="android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk"
           DEFAULT_APK="android/app/build/outputs/apk/debug/app-debug.apk"
 
