@@ -54,6 +54,7 @@ export async function handleAuthSuccess(data: AuthResponse): Promise<void> {
     refreshToken: data.refresh_token,
     userId: data.user.id,
     username: data.user.username,
+    appUsageMode: data.user.app_usage_mode ?? undefined,
   });
 }
 

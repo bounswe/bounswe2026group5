@@ -23,7 +23,8 @@ const MAPPING = {
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
   'calendar': 'calendar-month',
-  'person.fill': 'person', 
+  'person.fill': 'person',
+  'person.2.fill': 'group',
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],
