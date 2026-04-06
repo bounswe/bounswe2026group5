@@ -6,266 +6,132 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2CA5E0?style=flat&logo=docker&logoColor=white)
 
-## 📌 About The Project
+## About
 
-Campus Neighborhood Mentorship Network is a platform designed to connect students for academic and professional guidance. Built as a scalable monorepo, this repository houses both the modern, type-safe frontend client and the robust backend API services required to facilitate seamless mentor-mentee matching, communication, and scheduling within the university ecosystem.
+Campus Neighborhood Mentorship Network connects students for mentorship, matching, and scheduling.
+This monorepo includes:
 
-## 🚀 Tech Stack
+- Web frontend (React + TypeScript)
+- Backend API (Django + DRF)
+- Mobile app (Expo + React Native)
+- PostgreSQL database
 
-**Frontend (Web):**
+## Production Runtime Stack
 
-- **Core:** React (TypeScript), Vite
-- **Routing & State:** TanStack Router, TanStack Query
-- **Styling & UI:** TailwindCSS, Shadcn UI
-- **Validation:** Zod
-- **Testing:** Vitest
+- Frontend (Web): React, TypeScript, Vite
+- Backend: Python, Django, Django REST Framework
+- Database: PostgreSQL
+- Containerization: Docker, Docker Compose
 
-**Backend:**
+## Prerequisites
 
-- **Core:** Python, Django
-- **API:** Django REST Framework (DRF), drf-spectacular (OpenAPI/Swagger)
-- **Database:** PostgreSQL
+- Docker Desktop (running)
+- Node.js 18+ (required to run mobile app locally)
 
-**Infrastructure & Code Quality:**
+## Environment Configuration
 
-- **Containerization:** Docker & Docker Compose
-- **Linting & Formatting:** ESLint, Prettier (Frontend) / Flake8, Black, Isort (Backend)
-- **Analysis:** SonarQube
-
-## 📦 Dependency Convention
-
-This repository separates dependencies by purpose so runtime images stay lean and CI/local development can still use test and lint tooling.
-
-**Backend (Python):**
-
-- `backend/requirements.txt`: Runtime dependencies used by the Django app in containers and production-like environments.
-- `backend/requirements-dev.txt`: Development and test tooling (includes `-r requirements.txt` plus lint/format/test-related packages).
-- Backend CI installs `requirements-dev.txt` so tests run with the full developer toolchain.
-
-**Frontend (Node.js):**
-
-- Runtime packages are listed in `dependencies`.
-- Tooling and test packages are listed in `devDependencies`.
-- This is the conventional frontend split and is already used in `web/package.json`.
-
-## 🧰 Required Tools & Software
-
-To ensure a smooth and standardized development experience across the team, please install the following tools before proceeding with the setup:
-
-**1. Core System Requirements:**
-
-- **[Git](https://git-scm.com/):** Version control system.
-- **[Node.js](https://nodejs.org/) (v18+):** Required for the React frontend.
-- **[Python](https://www.python.org/downloads/) (3.10+):** Required for the Django backend.
-- **[Docker Desktop](https://www.docker.com/products/docker-desktop/):** Must be installed and running in the background to host our PostgreSQL database container.
-
-**2. Recommended IDE & Extensions:**
-
-- **[Visual Studio Code](https://code.visualstudio.com/):** The officially supported IDE for this project.
-- _Note on Extensions:_ When you open this repository in VS Code, you will be prompted to install our recommended extensions (ESLint, Prettier, Black, Flake8, and **SonarLint**). Please install them to ensure your code aligns with our auto-formatting and quality standards.
-
-**3. Database Management:**
-
-- **[DBeaver](https://dbeaver.io/) (Community Edition):** Highly recommended for visually managing and querying our local PostgreSQL database. Alternatively, you can use JetBrains DataGrip or pgAdmin.
-
-**4. Browser Extensions (For Accessibility Testing):**
-
-- **[axe DevTools](https://www.deque.com/axe/devtools/):** Chrome/Edge extension to catch WCAG 2.1 AA accessibility issues during UI development.
-- **[WAVE](https://wave.webaim.org/extension/):** Visual tool for evaluating structural and color contrast accessibility.
-
-## 🛠 Getting Started
-
-Clone the repository and start services with Docker Compose.
-
-### 🐳 Docker-based Local Development
-
-The project can be run fully inside Docker for a consistent local development environment across the team. This starts the PostgreSQL database, Django backend, and React frontend in isolated containers with volume mounts enabled for hot-reloading.
-
-**Start all services**
+Create a root `.env` file from `.env.example`:
 
 ```bash
-docker compose up --build
+cp .env.example .env
 ```
 
-**Run in detached mode**
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Update values in `.env` before deployment, especially:
+
+- `SECRET_KEY`
+- `POSTGRES_PASSWORD`
+- `DEBUG` (set to `False` for production)
+- `ALLOWED_HOSTS`
+- `CORS_ALLOWED_ORIGINS`
+- `CSRF_TRUSTED_ORIGINS`
+
+## Run the Application with Docker Compose
+
+This starts database, backend API, and web frontend.
+
+### 1. Build and start all services
 
 ```bash
 docker compose up --build -d
 ```
 
-**Stop all services**
+### 2. Verify running services
+
+```bash
+docker compose ps
+```
+
+### 3. Access services
+
+- Web frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- PostgreSQL: localhost:5432
+
+### 4. View logs
+
+```bash
+docker compose logs -f
+```
+
+### 5. Stop services
 
 ```bash
 docker compose down
 ```
 
-**Stop and remove the database volume**
+### 6. Stop and remove database volume (destructive)
 
 ```bash
 docker compose down -v
 ```
 
-**Service URLs**
+## Run Mobile App Separately
 
-- **Frontend:** http://localhost:3000
-- **Backend:** http://localhost:8000
-- **Database:** localhost:5432
+The mobile app is not part of Docker Compose and should be run from the `mobile` folder.
 
-**Initial database migration**
-Migrations are applied automatically when the backend container starts. If needed, they can also be run manually:
+### 1. Ensure backend API is running
 
-```bash
-docker compose exec backend python manage.py migrate
-```
-
-**Create new migrations**
+You can use Docker Compose (recommended):
 
 ```bash
-docker compose exec backend python manage.py makemigrations
-docker compose exec backend python manage.py migrate
+docker compose up -d backend db
 ```
 
-**Notes**
+### 2. Configure mobile API URL
 
-- Backend source code is mounted into the container for automatic reload during development.
-- Frontend source code is mounted into the container and Vite hot-reload is enabled.
-- The backend connects to PostgreSQL using the Docker Compose service name db.
-- If migration history becomes inconsistent during development, reset the local database volume with:
+Create `mobile/.env.local`:
 
 ```bash
-docker compose down -v
+EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-### 💻 Daily Development Workflow
+Notes:
 
-For your day-to-day development after the initial setup, you can start the environment using either the automated VS Code tasks or manually via the terminal.
+- Android emulator usually needs `http://10.0.2.2:8000`
+- iOS simulator can use `http://127.0.0.1:8000` or `http://localhost:8000`
+- Physical device should use your machine's local network IP (for example `http://192.168.1.20:8000`)
 
-**Option A: The One-Click Way (VS Code)**
-If you are using Visual Studio Code, simply press F5 or go to the "Run and Debug" panel and launch 🚀 Start Full Stack. This will automatically spin up the Docker database, start the frontend, and run the backend with debuggers attached.
-
-**Option B: The Manual Way (Terminal)**
-If you prefer managing the services manually, open your terminal and follow these steps:
-
-**1. Start the Database:**
-Make sure Docker Desktop is open, then run:
+### 3. Install mobile dependencies
 
 ```bash
-docker compose up -d
-# or
-docker-compose up -d
+cd mobile
+npm install
 ```
 
-**2. Start the Backend (Django):**
-Open a terminal, activate the virtual environment, and run the server:
+### 4. Start Expo
 
 ```bash
-cd backend
-# Windows: venv\Scripts\activate
-# Mac/Linux: source venv/bin/activate
-python manage.py runserver
+npx expo start
 ```
 
-**3. Start the Frontend (Vite):**
-Open a new, separate terminal and start the client:
+## Useful Links
 
-```bash
-cd web
-npm run dev
-```
-
-### 🔄 Manual Database Migration
-
-If you need to manually synchronize or create migrations, use the commands below.
-
-**Apply existing migrations (recommended before runserver):**
-
-```bash
-cd backend
-# Windows: venv\Scripts\activate
-# Mac/Linux: source venv/bin/activate
-python manage.py migrate
-```
-
-**Create new migration files after model changes:**
-
-```bash
-cd backend
-# Windows: venv\Scripts\activate
-# Mac/Linux: source venv/bin/activate
-python manage.py makemigrations
-python manage.py migrate
-```
-
-**Create migration for a specific app only (examples):**
-
-```bash
-cd backend
-# Windows: venv\Scripts\activate
-# Mac/Linux: source venv/bin/activate
-python manage.py makemigrations accounts
-python manage.py makemigrations profiles
-python manage.py makemigrations mentorship
-python manage.py migrate
-```
-
-### 🧱 Domain Schema (Profiles & Mentorship)
-
-Domain ownership is now split across dedicated apps:
-
-- `profiles` app
-  - `Profile` (one-to-one with `User`) for identity and visibility data
-  - `ExpertiseField` for reusable skill taxonomy
-  - `ProfileExpertise` as the profile-skill relationship with proficiency and rating aggregates
-  - `AvailabilitySlot` for mentor time-slot scheduling
-- `mentorship` app
-  - `MentorshipRequest` for mentor/mentee workflow state
-  - `Match` for accepted mentorship relationships
-
-Auth and identity remain in the `accounts` app (`User`, registration/login/logout endpoints).
-
-### 🌐 Domain API Endpoints
-
-- `GET /api/profiles/me/` returns the authenticated user's profile payload.
-- `GET /api/mentorship/requests/me/` lists mentorship requests where the user is mentor or mentee.
-
-Local development seed data is included via migration `accounts.0004_seed_profile_page_data` and creates demo mentor, mentee, and both-role profiles.
-
-### 🧾 API Documentation PDF for Wiki
-
-We generate a PDF from our OpenAPI schema (`drf-spectacular`) and publish it to the GitHub Wiki.
-
-**Automatic sync in GitHub Actions:**
-
-- Workflow: `.github/workflows/wiki-api-endpoints.yml`
-- Trigger: pushes to `main` or `dev` affecting `backend/**` (or manual dispatch)
-- Behavior: runs a three-step OpenAPI-to-PDF pipeline and commits `wiki/API-Documentation.pdf`.
-
-Pipeline steps:
-
-1. Generate OpenAPI JSON from Django (`manage.py spectacular`).
-2. Convert OpenAPI JSON to AsciiDoc (`openapi-generator-cli`).
-3. Convert AsciiDoc to PDF (`asciidoctor-pdf`).
-
-### 🗄️ Connecting to the Database
-
-To view, manage, and query the local PostgreSQL database, we recommend using DBeaver (or DataGrip/pgAdmin). Create a new PostgreSQL connection using the following credentials:
-
-- **Host:** 127.0.0.1 (or localhost)
-- **Port:** 5432
-- **Database:** mentorship
-- **Username:** In .env file
-- **Password:** In .env file
-
-Note: Ensure the Docker database container is running (docker compose up -d) before attempting to connect.
-
-## 📖 Documentation & Guidelines
-
-To keep this repository clean, all detailed documentation, architectural decisions, and workflows are maintained in our GitHub Wiki. Please review these carefully before opening a Pull Request.
-
-- **[Wiki Home Page](https://github.com/bounswe/bounswe2026group5/wiki):** Main page of this project's wiki.
-- **[Project Standards & Workflow](https://github.com/bounswe/bounswe2026group5/wiki/Project-Standards-&-Workflow):** Branching strategies, PR rules, Conventional Commits, and Definition of Done.
-- **[Knowledge Base](https://github.com/bounswe/bounswe2026group5/wiki/Knowledge-Base):** Useful resources, setup guides, and technical references for developers.
-
-## 👥 Team
-
-This project is developed and maintained by Boğaziçi University Software Engineering Team (Group 5).
+- Wiki: https://github.com/bounswe/bounswe2026group5/wiki
+- Project Standards & Workflow: https://github.com/bounswe/bounswe2026group5/wiki/Project-Standards-&-Workflow
+- Knowledge Base: https://github.com/bounswe/bounswe2026group5/wiki/Knowledge-Base
