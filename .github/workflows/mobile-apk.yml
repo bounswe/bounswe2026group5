@@ -17,6 +17,8 @@ jobs:
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest
+    env:
+      APK_NAME: mentorship-mobile-${{ github.ref_name }}-${{ github.run_number }}.apk
 
     defaults:
       run:
@@ -37,6 +39,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -53,18 +56,34 @@ jobs:
           fi
 
       - name: Generate native Android project
-        run: npx expo prebuild --platform android --non-interactive --clean
+        run: npx expo prebuild --platform android --non-interactive
 
       - name: Build debug APK
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
+
+      - name: Prepare renamed APK
+        run: |
+          mkdir -p apk-out
+          ARM64_APK="android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk"
+          DEFAULT_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ -f "$ARM64_APK" ]; then
+            cp "$ARM64_APK" "apk-out/$APK_NAME"
+          elif [ -f "$DEFAULT_APK" ]; then
+            cp "$DEFAULT_APK" "apk-out/$APK_NAME"
+          else
+            echo "Expected APK not found under android/app/build/outputs/apk/debug"
+            ls -R android/app/build/outputs/apk || true
+            exit 1
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: mobile-apk-debug
-          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          path: mobile/apk-out/*.apk
           if-no-files-found: error
           retention-days: 14
