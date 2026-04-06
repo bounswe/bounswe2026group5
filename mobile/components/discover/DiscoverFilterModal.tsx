@@ -107,6 +107,7 @@ export function DiscoverFilterModal({
 
                   return (
                     <TouchableOpacity
+                      activeOpacity={1}
                       key={skill}
                       onPress={() => onToggleSkill(skill)}
                       className={`px-3 py-2 rounded-full border ${
