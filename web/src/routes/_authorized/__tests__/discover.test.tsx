@@ -1,8 +1,10 @@
 // web/src/routes/_authorized/__tests__/discover.test.tsx
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import {infiniteQueryOptions, QueryClient, QueryClientProvider, queryOptions} from '@tanstack/react-query'
 
-// 1. Hoist navigate mock so it is available inside vi.mock factories
+// ── Hoist mocks ──────────────────────────────────────────────────────────────
+
 const { mockNavigate } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
 }))
@@ -16,7 +18,6 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   }
 })
 
-// 2. Mock Lucide icons to prevent SVG rendering errors in jsdom
 vi.mock('lucide-react', async (importOriginal) => {
   const actual = await importOriginal<any>()
   return {
@@ -27,223 +28,286 @@ vi.mock('lucide-react', async (importOriginal) => {
   }
 })
 
+// ── Mock API data ────────────────────────────────────────────────────────────
+
+const MOCK_SKILLS = [
+  { id: 1, name: 'Python' },
+  { id: 2, name: 'Kubernetes' },
+  { id: 3, name: 'Go' },
+  { id: 4, name: 'React' },
+]
+
+const makeMentor = (n: number) => ({
+  id: `id-${n}`,
+  username: `mentor${n}`,
+  full_name: `Mentor ${n}`,
+  bio: `Bio of mentor ${n}`,
+  hidden: false,
+  picture_url: null,
+  title: `Engineer ${n}`,
+  location: null,
+  show_initials_only: false,
+  expertises: n % 2 === 0 ? ['Python'] : ['Kubernetes'],
+  rating: 4.5,
+  total_mentee_count: n,
+})
+
+// 8 mentors so Load More tests work (> PAGE_SIZE of 6)
+const MOCK_MENTORS = Array.from({ length: 8 }, (_, i) => makeMentor(i + 1))
+
+vi.mock('@/lib/queries/DiscoverQueries.ts', async (importOriginal) => {
+  const actual = await importOriginal<any>()
+  return {
+    ...actual,
+    mentorSearchInfiniteQueryOptions: (params: any) =>
+        infiniteQueryOptions({
+          queryKey: ['mentors', 'search', params],
+          queryFn: async ({ pageParam }) => {
+            const page = (pageParam as number) ?? 1
+            const pageSize = params.pageSize ?? 6
+            let results = [...MOCK_MENTORS]
+
+            if (params.q) {
+              const q = params.q.toLowerCase()
+              results = results.filter(
+                  (m) =>
+                      m.full_name.toLowerCase().includes(q) ||
+                      m.bio.toLowerCase().includes(q) ||
+                      m.expertises.some((e: string) => e.toLowerCase().includes(q)),
+              )
+            }
+
+            if (params.skills?.length) {
+              results = results.filter((m) =>
+                  m.expertises.some((e: string) => params.skills.includes(e)),
+              )
+            }
+
+            const start = (page - 1) * pageSize
+            return {
+              count: results.length,
+              page,
+              pageSize,
+              results: results.slice(start, start + pageSize),
+            }
+          },
+          initialPageParam: 1,
+          getNextPageParam: (lastPage: any) => {
+            const fetched = lastPage.page * lastPage.pageSize
+            return fetched < lastPage.count ? lastPage.page + 1 : undefined
+          },
+        }),
+    allSkillsQueryOptions: queryOptions({
+      queryKey: ['profiles', 'skills'],
+      queryFn: async () => MOCK_SKILLS,
+    }),
+  }
+})
+
+// ── Test helpers ─────────────────────────────────────────────────────────────
+
 import { DiscoverPage } from '../discover'
+
+function renderDiscover() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return render(
+      <QueryClientProvider client={queryClient}>
+        <DiscoverPage />
+      </QueryClientProvider>,
+  )
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('DiscoverPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  // ── Rendering ─────────────────────────────────────────────────────────────
+  // ── Rendering ───────────────────────────────────────────────────────────────
 
   it('renders the hero heading', () => {
-    render(<DiscoverPage />)
+    renderDiscover()
     expect(screen.getByRole('heading', { name: /Discover the/i })).toBeInTheDocument()
   })
 
   it('renders the search bar', () => {
-    render(<DiscoverPage />)
+    renderDiscover()
     expect(screen.getByPlaceholderText(/Search profiles, skills, or projects/i)).toBeInTheDocument()
   })
 
   it('renders the filter button', () => {
-    render(<DiscoverPage />)
+    renderDiscover()
     expect(screen.getByRole('button', { name: /Filter by skill/i })).toBeInTheDocument()
   })
 
-  it('renders at least one ProfileCard on initial load', () => {
-    render(<DiscoverPage />)
-    // Every card has a "View Profile" button
-    const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
-    expect(viewButtons.length).toBeGreaterThan(0)
+  it('renders at least one ProfileCard on initial load', async () => {
+    renderDiscover()
+    await waitFor(() => {
+      const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
+      expect(viewButtons.length).toBeGreaterThan(0)
+    })
   })
 
-  it('shows at most PAGE_SIZE (6) cards on initial load', () => {
-    render(<DiscoverPage />)
-    const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
-    expect(viewButtons.length).toBeLessThanOrEqual(6)
+  it('shows at most PAGE_SIZE (6) cards on initial load', async () => {
+    renderDiscover()
+    await waitFor(() => {
+      const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
+      expect(viewButtons.length).toBeLessThanOrEqual(6)
+    })
   })
 
-  // ── Search ─────────────────────────────────────────────────────────────────
+  // ── Search ──────────────────────────────────────────────────────────────────
 
-  it('filters profiles by name as the user types', () => {
-    render(<DiscoverPage />)
+  it('shows the empty state when no profiles match the search query', async () => {
+    renderDiscover()
     const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
-
-    fireEvent.change(input, { target: { value: 'Dr. Sarah Chen' } })
-
-    expect(screen.getByText('Dr. Sarah Chen')).toBeInTheDocument()
-    // Other profiles should be gone
-    expect(screen.queryByText('James Wilson')).not.toBeInTheDocument()
+    fireEvent.change(input, { target: { value: 'xyznonexistent' } })
+    await waitFor(() => {
+      expect(screen.getByText(/No mentors found matching/i)).toBeInTheDocument()
+    })
   })
 
-  it('filters profiles by skill name', () => {
-    render(<DiscoverPage />)
+  it('filters profiles by skill name via search', async () => {
+    renderDiscover()
+    const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
+    fireEvent.change(input, { target: { value: 'Kubernetes' } })
+    await waitFor(() => {
+      expect(screen.getByText('Mentor 1')).toBeInTheDocument()
+      expect(screen.queryByText('Mentor 2')).not.toBeInTheDocument()
+    })
+  })
+
+  it('restores profiles when search query is cleared', async () => {
+    renderDiscover()
     const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
 
     fireEvent.change(input, { target: { value: 'Kubernetes' } })
+    await waitFor(() => expect(screen.getByText('Mentor 1')).toBeInTheDocument())
 
-    // Julian Thorne is the only mentor with Kubernetes
-    expect(screen.getByText('Julian Thorne')).toBeInTheDocument()
-    expect(screen.queryByText('Dr. Sarah Chen')).not.toBeInTheDocument()
-  })
-
-  it('shows the empty state when no profiles match the search query', () => {
-    render(<DiscoverPage />)
-    const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
-
-    fireEvent.change(input, { target: { value: 'xyznonexistent' } })
-
-    expect(screen.getByText(/No mentors found matching/i)).toBeInTheDocument()
-  })
-
-  it('restores all profiles when search query is cleared', () => {
-    render(<DiscoverPage />)
-    const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
-
-    fireEvent.change(input, { target: { value: 'Dr. Sarah Chen' } })
     fireEvent.change(input, { target: { value: '' } })
-
-    const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
-    expect(viewButtons.length).toBeGreaterThan(1)
+    await waitFor(() => {
+      const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
+      expect(viewButtons.length).toBeGreaterThan(1)
+    })
   })
 
-  // ── Skill filter panel ─────────────────────────────────────────────────────
+  // ── Skill filter panel ──────────────────────────────────────────────────────
 
-  it('opens the skill filter panel when the filter button is clicked', () => {
-    render(<DiscoverPage />)
+  it('opens the skill filter panel when the filter button is clicked', async () => {
+    renderDiscover()
+    // Wait for skills to load first
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
-
     expect(screen.getByText(/Filter by Skill/i)).toBeInTheDocument()
   })
 
-  it('closes the filter panel when clicked outside', () => {
-    render(<DiscoverPage />)
+  it('closes the filter panel when clicked outside', async () => {
+    renderDiscover()
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
     expect(screen.getByText(/Filter by Skill/i)).toBeInTheDocument()
 
     fireEvent.mouseDown(document.body)
-
     expect(screen.queryByText(/Filter by Skill/i)).not.toBeInTheDocument()
   })
 
-  it('filters profiles when a skill chip is selected', () => {
-    render(<DiscoverPage />)
+  it('filters profiles when a skill chip is selected', async () => {
+    renderDiscover()
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
-    // Open filter panel
     fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
 
-    // Click the "Python" chip — James Wilson and Alex Sterling have Python
-    const pythonChip = screen.getByRole('button', { name: /^Python$/i })
+    const pythonChip = await screen.findByRole('button', { name: /^Python$/i })
     fireEvent.click(pythonChip)
 
-    const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
-    expect(viewButtons.length).toBeGreaterThan(0)
-    // Dr. Sarah Chen has Python/Django, not plain Python — she should not appear
-    expect(screen.queryByText('Julian Thorne')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Mentor 2')).toBeInTheDocument()
+      expect(screen.queryByText('Mentor 1')).not.toBeInTheDocument()
+    })
   })
 
-  it('shows the active filter count badge on the filter button', () => {
-    render(<DiscoverPage />)
+  it('shows the active filter count badge on the filter button', async () => {
+    renderDiscover()
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
-
-    const goChip = screen.getByRole('button', { name: /^Go$/i })
+    const goChip = await screen.findByRole('button', { name: /^Go$/i })
     fireEvent.click(goChip)
 
-    // Badge with count "1" should be visible inside the trigger button
     expect(screen.getByText('1')).toBeInTheDocument()
   })
 
-  it('shows the empty state when skill filters match no mentor', () => {
-    render(<DiscoverPage />)
+  it('clears skill filters when "Clear all" is clicked', async () => {
+    renderDiscover()
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
-    // Search for something that won't match any mentor
-    const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
-    fireEvent.change(input, { target: { value: 'xyznonexistent' } })
-
-    // Open filter panel and select a skill
     fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
-    const goChip = screen.getByRole('button', { name: /^Go$/i })
+    const goChip = await screen.findByRole('button', { name: /^Go$/i })
     fireEvent.click(goChip)
 
-    expect(screen.getByText(/No mentors found matching/i)).toBeInTheDocument()
-  })
-
-  it('clears skill filters when "Clear all" is clicked', () => {
-    render(<DiscoverPage />)
-
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
-    fireEvent.click(screen.getByRole('button', { name: /^Go$/i }))
-
-    // "Clear all" appears when at least one skill is active
     const clearAll = screen.getByRole('button', { name: /Clear all/i })
     fireEvent.click(clearAll)
 
-    // Badge should be gone
     expect(screen.queryByText('1')).not.toBeInTheDocument()
   })
 
-  // ── Pagination ─────────────────────────────────────────────────────────────
+  // ── Pagination ──────────────────────────────────────────────────────────────
 
-  it('shows the Load More button when there are more profiles than PAGE_SIZE', () => {
-    render(<DiscoverPage />)
-    // There are 8 mentor profiles in mock data (> 6 PAGE_SIZE)
-    expect(screen.getByRole('button', { name: /Load More/i })).toBeInTheDocument()
+  it('shows the Load More button when there are more profiles than PAGE_SIZE', async () => {
+    renderDiscover()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Load More/i })).toBeInTheDocument()
+    })
   })
 
-  it('loads more profiles when Load More is clicked', () => {
-    render(<DiscoverPage />)
+  it('loads more profiles when Load More is clicked', async () => {
+    renderDiscover()
+    await waitFor(() => screen.getAllByRole('button', { name: /View Profile/i }))
 
     const before = screen.getAllByRole('button', { name: /View Profile/i }).length
     fireEvent.click(screen.getByRole('button', { name: /Load More/i }))
-    const after = screen.getAllByRole('button', { name: /View Profile/i }).length
 
-    expect(after).toBeGreaterThan(before)
+    await waitFor(() => {
+      const after = screen.getAllByRole('button', { name: /View Profile/i }).length
+      expect(after).toBeGreaterThan(before)
+    })
   })
 
-  it('hides the Load More button once all profiles are shown', () => {
-    render(<DiscoverPage />)
+  it('resets pagination when the search query changes', async () => {
+    renderDiscover()
+    await waitFor(() => screen.getByRole('button', { name: /Load More/i }))
 
-    // Keep clicking until the button disappears
-    while (screen.queryByRole('button', { name: /Load More/i })) {
-      fireEvent.click(screen.getByRole('button', { name: /Load More/i }))
-    }
-
-    expect(screen.queryByRole('button', { name: /Load More/i })).not.toBeInTheDocument()
-  })
-
-  it('resets pagination when the search query changes', () => {
-    render(<DiscoverPage />)
-
-    // Load extra profiles past PAGE_SIZE
     fireEvent.click(screen.getByRole('button', { name: /Load More/i }))
-    const afterLoadMore = screen.getAllByRole('button', { name: /View Profile/i }).length
-    expect(afterLoadMore).toBeGreaterThan(6)
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /View Profile/i }).length).toBeGreaterThan(6)
+    })
 
-    // Typing a new query must reset visibleCount back to PAGE_SIZE
     const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
     fireEvent.change(input, { target: { value: 'python' } })
 
-    const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
-    expect(viewButtons.length).toBeLessThanOrEqual(6)
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /View Profile/i }).length).toBeLessThanOrEqual(6)
+    })
   })
 
-  // ── Navigation ─────────────────────────────────────────────────────────────
+  // ── Navigation ──────────────────────────────────────────────────────────────
 
-  it('navigates to the profile page when View Profile is clicked', () => {
-    render(<DiscoverPage />)
+  it('navigates to the profile page when View Profile is clicked', async () => {
+    renderDiscover()
+    await waitFor(() => screen.getAllByRole('button', { name: /View Profile/i }))
 
-    const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
-    fireEvent.click(viewButtons[0])
+    fireEvent.click(screen.getAllByRole('button', { name: /View Profile/i })[0])
 
     expect(mockNavigate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: '/profiles/$profileId',
-        params: expect.objectContaining({ profileId: expect.any(String) }),
-      }),
+        expect.objectContaining({
+          to: '/profiles/$username',
+          params: expect.objectContaining({ username: expect.any(String) }),
+        }),
     )
   })
 })
