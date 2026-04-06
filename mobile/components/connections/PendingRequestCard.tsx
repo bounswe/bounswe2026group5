@@ -10,6 +10,7 @@ export interface PendingRequestCardProps {
   slot_end_time: string | null;
   isNew?: boolean;
   avatarUrl?: string;
+  disabled?: boolean;
   onPress?: () => void;
   onAccept?: () => void;
   onDecline?: () => void;
@@ -23,6 +24,7 @@ export function PendingRequestCard({
   slot_end_time,
   isNew,
   avatarUrl,
+  disabled,
   onPress,
   onAccept,
   onDecline,
@@ -72,6 +74,7 @@ export function PendingRequestCard({
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={onDecline}
+            disabled={disabled}
             className="flex-1 py-3 rounded-full border border-divider bg-white items-center"
           >
             <Text className="font-bold text-on-surface text-sm">Decline</Text>
@@ -80,7 +83,8 @@ export function PendingRequestCard({
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={onAccept}
-            className="flex-[1.4] py-3 rounded-full bg-primary items-center"
+            disabled={disabled}
+            className={`flex-[1.4] py-3 rounded-full items-center ${disabled ? 'bg-primary/50' : 'bg-primary'}`}
           >
             <Text className="font-bold text-white text-sm">Accept</Text>
           </TouchableOpacity>

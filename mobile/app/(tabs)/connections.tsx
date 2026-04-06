@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { getAppUsageMode, getAccessToken } from '@/lib/auth/storage';
+import { useAuthStore } from '@/lib/auth/store';
 import {
   fetchMyRequestsFn,
   fetchMyMatchesFn,
@@ -16,12 +16,6 @@ import { PendingRequestCard, PendingRequestCardProps } from '@/components/connec
 import { MentorCard } from '@/components/connections/MentorCard';
 import { RequestDetailSheet } from '@/components/connections/RequestDetailSheet';
 import { DeclineConfirmModal } from '@/components/connections/DeclineConfirmModal';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type UserRole = 'Mentor' | 'Mentee';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -92,37 +86,40 @@ const MENTORS_PREVIEW_COUNT = 2;
 
 function MentorConnections() {
   const queryClient = useQueryClient();
+  const { accessToken } = useAuthStore();
   const [selectedRequest, setSelectedRequest] = useState<PendingRequestCardProps | null>(null);
   const [declineTargetId, setDeclineTargetId] = useState<string | null>(null);
   const [showAllMentees, setShowAllMentees] = useState(false);
 
   const { data: requests = [], isLoading: requestsLoading, isError: requestsError } = useQuery({
     queryKey: ['mentorship-requests'],
-    queryFn: async () => {
-      const token = await getAccessToken();
-      if (!token) throw new Error('Not authenticated');
-      return fetchMyRequestsFn(token);
+    queryFn: () => {
+      if (!accessToken) throw new Error('Not authenticated');
+      return fetchMyRequestsFn(accessToken);
     },
+    enabled: !!accessToken,
   });
 
   const { data: matches = [], isLoading: matchesLoading, isError: matchesError } = useQuery({
     queryKey: ['mentorship-matches'],
-    queryFn: async () => {
-      const token = await getAccessToken();
-      if (!token) throw new Error('Not authenticated');
-      return fetchMyMatchesFn(token);
+    queryFn: () => {
+      if (!accessToken) throw new Error('Not authenticated');
+      return fetchMyMatchesFn(accessToken);
     },
+    enabled: !!accessToken,
   });
 
   const respondMutation = useMutation({
-    mutationFn: async (params: { requestId: string; action: 'accept' | 'reject' }) => {
-      const token = await getAccessToken();
-      if (!token) throw new Error('Not authenticated');
-      return respondToRequestFn({ ...params, accessToken: token });
+    mutationFn: (params: { requestId: string; action: 'accept' | 'reject' }) => {
+      if (!accessToken) throw new Error('Not authenticated');
+      return respondToRequestFn({ ...params, accessToken });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mentorship-requests'] });
       queryClient.invalidateQueries({ queryKey: ['mentorship-matches'] });
+    },
+    onError: (error: Error) => {
+      Alert.alert('Action Failed', error.message || 'Something went wrong. Please try again.');
     },
   });
 
@@ -134,9 +131,8 @@ function MentorConnections() {
     avatarUrl: m.mentee.picture_url || undefined,
   }));
 
-  const handleMessage = (name: string) => {
+  const handleMessage = (_name: string) => {
     // TODO: API connection — navigate to messaging thread with mentee
-    console.log('Open message thread with', name);
   };
 
   const handleAccept = (id: string) => {
@@ -167,6 +163,7 @@ function MentorConnections() {
         onClose={() => setSelectedRequest(null)}
         onAccept={handleAccept}
         onDecline={(id) => setDeclineTargetId(id)}
+        disabled={respondMutation.isPending}
       />
 
       {/* Section: Upcoming Messages */}
@@ -264,6 +261,7 @@ function MentorConnections() {
               onPress={() => setSelectedRequest(cardProps)}
               onAccept={() => handleAccept(req.id)}
               onDecline={() => setDeclineTargetId(req.id)}
+              disabled={respondMutation.isPending}
             />
           );
         })}
@@ -280,15 +278,16 @@ function MentorConnections() {
 // ---------------------------------------------------------------------------
 
 function MenteeConnections() {
+  const { accessToken } = useAuthStore();
   const [showAllMentors, setShowAllMentors] = useState(false);
 
   const { data: matches = [], isLoading: matchesLoading, isError: matchesError } = useQuery({
     queryKey: ['mentorship-matches'],
-    queryFn: async () => {
-      const token = await getAccessToken();
-      if (!token) throw new Error('Not authenticated');
-      return fetchMyMatchesFn(token);
+    queryFn: () => {
+      if (!accessToken) throw new Error('Not authenticated');
+      return fetchMyMatchesFn(accessToken);
     },
+    enabled: !!accessToken,
   });
 
   const mentors = matches.map(m => ({
@@ -298,14 +297,12 @@ function MenteeConnections() {
     avatarUrl: m.mentor.picture_url || undefined,
   }));
 
-  const handleMessage = (name: string) => {
+  const handleMessage = (_name: string) => {
     // TODO: API connection — navigate to messaging thread with mentor
-    console.log('Open message thread with', name);
   };
 
-  const handleMore = (name: string) => {
+  const handleMore = (_name: string) => {
     // TODO: API connection — show options sheet for mentor relationship
-    console.log('More options for', name);
   };
 
   const displayedMentors = showAllMentors ? mentors : mentors.slice(0, MENTORS_PREVIEW_COUNT);
@@ -400,16 +397,9 @@ function MenteeConnections() {
 
 export default function ConnectionsScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuthStore();
 
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
-
-  useEffect(() => {
-    getAppUsageMode().then((mode) => {
-      setUserRole(mode === 'MENTEE' ? 'Mentee' : 'Mentor');
-    });
-  }, []);
-
-  const isMentor = userRole !== 'Mentee';
+  const isMentor = user?.app_usage_mode !== 'MENTEE';
 
   return (
     <View className="flex-1 bg-surface">

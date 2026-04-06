@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../api/client';
+import { API_BASE_URL } from '../api/config';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,10 +35,17 @@ export interface Match {
 // ── Fetch functions ───────────────────────────────────────────────────────────
 
 export async function fetchMyRequestsFn(accessToken: string): Promise<MentorshipRequest[]> {
-  const res = await fetch(`${API_BASE_URL}/mentorship/requests/me/`, {
+  const url = `${API_BASE_URL}/api/mentorship/requests/me/`;
+
+  const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) throw new Error('Failed to fetch mentorship requests.');
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.detail || 'Failed to fetch mentorship requests.');
+  }
+
   return res.json() as Promise<MentorshipRequest[]>;
 }
 
@@ -47,7 +54,9 @@ export async function respondToRequestFn(params: {
   action: 'accept' | 'reject';
   accessToken: string;
 }): Promise<MentorshipRequest> {
-  const res = await fetch(`${API_BASE_URL}/mentorship/requests/${params.requestId}/respond/`, {
+  const url = `${API_BASE_URL}/api/mentorship/requests/${params.requestId}/respond/`;
+
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -55,14 +64,26 @@ export async function respondToRequestFn(params: {
     },
     body: JSON.stringify({ action: params.action }),
   });
-  if (!res.ok) throw new Error('Failed to respond to mentorship request.');
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.detail || 'Failed to respond to mentorship request.');
+  }
+
   return res.json() as Promise<MentorshipRequest>;
 }
 
 export async function fetchMyMatchesFn(accessToken: string): Promise<Match[]> {
-  const res = await fetch(`${API_BASE_URL}/mentorship/matches/me/`, {
+  const url = `${API_BASE_URL}/api/mentorship/matches/me/`;
+
+  const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) throw new Error('Failed to fetch mentorship matches.');
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.detail || 'Failed to fetch mentorship matches.');
+  }
+
   return res.json() as Promise<Match[]>;
 }

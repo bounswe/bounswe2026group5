@@ -9,9 +9,10 @@ interface RequestDetailSheetProps {
   onClose: () => void;
   onAccept: (id: string) => void;
   onDecline: (id: string) => void;
+  disabled?: boolean;
 }
 
-export function RequestDetailSheet({ request, visible, onClose, onAccept, onDecline }: RequestDetailSheetProps) {
+export function RequestDetailSheet({ request, visible, onClose, onAccept, onDecline, disabled }: RequestDetailSheetProps) {
   if (!request) return null;
 
   const slotDate = request.slot_date;
@@ -166,7 +167,8 @@ export function RequestDetailSheet({ request, visible, onClose, onAccept, onDecl
                 onAccept(request.id);
                 onClose();
               }}
-              className="flex-[2] py-3.5 rounded-full bg-primary items-center justify-center flex-row gap-2"
+              disabled={disabled}
+              className={`flex-[2] py-3.5 rounded-full items-center justify-center flex-row gap-2 ${disabled ? 'bg-primary/50' : 'bg-primary'}`}
             >
               <Ionicons name="checkmark-circle" size={16} color="#ffffff" />
               <Text className="font-bold text-white text-sm">Accept Request</Text>
