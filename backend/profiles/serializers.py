@@ -2,13 +2,12 @@
 
 from datetime import datetime
 
+from accounts.models import AppUsageMode
 from django.contrib.gis.geos import Point
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
-
-from accounts.models import AppUsageMode
 
 from .models import AvailabilitySlot, Profile, Skill
 

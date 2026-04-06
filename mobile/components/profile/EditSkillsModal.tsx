@@ -5,12 +5,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-// TODO: [Backend] Fetch this master list from GET /api/skills
 const MOCK_SKILLS_DB = [
   'React Native', 'React', 'JavaScript', 'TypeScript', 'Node.js', 
   'Python', 'Django', 'SQL', 'PostgreSQL', 'System Design', 
   'Machine Learning', 'AWS', 'Docker', 'GraphQL', 'Swift', 'Kotlin'
-].sort();
+].sort((a, b) => a.localeCompare(b));
 
 interface EditSkillsModalProps {
   visible: boolean;
@@ -18,10 +17,19 @@ interface EditSkillsModalProps {
   title: string;
   initialSkills: string[];
   variant: 'mentor' | 'mentee';
+  availableSkills?: string[];
   onSave: (newSkills: string[]) => void;
 }
 
-export function EditSkillsModal({ visible, onClose, title, initialSkills, variant, onSave }: EditSkillsModalProps) {
+export function EditSkillsModal({
+  visible,
+  onClose,
+  title,
+  initialSkills,
+  variant,
+  availableSkills = [],
+  onSave,
+}: Readonly<EditSkillsModalProps>) {
   const [currentSkills, setCurrentSkills] = useState<string[]>([]);
   const [inputText, setInputText] = useState('');
 
@@ -33,11 +41,15 @@ export function EditSkillsModal({ visible, onClose, title, initialSkills, varian
   }, [visible, initialSkills]);
 
   const isMentor = variant === 'mentor';
-  const themeColor = isMentor ? 'indigo' : 'emerald';
   const bgClass = isMentor ? 'bg-indigo-50 border-indigo-200' : 'bg-emerald-50 border-emerald-200';
   const textClass = isMentor ? 'text-indigo-700' : 'text-emerald-700';
 
-  const filteredSuggestions = MOCK_SKILLS_DB.filter(skill => 
+  const suggestionsCatalog =
+    availableSkills.length > 0
+      ? [...availableSkills].sort((a, b) => a.localeCompare(b))
+      : MOCK_SKILLS_DB;
+
+  const filteredSuggestions = suggestionsCatalog.filter(skill => 
     skill.toLowerCase().includes(inputText.toLowerCase()) && 
     !currentSkills.includes(skill)
   );

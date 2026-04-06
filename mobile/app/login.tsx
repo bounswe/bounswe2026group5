@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,38 +8,82 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-} from 'react-native';
-import { router, type Href } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+  ActivityIndicator,
+} from "react-native";
+import { router, type Href } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Colors } from "@/constants/theme";
+import { useLoginMutation } from "@/lib/queries/auth";
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
-  const colorScheme = useColorScheme() ?? 'light';
-  const isDark = colorScheme === 'dark';
+  const loginMutation = useLoginMutation();
+
+  const colorScheme = useColorScheme() ?? "light";
+  const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme];
+
+  /**
+   * Navigate to dashboard when login succeeds.
+   */
+  useEffect(() => {
+    if (loginMutation.data) {
+      router.replace("/(tabs)");
+    }
+  }, [loginMutation.data]);
+
+  /**
+   * Handle login button press.
+   * Validates input and calls login mutation.
+   */
+  const handleLogin = async () => {
+    setLocalError(null);
+
+    if (!email.trim()) {
+      setLocalError("Please enter your email");
+      return;
+    }
+
+    if (!password) {
+      setLocalError("Please enter your password");
+      return;
+    }
+
+    try {
+      await loginMutation.mutateAsync({ email: email.trim(), password });
+    } catch (error) {
+      // Error is already handled by mutation's onError, but we can add local handling if needed
+      console.error("Login error:", error);
+    }
+  };
+
+  const isLoading = loginMutation.isPending;
 
   return (
     <SafeAreaView
-      className={`flex-1 ${isDark ? 'bg-surface-dark' : 'bg-surface'}`}
+      className={`flex-1 ${isDark ? "bg-surface-dark" : "bg-surface"}`}
     >
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
           className="flex-1"
-          contentContainerStyle={{ paddingHorizontal: 32, paddingTop: 40, paddingBottom: 48 }}
+          contentContainerStyle={{
+            paddingHorizontal: 32,
+            paddingTop: 40,
+            paddingBottom: 48,
+          }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-
           {/* ── Brand Header ── */}
           <View className="flex-row items-center gap-2 mb-12">
             <Ionicons name="leaf" size={28} color={theme.primary} />
@@ -63,6 +107,14 @@ export default function LoginScreen() {
 
           {/* ── Form ── */}
           <View className="gap-5">
+            {/* Error Message */}
+            {(loginMutation.error || localError) && (
+              <View className="p-3 rounded-lg bg-error/10 dark:bg-error-dark/10 border border-error dark:border-error-dark">
+                <Text className="text-sm font-medium text-error dark:text-error-dark">
+                  {localError || loginMutation.error?.message}
+                </Text>
+              </View>
+            )}
 
             {/* Email / Username */}
             <View className="gap-1.5">
@@ -102,7 +154,7 @@ export default function LoginScreen() {
                   accessibilityRole="link"
                   accessibilityLabel="Forgot password"
                   onPress={() =>
-                    console.log('TODO: Navigate to forgot-password screen')
+                    console.log("TODO: Navigate to forgot-password screen")
                   }
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
@@ -130,9 +182,7 @@ export default function LoginScreen() {
                   autoComplete="current-password"
                   returnKeyType="done"
                   accessibilityLabel="Password"
-                  onSubmitEditing={() =>
-                    console.log('TODO: Trigger login on keyboard done')
-                  }
+                  onSubmitEditing={handleLogin}
                 />
                 {/* Pressable avoids the stuck-opacity bug that TouchableOpacity
                     (which wraps children in Animated.View) causes when secureTextEntry
@@ -141,11 +191,13 @@ export default function LoginScreen() {
                   onPress={() => setShowPassword((prev) => !prev)}
                   style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
                   accessibilityRole="button"
-                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                  accessibilityLabel={
+                    showPassword ? "Hide password" : "Show password"
+                  }
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Ionicons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
                     size={20}
                     color={theme.textMuted}
                   />
@@ -155,17 +207,23 @@ export default function LoginScreen() {
 
             {/* Login CTA */}
             <TouchableOpacity
-              className="w-full h-14 rounded-full items-center justify-center mt-2 shadow-sm bg-primary dark:bg-primary-dim"
+              className={`w-full h-14 rounded-full items-center justify-center mt-2 shadow-sm ${
+                isLoading
+                  ? "bg-primary/50 dark:bg-primary-dim/50"
+                  : "bg-primary dark:bg-primary-dim"
+              }`}
               activeOpacity={0.88}
+              disabled={isLoading}
               accessibilityRole="button"
               accessibilityLabel="Log in"
-              onPress={() =>
-                console.log('TODO: POST /api/auth/login with email + password')
-              }
+              onPress={handleLogin}
             >
-              <Text className="text-white text-lg font-bold">Log In</Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Text className="text-white text-lg font-bold">Log In</Text>
+              )}
             </TouchableOpacity>
-
           </View>
 
           {/* ── Divider ── */}
@@ -183,7 +241,7 @@ export default function LoginScreen() {
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel="Log in with Google"
-            onPress={() => console.log('TODO: Implement Google OAuth sign-in')}
+            onPress={() => console.log("TODO: Implement Google OAuth sign-in")}
           >
             <Ionicons
               name="logo-google"
@@ -197,42 +255,20 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
 
-          {/* ── Demo Bypass ── */}
-          <TouchableOpacity
-            className="w-full rounded-full h-12 mt-8 items-center justify-center"
-            style={{
-              backgroundColor: isDark ? '#451a03' : '#FEF3C7',
-              borderColor: isDark ? '#92400e' : '#d97706',
-              borderWidth: 1.5,
-            }}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Continue as demo user"
-            onPress={() => router.replace('/(tabs)')}
-          >
-            <Text
-              className="text-sm font-semibold"
-              style={{ color: isDark ? '#fcd34d' : '#92400e' }}
-            >
-              Continue without logging in (Demo)
-            </Text>
-          </TouchableOpacity>
-
           {/* ── Sign Up Footer ── */}
           <View className="mt-6 items-center">
             <Text className="font-medium text-base text-on-surface-soft dark:text-on-surface-soft-dark">
-              Don&apos;t have an account?{' '}
+              Don&apos;t have an account?{" "}
               <Text
                 className="font-bold text-primary dark:text-primary-dim"
                 accessibilityRole="link"
                 accessibilityLabel="Sign up"
-                onPress={() => router.push('/register' as Href)}
+                onPress={() => router.push("/register" as Href)}
               >
                 Sign Up
               </Text>
             </Text>
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

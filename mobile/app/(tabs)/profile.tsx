@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, ScrollView, Text, TouchableOpacity } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Alert, View, ScrollView, Text, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -8,65 +8,190 @@ import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { AvailabilityPreview } from "@/components/profile/AvailabilityPreview";
-import {
-  MentorshipOfferings,
-  Offering,
-} from "@/components/profile/MentorshipOfferings";
 import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { EditAvailabilityModal } from "@/components/profile/EditAvailabilityModal";
 import {
   EditProfileModal,
   UserProfileData,
 } from "@/components/profile/EditProfileModal";
-import { BookingModal } from "@/components/profile/BookingModal";
-import { ManageOfferingsModal } from "@/components/profile/ManageOfferingsModal";
 
-// Mock Data from centralized file
-import { MOCK_AVAILABILITY, MOCK_OFFERINGS } from "@/constants/mockData";
+import { API_BASE_URL } from "@/constants/api";
+import {
+  mapAvailabilityToSchedule,
+  useAvailabilitySlotsQuery,
+} from "@/lib/queries/mentorship";
+import { useAuthStore } from "@/lib/auth/store";
+import { useProfileVisibilityStore } from "@/lib/profile/preferences";
+import { useUpdateOwnProfileMutation } from "@/lib/queries/profile";
 
-const MOCK_PROFILE_DATA = {
-  user: {
-    name: "Ali Aydın",
-    bio: "Computer Engineering student passionate about full-stack development, system design, and helping others learn React Native.",
-    rating: 4.8,
-    reviewCount: 12,
-  },
-  commonData: {
-    expertise: ["React Native", "System Design", "Django", "SQL"],
-    learningGoals: ["Machine Learning", "Advanced Algorithms"],
-  },
-  preferences: {
-    showAvailability: true,
-    showOfferings: true,
-  },
+const PROFILE_DEFAULTS = {
+  rating: 0,
+  reviewCount: 0,
+  expertise: [] as string[],
+  eagerToLearn: [] as string[],
 };
 
+interface OwnProfileResponse {
+  full_name: string;
+  bio: string;
+  picture_url: string;
+  expertises?: string[];
+  eager_to_learn?: string[];
+}
+
+function includesMentor(mode?: string): boolean {
+  return mode === "MENTOR" || mode === "BOTH";
+}
+
+function includesMentee(mode?: string): boolean {
+  return mode === "MENTEE" || mode === "BOTH";
+}
+
 export default function ProfileScreen() {
-  const { preferences, commonData } = MOCK_PROFILE_DATA;
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const authUser = useAuthStore((state) => state.user);
+  const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
+  const currentUsername = useAuthStore((state) => state.user?.username);
+  const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
+  const updateProfileMutation = useUpdateOwnProfileMutation();
 
-  const [availabilityData, setAvailabilityData] = useState(MOCK_AVAILABILITY);
-  const [offeringsData, setOfferingsData] = useState<Offering[]>(
-    MOCK_OFFERINGS as Offering[],
+  const showExpertise = useProfileVisibilityStore(
+    (state) => state.showExpertise,
   );
-  const [expertiseData, setExpertiseData] = useState(commonData.expertise);
-  const [learningGoalsData, setLearningGoalsData] = useState(
-    commonData.learningGoals,
+  const showEagerToLearn = useProfileVisibilityStore(
+    (state) => state.showEagerToLearn,
+  );
+  const showAvailability = useProfileVisibilityStore(
+    (state) => state.showAvailability,
+  );
+
+  const [availabilityData, setAvailabilityData] = useState<
+    { day: string; times: string[] }[]
+  >([]);
+  const [expertiseData, setExpertiseData] = useState<string[]>(
+    PROFILE_DEFAULTS.expertise,
+  );
+  const [eagerToLearnData, setEagerToLearnData] = useState<string[]>(
+    PROFILE_DEFAULTS.eagerToLearn,
   );
 
   const [userData, setUserData] = useState<UserProfileData>({
-    name: MOCK_PROFILE_DATA.user.name,
-    bio: MOCK_PROFILE_DATA.user.bio,
+    name: authUser?.username ?? "User",
+    bio: "",
   });
 
-  const [selectedOffering, setSelectedOffering] = useState<Offering | null>(
-    null,
-  );
+  useEffect(() => {
+    setUserData((prev) => ({
+      ...prev,
+      name: authUser?.username ?? prev.name,
+    }));
+  }, [authUser?.username]);
+
+  const [availableSkills, setAvailableSkills] = useState<string[]>([]);
   const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
-  const [isManageOfferingsModalOpen, setManageOfferingsModalOpen] =
-    useState(false);
+
+  const hasExpertiseData = expertiseData.length > 0;
+  const hasEagerToLearnData = eagerToLearnData.length > 0;
+  const isMentorMode =
+    includesMentor(appUsageMode) || (!appUsageMode && hasExpertiseData);
+  const isMenteeMode =
+    includesMentee(appUsageMode) || (!appUsageMode && hasEagerToLearnData);
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (!currentUsername) {
+      return () => {
+        mounted = false;
+      };
+    }
+
+    fetch(
+      `${API_BASE_URL}/api/profiles/${encodeURIComponent(currentUsername)}/`,
+      {
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    )
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load profile.");
+        }
+
+        const payload = (await response.json()) as OwnProfileResponse;
+        if (!mounted) {
+          return;
+        }
+
+        setUserData((prev) => ({
+          ...prev,
+          name: payload.full_name || prev.name,
+          bio: payload.bio || "",
+        }));
+
+        if (Array.isArray(payload.expertises)) {
+          setExpertiseData(payload.expertises);
+        }
+
+        if (Array.isArray(payload.eager_to_learn)) {
+          setEagerToLearnData(payload.eager_to_learn);
+        }
+      })
+      .catch(() => {
+        if (!mounted) {
+          return;
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentUsername]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    fetch(`${API_BASE_URL}/api/profiles/skills/`, {
+      headers: {
+        Accept: "application/json",
+      },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load skills.");
+        }
+        const payload = (await response.json()) as
+          | { name: string }[]
+          | string[];
+        if (!mounted) {
+          return;
+        }
+
+        const normalized = payload
+          .map((skill) => (typeof skill === "string" ? skill : skill.name))
+          .filter(Boolean);
+
+        setAvailableSkills(normalized);
+      })
+      .catch(() => {
+        if (mounted) {
+          setAvailableSkills([]);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (availabilityQuery.data) {
+      setAvailabilityData(mapAvailabilityToSchedule(availabilityQuery.data));
+    }
+  }, [availabilityQuery.data]);
 
   const [skillsModalConfig, setSkillsModalConfig] = useState<{
     visible: boolean;
@@ -104,6 +229,61 @@ export default function ProfileScreen() {
     });
   };
 
+  const handleSaveProfileHeader = async (updatedData: UserProfileData) => {
+    if (!currentUsername) {
+      setUserData(updatedData);
+      return;
+    }
+
+    try {
+      const response = await updateProfileMutation.mutateAsync({
+        username: currentUsername,
+        display_name: updatedData.name,
+        bio: updatedData.bio,
+      });
+      setUserData({
+        name: response.display_name || updatedData.name,
+        bio: response.bio || updatedData.bio,
+      });
+    } catch (error) {
+      Alert.alert(
+        "Profile Update Failed",
+        error instanceof Error
+          ? error.message
+          : "Could not update profile details.",
+      );
+    }
+  };
+
+  const handleSaveSkills = async (
+    variant: "mentor" | "mentee",
+    nextSkills: string[],
+  ) => {
+    if (variant === "mentor") {
+      setExpertiseData(nextSkills);
+    } else {
+      setEagerToLearnData(nextSkills);
+    }
+
+    if (!currentUsername) {
+      return;
+    }
+
+    try {
+      await updateProfileMutation.mutateAsync({
+        username: currentUsername,
+        ...(variant === "mentor"
+          ? { expertises: nextSkills }
+          : { eager_to_learn: nextSkills }),
+      });
+    } catch (error) {
+      Alert.alert(
+        "Skill Update Failed",
+        error instanceof Error ? error.message : "Could not update skills.",
+      );
+    }
+  };
+
   const openSkillsModal = (
     title: string,
     skills: string[],
@@ -137,62 +317,65 @@ export default function ProfileScreen() {
         <ProfileHeader
           name={userData.name}
           bio={userData.bio}
-          rating={MOCK_PROFILE_DATA.user.rating}
-          reviewCount={MOCK_PROFILE_DATA.user.reviewCount}
+          roleBadges={[
+            ...(isMentorMode ? (["MENTOR"] as const) : []),
+            ...(isMenteeMode ? (["MENTEE"] as const) : []),
+          ]}
+          rating={PROFILE_DEFAULTS.rating}
+          reviewCount={PROFILE_DEFAULTS.reviewCount}
           onEdit={() => setEditProfileModalOpen(true)}
         />
 
         <View className="px-4 mt-4">
           <View className="mb-6">
-            <SkillsCloud
-              title="Expertise"
-              skills={expertiseData}
-              variant="mentor"
-              onEdit={() =>
-                openEditModal(
-                  "Expertise",
-                  expertiseData,
-                  "mentor",
-                  setExpertiseData,
-                )
-              }
-              onViewAll={() =>
-                openSkillsModal("Expertise", expertiseData, "mentor")
-              }
-            />
-            <SkillsCloud
-              title="Learning Goals"
-              skills={learningGoalsData}
-              variant="mentee"
-              onEdit={() =>
-                openEditModal(
-                  "Learning Goals",
-                  learningGoalsData,
-                  "mentee",
-                  setLearningGoalsData,
-                )
-              }
-              onViewAll={() =>
-                openSkillsModal("Learning Goals", learningGoalsData, "mentee")
-              }
-            />
+            {isMentorMode && showExpertise && (
+              <SkillsCloud
+                title="Expertise"
+                skills={expertiseData}
+                variant="mentor"
+                onEdit={() =>
+                  openEditModal(
+                    "Expertise",
+                    expertiseData,
+                    "mentor",
+                    (newSkills) => {
+                      void handleSaveSkills("mentor", newSkills);
+                    },
+                  )
+                }
+                onViewAll={() =>
+                  openSkillsModal("Expertise", expertiseData, "mentor")
+                }
+              />
+            )}
+
+            {isMenteeMode && showEagerToLearn && (
+              <SkillsCloud
+                title="Eager to Learn"
+                skills={eagerToLearnData}
+                variant="mentee"
+                onEdit={() =>
+                  openEditModal(
+                    "Eager to Learn",
+                    eagerToLearnData,
+                    "mentee",
+                    (newSkills) => {
+                      void handleSaveSkills("mentee", newSkills);
+                    },
+                  )
+                }
+                onViewAll={() =>
+                  openSkillsModal("Eager to Learn", eagerToLearnData, "mentee")
+                }
+              />
+            )}
           </View>
 
-          {preferences.showAvailability && (
+          {isMentorMode && showAvailability && (
             <AvailabilityPreview
               schedule={availabilityData}
               onEdit={() => setAvailabilityModalOpen(true)}
             />
-          )}
-
-          {preferences.showOfferings && (
-            <View className="-mx-4">
-              <MentorshipOfferings
-                offerings={offeringsData}
-                onEdit={() => setManageOfferingsModalOpen(true)}
-                onSelectOffering={(offering) => setSelectedOffering(offering)}
-              />
-            </View>
           )}
         </View>
       </ScrollView>
@@ -211,6 +394,7 @@ export default function ProfileScreen() {
         title={editModalConfig.title}
         initialSkills={editModalConfig.skills}
         variant={editModalConfig.variant}
+        availableSkills={availableSkills}
         onSave={editModalConfig.onSave}
         onClose={() =>
           setEditModalConfig((prev) => ({ ...prev, visible: false }))
@@ -227,27 +411,9 @@ export default function ProfileScreen() {
         onClose={() => setEditProfileModalOpen(false)}
         initialData={userData}
         onSave={(updatedData) => {
-          setUserData(updatedData);
+          void handleSaveProfileHeader(updatedData);
           setEditProfileModalOpen(false);
         }}
-      />
-      <ManageOfferingsModal
-        visible={isManageOfferingsModalOpen}
-        offerings={offeringsData}
-        onClose={() => setManageOfferingsModalOpen(false)}
-        onAdd={(newOffering) =>
-          setOfferingsData([...offeringsData, newOffering])
-        }
-        onDelete={(id) =>
-          setOfferingsData(offeringsData.filter((o) => o.id !== id))
-        }
-        onReorder={(newOrder) => setOfferingsData(newOrder)}
-      />
-      <BookingModal
-        visible={!!selectedOffering}
-        offering={selectedOffering}
-        availability={availabilityData}
-        onClose={() => setSelectedOffering(null)}
       />
     </View>
   );

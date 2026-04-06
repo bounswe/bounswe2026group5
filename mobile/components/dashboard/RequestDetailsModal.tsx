@@ -4,7 +4,12 @@ import { View, Text, Modal, TouchableOpacity, Pressable, ScrollView } from 'reac
 interface RequestDetailsModalProps {
   visible: boolean;
   onClose: () => void;
+  onAccept?: () => void;
+  onReject?: () => void;
+  onCancelOutgoing?: () => void;
+  isSubmitting?: boolean;
   request: {
+    id?: string;
     user: string;
     topic: string;
     type: 'incoming' | 'outgoing';
@@ -13,7 +18,15 @@ interface RequestDetailsModalProps {
   } | null;
 }
 
-export function RequestDetailsModal({ visible, onClose, request }: RequestDetailsModalProps) {
+export function RequestDetailsModal({
+  visible,
+  onClose,
+  onAccept,
+  onReject,
+  onCancelOutgoing,
+  isSubmitting = false,
+  request,
+}: Readonly<RequestDetailsModalProps>) {
   if (!request) return null;
 
   const isIncoming = request.type === 'incoming';
@@ -65,23 +78,32 @@ export function RequestDetailsModal({ visible, onClose, request }: RequestDetail
             <View className="flex-row justify-between gap-3 pt-2 border-t border-gray-100">
               <TouchableOpacity 
                 className="flex-1 bg-white py-4 rounded-xl items-center border border-gray-300"
-                onPress={() => { console.log('Declined'); onClose(); }}
+                onPress={onReject}
+                disabled={isSubmitting}
               >
-                <Text className="text-gray-700 font-bold text-base">Decline</Text>
+                <Text className="text-gray-700 font-bold text-base">
+                  {isSubmitting ? 'Submitting...' : 'Decline'}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 className="flex-1 bg-blue-600 py-4 rounded-xl items-center"
-                onPress={() => { console.log('Accepted'); onClose(); }}
+                onPress={onAccept}
+                disabled={isSubmitting}
               >
-                <Text className="text-white font-bold text-base">Accept Request</Text>
+                <Text className="text-white font-bold text-base">
+                  {isSubmitting ? 'Submitting...' : 'Accept Request'}
+                </Text>
               </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity 
               className="bg-red-50 py-4 rounded-xl items-center mt-2 border border-red-100"
-              onPress={() => { console.log('Canceled Outgoing'); onClose(); }}
+              onPress={onCancelOutgoing}
+              disabled={isSubmitting}
             >
-              <Text className="text-red-600 font-bold text-base">Cancel Request</Text>
+              <Text className="text-red-600 font-bold text-base">
+                {isSubmitting ? 'Submitting...' : 'Cancel Request'}
+              </Text>
             </TouchableOpacity>
           )}
 
