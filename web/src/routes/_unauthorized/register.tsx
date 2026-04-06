@@ -238,21 +238,6 @@ export function RegisterPage() {
                         </CardContent>
 
                         <CardFooter className="flex-col gap-2 pt-2">
-                            {/* Temporary Button for Bypassing Register*/}
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                className="w-full bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border border-dashed border-yellow-300"
-                                onClick={() => {
-                                    setDemoAuthRole("both")
-                                    router.navigate({
-                                        to: '/gettingToKnowYou',
-                                        replace: true,
-                                    })
-                                }}
-                            >
-                                Bypass Register (UI Demo Mode)
-                            </Button>
                             <Button
                                 type="submit"
                                 form="register-form"
