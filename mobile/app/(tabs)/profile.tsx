@@ -19,6 +19,7 @@ import { API_BASE_URL } from "@/constants/api";
 import {
   mapAvailabilityToSchedule,
   useAvailabilitySlotsQuery,
+  useMentorshipMatchesQuery,
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
 import { useProfileVisibilityStore } from "@/lib/profile/preferences";
@@ -54,6 +55,9 @@ export default function ProfileScreen() {
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const currentUsername = useAuthStore((state) => state.user?.username);
   const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
+  const mentorshipMatchesQuery = useMentorshipMatchesQuery(
+    currentUsername || "",
+  );
   const updateProfileMutation = useUpdateOwnProfileMutation();
 
   const showExpertise = useProfileVisibilityStore(
@@ -69,6 +73,7 @@ export default function ProfileScreen() {
   const [availabilityData, setAvailabilityData] = useState<
     { day: string; times: string[] }[]
   >([]);
+  const [menteesCount, setMenteesCount] = useState<number>(0);
   const [expertiseData, setExpertiseData] = useState<string[]>(
     PROFILE_DEFAULTS.expertise,
   );
@@ -192,6 +197,17 @@ export default function ProfileScreen() {
       setAvailabilityData(mapAvailabilityToSchedule(availabilityQuery.data));
     }
   }, [availabilityQuery.data]);
+
+  useEffect(() => {
+    if (mentorshipMatchesQuery.data) {
+      const uniqueMentees = new Set(
+        mentorshipMatchesQuery.data
+          .filter((match) => match.is_active)
+          .map((match) => match.mentee.username),
+      );
+      setMenteesCount(uniqueMentees.size);
+    }
+  }, [mentorshipMatchesQuery.data]);
 
   const [skillsModalConfig, setSkillsModalConfig] = useState<{
     visible: boolean;
@@ -323,6 +339,8 @@ export default function ProfileScreen() {
           ]}
           rating={PROFILE_DEFAULTS.rating}
           reviewCount={PROFILE_DEFAULTS.reviewCount}
+          totalSessions={0}
+          menteesHelped={isMentorMode ? menteesCount : 0}
           onEdit={() => setEditProfileModalOpen(true)}
         />
 

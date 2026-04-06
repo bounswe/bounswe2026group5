@@ -212,6 +212,7 @@ export default function DiscoverScreen() {
 
         {hasMore && (
           <TouchableOpacity
+            activeOpacity={1.0}
             onPress={() => setPage((prev) => prev + 1)}
             disabled={loadingProfiles}
             className="bg-indigo-600 py-3 rounded-xl items-center mt-2"

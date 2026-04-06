@@ -1,0 +1,355 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Colors } from "@/constants/theme";
+
+type Role = "mentor" | "mentee";
+
+interface RegistrationProfileSetupSheetProps {
+  visible: boolean;
+  role: Role;
+  username: string;
+  skills: string[];
+  isLoadingSkills: boolean;
+  isSubmitting: boolean;
+  submitError: string;
+  onClose: () => void;
+  onSubmit: (values: {
+    displayName: string;
+    bio: string;
+    selectedSkills: string[];
+  }) => void;
+}
+
+function buildDisplayNameSuggestion(username: string): string {
+  if (!username) {
+    return "";
+  }
+
+  return username
+    .replaceAll(".", " ")
+    .replaceAll("_", " ")
+    .replaceAll("-", " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export function RegistrationProfileSetupSheet({
+  visible,
+  role,
+  username,
+  skills,
+  isLoadingSkills,
+  isSubmitting,
+  submitError,
+  onClose,
+  onSubmit,
+}: Readonly<RegistrationProfileSetupSheetProps>) {
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
+
+  const roleCopy = role === "mentor" ? "mentor" : "mentee";
+  const skillLabel = role === "mentor" ? "Teach skills" : "Learn skills";
+  const skillHint =
+    role === "mentor"
+      ? "Pick the topics you can teach."
+      : "Pick the topics you want to learn.";
+
+  const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
+  const [search, setSearch] = useState("");
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [displayNameError, setDisplayNameError] = useState("");
+  const [skillsError, setSkillsError] = useState("");
+
+  const suggestedDisplayName = useMemo(
+    () => buildDisplayNameSuggestion(username),
+    [username],
+  );
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
+    setDisplayName(suggestedDisplayName);
+    setBio("");
+    setSearch("");
+    setSelectedSkills([]);
+    setDisplayNameError("");
+    setSkillsError("");
+  }, [visible, suggestedDisplayName]);
+
+  const toggleSkill = (skill: string) => {
+    setSelectedSkills((current) =>
+      current.includes(skill)
+        ? current.filter((item) => item !== skill)
+        : [...current, skill],
+    );
+    setSkillsError("");
+  };
+
+  const filteredSkills = skills.filter((skill) => {
+    const matchesSearch = skill.toLowerCase().includes(search.toLowerCase());
+    return matchesSearch && !selectedSkills.includes(skill);
+  });
+
+  let skillsListContent: React.ReactNode;
+  if (isLoadingSkills) {
+    skillsListContent = (
+      <View className="items-center justify-center py-8">
+        <ActivityIndicator color={theme.primary} />
+      </View>
+    );
+  } else if (filteredSkills.length === 0) {
+    skillsListContent = (
+      <View className="items-center justify-center py-8 px-4">
+        <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark text-center">
+          No matching skills found.
+        </Text>
+      </View>
+    );
+  } else {
+    skillsListContent = (
+      <>
+        {filteredSkills.map((skill, index) => {
+          const isLastItem = index + 1 === filteredSkills.length;
+
+          return (
+            <TouchableOpacity
+              key={skill}
+              onPress={() => toggleSkill(skill)}
+              className={`flex-row items-center justify-between px-4 py-4 ${isLastItem ? "" : "border-b border-divider dark:border-divider-dark"}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${skill}`}
+            >
+              <Text className="text-base font-medium text-on-surface dark:text-on-surface-dark">
+                {skill}
+              </Text>
+              <Ionicons
+                name="add-circle-outline"
+                size={20}
+                color={theme.textMuted}
+              />
+            </TouchableOpacity>
+          );
+        })}
+      </>
+    );
+  }
+
+  const handleSubmit = () => {
+    const trimmedDisplayName = displayName.trim();
+    const trimmedBio = bio.trim();
+
+    const nextDisplayNameError = trimmedDisplayName
+      ? ""
+      : "Display name is required.";
+    const nextSkillsError =
+      selectedSkills.length === 0 ? "Please select at least one skill." : "";
+
+    setDisplayNameError(nextDisplayNameError);
+    setSkillsError(nextSkillsError);
+
+    if (nextDisplayNameError || nextSkillsError) {
+      return;
+    }
+
+    onSubmit({
+      displayName: trimmedDisplayName,
+      bio: trimmedBio,
+      selectedSkills,
+    });
+  };
+
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <SafeAreaView className="absolute inset-0 z-50 flex-1 bg-surface dark:bg-surface-dark">
+      <View className="flex-1 bg-surface dark:bg-surface-dark">
+        <View className="flex-row items-start justify-between px-5 pt-4 pb-3 border-b border-divider/50 dark:border-divider-dark/50">
+          <View className="flex-1 pr-4">
+            <Text className="text-2xl font-bold mb-1 text-on-surface dark:text-on-surface-dark">
+              Complete profile setup
+            </Text>
+            <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
+              Finish your {roleCopy} profile before entering the app.
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Close profile setup"
+          >
+            <Ionicons name="close" size={24} color={theme.textSoft} />
+          </Pressable>
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          className="flex-1"
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingTop: 20,
+            paddingBottom: 40,
+          }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {submitError ? (
+            <View className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
+              <Text className="text-sm font-medium text-red-600 dark:text-red-300">
+                {submitError}
+              </Text>
+            </View>
+          ) : null}
+
+          <View className="gap-5">
+            <View className="gap-1.5">
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                Display Name
+              </Text>
+              <View className="flex-row items-center h-14 rounded-xl px-4 gap-2 bg-surface-input dark:bg-surface-input-dark">
+                <Ionicons
+                  name="person-outline"
+                  size={18}
+                  color={theme.textMuted}
+                />
+                <TextInput
+                  className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
+                  placeholder={suggestedDisplayName || "Your display name"}
+                  placeholderTextColor={theme.textMuted}
+                  value={displayName}
+                  onChangeText={(text) => {
+                    setDisplayName(text);
+                    if (displayNameError) {
+                      setDisplayNameError("");
+                    }
+                  }}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  accessibilityLabel="Display Name"
+                />
+              </View>
+              {displayNameError ? (
+                <Text className="text-xs text-red-500 ml-1">
+                  {displayNameError}
+                </Text>
+              ) : null}
+            </View>
+
+            <View className="gap-1.5">
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                Bio
+              </Text>
+              <View className="rounded-xl bg-surface-input dark:bg-surface-input-dark px-4 py-3">
+                <TextInput
+                  className="min-h-[112px] text-base font-medium text-on-surface dark:text-on-surface-dark"
+                  placeholder="Tell people a bit about yourself..."
+                  placeholderTextColor={theme.textMuted}
+                  value={bio}
+                  onChangeText={setBio}
+                  multiline
+                  textAlignVertical="top"
+                  maxLength={220}
+                  accessibilityLabel="Bio"
+                />
+              </View>
+              <Text className="text-xs ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                {bio.length}/220
+              </Text>
+            </View>
+
+            <View className="gap-1.5 pt-1">
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                {skillLabel}
+              </Text>
+              <Text className="text-sm ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                {skillHint}
+              </Text>
+
+              <View className="flex-row items-center h-14 rounded-xl px-4 gap-2 bg-surface-input dark:bg-surface-input-dark">
+                <Ionicons
+                  name="search-outline"
+                  size={18}
+                  color={theme.textMuted}
+                />
+                <TextInput
+                  className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
+                  placeholder="Search skills"
+                  placeholderTextColor={theme.textMuted}
+                  value={search}
+                  onChangeText={setSearch}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  accessibilityLabel="Search skills"
+                />
+              </View>
+
+              {selectedSkills.length > 0 ? (
+                <View className="flex-row flex-wrap gap-2 pt-1">
+                  {selectedSkills.map((skill) => (
+                    <TouchableOpacity
+                      key={skill}
+                      onPress={() => toggleSkill(skill)}
+                      className="rounded-full px-3 py-2"
+                      style={{ backgroundColor: theme.surfaceActive }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${skill}`}
+                    >
+                      <Text
+                        className="text-sm font-semibold"
+                        style={{ color: theme.primary }}
+                      >
+                        {skill}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+
+              <View className="rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark overflow-hidden">
+                {skillsListContent}
+              </View>
+
+              {skillsError ? (
+                <Text className="text-xs text-red-500 ml-1">{skillsError}</Text>
+              ) : null}
+            </View>
+
+            <TouchableOpacity
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+              activeOpacity={0.88}
+              className="mt-2 w-full h-14 rounded-xl items-center justify-center flex-row gap-2 bg-primary dark:bg-primary-dim"
+              style={isSubmitting ? { opacity: 0.6 } : undefined}
+              accessibilityRole="button"
+              accessibilityLabel="Save profile setup"
+            >
+              <Text className="text-white font-bold text-base">
+                {isSubmitting ? "Saving profile…" : "Save and continue"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
+  );
+}
