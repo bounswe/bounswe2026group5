@@ -24,7 +24,10 @@ ehthumbs.db
 .env
 .env.local
 *.local
-!.env.example
+web/.env*
+backend/.env*
+!web/.env.example
+!backend/.env.example
 
 # ==========================================
 # Backend (Python & Django)
