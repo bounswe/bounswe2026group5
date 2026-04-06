@@ -2,12 +2,6 @@ name: Mobile APK Build
 
 on:
   workflow_dispatch:
-    inputs:
-      run_prebuild:
-        description: "Run expo prebuild before Gradle build"
-        required: false
-        default: false
-        type: boolean
   push:
     branches: [main, dev]
     paths:
@@ -50,8 +44,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate native Android project (optional)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_prebuild }}
+      - name: Validate API base URL
+        env:
+          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.EXPO_PUBLIC_API_BASE_URL }}
+        run: |
+          if [ -z "$EXPO_PUBLIC_API_BASE_URL" ]; then
+            echo "EXPO_PUBLIC_API_BASE_URL secret is empty."
+            exit 1
+          fi
+
+          case "$EXPO_PUBLIC_API_BASE_URL" in
+            http://*|https://*)
+              echo "API base URL format is valid."
+              ;;
+            *)
+              echo "EXPO_PUBLIC_API_BASE_URL must start with http:// or https://"
+              exit 1
+              ;;
+          esac
+
+      - name: Generate native Android project
         env:
           EXPO_PUBLIC_API_BASE_URL: ${{ secrets.EXPO_PUBLIC_API_BASE_URL }}
         run: npx expo prebuild --platform android --non-interactive

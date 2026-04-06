@@ -6,7 +6,8 @@ import { Platform } from "react-native";
 const configuredBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
 
 function normalizeUrl(value: string): string {
-  return value.replace(/\/$/, "");
+  const withScheme = /^https?:\/\//i.test(value) ? value : `http://${value}`;
+  return withScheme.replace(/\/$/, "");
 }
 
 function devFallbackBaseUrl(): string {
