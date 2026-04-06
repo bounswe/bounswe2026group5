@@ -1,0 +1,88 @@
+name: Mobile APK Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, dev]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-apk.yml"
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-apk.yml"
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write mobile env file
+        run: |
+          if [ -n "${{ secrets.EXPO_PUBLIC_API_BASE_URL }}" ]; then
+            echo "EXPO_PUBLIC_API_BASE_URL=${{ secrets.EXPO_PUBLIC_API_BASE_URL }}" > .env
+          else
+            echo "EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000" > .env
+          fi
+
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --non-interactive
+
+      - name: Build debug APK
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
+
+      - name: Prepare renamed APK
+        run: |
+          mkdir -p apk-out
+          SAFE_REF=$(echo "${GITHUB_REF_NAME}" | tr '/\\' '-' | tr -cd '[:alnum:]._-')
+          APK_NAME="mentorship-mobile-${SAFE_REF}-${GITHUB_RUN_NUMBER}.apk"
+          ARM64_APK="android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk"
+          DEFAULT_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ -f "$ARM64_APK" ]; then
+            cp "$ARM64_APK" "apk-out/$APK_NAME"
+          elif [ -f "$DEFAULT_APK" ]; then
+            cp "$DEFAULT_APK" "apk-out/$APK_NAME"
+          else
+            echo "Expected APK not found under android/app/build/outputs/apk/debug"
+            ls -R android/app/build/outputs/apk || true
+            exit 1
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-apk-debug
+          path: mobile/apk-out/*.apk
+          if-no-files-found: error
+          retention-days: 14

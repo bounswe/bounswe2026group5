@@ -84,3 +84,4 @@ pnpm-debug.log*
 
 # Test Coverage
 web/coverage/
+mobile/coverage/

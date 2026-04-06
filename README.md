@@ -32,6 +32,22 @@ Campus Neighborhood Mentorship Network is a platform designed to connect student
 - **Linting & Formatting:** ESLint, Prettier (Frontend) / Flake8, Black, Isort (Backend)
 - **Analysis:** SonarQube
 
+## 📦 Dependency Convention
+
+This repository separates dependencies by purpose so runtime images stay lean and CI/local development can still use test and lint tooling.
+
+**Backend (Python):**
+
+- `backend/requirements.txt`: Runtime dependencies used by the Django app in containers and production-like environments.
+- `backend/requirements-dev.txt`: Development and test tooling (includes `-r requirements.txt` plus lint/format/test-related packages).
+- Backend CI installs `requirements-dev.txt` so tests run with the full developer toolchain.
+
+**Frontend (Node.js):**
+
+- Runtime packages are listed in `dependencies`.
+- Tooling and test packages are listed in `devDependencies`.
+- This is the conventional frontend split and is already used in `web/package.json`.
+
 ## 🧰 Required Tools & Software
 
 To ensure a smooth and standardized development experience across the team, please install the following tools before proceeding with the setup:
@@ -59,23 +75,65 @@ To ensure a smooth and standardized development experience across the team, plea
 
 ## 🛠 Getting Started
 
-### Quick Setup
+Clone the repository and start services with Docker Compose.
 
-Clone the repository and run the setup script corresponding to your operating system. This will automatically initialize the database container, install all dependencies, and run database migrations.
+### 🐳 Docker-based Local Development
 
-**Windows Users:**
+The project can be run fully inside Docker for a consistent local development environment across the team. This starts the PostgreSQL database, Django backend, and React frontend in isolated containers with volume mounts enabled for hot-reloading.
 
-```cmd
-.\setup.bat
-
-```
-
-**Mac/Linux Users:**
+**Start all services**
 
 ```bash
-chmod +x setup.sh
-./setup.sh
+docker compose up --build
+```
 
+**Run in detached mode**
+
+```bash
+docker compose up --build -d
+```
+
+**Stop all services**
+
+```bash
+docker compose down
+```
+
+**Stop and remove the database volume**
+
+```bash
+docker compose down -v
+```
+
+**Service URLs**
+
+- **Frontend:** http://localhost:3000
+- **Backend:** http://localhost:8000
+- **Database:** localhost:5432
+
+**Initial database migration**
+Migrations are applied automatically when the backend container starts. If needed, they can also be run manually:
+
+```bash
+docker compose exec backend python manage.py migrate
+```
+
+**Create new migrations**
+
+```bash
+docker compose exec backend python manage.py makemigrations
+docker compose exec backend python manage.py migrate
+```
+
+**Notes**
+
+- Backend source code is mounted into the container for automatic reload during development.
+- Frontend source code is mounted into the container and Vite hot-reload is enabled.
+- The backend connects to PostgreSQL using the Docker Compose service name db.
+- If migration history becomes inconsistent during development, reset the local database volume with:
+
+```bash
+docker compose down -v
 ```
 
 ### 💻 Daily Development Workflow
@@ -83,7 +141,7 @@ chmod +x setup.sh
 For your day-to-day development after the initial setup, you can start the environment using either the automated VS Code tasks or manually via the terminal.
 
 **Option A: The One-Click Way (VS Code)**
-If you are using Visual Studio Code, simply press `F5` or go to the "Run and Debug" panel and launch **`🚀 Start Full Stack`**. This will automatically spin up the Docker database, start the frontend, and run the backend with debuggers attached.
+If you are using Visual Studio Code, simply press F5 or go to the "Run and Debug" panel and launch 🚀 Start Full Stack. This will automatically spin up the Docker database, start the frontend, and run the backend with debuggers attached.
 
 **Option B: The Manual Way (Terminal)**
 If you prefer managing the services manually, open your terminal and follow these steps:
@@ -115,17 +173,90 @@ cd web
 npm run dev
 ```
 
+### 🔄 Manual Database Migration
+
+If you need to manually synchronize or create migrations, use the commands below.
+
+**Apply existing migrations (recommended before runserver):**
+
+```bash
+cd backend
+# Windows: venv\Scripts\activate
+# Mac/Linux: source venv/bin/activate
+python manage.py migrate
+```
+
+**Create new migration files after model changes:**
+
+```bash
+cd backend
+# Windows: venv\Scripts\activate
+# Mac/Linux: source venv/bin/activate
+python manage.py makemigrations
+python manage.py migrate
+```
+
+**Create migration for a specific app only (examples):**
+
+```bash
+cd backend
+# Windows: venv\Scripts\activate
+# Mac/Linux: source venv/bin/activate
+python manage.py makemigrations accounts
+python manage.py makemigrations profiles
+python manage.py makemigrations mentorship
+python manage.py migrate
+```
+
+### 🧱 Domain Schema (Profiles & Mentorship)
+
+Domain ownership is now split across dedicated apps:
+
+- `profiles` app
+  - `Profile` (one-to-one with `User`) for identity and visibility data
+  - `ExpertiseField` for reusable skill taxonomy
+  - `ProfileExpertise` as the profile-skill relationship with proficiency and rating aggregates
+  - `AvailabilitySlot` for mentor time-slot scheduling
+- `mentorship` app
+  - `MentorshipRequest` for mentor/mentee workflow state
+  - `Match` for accepted mentorship relationships
+
+Auth and identity remain in the `accounts` app (`User`, registration/login/logout endpoints).
+
+### 🌐 Domain API Endpoints
+
+- `GET /api/profiles/me/` returns the authenticated user's profile payload.
+- `GET /api/mentorship/requests/me/` lists mentorship requests where the user is mentor or mentee.
+
+Local development seed data is included via migration `accounts.0004_seed_profile_page_data` and creates demo mentor, mentee, and both-role profiles.
+
+### 🧾 API Documentation PDF for Wiki
+
+We generate a PDF from our OpenAPI schema (`drf-spectacular`) and publish it to the GitHub Wiki.
+
+**Automatic sync in GitHub Actions:**
+
+- Workflow: `.github/workflows/wiki-api-endpoints.yml`
+- Trigger: pushes to `main` or `dev` affecting `backend/**` (or manual dispatch)
+- Behavior: runs a three-step OpenAPI-to-PDF pipeline and commits `wiki/API-Documentation.pdf`.
+
+Pipeline steps:
+
+1. Generate OpenAPI JSON from Django (`manage.py spectacular`).
+2. Convert OpenAPI JSON to AsciiDoc (`openapi-generator-cli`).
+3. Convert AsciiDoc to PDF (`asciidoctor-pdf`).
+
 ### 🗄️ Connecting to the Database
 
-To view, manage, and query the local PostgreSQL database, we recommend using **DBeaver** (or DataGrip/pgAdmin). Create a new PostgreSQL connection using the following credentials:
+To view, manage, and query the local PostgreSQL database, we recommend using DBeaver (or DataGrip/pgAdmin). Create a new PostgreSQL connection using the following credentials:
 
-- **Host:** `127.0.0.1` (or `localhost`)
-- **Port:** `5432`
-- **Database:** `mentorship`
+- **Host:** 127.0.0.1 (or localhost)
+- **Port:** 5432
+- **Database:** mentorship
 - **Username:** In .env file
 - **Password:** In .env file
 
-_Note: Ensure the Docker database container is running (`docker compose up -d`) before attempting to connect._
+Note: Ensure the Docker database container is running (docker compose up -d) before attempting to connect.
 
 ## 📖 Documentation & Guidelines
 
