@@ -37,8 +37,6 @@ function validateEmail(value: string): string {
 function validatePassword(value: string): string {
   if (!value) return 'Password is required.';
   if (value.length < 8) return 'Password must be at least 8 characters.';
-  if (!/[A-Z]/.test(value)) return 'Password must contain at least one uppercase letter.';
-  if (!/[0-9]/.test(value)) return 'Password must contain at least one number.';
   return '';
 }
 
@@ -150,9 +148,11 @@ export default function RegisterScreen() {
   const handleSubmit = () => {
     const eErr = validateEmail(email);
     const pErr = validatePassword(password);
-    const cpErr = confirmPassword !== password ? 'Passwords do not match.' : '';
+    const passwordsMatch = confirmPassword === password;
+    const cpErr = passwordsMatch ? '' : 'Passwords do not match.';
     const sErr = selectedSubjects.length === 0 ? 'Please select at least one skill.' : '';
-    const tErr = !terms ? 'You must agree to the Terms of Service and Privacy Policy.' : '';
+    const termsAccepted = terms;
+    const tErr = termsAccepted ? '' : 'You must agree to the Terms of Service and Privacy Policy.';
 
     setEmailError(eErr);
     setPasswordError(pErr);
@@ -266,12 +266,12 @@ export default function RegisterScreen() {
               <View className="flex-row items-center h-14 rounded-xl px-4 gap-2 bg-surface-input dark:bg-surface-input-dark">
                 <TextInput
                   className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
-                  placeholder="John Williams"
+                  placeholder="Alex Rivers"
                   placeholderTextColor={theme.textMuted}
                   value={displayName}
                   onChangeText={setDisplayName}
-                  autoCapitalize="none"
-                  autoComplete="username"
+                  autoCapitalize="words"
+                  autoComplete="name"
                   returnKeyType="next"
                   accessibilityLabel="Display Name"
                 />
@@ -316,7 +316,7 @@ export default function RegisterScreen() {
                 <Ionicons name="lock-closed-outline" size={18} color={theme.textMuted} />
                 <TextInput
                   className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
-                  placeholder="Min 8 chars, 1 uppercase, 1 number"
+                  placeholder="Min 8 characters"
                   placeholderTextColor={theme.textMuted}
                   value={password}
                   onChangeText={(text) => {

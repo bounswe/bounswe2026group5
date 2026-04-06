@@ -43,7 +43,6 @@ export function MentorCard({ name, subtitle, avatarUrl, onMessage, onMore }: Men
       </View>
 
       {/* Action Buttons */}
-      {/* TODO: API connection — navigate to messaging screen for this mentor */}
       <View className="flex-row gap-2.5 mt-4">
         <TouchableOpacity
           activeOpacity={0.85}

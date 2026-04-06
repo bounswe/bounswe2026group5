@@ -8,6 +8,10 @@ from datetime import datetime, time, timedelta
 
 TEST_SECRET_SUFFIX = "-2026!"
 
+REACT_NATIVE_SKILL = "React Native"
+SYSTEM_DESIGN_SKILL = "System Design"
+GERMAN_CONVERSATION_SKILL = "German Conversation"
+
 CORE_SKILLS = [
     "Django",
     "Docker",
@@ -15,11 +19,11 @@ CORE_SKILLS = [
     "JavaScript",
     "Machine Learning",
     "PostgreSQL",
-    "React Native",
+    REACT_NATIVE_SKILL,
     "SQL",
-    "System Design",
+    SYSTEM_DESIGN_SKILL,
     "TypeScript",
-    "German Conversation",
+    GERMAN_CONVERSATION_SKILL,
     "Public Speaking",
     "Interview Practice",
 ]
@@ -56,7 +60,7 @@ MENTORS: list[SeedUser] = [
         display_name="Lena Schmidt",
         title="Language Mentor",
         bio="Supports students with speaking confidence and structured language plans.",
-        skills=["German Conversation", "Public Speaking", "Interview Practice"],
+        skills=[GERMAN_CONVERSATION_SKILL, "Public Speaking", "Interview Practice"],
         mode="MENTOR",
         rating=5,
         total_mentee_count=18,
@@ -93,7 +97,7 @@ MENTORS: list[SeedUser] = [
         display_name="Metin Yildiz",
         title="Mobile Mentor",
         bio="Guides teams from quick prototypes to maintainable React Native products.",
-        skills=["React Native", "TypeScript", "System Design"],
+        skills=[REACT_NATIVE_SKILL, "TypeScript", SYSTEM_DESIGN_SKILL],
         mode="MENTOR",
         rating=5,
         total_mentee_count=21,
@@ -107,7 +111,7 @@ PRIMARY_MENTEE = SeedUser(
     display_name="Mert Aydin",
     title="Computer Science Student",
     bio="Looking for mentorship on communication and software project growth.",
-    skills=["React Native", "TypeScript", "German Conversation"],
+    skills=[REACT_NATIVE_SKILL, "TypeScript", GERMAN_CONVERSATION_SKILL],
     mode="MENTEE",
 )
 
@@ -118,7 +122,7 @@ SECONDARY_MENTEE = SeedUser(
     display_name="Ayse Demir",
     title="Junior Developer",
     bio="Improving test quality and backend confidence.",
-    skills=["Django", "System Design"],
+    skills=["Django", SYSTEM_DESIGN_SKILL],
     mode="MENTEE",
 )
 
@@ -172,8 +176,8 @@ def seed_skill_catalog() -> None:
 
     values = set(CORE_SKILLS)
     values.update(skill for mentor in MENTORS for skill in mentor.skills)
-    values.update(skill for skill in PRIMARY_MENTEE.skills)
-    values.update(skill for skill in SECONDARY_MENTEE.skills)
+    values.update(PRIMARY_MENTEE.skills)
+    values.update(SECONDARY_MENTEE.skills)
 
     for name in sorted(values):
         Skill.objects.get_or_create(name=name)
@@ -234,7 +238,11 @@ def hide_non_scenario_mentors(active_usernames: set[str]) -> None:
     ).update(is_visible=False)
 
 
-def seed_requests_and_matches(profile_map: dict[str, object], user_map: dict[str, object]) -> None:
+def seed_requests_and_matches(
+    profile_map: dict[str, object],
+    user_map: dict[str, object],
+    include_secondary_mentee: bool,
+) -> None:
     """Seed pending/accepted/rejected requests and one existing session relation."""
 
     from django.db.models import Q
@@ -258,7 +266,7 @@ def seed_requests_and_matches(profile_map: dict[str, object], user_map: dict[str
     metin = profile_map["metin-yildiz"]
 
     mert = profile_map["mert-aydin"]
-    ayse = profile_map["ayse-demir"]
+    ayse = profile_map.get("ayse-demir")
 
     lena_slots = list(AvailabilitySlot.objects.filter(profile=lena).order_by("start_at"))
     can_slots = list(AvailabilitySlot.objects.filter(profile=can_profile).order_by("start_at"))
@@ -273,22 +281,24 @@ def seed_requests_and_matches(profile_map: dict[str, object], user_map: dict[str
         cover_letter="Hi Lena, I would like weekly speaking practice and feedback.",
     )
 
-    MentorshipRequest.objects.create(
-        mentor=can_profile,
-        mentee=ayse,
-        slot=can_slots[0],
-        status=MentorshipRequest.Status.PENDING,
-        cover_letter="Could we review my architecture and testing plan this week?",
-    )
+    if include_secondary_mentee:
+        MentorshipRequest.objects.create(
+            mentor=can_profile,
+            mentee=profile_map["ayse-demir"],
+            slot=can_slots[0],
+            status=MentorshipRequest.Status.PENDING,
+            cover_letter="Could we review my architecture and testing plan this week?",
+        )
 
-    accepted = MentorshipRequest.objects.create(
+    accepted_slot = metin_slots[1]
+    MentorshipRequest.objects.create(
         mentor=metin,
         mentee=mert,
-        slot=metin_slots[1],
+        slot=accepted_slot,
         status=MentorshipRequest.Status.ACCEPTED,
         cover_letter="Can we do a focused mobile architecture review session?",
     )
-    accepted.slot.mark_booked(user=user_map["mert-aydin"])
+    accepted_slot.mark_booked(user=user_map["mert-aydin"])
 
     MentorshipRequest.objects.create(
         mentor=elif_profile,
@@ -299,15 +309,16 @@ def seed_requests_and_matches(profile_map: dict[str, object], user_map: dict[str
     )
 
     historical_start = timezone.now() - timedelta(days=7)
-    MentorshipRequest.objects.create(
-        mentor=metin,
-        mentee=ayse,
-        slot=None,
-        initial_session_start_at=historical_start,
-        initial_session_end_at=historical_start + timedelta(hours=1),
-        status=MentorshipRequest.Status.ACCEPTED,
-        cover_letter="Thanks for the previous debugging session; it was very helpful.",
-    )
+    if include_secondary_mentee and ayse is not None:
+        MentorshipRequest.objects.create(
+            mentor=metin,
+            mentee=ayse,
+            slot=None,
+            initial_session_start_at=historical_start,
+            initial_session_end_at=historical_start + timedelta(hours=1),
+            status=MentorshipRequest.Status.ACCEPTED,
+            cover_letter="Thanks for the previous debugging session; it was very helpful.",
+        )
 
 
 def seed_demo_data() -> None:
@@ -320,6 +331,12 @@ def seed_demo_data() -> None:
 
     seed_skill_catalog()
 
+    include_secondary_mentee = os.getenv("SEED_INCLUDE_SECONDARY_MENTEE", "true").lower() not in {
+        "0",
+        "false",
+        "no",
+    }
+
     profile_map: dict[str, object] = {}
     user_map: dict[str, object] = {}
 
@@ -330,22 +347,31 @@ def seed_demo_data() -> None:
         profile_map[seed.username] = profile
         user_map[seed.username] = user
 
-    for seed in [PRIMARY_MENTEE, SECONDARY_MENTEE]:
+    mentee_seeds = [PRIMARY_MENTEE]
+    if include_secondary_mentee:
+        mentee_seeds.append(SECONDARY_MENTEE)
+
+    for seed in mentee_seeds:
         user = upsert_user(seed.email, seed.username, seed.login_secret, mode=seed.mode)
         profile = upsert_profile(user, seed)
         profile_map[seed.username] = profile
         user_map[seed.username] = user
 
     hide_non_scenario_mentors(active_usernames={seed.username for seed in MENTORS})
-    seed_requests_and_matches(profile_map=profile_map, user_map=user_map)
+    seed_requests_and_matches(
+        profile_map=profile_map,
+        user_map=user_map,
+        include_secondary_mentee=include_secondary_mentee,
+    )
 
     print("\n--- Demo Seed Complete (Two-Phone Scenario) ---")
     print("phone1_mentee_email=mert.aydin@example.com")
-    print("phone1_mentee_password=mert-aydin-2026!")
+    print("phone1_mentee_login_secret=mert-aydin-2026!")
+    print(f"secondary_mentee_included={include_secondary_mentee}")
     print("phone2_mentor_email=can.ozkan@example.com")
-    print("phone2_mentor_password=can-ozkan-2026!")
+    print("phone2_mentor_login_secret=can-ozkan-2026!")
     print("backup_mentor_email=lena.schmidt@example.com")
-    print("backup_mentor_password=lena-schmidt-2026!")
+    print("backup_mentor_login_secret=lena-schmidt-2026!")
     print("seeded_mentor_usernames=lena-schmidt,can-ozkan,elif-kaya,metin-yildiz")
 
 

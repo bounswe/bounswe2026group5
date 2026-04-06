@@ -338,7 +338,7 @@ export function SubjectExpertisePicker({
       <Modal
         visible={modalVisible}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={closeModal}
         statusBarTranslucent
       >
