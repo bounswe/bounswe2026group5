@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,7 +9,6 @@ import { RequestCard } from "@/components/dashboard/RequestCard";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
-import { ViewAllRequestsModal } from "@/components/dashboard/ViewAllRequestsModal";
 
 import {
   mapMatchesToSessions,
@@ -40,58 +39,12 @@ export default function DashboardScreen() {
   const isMentorOnly = appUsageMode === "MENTOR";
 
   // Debug logging
-  React.useEffect(() => {
-    console.log("[Dashboard] Auth State:", {
-      username: currentUsername,
-      requestsLoading: requestsQuery.isLoading,
-      requestsError: requestsQuery.error?.message,
-      requestsData: requestsQuery.data?.length,
-      matchesLoading: matchesQuery.isLoading,
-      matchesError: matchesQuery.error?.message,
-      matchesData: matchesQuery.data?.length,
-      sessionsLoading: upcomingSessionsQuery.isLoading,
-      sessionsError: upcomingSessionsQuery.error?.message,
-      sessionsData: upcomingSessionsQuery.data?.length,
-    });
-  }, [
-    currentUsername,
-    requestsQuery.isLoading,
-    requestsQuery.error,
-    requestsQuery.data,
-    matchesQuery.isLoading,
-    matchesQuery.error,
-    matchesQuery.data,
-    upcomingSessionsQuery.isLoading,
-    upcomingSessionsQuery.error,
-    upcomingSessionsQuery.data,
-  ]);
-
   const requests = useMemo<DashboardRequestItem[]>(() => {
     if (requestsQuery.data && currentUsername) {
-      const mapped = mapRequestsToDashboard(
-        requestsQuery.data,
-        currentUsername,
-      );
-      console.log("[Dashboard] Mapped requests from backend:", mapped.length);
-      return mapped;
+      return mapRequestsToDashboard(requestsQuery.data, currentUsername);
     }
-
-    if (requestsQuery.isLoading) {
-      console.log("[Dashboard] Requests loading...");
-      return [];
-    }
-
-    if (requestsQuery.error) {
-      console.log("[Dashboard] Requests error:", requestsQuery.error.message);
-    }
-
     return [];
-  }, [
-    requestsQuery.data,
-    requestsQuery.isLoading,
-    requestsQuery.error,
-    currentUsername,
-  ]);
+  }, [requestsQuery.data, requestsQuery.isLoading, requestsQuery.error, currentUsername]);
 
   const sessions = useMemo(() => {
     if (!currentUsername) {
@@ -147,7 +100,6 @@ export default function DashboardScreen() {
   const [selectedSession, setSelectedSession] = useState<
     (typeof sessions)[0] | null
   >(null);
-  const [isViewAllRequestsOpen, setViewAllRequestsOpen] = useState(false);
 
   const handleRespond = async (action: "accept" | "reject") => {
     if (!selectedRequest) {
@@ -209,7 +161,7 @@ export default function DashboardScreen() {
                 </View>
               )}
             </View>
-            <TouchableOpacity onPress={() => setViewAllRequestsOpen(true)}>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/connections')}>
               <Text className="text-indigo-600 font-semibold text-sm">
                 View All
               </Text>
@@ -290,15 +242,6 @@ export default function DashboardScreen() {
         }}
       />
 
-      <ViewAllRequestsModal
-        visible={isViewAllRequestsOpen}
-        requests={requests}
-        onClose={() => setViewAllRequestsOpen(false)}
-        onSelectRequest={(req: DashboardRequestItem) => {
-          setViewAllRequestsOpen(false);
-          setTimeout(() => setSelectedRequest(req), 300);
-        }}
-      />
     </View>
   );
 }
