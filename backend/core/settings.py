@@ -46,18 +46,6 @@ CORS_ALLOWED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
-
-if DEBUG:
-    dev_cors_origins = [
-        "http://localhost:8081",
-        "http://127.0.0.1:8081",
-        "http://localhost:19006",
-        "http://127.0.0.1:19006",
-    ]
-    for origin in dev_cors_origins:
-        if origin not in CORS_ALLOWED_ORIGINS:
-            CORS_ALLOWED_ORIGINS.append(origin)
-
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
@@ -68,17 +56,6 @@ CSRF_TRUSTED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
-
-if DEBUG:
-    dev_csrf_origins = [
-        "http://localhost:8081",
-        "http://127.0.0.1:8081",
-        "http://localhost:19006",
-        "http://127.0.0.1:19006",
-    ]
-    for origin in dev_csrf_origins:
-        if origin not in CSRF_TRUSTED_ORIGINS:
-            CSRF_TRUSTED_ORIGINS.append(origin)
 
 # Application definition
 
