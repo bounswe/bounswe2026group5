@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../api/client';
+import { API_BASE_URL } from '../api/config';
 import { saveAuthData } from '../auth/storage';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ export async function registerFn(credentials: {
   password: string;
   confirm_password: string;
 }): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/auth/register/`, {
+  const res = await fetch(`${API_BASE_URL}/api/auth/register/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(credentials),
@@ -80,7 +80,7 @@ export async function registerFn(credentials: {
 }
 
 export async function fetchSkillsFn(): Promise<Skill[]> {
-  const res = await fetch(`${API_BASE_URL}/profiles/skills/`);
+  const res = await fetch(`${API_BASE_URL}/api/profiles/skills/`);
   if (!res.ok) throw new Error('Failed to fetch skills.');
   return res.json() as Promise<Skill[]>;
 }
@@ -92,7 +92,7 @@ export async function updateUsageModeFn(params: {
   /** Pass-through field: username for the subsequent profile PATCH in onSuccess. */
   _username: string;
 }): Promise<User> {
-  const res = await fetch(`${API_BASE_URL}/auth/${params.userId}/app-usage-mode/`, {
+  const res = await fetch(`${API_BASE_URL}/api/auth/${params.userId}/app-usage-mode/`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -119,7 +119,7 @@ export async function updateProfileFn(params: {
 }): Promise<unknown> {
   const { username, accessToken, ...payload } = params;
 
-  const res = await fetch(`${API_BASE_URL}/profiles/${username}/`, {
+  const res = await fetch(`${API_BASE_URL}/api/profiles/${username}/`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
