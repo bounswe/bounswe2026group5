@@ -8,7 +8,6 @@ interface ProfileHeaderProps {
   roleBadges?: Array<"MENTOR" | "MENTEE">;
   rating?: number;
   reviewCount?: number;
-  // NEW: Impact Stats
   totalSessions?: number;
   menteesHelped?: number;
   imageUrl?: string;
@@ -21,9 +20,9 @@ export function ProfileHeader({
   bio,
   roleBadges = [],
   rating,
-  reviewCount,
-  totalSessions = 24, // Mock default
-  menteesHelped = 15, // Mock default
+  reviewCount = 0,
+  totalSessions = 0,
+  menteesHelped = 0,
   imageUrl,
   coverUrl,
   onEdit,
@@ -104,7 +103,7 @@ export function ProfileHeader({
         <Text className="text-base text-gray-600 leading-relaxed">{bio}</Text>
       </View>
 
-      {/* 5. NEW: Impact Stats Row */}
+      {/* Impact Stats Row */}
       <View className="px-4 mt-6">
         <View className="flex-row items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100">
           <View className="items-center flex-1 border-r border-gray-200">
@@ -127,7 +126,7 @@ export function ProfileHeader({
 
           <View className="items-center flex-1">
             <Text className="text-xl font-extrabold text-gray-900 mb-0.5">
-              {reviewCount || 0}
+              {reviewCount}
             </Text>
             <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider">
               Reviews
