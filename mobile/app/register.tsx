@@ -17,11 +17,11 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import { SubjectExpertisePicker } from '@/components/ui/SubjectExpertisePicker';
+import { useAuthStore } from '@/lib/auth/store';
 import {
   registerFn,
   updateUsageModeFn,
   updateProfileFn,
-  handleAuthSuccess,
   fetchSkillsFn,
   type AuthResponse,
 } from '@/lib/queries/authQueries';
@@ -89,9 +89,14 @@ export default function RegisterScreen() {
     },
   });
 
+  const setAuthenticated = useAuthStore((state) => state.setAuthenticated);
+  const updateUser = useAuthStore((state) => state.updateUser);
+
   const updateUsageMode = useMutation({
     mutationFn: updateUsageModeFn,
     onSuccess: (_data, variables) => {
+      updateUser({ app_usage_mode: variables.app_usage_mode });
+
       const skillsPayload =
         variables.app_usage_mode === 'MENTOR'
           ? { expertises: selectedSubjects }
@@ -112,7 +117,10 @@ export default function RegisterScreen() {
   const register = useMutation({
     mutationFn: registerFn,
     onSuccess: async (data: AuthResponse) => {
-      await handleAuthSuccess(data);
+      await setAuthenticated(
+        data.user as import('@/lib/auth/types').AuthUser,
+        { access_token: data.access_token, refresh_token: data.refresh_token },
+      );
 
       updateUsageMode.mutate({
         userId: data.user.id,

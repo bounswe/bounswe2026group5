@@ -1,5 +1,4 @@
 import { API_BASE_URL } from '../api/config';
-import { saveAuthData } from '../auth/storage';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,19 +42,6 @@ async function extractErrorMessage(res: Response, fallback: string): Promise<str
   } catch {
     return fallback;
   }
-}
-
-// ── Auth helpers ─────────────────────────────────────────────────────────────
-
-/** Persists tokens + user info after a successful auth response (mirrors web handleAuthSuccess). */
-export async function handleAuthSuccess(data: AuthResponse): Promise<void> {
-  await saveAuthData({
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    userId: data.user.id,
-    username: data.user.username,
-    appUsageMode: data.user.app_usage_mode ?? undefined,
-  });
 }
 
 // ── Mutation functions ────────────────────────────────────────────────────────
