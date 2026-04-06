@@ -9,12 +9,30 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AboutRouteImport } from './routes/about'
+import { Route as UnauthorizedRouteRouteImport } from './routes/_unauthorized/route'
+import { Route as OnBoardingRouteRouteImport } from './routes/_onBoarding/route'
+import { Route as AuthorizedRouteRouteImport } from './routes/_authorized/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProfilesUsernameRouteImport } from './routes/profiles.$username'
+import { Route as UnauthorizedRegisterRouteImport } from './routes/_unauthorized/register'
+import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/login'
+import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/about'
+import { Route as OnBoardingGettingToKnowYouRouteImport } from './routes/_onBoarding/gettingToKnowYou'
+import { Route as AuthorizedScheduleRouteImport } from './routes/_authorized/schedule'
+import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/discover'
+import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
+import { Route as AuthorizedConnectionsRouteImport } from './routes/_authorized/connections'
 
-const AboutRoute = AboutRouteImport.update({
-  id: '/about',
-  path: '/about',
+const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
+  id: '/_unauthorized',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnBoardingRouteRoute = OnBoardingRouteRouteImport.update({
+  id: '/_onBoarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthorizedRouteRoute = AuthorizedRouteRouteImport.update({
+  id: '/_authorized',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -22,40 +40,164 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfilesUsernameRoute = ProfilesUsernameRouteImport.update({
+  id: '/profiles/$username',
+  path: '/profiles/$username',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UnauthorizedRegisterRoute = UnauthorizedRegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => UnauthorizedRouteRoute,
+} as any)
+const UnauthorizedLoginRoute = UnauthorizedLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => UnauthorizedRouteRoute,
+} as any)
+const UnauthorizedAboutRoute = UnauthorizedAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => UnauthorizedRouteRoute,
+} as any)
+const OnBoardingGettingToKnowYouRoute =
+  OnBoardingGettingToKnowYouRouteImport.update({
+    id: '/gettingToKnowYou',
+    path: '/gettingToKnowYou',
+    getParentRoute: () => OnBoardingRouteRoute,
+  } as any)
+const AuthorizedScheduleRoute = AuthorizedScheduleRouteImport.update({
+  id: '/schedule',
+  path: '/schedule',
+  getParentRoute: () => AuthorizedRouteRoute,
+} as any)
+const AuthorizedDiscoverRoute = AuthorizedDiscoverRouteImport.update({
+  id: '/discover',
+  path: '/discover',
+  getParentRoute: () => AuthorizedRouteRoute,
+} as any)
+const AuthorizedDashboardRoute = AuthorizedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthorizedRouteRoute,
+} as any)
+const AuthorizedConnectionsRoute = AuthorizedConnectionsRouteImport.update({
+  id: '/connections',
+  path: '/connections',
+  getParentRoute: () => AuthorizedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
+  '/connections': typeof AuthorizedConnectionsRoute
+  '/dashboard': typeof AuthorizedDashboardRoute
+  '/discover': typeof AuthorizedDiscoverRoute
+  '/schedule': typeof AuthorizedScheduleRoute
+  '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
+  '/about': typeof UnauthorizedAboutRoute
+  '/login': typeof UnauthorizedLoginRoute
+  '/register': typeof UnauthorizedRegisterRoute
+  '/profiles/$username': typeof ProfilesUsernameRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
+  '/connections': typeof AuthorizedConnectionsRoute
+  '/dashboard': typeof AuthorizedDashboardRoute
+  '/discover': typeof AuthorizedDiscoverRoute
+  '/schedule': typeof AuthorizedScheduleRoute
+  '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
+  '/about': typeof UnauthorizedAboutRoute
+  '/login': typeof UnauthorizedLoginRoute
+  '/register': typeof UnauthorizedRegisterRoute
+  '/profiles/$username': typeof ProfilesUsernameRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
+  '/_authorized': typeof AuthorizedRouteRouteWithChildren
+  '/_onBoarding': typeof OnBoardingRouteRouteWithChildren
+  '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
+  '/_authorized/connections': typeof AuthorizedConnectionsRoute
+  '/_authorized/dashboard': typeof AuthorizedDashboardRoute
+  '/_authorized/discover': typeof AuthorizedDiscoverRoute
+  '/_authorized/schedule': typeof AuthorizedScheduleRoute
+  '/_onBoarding/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
+  '/_unauthorized/about': typeof UnauthorizedAboutRoute
+  '/_unauthorized/login': typeof UnauthorizedLoginRoute
+  '/_unauthorized/register': typeof UnauthorizedRegisterRoute
+  '/profiles/$username': typeof ProfilesUsernameRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about'
+  fullPaths:
+    | '/'
+    | '/connections'
+    | '/dashboard'
+    | '/discover'
+    | '/schedule'
+    | '/gettingToKnowYou'
+    | '/about'
+    | '/login'
+    | '/register'
+    | '/profiles/$username'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about'
-  id: '__root__' | '/' | '/about'
+  to:
+    | '/'
+    | '/connections'
+    | '/dashboard'
+    | '/discover'
+    | '/schedule'
+    | '/gettingToKnowYou'
+    | '/about'
+    | '/login'
+    | '/register'
+    | '/profiles/$username'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authorized'
+    | '/_onBoarding'
+    | '/_unauthorized'
+    | '/_authorized/connections'
+    | '/_authorized/dashboard'
+    | '/_authorized/discover'
+    | '/_authorized/schedule'
+    | '/_onBoarding/gettingToKnowYou'
+    | '/_unauthorized/about'
+    | '/_unauthorized/login'
+    | '/_unauthorized/register'
+    | '/profiles/$username'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AboutRoute: typeof AboutRoute
+  AuthorizedRouteRoute: typeof AuthorizedRouteRouteWithChildren
+  OnBoardingRouteRoute: typeof OnBoardingRouteRouteWithChildren
+  UnauthorizedRouteRoute: typeof UnauthorizedRouteRouteWithChildren
+  ProfilesUsernameRoute: typeof ProfilesUsernameRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof AboutRouteImport
+    '/_unauthorized': {
+      id: '/_unauthorized'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof UnauthorizedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_onBoarding': {
+      id: '/_onBoarding'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof OnBoardingRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authorized': {
+      id: '/_authorized'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthorizedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -65,12 +207,123 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/profiles/$username': {
+      id: '/profiles/$username'
+      path: '/profiles/$username'
+      fullPath: '/profiles/$username'
+      preLoaderRoute: typeof ProfilesUsernameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_unauthorized/register': {
+      id: '/_unauthorized/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof UnauthorizedRegisterRouteImport
+      parentRoute: typeof UnauthorizedRouteRoute
+    }
+    '/_unauthorized/login': {
+      id: '/_unauthorized/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof UnauthorizedLoginRouteImport
+      parentRoute: typeof UnauthorizedRouteRoute
+    }
+    '/_unauthorized/about': {
+      id: '/_unauthorized/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof UnauthorizedAboutRouteImport
+      parentRoute: typeof UnauthorizedRouteRoute
+    }
+    '/_onBoarding/gettingToKnowYou': {
+      id: '/_onBoarding/gettingToKnowYou'
+      path: '/gettingToKnowYou'
+      fullPath: '/gettingToKnowYou'
+      preLoaderRoute: typeof OnBoardingGettingToKnowYouRouteImport
+      parentRoute: typeof OnBoardingRouteRoute
+    }
+    '/_authorized/schedule': {
+      id: '/_authorized/schedule'
+      path: '/schedule'
+      fullPath: '/schedule'
+      preLoaderRoute: typeof AuthorizedScheduleRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
+    '/_authorized/discover': {
+      id: '/_authorized/discover'
+      path: '/discover'
+      fullPath: '/discover'
+      preLoaderRoute: typeof AuthorizedDiscoverRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
+    '/_authorized/dashboard': {
+      id: '/_authorized/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthorizedDashboardRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
+    '/_authorized/connections': {
+      id: '/_authorized/connections'
+      path: '/connections'
+      fullPath: '/connections'
+      preLoaderRoute: typeof AuthorizedConnectionsRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
   }
 }
 
+interface AuthorizedRouteRouteChildren {
+  AuthorizedConnectionsRoute: typeof AuthorizedConnectionsRoute
+  AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
+  AuthorizedDiscoverRoute: typeof AuthorizedDiscoverRoute
+  AuthorizedScheduleRoute: typeof AuthorizedScheduleRoute
+}
+
+const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
+  AuthorizedConnectionsRoute: AuthorizedConnectionsRoute,
+  AuthorizedDashboardRoute: AuthorizedDashboardRoute,
+  AuthorizedDiscoverRoute: AuthorizedDiscoverRoute,
+  AuthorizedScheduleRoute: AuthorizedScheduleRoute,
+}
+
+const AuthorizedRouteRouteWithChildren = AuthorizedRouteRoute._addFileChildren(
+  AuthorizedRouteRouteChildren,
+)
+
+interface OnBoardingRouteRouteChildren {
+  OnBoardingGettingToKnowYouRoute: typeof OnBoardingGettingToKnowYouRoute
+}
+
+const OnBoardingRouteRouteChildren: OnBoardingRouteRouteChildren = {
+  OnBoardingGettingToKnowYouRoute: OnBoardingGettingToKnowYouRoute,
+}
+
+const OnBoardingRouteRouteWithChildren = OnBoardingRouteRoute._addFileChildren(
+  OnBoardingRouteRouteChildren,
+)
+
+interface UnauthorizedRouteRouteChildren {
+  UnauthorizedAboutRoute: typeof UnauthorizedAboutRoute
+  UnauthorizedLoginRoute: typeof UnauthorizedLoginRoute
+  UnauthorizedRegisterRoute: typeof UnauthorizedRegisterRoute
+}
+
+const UnauthorizedRouteRouteChildren: UnauthorizedRouteRouteChildren = {
+  UnauthorizedAboutRoute: UnauthorizedAboutRoute,
+  UnauthorizedLoginRoute: UnauthorizedLoginRoute,
+  UnauthorizedRegisterRoute: UnauthorizedRegisterRoute,
+}
+
+const UnauthorizedRouteRouteWithChildren =
+  UnauthorizedRouteRoute._addFileChildren(UnauthorizedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AboutRoute: AboutRoute,
+  AuthorizedRouteRoute: AuthorizedRouteRouteWithChildren,
+  OnBoardingRouteRoute: OnBoardingRouteRouteWithChildren,
+  UnauthorizedRouteRoute: UnauthorizedRouteRouteWithChildren,
+  ProfilesUsernameRoute: ProfilesUsernameRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

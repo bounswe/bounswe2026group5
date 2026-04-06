@@ -24,10 +24,7 @@ ehthumbs.db
 .env
 .env.local
 *.local
-web/.env*
-backend/.env*
-!web/.env.example
-!backend/.env.example
+!.env.example
 
 # ==========================================
 # Backend (Python & Django)
@@ -84,3 +81,4 @@ pnpm-debug.log*
 
 # Test Coverage
 web/coverage/
+mobile/coverage/
