@@ -7,6 +7,11 @@ on:
     paths:
       - "mobile/**"
       - ".github/workflows/mobile-apk.yml"
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-apk.yml"
 
 jobs:
   build-apk:
