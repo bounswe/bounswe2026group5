@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import { RequestCard } from '@/components/dashboard/RequestCard';
 
 describe('RequestCard Component', () => {
@@ -15,7 +15,7 @@ describe('RequestCard Component', () => {
     expect(getByText('Zeynep Kaya')).toBeTruthy();
     expect(getByText('Topic: React Native')).toBeTruthy();
     expect(getByText('Has requested you to be their Mentor.')).toBeTruthy();
-    expect(getByText('Accept')).toBeTruthy();
+    expect(getByText('Open to respond')).toBeTruthy();
   });
 
   it('renders the reschedule warning state when isReschedule is true', () => {

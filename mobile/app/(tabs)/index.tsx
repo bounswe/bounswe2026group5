@@ -1,75 +1,229 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import React, { useMemo, useState } from "react";
+import { Alert, View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 // Import the components for the dashboard
-import { RequestCard } from '@/components/dashboard/RequestCard';
-import { SessionCard } from '@/components/dashboard/SessionCard';
-import { SessionDetailsModal } from '@/components/dashboard/SessionDetailsModal';
-import { RequestDetailsModal } from '@/components/dashboard/RequestDetailsModal';
-import { ViewAllRequestsModal } from '@/components/dashboard/ViewAllRequestsModal';
-import { BookingModal } from '@/components/profile/BookingModal';
+import { RequestCard } from "@/components/dashboard/RequestCard";
+import { SessionCard } from "@/components/dashboard/SessionCard";
+import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
+import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
+import { ViewAllRequestsModal } from "@/components/dashboard/ViewAllRequestsModal";
 
-// Import mock data
-import { MOCK_REQUESTS, MOCK_SESSIONS, MOCK_AVAILABILITY } from '@/constants/mockData';
+import {
+  mapMatchesToSessions,
+  mapUpcomingSessionsToDashboard,
+  mapRequestsToDashboard,
+  useMentorshipMatchesQuery,
+  useMentorshipUpcomingSessionsQuery,
+  useMentorshipRequestsQuery,
+  useRespondToMentorshipRequestMutation,
+  type DashboardRequestItem,
+  type DashboardSessionItem,
+} from "@/lib/queries/mentorship";
+import { useAuthStore } from "@/lib/auth/store";
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
+  const currentUsername = useAuthStore((state) => state.user?.username);
+  const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
+
+  const requestsQuery = useMentorshipRequestsQuery(currentUsername);
+  const matchesQuery = useMentorshipMatchesQuery(currentUsername);
+  const upcomingSessionsQuery = useMentorshipUpcomingSessionsQuery(currentUsername);
+  const respondMutation = useRespondToMentorshipRequestMutation();
+
+  const isMenteeOnly = appUsageMode === "MENTEE";
+  const isMentorOnly = appUsageMode === "MENTOR";
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log("[Dashboard] Auth State:", {
+      username: currentUsername,
+      requestsLoading: requestsQuery.isLoading,
+      requestsError: requestsQuery.error?.message,
+      requestsData: requestsQuery.data?.length,
+      matchesLoading: matchesQuery.isLoading,
+      matchesError: matchesQuery.error?.message,
+      matchesData: matchesQuery.data?.length,
+      sessionsLoading: upcomingSessionsQuery.isLoading,
+      sessionsError: upcomingSessionsQuery.error?.message,
+      sessionsData: upcomingSessionsQuery.data?.length,
+    });
+  }, [
+    currentUsername,
+    requestsQuery.isLoading,
+    requestsQuery.error,
+    requestsQuery.data,
+    matchesQuery.isLoading,
+    matchesQuery.error,
+    matchesQuery.data,
+    upcomingSessionsQuery.isLoading,
+    upcomingSessionsQuery.error,
+    upcomingSessionsQuery.data,
+  ]);
+
+  const requests = useMemo<DashboardRequestItem[]>(() => {
+    if (requestsQuery.data && currentUsername) {
+      const mapped = mapRequestsToDashboard(
+        requestsQuery.data,
+        currentUsername,
+      );
+      console.log("[Dashboard] Mapped requests from backend:", mapped.length);
+      return mapped;
+    }
+
+    if (requestsQuery.isLoading) {
+      console.log("[Dashboard] Requests loading...");
+      return [];
+    }
+
+    if (requestsQuery.error) {
+      console.log("[Dashboard] Requests error:", requestsQuery.error.message);
+    }
+
+    return [];
+  }, [
+    requestsQuery.data,
+    requestsQuery.isLoading,
+    requestsQuery.error,
+    currentUsername,
+  ]);
+
+  const sessions = useMemo(() => {
+    if (!currentUsername) {
+      return [];
+    }
+
+    if (isMenteeOnly) {
+      return mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []);
+    }
+
+    if (isMentorOnly) {
+      return mapMatchesToSessions(
+        requestsQuery.data ?? [],
+        matchesQuery.data ?? [],
+        currentUsername,
+      );
+    }
+
+    const byKey = new Map<string, DashboardSessionItem>();
+
+    mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []).forEach(
+      (session) => {
+        byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
+      },
+    );
+
+    mapMatchesToSessions(
+      requestsQuery.data ?? [],
+      matchesQuery.data ?? [],
+      currentUsername,
+    ).forEach((session) => {
+      byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
+    });
+
+    return Array.from(byKey.values()).sort((a, b) => {
+      const aKey = `${a.rawDate}T${a.time.split(" - ")[0] ?? "00:00"}`;
+      const bKey = `${b.rawDate}T${b.time.split(" - ")[0] ?? "00:00"}`;
+      return aKey.localeCompare(bKey);
+    });
+  }, [
+    currentUsername,
+    appUsageMode,
+    isMenteeOnly,
+    isMentorOnly,
+    upcomingSessionsQuery.data,
+    requestsQuery.data,
+    matchesQuery.data,
+  ]);
+
   // State for Modals
-  const [selectedRequest, setSelectedRequest] = useState<typeof MOCK_REQUESTS[0] | null>(null);
-  const [selectedSession, setSelectedSession] = useState<typeof MOCK_SESSIONS[0] | null>(null);
+  const [selectedRequest, setSelectedRequest] =
+    useState<DashboardRequestItem | null>(null);
+  const [selectedSession, setSelectedSession] = useState<
+    (typeof sessions)[0] | null
+  >(null);
   const [isViewAllRequestsOpen, setViewAllRequestsOpen] = useState(false);
-  const [sessionToReschedule, setSessionToReschedule] = useState<typeof MOCK_SESSIONS[0] | null>(null);
+
+  const handleRespond = async (action: "accept" | "reject") => {
+    if (!selectedRequest) {
+      return;
+    }
+
+    try {
+      await respondMutation.mutateAsync({
+        requestId: selectedRequest.requestId,
+        action,
+      });
+      setSelectedRequest(null);
+      requestsQuery.refetch();
+      matchesQuery.refetch();
+      upcomingSessionsQuery.refetch();
+    } catch (error) {
+      Alert.alert(
+        "Request Action Failed",
+        error instanceof Error
+          ? error.message
+          : "Could not update request status.",
+      );
+    }
+  };
 
   return (
     <View className="flex-1 bg-gray-50">
-      
       {/* 1. FIXED TOP HEADER */}
-      <View 
-        className="bg-white z-10 shadow-sm border-b border-gray-100" 
+      <View
+        className="bg-white z-10 shadow-sm border-b border-gray-100"
         style={{ paddingTop: insets.top }}
       >
         <View className="flex-row justify-between items-center px-4 pb-3 pt-2">
-          <Text className="text-2xl font-extrabold text-gray-900">Dashboard</Text>
+          <Text className="text-2xl font-extrabold text-gray-900">
+            Dashboard
+          </Text>
           <Ionicons name="notifications-outline" size={24} color="#4b5563" />
         </View>
       </View>
 
       {/* 2. MAIN SCROLL AREA */}
-      <ScrollView 
+      <ScrollView
         className="flex-1 px-4 pt-4"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 160 }}
       >
-        
         {/* Requests Section */}
         <View className="mb-6">
           <View className="flex-row justify-between items-center mb-3 mt-2">
             <View className="flex-row items-center">
-              <Text className="text-lg font-bold text-gray-900">Pending Requests</Text>
-              {MOCK_REQUESTS.length > 0 && (
+              <Text className="text-lg font-bold text-gray-900">
+                Pending Requests
+              </Text>
+              {requests.length > 0 && (
                 <View className="bg-red-500 rounded-full px-2 py-0.5 ml-2 justify-center items-center">
-                  <Text className="text-white text-xs font-bold">{MOCK_REQUESTS.length}</Text>
+                  <Text className="text-white text-xs font-bold">
+                    {requests.length}
+                  </Text>
                 </View>
               )}
             </View>
             <TouchableOpacity onPress={() => setViewAllRequestsOpen(true)}>
-              <Text className="text-indigo-600 font-semibold text-sm">View All</Text>
+              <Text className="text-indigo-600 font-semibold text-sm">
+                View All
+              </Text>
             </TouchableOpacity>
           </View>
 
           {/* Show the first 2 requests on the dashboard */}
-          {MOCK_REQUESTS.slice(0, 2).map((req) => (
-            <RequestCard 
+          {requests.slice(0, 2).map((req) => (
+            <RequestCard
               key={req.id}
               user={req.user}
               topic={req.topic}
               type={req.type}
-              onPress={() => setSelectedRequest(req)} 
+              onPress={() => setSelectedRequest(req)}
             />
           ))}
         </View>
@@ -77,65 +231,73 @@ export default function DashboardScreen() {
         {/* Sessions Section */}
         <View className="mb-6">
           <View className="flex-row justify-between items-center mb-3 mt-2">
-            <Text className="text-lg font-bold text-gray-900">Your Sessions</Text>
-            <TouchableOpacity onPress={() => router.push('/schedule')}>
+            <Text className="text-lg font-bold text-gray-900">
+              Your Sessions
+            </Text>
+            <TouchableOpacity onPress={() => router.push("/schedule")}>
               <Text className="text-blue-600 font-semibold text-sm">
-                View All {MOCK_SESSIONS.length > 0 ? `(${MOCK_SESSIONS.length})` : ''}
+                View All {sessions.length > 0 ? `(${sessions.length})` : ""}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {MOCK_SESSIONS.map((session) => (
-            <SessionCard 
-              key={session.id}
-              user={session.user}
-              date={session.date}
-              time={session.time}
-              status={session.status}
-              onPress={() => setSelectedSession(session)}
-            />
-          ))}
+          {sessions.length === 0 ? (
+            <View className="bg-white p-4 rounded-xl border border-gray-100">
+              <Text className="text-gray-500 font-medium">
+                No upcoming sessions yet.
+              </Text>
+            </View>
+          ) : (
+            sessions.map((session) => (
+              <SessionCard
+                key={session.id}
+                user={session.user}
+                date={session.date}
+                time={session.time}
+                status={session.status}
+                onPress={() => setSelectedSession(session)}
+              />
+            ))
+          )}
         </View>
-
       </ScrollView>
 
       {/* 3. MODALS */}
-      <RequestDetailsModal 
+      <RequestDetailsModal
         visible={!!selectedRequest}
         request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
+        onAccept={() => handleRespond("accept")}
+        onReject={() => handleRespond("reject")}
+        onCancelOutgoing={() => {
+          Alert.alert(
+            "Not Supported Yet",
+            "Outgoing request cancellation is not available on the current API.",
+          );
+        }}
+        isSubmitting={respondMutation.isPending}
       />
 
-      <SessionDetailsModal 
+      <SessionDetailsModal
         visible={!!selectedSession}
         session={selectedSession}
         onClose={() => setSelectedSession(null)}
-        onReschedule={() => setSessionToReschedule(selectedSession)}
+        onReschedule={() => {
+          Alert.alert(
+            "Coming Soon",
+            "Rescheduling will be wired after the dedicated API endpoint is finalized.",
+          );
+        }}
       />
 
       <ViewAllRequestsModal
         visible={isViewAllRequestsOpen}
-        requests={MOCK_REQUESTS}
+        requests={requests}
         onClose={() => setViewAllRequestsOpen(false)}
-        onSelectRequest={(req) => {
+        onSelectRequest={(req: DashboardRequestItem) => {
           setViewAllRequestsOpen(false);
-          setTimeout(() => setSelectedRequest(req as typeof MOCK_REQUESTS[0]), 300); 
+          setTimeout(() => setSelectedRequest(req), 300);
         }}
-      />
-
-      <BookingModal 
-        visible={!!sessionToReschedule}
-        onClose={() => setSessionToReschedule(null)}
-        availability={MOCK_AVAILABILITY}
-        existingSession={sessionToReschedule ? { date: sessionToReschedule.rawDate, time: sessionToReschedule.time } : undefined}
-        offering={sessionToReschedule ? {
-          id: 'reschedule-temp',
-          title: sessionToReschedule.topic,
-          duration: '60 min',
-          level: 'Previous Session Level',
-          icon: 'calendar-outline',
-          description: `You are requesting to reschedule your session with ${sessionToReschedule.user}.`
-        } : null}
       />
     </View>
   );

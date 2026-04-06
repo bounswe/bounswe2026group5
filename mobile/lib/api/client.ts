@@ -1,8 +1,136 @@
+import { API_BASE_URL } from "@/lib/api/config";
+import { useAuthStore } from "@/lib/auth/store";
+
 /**
- * API base URL for the backend.
- *
- * - iOS Simulator / web: http://localhost:8000/api
- * - Android Emulator:    http://10.0.2.2:8000/api
- * - Physical device:     replace with your machine's LAN IP
+ * Error type thrown when an API request fails.
  */
-export const API_BASE_URL = 'http://localhost:8000/api';
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/**
+ * Perform a typed GET request against the backend API.
+ * Uses the access token from auth store.
+ *
+ * @param path Relative API path (e.g. /api/mentorship/requests/me/)
+ */
+export async function apiGet<T>(path: string): Promise<T> {
+  const accessToken = useAuthStore.getState().accessToken;
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  return (await response.json()) as T;
+}
+
+/**
+ * Perform a typed POST request against the backend API.
+ * Uses the access token from auth store.
+ *
+ * @param path Relative API path (e.g. /api/mentorship/requests/)
+ * @param payload Optional JSON payload
+ */
+export async function apiPost<TResponse, TPayload = unknown>(
+  path: string,
+  payload?: TPayload,
+): Promise<TResponse> {
+  const accessToken = useAuthStore.getState().accessToken;
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  if (response.status === 204) {
+    return undefined as TResponse;
+  }
+
+  return (await response.json()) as TResponse;
+}
+
+/**
+ * Perform a typed PATCH request against the backend API.
+ * Uses the access token from auth store.
+ *
+ * @param path Relative API path (e.g. /api/profiles/<username>/)
+ * @param payload JSON payload
+ */
+export async function apiPatch<TResponse, TPayload>(
+  path: string,
+  payload: TPayload,
+): Promise<TResponse> {
+  const accessToken = useAuthStore.getState().accessToken;
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  return (await response.json()) as TResponse;
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const payload = (await response.json()) as {
+      detail?: string;
+      non_field_errors?: string[];
+      [key: string]: unknown;
+    };
+
+    if (payload.detail) {
+      return payload.detail;
+    }
+
+    if (Array.isArray(payload.non_field_errors) && payload.non_field_errors[0]) {
+      return payload.non_field_errors[0];
+    }
+
+    for (const value of Object.values(payload)) {
+      if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string") {
+        return value[0];
+      }
+      if (typeof value === "string" && value.trim()) {
+        return value;
+      }
+    }
+
+    return `Request failed with status ${response.status}`;
+  } catch {
+    return `Request failed with status ${response.status}`;
+  }
+}

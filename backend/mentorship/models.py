@@ -7,7 +7,7 @@ from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
 
-from profiles.models import Profile
+from profiles.models import AvailabilitySlot, Profile
 
 
 class MentorshipRequest(models.Model):
@@ -31,6 +31,15 @@ class MentorshipRequest(models.Model):
         on_delete=models.CASCADE,
         related_name="sent_requests",
     )
+    slot = models.ForeignKey(
+        AvailabilitySlot,
+        on_delete=models.PROTECT,
+        related_name="mentorship_requests",
+        null=True,
+        blank=True,
+    )
+    initial_session_start_at = models.DateTimeField(null=True, blank=True)
+    initial_session_end_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
@@ -78,6 +87,12 @@ class MentorshipRequest(models.Model):
                 self.responded_at = timezone.now()
         elif self.status == self.Status.PENDING:
             self.responded_at = None
+
+        if self.status == self.Status.ACCEPTED and self.slot is not None:
+            if self.initial_session_start_at is None:
+                self.initial_session_start_at = self.slot.start_at
+            if self.initial_session_end_at is None:
+                self.initial_session_end_at = self.slot.end_at
 
         super().save(*args, **kwargs)
 

@@ -8,11 +8,9 @@ interface RequestCardProps {
   onPress?: () => void;
 }
 
-// FIX: Added `isReschedule` to the destructured props
-export function RequestCard({ user, topic, type, isReschedule, onPress }: RequestCardProps) {
+export function RequestCard({ user, topic, type, isReschedule, onPress }: Readonly<RequestCardProps>) {
   const isIncoming = type === 'incoming';
   
-  // Define what the USER's role is in this specific relationship
   const myRole = isIncoming ? 'Mentor' : 'Mentee';
   const badgeColor = isIncoming ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700';
 
@@ -20,7 +18,6 @@ export function RequestCard({ user, topic, type, isReschedule, onPress }: Reques
     <TouchableOpacity 
       activeOpacity={0.7}
       onPress={onPress}
-      // FIX: Apply amber styling if it's a reschedule request
       className={`p-4 rounded-xl shadow-sm border mb-3 ${isReschedule ? 'bg-amber-50/30 border-amber-200' : 'bg-white border-gray-100'}`}
     >
       
@@ -59,28 +56,11 @@ export function RequestCard({ user, topic, type, isReschedule, onPress }: Reques
         <Text className="text-xs text-gray-400 mt-1 font-medium">Topic: {topic}</Text>
       </View>
       
-      {/* Bottom Row: Actions */}
+      {/* Bottom Row: Status */}
       <View className="flex-row justify-end mt-1">
         {isIncoming ? (
-          <View className="flex-row gap-2">
-            {/* TODO: Hook up to /api/requests/decline endpoint */}
-            <TouchableOpacity 
-              accessibilityRole="button"
-              onPress={(e) => { e.stopPropagation(); console.log(`TODO: Decline request from ${user}`); }}
-              className="bg-white px-4 py-2 rounded-lg border border-gray-200"
-            >
-              <Text className="text-gray-600 font-medium text-sm">Decline</Text>
-            </TouchableOpacity>
-            
-            {/* TODO: Hook up to /api/requests/accept endpoint */}
-            <TouchableOpacity 
-              accessibilityRole="button"
-              onPress={(e) => { e.stopPropagation(); console.log(`TODO: Accept request from ${user}`); }}
-              // FIX: Update Accept button color if it's a reschedule
-              className={`px-4 py-2 rounded-lg ${isReschedule ? 'bg-amber-600' : 'bg-blue-600'}`}
-            >
-              <Text className="text-white font-medium text-sm">Accept</Text>
-            </TouchableOpacity>
+          <View className="bg-indigo-50 px-4 py-2 rounded-lg border border-indigo-100">
+            <Text className="text-indigo-700 text-sm font-semibold">Open to respond</Text>
           </View>
         ) : (
           <View className="bg-gray-100 px-4 py-2 rounded-lg border border-gray-200">

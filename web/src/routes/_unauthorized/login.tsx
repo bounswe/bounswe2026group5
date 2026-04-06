@@ -15,7 +15,7 @@ import { Heading, Muted, Body, Display } from "@/components/Typography"
 
 // DEMO BYPASS IMPORT - FUTURE: Delete this once real auth is merged
 import { setDemoAuthRole } from '@/lib/demoAuth'
-import {handleAuthSuccess, loginFn} from "#/lib/queries/Authqueries.ts";
+import {handleAuthSuccess, loginFn} from "#/lib/queries/AuthQueries.ts";
 import {useMutation} from "@tanstack/react-query";
 import {useState} from "react";
 
@@ -38,7 +38,9 @@ function RouteComponent() {
         mutationFn: loginFn,
         onSuccess: (data) => {
             handleAuthSuccess(data)
-            router.navigate({to: '/dashboard', search: { mode: 'mentor' }})
+            router.navigate({
+                to: '/dashboard',
+            })
         }
     })
 
@@ -140,26 +142,6 @@ function RouteComponent() {
                             {login.isError && (
                                 <p className="text-xs text-destructive">{login.error.message}</p>
                             )}
-
-                            {/* ---------------------------------------------------------
-                                    DEMO LOGIN BYPASS BUTTON
-                                    Added temporarily so UI teammates can view the Dashboard.
-                                    FUTURE: Delete this entire button once real auth is merged.
-                                --------------------------------------------------------- */}
-                            <Button 
-                                type="button" 
-                                variant="secondary" 
-                                className="w-full bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border border-dashed border-yellow-300"
-                                onClick={() => {
-                                    setDemoAuthRole('mentor')
-                                    router.navigate({
-                                        to: '/dashboard',
-                                        search: { mode: 'mentor' }
-                                    })
-                                }}
-                            >
-                                Bypass Login (UI Demo Mode)
-                            </Button>
 
                             <div className="flex items-center gap-3 w-full mt-2">
                                 <div className="flex-1 h-px bg-(--color-brand-line)" />

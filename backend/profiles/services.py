@@ -71,5 +71,29 @@ def cancel_availability_booking(*, profile: Profile, slot_id, actor) -> Availabi
                 "Only booking owner or mentor can cancel this booking."
             )
 
+        # Accepted first-session requests keep a protected FK to the slot.
+        # Once the booking is canceled, detach those links so the mentor can
+        # delete the now-available slot without triggering ProtectedError.
+        from mentorship.models import MentorshipRequest
+
+        accepted_requests = MentorshipRequest.objects.select_for_update().filter(
+            slot=slot,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+
+        for request_obj in accepted_requests:
+            if request_obj.initial_session_start_at is None:
+                request_obj.initial_session_start_at = slot.start_at
+            if request_obj.initial_session_end_at is None:
+                request_obj.initial_session_end_at = slot.end_at
+            request_obj.slot = None
+            request_obj.save(
+                update_fields=[
+                    "slot",
+                    "initial_session_start_at",
+                    "initial_session_end_at",
+                ]
+            )
+
         slot.mark_available()
         return slot

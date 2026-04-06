@@ -1,0 +1,56 @@
+import { type DiscoverMentorProfile } from "@/lib/discover/types";
+
+export const DEMO_DISCOVER_SKILLS = [
+  "Django",
+  "Docker",
+  "GraphQL",
+  "JavaScript",
+  "Machine Learning",
+  "PostgreSQL",
+  "React Native",
+  "SQL",
+  "System Design",
+  "TypeScript",
+].sort((a, b) => a.localeCompare(b));
+
+export const DEMO_DISCOVER_PROFILES: DiscoverMentorProfile[] = [
+  {
+    id: "demo-mentor-1",
+    username: "metin.yildiz",
+    full_name: "Metin Yıldız",
+    bio: "Helps students turn rough app ideas into clean mobile products with practical architecture advice.",
+    hidden: false,
+    picture_url: "",
+    title: "Mobile Engineer",
+    show_initials_only: false,
+    expertises: ["React Native", "TypeScript", "System Design"],
+    rating: 5,
+    total_mentee_count: 18,
+  },
+  {
+    id: "demo-mentor-2",
+    username: "elif.kaya",
+    full_name: "Elif Kaya",
+    bio: "Focused on backend design, mentoring workflow, and clean API contracts for student projects.",
+    hidden: false,
+    picture_url: "",
+    title: "Backend Mentor",
+    show_initials_only: false,
+    expertises: ["Django", "PostgreSQL", "SQL"],
+    rating: 4,
+    total_mentee_count: 11,
+  },
+  {
+    id: "demo-mentor-3",
+    username: "can.ozkan",
+    full_name: "Can Özkan",
+    bio: "Enjoys code review sessions, testing strategy, and helping teams ship with confidence.",
+    hidden: false,
+    picture_url: "",
+    title: "Engineering Mentor",
+    show_initials_only: false,
+    expertises: ["Docker", "GraphQL", "System Design"],
+    rating: 5,
+    total_mentee_count: 24,
+  },
+];

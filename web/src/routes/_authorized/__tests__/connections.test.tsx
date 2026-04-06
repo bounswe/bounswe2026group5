@@ -1,285 +1,243 @@
-// web/src/routes/_authorized/__tests__/connections.test.tsx
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
-// 1. Hoist mocks so they are available inside vi.mock factories
-const { mockNavigate, mockUseSearch } = vi.hoisted(() => ({
-  mockNavigate: vi.fn(),
-  mockUseSearch: vi.fn(),
-}))
+vi.mock('../../../routeTree.gen', () => ({}))
+vi.mock('../../../router', () => ({}))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<any>()
   return {
     ...actual,
     createFileRoute: () => () => ({
-      useSearch: mockUseSearch,
+      update: vi.fn().mockReturnThis(),
     }),
-    useNavigate: () => mockNavigate,
+    Link: ({ children, to, params, className }: any) => (
+        <a href={`${to}/${params?.username ?? ''}`} className={className}>{children}</a>
+    ),
+    useNavigate: () => vi.fn(),
   }
 })
 
-// 2. Mock Lucide icons used by DiscoverFilterPanel to avoid jsdom SVG errors
 vi.mock('lucide-react', async (importOriginal) => {
   const actual = await importOriginal<any>()
   return {
     ...actual,
-    SlidersHorizontal: () => <div data-testid="icon-sliders" />,
-    X: () => <div data-testid="icon-x" />,
+    Loader2: () => <div data-testid="icon-loader" />,
+    UserCircle: () => <div data-testid="icon-user" />,
   }
 })
 
+vi.mock('#/lib/utils.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('#/lib/utils.ts')>()
+  return {
+    ...actual,
+    getInitials: (name: string) => name.slice(0, 2).toUpperCase(),
+  }
+})
+
+const MOCK_MATCHES = [
+  {
+    id: 'match-1',
+    mentor: {
+      id: 'mentor-1',
+      username: 'john_mentor',
+      display_name: 'John Smith',
+      picture_url: '',
+      title: 'Software Engineer',
+    },
+    mentee: {
+      id: 'mentee-1',
+      username: 'alice_mentee',
+      display_name: 'Alice Johnson',
+      picture_url: '',
+      title: '',
+    },
+    request_id: 'req-1',
+    is_active: true,
+  },
+  {
+    id: 'match-2',
+    mentor: {
+      id: 'mentor-1',
+      username: 'john_mentor',
+      display_name: 'John Smith',
+      picture_url: '',
+      title: 'Software Engineer',
+    },
+    mentee: {
+      id: 'mentee-2',
+      username: 'bob_mentee',
+      display_name: 'Bob Williams',
+      picture_url: '',
+      title: '',
+    },
+    request_id: 'req-2',
+    is_active: true,
+  },
+  {
+    id: 'match-3',
+    mentor: {
+      id: 'mentor-2',
+      username: 'jane_mentor',
+      display_name: 'Jane Doe',
+      picture_url: '',
+      title: 'Data Scientist',
+    },
+    mentee: {
+      id: 'mentee-1',
+      username: 'alice_mentee',
+      display_name: 'Alice Johnson',
+      picture_url: '',
+      title: '',
+    },
+    request_id: 'req-3',
+    is_active: false,
+  },
+]
+
+const mockUseMyMatches = vi.fn()
+
+vi.mock('#/lib/queries/MentorshipQueries.ts', () => ({
+  useMyMatches: () => mockUseMyMatches(),
+  myMatchesQueryOptions: { queryKey: ['mentorship', 'matches'], queryFn: () => null },
+}))
+
 import { ConnectionsPage } from '../connections'
+
+function renderWithUser(appUsageMode: 'MENTOR' | 'MENTEE') {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  queryClient.setQueryData(['me'], {
+    id: '1',
+    username: appUsageMode === 'MENTOR' ? 'john_mentor' : 'alice_mentee',
+    email: 'test@test.com',
+    app_usage_mode: appUsageMode,
+    role: 'USER',
+    auth_provider: 'LOCAL',
+    is_active: true,
+    created_at: '2026-01-01',
+  })
+  return render(
+      <QueryClientProvider client={queryClient}>
+        <ConnectionsPage />
+      </QueryClientProvider>
+  )
+}
 
 describe('ConnectionsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseMyMatches.mockReturnValue({ data: MOCK_MATCHES, isLoading: false })
   })
 
-  // ── Mentee mode (default) ────────────────────────────────────────────────────
+  // ── Mentee mode ──────────────────────────────────────────────────────────
 
   it('renders "My Connections" heading in mentee mode', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
+    renderWithUser('MENTEE')
     expect(screen.getByRole('heading', { name: /My Connections/i })).toBeInTheDocument()
   })
 
-  it('renders the mentee-mode description in mentee mode', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
+  it('renders mentee-mode description', () => {
+    renderWithUser('MENTEE')
     expect(screen.getByText(/Nurture your intellectual growth/i)).toBeInTheDocument()
   })
 
-  it('renders "My Mentors" toggle button as active in mentee mode', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-    const mentorsBtn = screen.getByRole('button', { name: /My Mentors/i })
-    expect(mentorsBtn).toHaveAttribute('aria-pressed', 'true')
+  it('renders mentor cards for mentee — shows mentor names', () => {
+    renderWithUser('MENTEE')
+    // alice_mentee has 2 active matches both with john_mentor
+    expect(screen.getAllByText('John Smith').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Jane Doe')).not.toBeInTheDocument()
   })
 
-  it('renders at least one profile card in mentee mode', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-    const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
-    expect(viewButtons.length).toBeGreaterThan(0)
+  it('renders View Profile buttons for each active connection in mentee mode', () => {
+    renderWithUser('MENTEE')
+    // alice_mentee has 2 active matches (match-1 and match-2)
+    const viewButtons = screen.getAllByText(/View Profile/i)
+    expect(viewButtons.length).toBe(2)
   })
 
-  it('shows at most PAGE_SIZE (6) cards on initial load', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-    const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
-    expect(viewButtons.length).toBeLessThanOrEqual(6)
+  it('shows mentor title in mentee mode', () => {
+    renderWithUser('MENTEE')
+    expect(screen.getAllByText('Software Engineer').length).toBeGreaterThan(0)
   })
 
-  // ── Mentor mode ──────────────────────────────────────────────────────────────
+  // ── Mentor mode ──────────────────────────────────────────────────────────
 
   it('renders "My Mentees" heading in mentor mode', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentor' })
-    render(<ConnectionsPage />)
+    renderWithUser('MENTOR')
     expect(screen.getByRole('heading', { name: /My Mentees/i })).toBeInTheDocument()
   })
 
-  it('renders the mentor-mode description in mentor mode', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentor' })
-    render(<ConnectionsPage />)
+  it('renders mentor-mode description', () => {
+    renderWithUser('MENTOR')
     expect(screen.getByText(/Manage your mentees and track their progress/i)).toBeInTheDocument()
   })
 
-  it('renders "My Mentees" toggle button as active in mentor mode', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentor' })
-    render(<ConnectionsPage />)
-    const menteesBtn = screen.getByRole('button', { name: /My Mentees/i })
-    expect(menteesBtn).toHaveAttribute('aria-pressed', 'true')
+  it('renders mentee cards for mentor — shows mentee names', () => {
+    renderWithUser('MENTOR')
+    expect(screen.getByText('Alice Johnson')).toBeInTheDocument()
+    expect(screen.getByText('Bob Williams')).toBeInTheDocument()
   })
 
-  it('renders at least one profile card in mentor mode', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentor' })
-    render(<ConnectionsPage />)
-    const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
-    expect(viewButtons.length).toBeGreaterThan(0)
+  it('renders View Profile buttons for each active connection in mentor mode', () => {
+    renderWithUser('MENTOR')
+    const viewButtons = screen.getAllByText(/View Profile/i)
+    expect(viewButtons.length).toBe(2)
   })
 
-  // ── Mode toggle ──────────────────────────────────────────────────────────────
+  it('does not show inactive matches', () => {
+    renderWithUser('MENTEE')
+    expect(screen.queryByText('Jane Doe')).not.toBeInTheDocument()
+  })
 
-  it('calls navigate when switching from mentee to mentor via the toggle', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
+  // ── Empty state ──────────────────────────────────────────────────────────
 
-    fireEvent.click(screen.getByRole('button', { name: /My Mentees/i }))
-
-    expect(mockNavigate).toHaveBeenCalledWith(
-      expect.objectContaining({ search: expect.any(Function) }),
+  it('shows empty state for mentee with no matches', () => {
+    mockUseMyMatches.mockReturnValue({ data: [], isLoading: false })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    queryClient.setQueryData(['me'], {
+      id: '99',
+      username: 'new_user',
+      email: 'new@test.com',
+      app_usage_mode: 'MENTEE',
+      role: 'USER',
+      auth_provider: 'LOCAL',
+      is_active: true,
+      created_at: '2026-01-01',
+    })
+    render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionsPage />
+        </QueryClientProvider>
     )
+    expect(screen.getByText(/No mentor connections yet/i)).toBeInTheDocument()
+    expect(screen.getByText(/Explore Mentors/i)).toBeInTheDocument()
   })
 
-  it('does not call navigate when clicking the already-active toggle button', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-
-    // "My Mentors" is already active in mentee mode
-    fireEvent.click(screen.getByRole('button', { name: /My Mentors/i }))
-
-    expect(mockNavigate).not.toHaveBeenCalled()
-  })
-
-  // ── New Request button ───────────────────────────────────────────────────────
-
-  it('renders the "New Request" button', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-    expect(
-      screen.getByRole('button', { name: /Go to Discover page to send a new mentorship request/i }),
-    ).toBeInTheDocument()
-  })
-
-  it('navigates to /discover when "New Request" is clicked', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-
-    fireEvent.click(
-      screen.getByRole('button', { name: /Go to Discover page to send a new mentorship request/i }),
+  it('shows empty state for mentor with no mentees', () => {
+    mockUseMyMatches.mockReturnValue({ data: [], isLoading: false })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    queryClient.setQueryData(['me'], {
+      id: '99',
+      username: 'new_mentor',
+      email: 'new@test.com',
+      app_usage_mode: 'MENTOR',
+      role: 'USER',
+      auth_provider: 'LOCAL',
+      is_active: true,
+      created_at: '2026-01-01',
+    })
+    render(
+        <QueryClientProvider client={queryClient}>
+          <ConnectionsPage />
+        </QueryClientProvider>
     )
-
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/discover' })
-  })
-
-  // ── New Message badge ────────────────────────────────────────────────────────
-
-  it('shows the "New Message" badge for connections with new-message status (mentee mode)', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-    // MOCK_MENTOR_CONNECTIONS has one entry with status 'new-message'
-    const badges = screen.getAllByText(/New Message/i)
-    expect(badges.length).toBeGreaterThan(0)
-  })
-
-  it('shows the "New Message" badge for connections with new-message status (mentor mode)', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentor' })
-    render(<ConnectionsPage />)
-    // MOCK_MENTEE_CONNECTIONS has one entry with status 'new-message'
-    const badges = screen.getAllByText(/New Message/i)
-    expect(badges.length).toBeGreaterThan(0)
-  })
-
-  // ── Pagination ───────────────────────────────────────────────────────────────
-
-  it('shows "Load More" button when there are more connections than PAGE_SIZE (mentee mode)', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-    // Mentor connections mock has 8 entries — more than PAGE_SIZE=6
-    expect(screen.getByRole('button', { name: /Load More Connections/i })).toBeInTheDocument()
-  })
-
-  it('loads more connections when "Load More" is clicked', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-
-    const before = screen.getAllByRole('button', { name: /View Profile/i }).length
-    fireEvent.click(screen.getByRole('button', { name: /Load More Connections/i }))
-    const after = screen.getAllByRole('button', { name: /View Profile/i }).length
-
-    expect(after).toBeGreaterThan(before)
-  })
-
-  it('hides "Load More" once all connections are visible', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-
-    while (screen.queryByRole('button', { name: /Load More Connections/i })) {
-      fireEvent.click(screen.getByRole('button', { name: /Load More Connections/i }))
-    }
-
-    expect(screen.queryByRole('button', { name: /Load More Connections/i })).not.toBeInTheDocument()
-  })
-
-  it('shows page count indicator', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-    expect(screen.getByText(/Page \d+ of \d+/i)).toBeInTheDocument()
-  })
-
-  // ── Skill filter ─────────────────────────────────────────────────────────────
-
-  it('renders the filter button', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-    expect(screen.getByRole('button', { name: /Filter by skill/i })).toBeInTheDocument()
-  })
-
-  it('opens the skill filter panel when the filter button is clicked', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
-
-    expect(screen.getByText(/Filter by Skill/i)).toBeInTheDocument()
-  })
-
-  it('reduces visible connections when a skill is selected', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-
-    // Load all connections first so the count is reliable
-    while (screen.queryByRole('button', { name: /Load More Connections/i })) {
-      fireEvent.click(screen.getByRole('button', { name: /Load More Connections/i }))
-    }
-    const allCount = screen.getAllByRole('button', { name: /View Profile/i }).length
-
-    // Open filter panel and select a skill chip
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
-    const skillChips = screen.getAllByRole('button', { name: /^(?!Filter by skill|Load More|New Request|My Mentors|My Mentees|Clear all).+$/i })
-    // Click first skill chip available in the panel
-    fireEvent.click(skillChips[0])
-
-    const filteredCount = screen.getAllByRole('button', { name: /View Profile/i }).length
-    expect(filteredCount).toBeLessThanOrEqual(allCount)
-  })
-
-  it('shows empty state when skill filter matches no connection', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-
-    // Open filter panel
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
-
-    // Select all available skill chips to force an empty state if combined with a non-existent mock
-    // We simulate via selecting skills that likely narrow results to zero by clicking a skill,
-    // then using clear to verify the state resets. A direct empty-state test uses the hasFilters path.
-    // Since we can't easily guarantee zero results from skill filtering alone, we verify the empty
-    // state text is not shown when there are results.
-    expect(screen.queryByText(/No connections match the selected filters/i)).not.toBeInTheDocument()
-  })
-
-  // ── Navigation ───────────────────────────────────────────────────────────────
-
-  it('navigates to the profile page when "View Profile" is clicked', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-
-    const viewButtons = screen.getAllByRole('button', { name: /View Profile/i })
-    fireEvent.click(viewButtons[0])
-
-    expect(mockNavigate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: '/profiles/$profileId',
-        params: expect.objectContaining({ profileId: expect.any(String) }),
-      }),
-    )
-  })
-
-  // ── Empty state ──────────────────────────────────────────────────────────────
-
-  it('shows no-mentee empty state text and body when mentor mode has no mentees', () => {
-    // Verify the EmptyState component strings are correct for mentor mode with no filters
-    // We test this indirectly by checking mentor mode renders cards (so empty state is hidden)
-    mockUseSearch.mockReturnValue({ mode: 'mentor' })
-    render(<ConnectionsPage />)
-    expect(screen.queryByText(/No mentees yet/i)).not.toBeInTheDocument()
-  })
-
-  it('shows no-mentor empty state text when mentee mode has no mentors', () => {
-    mockUseSearch.mockReturnValue({ mode: 'mentee' })
-    render(<ConnectionsPage />)
-    expect(screen.queryByText(/No mentor connections yet/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/No mentees yet/i)).toBeInTheDocument()
   })
 })
