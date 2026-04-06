@@ -31,6 +31,7 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   ListRenderItemInfo,
   Modal,
@@ -42,20 +43,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
-
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
-const ALL_SUBJECTS: readonly string[] = [
-  'Backend',
-  'Career Advice',
-  'Data Science',
-  'DevOps',
-  'Machine Learning',
-  'Product Management',
-  'React',
-  'Software Engineering',
-  'UI/UX Design',
-];
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -200,6 +187,10 @@ export interface SubjectExpertisePickerProps {
   onChange: (selected: string[]) => void;
   /** Drives the contextual subtitle text shown inside the modal. */
   role: 'mentor' | 'mentee';
+  /** Skills list fetched from the API. Shows a loading indicator while undefined. */
+  skills?: string[];
+  /** Whether the skills list is still loading from the API. */
+  isLoadingSkills?: boolean;
 }
 
 /**
@@ -210,6 +201,8 @@ export function SubjectExpertisePicker({
   selected,
   onChange,
   role,
+  skills = [],
+  isLoadingSkills = false,
 }: Readonly<SubjectExpertisePickerProps>) {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
@@ -220,7 +213,7 @@ export function SubjectExpertisePicker({
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
   const selectionCount = selected.length;
-  const totalCount = ALL_SUBJECTS.length;
+  const totalCount = skills.length;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -409,16 +402,22 @@ export function SubjectExpertisePicker({
             />
 
             {/* ── Subject list ── */}
-            <FlatList
-              data={ALL_SUBJECTS as string[]}
-              renderItem={renderItem}
-              keyExtractor={keyExtractor}
-              getItemLayout={getItemLayout}
-              extraData={selectedSet}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingTop: 4, paddingBottom: 8 }}
-              bounces={false}
-            />
+            {isLoadingSkills ? (
+              <View className="items-center justify-center py-10">
+                <ActivityIndicator color={theme.primary} />
+              </View>
+            ) : (
+              <FlatList
+                data={skills}
+                renderItem={renderItem}
+                keyExtractor={keyExtractor}
+                getItemLayout={getItemLayout}
+                extraData={selectedSet}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingTop: 4, paddingBottom: 8 }}
+                bounces={false}
+              />
+            )}
 
             {/* ── Done button ── */}
             <View className="px-5 pt-2">

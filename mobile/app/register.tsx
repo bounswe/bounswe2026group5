@@ -12,10 +12,19 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import { SubjectExpertisePicker } from '@/components/ui/SubjectExpertisePicker';
+import {
+  registerFn,
+  updateUsageModeFn,
+  updateProfileFn,
+  handleAuthSuccess,
+  fetchSkillsFn,
+  type AuthResponse,
+} from '@/lib/queries/authQueries';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -39,7 +48,7 @@ export default function RegisterScreen() {
   const theme = Colors[colorScheme];
 
   const [role, setRole] = useState<'mentor' | 'mentee'>('mentor');
-  const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [password, setPassword] = useState('');
@@ -52,6 +61,82 @@ export default function RegisterScreen() {
   const [skillsError, setSkillsError] = useState('');
   const [terms, setTerms] = useState(false);
   const [termsError, setTermsError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+
+  // ── Skills query ───────────────────────────────────────────────────────────
+  // queryKey matches the backend field name used in each role's profile serializer:
+  // MentorProfileResponseSerializer exposes skills as "expertises"
+  // MenteeProfileResponseSerializer exposes skills as "eager_to_learn"
+  const skillsQueryKey = role === 'mentor' ? 'expertises' : 'eager_to_learn';
+
+  const { data: skillsData, isLoading: isLoadingSkills } = useQuery({
+    queryKey: [skillsQueryKey],
+    queryFn: fetchSkillsFn,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const skillNames = skillsData?.map((s) => s.name) ?? [];
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+
+  const updateProfile = useMutation({
+    mutationFn: updateProfileFn,
+    onSuccess: () => {
+      router.replace('/(tabs)');
+    },
+    onError: (error: Error) => {
+      setSubmitError(error.message);
+    },
+  });
+
+  const updateUsageMode = useMutation({
+    mutationFn: updateUsageModeFn,
+    onSuccess: (_data, variables) => {
+      const skillsPayload =
+        variables.app_usage_mode === 'MENTOR'
+          ? { expertises: selectedSubjects }
+          : { eager_to_learn: selectedSubjects };
+
+      updateProfile.mutate({
+        username: variables._username,
+        accessToken: variables.accessToken,
+        display_name: displayName.trim(),
+        ...skillsPayload,
+      });
+    },
+    onError: (error: Error) => {
+      setSubmitError(error.message);
+    },
+  });
+
+  const register = useMutation({
+    mutationFn: registerFn,
+    onSuccess: async (data: AuthResponse) => {
+      await handleAuthSuccess(data);
+
+      updateUsageMode.mutate({
+        userId: data.user.id,
+        app_usage_mode: role.toUpperCase() as 'MENTOR' | 'MENTEE',
+        accessToken: data.access_token,
+        _username: data.user.username,
+      });
+    },
+    onError: (error: Error) => {
+      setSubmitError(error.message);
+    },
+  });
+
+  const isPending =
+    register.isPending || updateUsageMode.isPending || updateProfile.isPending;
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+
+  const handleRoleChange = (newRole: 'mentor' | 'mentee') => {
+    if (newRole === role) return;
+    setRole(newRole);
+    setSelectedSubjects([]);
+    setSkillsError('');
+  };
 
   const handleConfirmPasswordChange = (text: string) => {
     setConfirmPassword(text);
@@ -74,11 +159,15 @@ export default function RegisterScreen() {
     setConfirmPasswordError(cpErr);
     setSkillsError(sErr);
     setTermsError(tErr);
+    setSubmitError('');
 
     if (eErr || pErr || cpErr || sErr || tErr) return;
 
-    // TODO: POST /api/auth/register
-    router.replace('/(tabs)');
+    register.mutate({
+      email: email.trim(),
+      password,
+      confirm_password: confirmPassword,
+    });
   };
 
   return (
@@ -137,7 +226,7 @@ export default function RegisterScreen() {
               </Text>
               <View className="flex-row items-center p-1.5 rounded-xl h-14 bg-surface-input dark:bg-surface-input-dark">
                 <Pressable
-                  onPress={() => setRole('mentor')}
+                  onPress={() => handleRoleChange('mentor')}
                   className="flex-1 h-full rounded-lg items-center justify-center"
                   style={role === 'mentor' ? { backgroundColor: theme.cardBackground } : undefined}
                   accessibilityRole="button"
@@ -152,7 +241,7 @@ export default function RegisterScreen() {
                   </Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => setRole('mentee')}
+                  onPress={() => handleRoleChange('mentee')}
                   className="flex-1 h-full rounded-lg items-center justify-center"
                   style={role === 'mentee' ? { backgroundColor: theme.cardBackground } : undefined}
                   accessibilityRole="button"
@@ -169,25 +258,22 @@ export default function RegisterScreen() {
               </View>
             </View>
 
-            {/* Username */}
+            {/* Display Name */}
             <View className="gap-1.5">
               <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
-                Username
+                Display Name
               </Text>
               <View className="flex-row items-center h-14 rounded-xl px-4 gap-2 bg-surface-input dark:bg-surface-input-dark">
-                <Text className="text-base font-medium text-on-surface-muted dark:text-on-surface-muted-dark">
-                  @
-                </Text>
                 <TextInput
                   className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
-                  placeholder="arivers_dev"
+                  placeholder="John Williams"
                   placeholderTextColor={theme.textMuted}
-                  value={username}
-                  onChangeText={setUsername}
+                  value={displayName}
+                  onChangeText={setDisplayName}
                   autoCapitalize="none"
                   autoComplete="username"
                   returnKeyType="next"
-                  accessibilityLabel="Username"
+                  accessibilityLabel="Display Name"
                 />
               </View>
             </View>
@@ -314,6 +400,8 @@ export default function RegisterScreen() {
                   if (subjects.length > 0) setSkillsError('');
                 }}
                 role={role}
+                skills={skillNames}
+                isLoadingSkills={isLoadingSkills}
               />
               {skillsError ? (
                 <Text className="text-xs text-red-500 ml-1">{skillsError}</Text>
@@ -357,21 +445,30 @@ export default function RegisterScreen() {
 
             {/* CTA + Log In link */}
             <View className="gap-5 pt-4">
+              {submitError ? (
+                <Text className="text-xs text-red-500 text-center">{submitError}</Text>
+              ) : null}
               <TouchableOpacity
                 className="w-full h-16 rounded-xl items-center justify-center flex-row gap-3 bg-primary dark:bg-primary-dim"
                 activeOpacity={0.88}
                 accessibilityRole="button"
                 accessibilityLabel="Complete registration"
+                disabled={isPending}
+                style={isPending ? { opacity: 0.6 } : undefined}
                 onPress={handleSubmit}
               >
-                <Text className="text-white font-bold text-lg">Complete Registration</Text>
-                <Ionicons
-                  name="arrow-forward"
-                  size={22}
-                  color="white"
-                  accessibilityElementsHidden
-                  importantForAccessibility="no"
-                />
+                <Text className="text-white font-bold text-lg">
+                  {isPending ? 'Creating account…' : 'Complete Registration'}
+                </Text>
+                {!isPending && (
+                  <Ionicons
+                    name="arrow-forward"
+                    size={22}
+                    color="white"
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  />
+                )}
               </TouchableOpacity>
 
               <View className="items-center">
