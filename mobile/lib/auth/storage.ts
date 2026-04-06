@@ -89,3 +89,41 @@ export async function clearAuthStorage(): Promise<void> {
     throw error;
   }
 }
+
+// ============================================================================
+// COMPATIBILITY ADAPTERS (feat/mobile-register-api-integration)
+// These ensure the registration flow code doesn't break while utilizing 
+// the optimized JSON storage engine from the dev branch above.
+// ============================================================================
+
+export interface StoredAuthData {
+  accessToken: string;
+  refreshToken: string;
+  userId: string;
+  username: string;
+}
+
+export async function saveAuthData(data: StoredAuthData): Promise<void> {
+  await Promise.all([
+    storeTokens({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      access: data.accessToken, // Fallback mapped for safety 
+      refresh: data.refreshToken, // Fallback mapped for safety
+    } as unknown as AuthTokens),
+    storeUser({
+      id: data.userId,
+      username: data.username,
+    } as unknown as AuthUser),
+  ]);
+}
+
+export async function getAccessToken(): Promise<string | null> {
+  const tokens = await getStoredTokens();
+  if (!tokens) return null;
+  
+  // Safely extract token regardless of how the AuthTokens type is mapped internally
+  return (tokens as any).accessToken || (tokens as any).access || null;
+}
+
+export const clearAuthData = clearAuthStorage;
