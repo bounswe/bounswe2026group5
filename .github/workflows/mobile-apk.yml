@@ -7,6 +7,11 @@ on:
     paths:
       - "mobile/**"
       - ".github/workflows/mobile-apk.yml"
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-apk.yml"
 
 jobs:
   build-apk:
@@ -48,18 +53,36 @@ jobs:
           fi
 
       - name: Generate native Android project
-        run: npx expo prebuild --platform android --non-interactive --clean
+        run: npx expo prebuild --platform android --non-interactive
 
       - name: Build debug APK
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
+
+      - name: Prepare renamed APK
+        run: |
+          mkdir -p apk-out
+          SAFE_REF=$(echo "${GITHUB_REF_NAME}" | tr '/\\' '-' | tr -cd '[:alnum:]._-')
+          APK_NAME="mentorship-mobile-${SAFE_REF}-${GITHUB_RUN_NUMBER}.apk"
+          ARM64_APK="android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk"
+          DEFAULT_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ -f "$ARM64_APK" ]; then
+            cp "$ARM64_APK" "apk-out/$APK_NAME"
+          elif [ -f "$DEFAULT_APK" ]; then
+            cp "$DEFAULT_APK" "apk-out/$APK_NAME"
+          else
+            echo "Expected APK not found under android/app/build/outputs/apk/debug"
+            ls -R android/app/build/outputs/apk || true
+            exit 1
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: mobile-apk-debug
-          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          path: mobile/apk-out/*.apk
           if-no-files-found: error
           retention-days: 14
