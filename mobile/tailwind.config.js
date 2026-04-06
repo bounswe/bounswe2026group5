@@ -37,6 +37,11 @@ module.exports = {
           DEFAULT: '#c3c6d7',
           dark: '#2d3748',
         },
+        // Error / destructive
+        error: {
+          DEFAULT: '#ba1a1a',
+          container: '#ffdad6',
+        },
       },
     },
   },
