@@ -92,6 +92,11 @@ def _clear_existing_seed_data(user_model):
     user_model.objects.filter(email__iendswith=f"@{MOCK_EMAIL_DOMAIN}").delete()
 
 
+def _is_test_database(schema_editor):
+    db_name = str(schema_editor.connection.settings_dict.get("NAME") or "")
+    return db_name.startswith("test_")
+
+
 def _build_people_dataset(rng):
     people = []
     cohorts = [
@@ -327,6 +332,9 @@ def _update_mentor_aggregates(profile_model, mentor_like_profiles, booked_counts
 
 
 def seed_realistic_mock_data(apps, schema_editor):
+    if _is_test_database(schema_editor):
+        return
+
     user_model = apps.get_model("accounts", "User")
     profile_model = apps.get_model("profiles", "Profile")
     skill_model = apps.get_model("profiles", "Skill")
@@ -366,6 +374,9 @@ def seed_realistic_mock_data(apps, schema_editor):
 
 
 def unseed_realistic_mock_data(apps, schema_editor):
+    if _is_test_database(schema_editor):
+        return
+
     user_model = apps.get_model("accounts", "User")
     _clear_existing_seed_data(user_model)
 
