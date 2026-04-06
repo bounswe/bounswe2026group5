@@ -22,6 +22,10 @@ const renderProfileIcon = ({ color }: { color: string }) => (
   <IconSymbol size={28} name="person.fill" color={color} />
 );
 
+const renderConnectionsIcon = ({ color }: { color: string }) => (
+  <IconSymbol size={28} name="person.2.fill" color={color} />
+);
+
 export default function TabLayout() {
   const colorScheme = useColorScheme();
 
@@ -38,6 +42,14 @@ export default function TabLayout() {
         options={{
           title: "Home",
           tabBarIcon: renderHomeIcon,
+        }}
+      />
+
+      <Tabs.Screen
+        name="connections"
+        options={{
+          title: "Connections",
+          tabBarIcon: renderConnectionsIcon,
         }}
       />
 

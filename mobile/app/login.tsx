@@ -65,6 +65,7 @@ export default function LoginScreen() {
   };
 
   const isLoading = loginMutation.isPending;
+  const hasError = Boolean(loginMutation.error || localError);
 
   return (
     <SafeAreaView
@@ -108,7 +109,7 @@ export default function LoginScreen() {
           {/* ── Form ── */}
           <View className="gap-5">
             {/* Error Message */}
-            {(loginMutation.error || localError) && (
+            {hasError && (
               <View className="p-3 rounded-lg bg-error/10 dark:bg-error-dark/10 border border-error dark:border-error-dark">
                 <Text className="text-sm font-medium text-error dark:text-error-dark">
                   {localError || loginMutation.error?.message}
