@@ -25,6 +25,8 @@ Campus Neighborhood Mentorship Network connects students for academic and profes
 
 This README is intentionally production-focused. Detailed contributor workflows are maintained in the project wiki.
 
+**Live**: [neighborship.app](https://neighborship.app)
+
 ## Deployment Prerequisites
 
 - Docker Desktop and Docker Compose
@@ -36,6 +38,12 @@ This README is intentionally production-focused. Detailed contributor workflows 
 
 ```bash
 cp .env.example .env
+```
+
+Windows PowerShell alternative:
+
+```powershell
+Copy-Item .env.example .env
 ```
 
 2. Review and update required values in `.env`:
@@ -53,6 +61,30 @@ cp .env.example .env
 
 - `DEBUG=False`
 - `AUTH_COOKIE_SECURE=True`
+
+## Quick Start (First Run Order)
+
+Follow this order on a fresh machine:
+
+1. Create `.env` from `.env.example` and set required values.
+2. Start containers:
+
+```bash
+docker compose up --build -d
+```
+
+3. Run backend migrations:
+
+```bash
+docker compose exec backend python manage.py migrate
+```
+
+4. Verify services:
+
+- Frontend: `http://localhost:3000`
+- API: `http://localhost:8000`
+
+5. (Optional) Start mobile app using the steps in "Run Mobile App Separately".
 
 ## Run with Docker Compose (Web + API + DB)
 
@@ -105,6 +137,12 @@ EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 ```
 
 Use your machine IP instead of `127.0.0.1` when testing on a physical device.
+
+Example for physical device on same Wi-Fi:
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=http://192.168.1.23:8000
+```
 
 4. Start Expo:
 
