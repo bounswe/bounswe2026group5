@@ -64,6 +64,8 @@ interface BackendMentorshipRequest {
   responded_at: string | null;
 }
 
+export type MentorshipRequest = BackendMentorshipRequest;
+
 interface BackendMatch {
   id: string;
   mentor: BackendProfileSummary;
@@ -71,6 +73,8 @@ interface BackendMatch {
   request_id: string;
   is_active: boolean;
 }
+
+export type MentorshipMatch = BackendMatch;
 
 interface BackendUpcomingSession {
   slot_id: string;

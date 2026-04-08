@@ -176,7 +176,7 @@ export function AvailabilityPreview({
                       >
                         {isBooked ? "Booked" : "Not Booked"}
                       </Text>
-                    ) : null}
+                    )}
                   </TouchableOpacity>
                 );
               })}
