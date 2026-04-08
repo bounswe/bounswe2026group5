@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Alert, View, ScrollView, Text, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -70,9 +70,6 @@ export default function ProfileScreen() {
     (state) => state.showAvailability,
   );
 
-  const [availabilityData, setAvailabilityData] = useState<
-    { day: string; times: string[] }[]
-  >([]);
   const [menteesCount, setMenteesCount] = useState<number>(0);
   const [expertiseData, setExpertiseData] = useState<string[]>(
     PROFILE_DEFAULTS.expertise,
@@ -192,11 +189,10 @@ export default function ProfileScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (availabilityQuery.data) {
-      setAvailabilityData(mapAvailabilityToSchedule(availabilityQuery.data));
-    }
-  }, [availabilityQuery.data]);
+  const availabilityData = useMemo(
+    () => mapAvailabilityToSchedule(availabilityQuery.data ?? []),
+    [availabilityQuery.data],
+  );
 
   useEffect(() => {
     if (mentorshipMatchesQuery.data) {
@@ -420,8 +416,11 @@ export default function ProfileScreen() {
       />
       <EditAvailabilityModal
         visible={isAvailabilityModalOpen}
-        initialSchedule={availabilityData}
-        onSave={setAvailabilityData}
+        username={currentUsername || ""}
+        slots={availabilityQuery.data ?? []}
+        onChanged={() => {
+          availabilityQuery.refetch();
+        }}
         onClose={() => setAvailabilityModalOpen(false)}
       />
       <EditProfileModal

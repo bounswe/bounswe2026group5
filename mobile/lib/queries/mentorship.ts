@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiGet, apiPost } from "@/lib/api/client";
+import { API_BASE_URL } from "@/lib/api/config";
+import { useAuthStore } from "@/lib/auth/store";
 
 export interface DashboardRequestItem {
   id: string;
@@ -84,6 +86,12 @@ interface BackendAvailabilitySlot {
   is_booked: boolean;
 }
 
+interface CreateAvailabilitySlotPayload {
+  date: string;
+  startTime: string;
+  endTime: string;
+}
+
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", { weekday: "long" });
 const PROPOSED_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -162,7 +170,13 @@ export function useMentorshipMatchesQuery(currentUsername?: string) {
  */
 export function useMentorshipUpcomingSessionsQuery(currentUsername?: string) {
   return useQuery({
-    queryKey: ["mentorship", "sessions", "me", "upcoming", currentUsername ?? "anonymous"],
+    queryKey: [
+      "mentorship",
+      "sessions",
+      "me",
+      "upcoming",
+      currentUsername ?? "anonymous",
+    ],
     queryFn: () =>
       apiGet<BackendUpcomingSession[]>("/api/mentorship/sessions/me/upcoming/"),
     enabled: Boolean(currentUsername),
@@ -246,6 +260,58 @@ export function useAvailabilitySlotsQuery(username: string) {
       ),
     enabled: Boolean(username),
     staleTime: 60_000,
+  });
+}
+
+/**
+ * Create an availability slot for the authenticated mentor.
+ */
+export function useCreateAvailabilitySlotMutation(username: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: CreateAvailabilitySlotPayload) =>
+      apiPost<BackendAvailabilitySlot, CreateAvailabilitySlotPayload>(
+        `/api/profiles/${username}/availability-slots/`,
+        payload,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["profiles", username, "availability-slots"],
+      });
+    },
+  });
+}
+
+/**
+ * Delete an availability slot for the authenticated mentor.
+ */
+export function useDeleteAvailabilitySlotMutation(username: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (slotId: string) => {
+      const accessToken = useAuthStore.getState().accessToken;
+      const response = await fetch(
+        `${API_BASE_URL}/api/profiles/${username}/availability-slots/${slotId}/`,
+        {
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to delete availability slot.");
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["profiles", username, "availability-slots"],
+      });
+    },
   });
 }
 
