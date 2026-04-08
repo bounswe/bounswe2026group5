@@ -168,9 +168,13 @@ export function AvailabilityPreview({
                     <Text className={`text-base font-bold ${slotTextClass}`}>
                       {time}
                     </Text>
-                    {isBooked ? (
-                      <Text className="text-xs text-gray-400 mt-1 font-medium">
-                        Booked
+                    {typeof entry === "string" ? null : (
+                      <Text
+                        className={`text-xs mt-1 font-medium ${
+                          isBooked ? "text-gray-400" : "text-emerald-600"
+                        }`}
+                      >
+                        {isBooked ? "Booked" : "Not Booked"}
                       </Text>
                     ) : null}
                   </TouchableOpacity>

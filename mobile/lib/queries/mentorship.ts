@@ -35,7 +35,11 @@ export interface DashboardSessionItem {
 
 export interface AvailabilityDayItem {
   day: string;
-  times: string[];
+  times: Array<{
+    id: string;
+    label: string;
+    isBooked: boolean;
+  }>;
 }
 
 interface BackendProfileSummary {
@@ -454,19 +458,26 @@ export function mapUpcomingSessionsToDashboard(
 export function mapAvailabilityToSchedule(
   slots: BackendAvailabilitySlot[],
 ): AvailabilityDayItem[] {
-  const dayMap = new Map<string, string[]>();
+  const dayMap = new Map<
+    string,
+    Array<{
+      id: string;
+      label: string;
+      isBooked: boolean;
+    }>
+  >();
 
   slots.forEach((slot) => {
-    if (slot.is_booked) {
-      return;
-    }
-
     const day = WEEKDAY_FORMATTER.format(new Date(`${slot.date}T00:00:00`));
-    const range = `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`;
-    const dayRanges = dayMap.get(day) ?? [];
+    const daySlots = dayMap.get(day) ?? [];
 
-    dayRanges.push(range);
-    dayMap.set(day, dayRanges);
+    daySlots.push({
+      id: slot.id,
+      label: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
+      isBooked: slot.is_booked,
+    });
+
+    dayMap.set(day, daySlots);
   });
 
   return Array.from(dayMap.entries()).map(([day, times]) => ({ day, times }));
