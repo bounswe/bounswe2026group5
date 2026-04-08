@@ -21,6 +21,7 @@ import {
 } from "@/components/profile/AvailabilityPreview";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
+import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { useCreateMentorshipRequestMutation } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
 
@@ -89,6 +90,7 @@ export default function MentorProfileScreen() {
   const [requestFeedback, setRequestFeedback] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
+  const [skillsModalVisible, setSkillsModalVisible] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -199,7 +201,10 @@ export default function MentorProfileScreen() {
           : prev,
       );
       setRequestFeedback("Request sent successfully.");
-      Alert.alert("Request Sent", "Your mentorship request was sent successfully.");
+      Alert.alert(
+        "Request Sent",
+        "Your mentorship request was sent successfully.",
+      );
       setSelectedSlot(null);
       setCoverLetter("");
     } catch (mutationError) {
@@ -268,6 +273,7 @@ export default function MentorProfileScreen() {
             title="Expertise"
             skills={profile.expertises}
             variant="mentor"
+            onViewAll={() => setSkillsModalVisible(true)}
           />
 
           {!canRequestMentorship && (
@@ -368,6 +374,14 @@ export default function MentorProfileScreen() {
       >
         {bodyContent}
       </KeyboardAvoidingView>
+
+      <ViewAllSkillsModal
+        visible={skillsModalVisible}
+        title="Expertise"
+        skills={profile?.expertises ?? []}
+        variant="mentor"
+        onClose={() => setSkillsModalVisible(false)}
+      />
     </View>
   );
 }
