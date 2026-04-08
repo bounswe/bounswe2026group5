@@ -176,6 +176,7 @@ export function EditAvailabilityModal({
             onPress={onClose}
             className="p-2 -ml-2"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={1}
           >
             <Ionicons name="close" size={24} color="#4b5563" />
           </TouchableOpacity>
@@ -185,6 +186,7 @@ export function EditAvailabilityModal({
           <TouchableOpacity
             onPress={onClose}
             className="px-3 py-1.5 rounded-full bg-gray-900"
+            activeOpacity={1}
           >
             <Text className="text-white text-xs font-bold">Done</Text>
           </TouchableOpacity>
@@ -199,6 +201,7 @@ export function EditAvailabilityModal({
                 setSelectedDayIndex(0);
               }}
               disabled={weekOffset <= -4}
+              activeOpacity={1}
             >
               <Ionicons name="chevron-back" size={18} color="#1f2937" />
             </TouchableOpacity>
@@ -212,6 +215,7 @@ export function EditAvailabilityModal({
                 setSelectedDayIndex(0);
               }}
               disabled={weekOffset >= 4}
+              activeOpacity={1}
             >
               <Ionicons name="chevron-forward" size={18} color="#1f2937" />
             </TouchableOpacity>
@@ -230,6 +234,7 @@ export function EditAvailabilityModal({
                 <TouchableOpacity
                   key={dateString}
                   onPress={() => setSelectedDayIndex(index)}
+                  activeOpacity={1}
                   className={`mr-2 px-4 py-3 rounded-xl border ${
                     isSelected
                       ? "bg-gray-900 border-gray-900"

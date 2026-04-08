@@ -118,19 +118,20 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   logout: async () => {
+    // Always clear in-memory auth first so protected screens cannot be reached.
+    set({
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      error: null,
+    });
+
     try {
       await clearAuthStorage();
-      set({
-        user: null,
-        accessToken: null,
-        refreshToken: null,
-        isAuthenticated: false,
-        error: null,
-      });
     } catch (error) {
-      console.error("Failed to logout:", error);
-      set({ error: "Failed to logout" });
-      throw error;
+      // Storage cleanup is best-effort; user is already logged out in memory.
+      console.error("Failed to clear auth storage during logout:", error);
     }
   },
 
