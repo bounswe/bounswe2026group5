@@ -1,18 +1,36 @@
-import React from 'react';
-import { Modal, View, Text, Image, ScrollView, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { PendingRequestCardProps } from './PendingRequestCard';
+import React from "react";
+import {
+  Modal,
+  View,
+  Text,
+  Image,
+  ScrollView,
+  TouchableOpacity,
+  Pressable,
+  StyleSheet,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { PendingRequestCardProps } from "./PendingRequestCard";
 
 interface RequestDetailSheetProps {
   request: PendingRequestCardProps | null;
   visible: boolean;
   onClose: () => void;
+  onViewProfile: (username: string) => void;
   onAccept: (id: string) => void;
   onDecline: (id: string) => void;
   disabled?: boolean;
 }
 
-export function RequestDetailSheet({ request, visible, onClose, onAccept, onDecline, disabled }: RequestDetailSheetProps) {
+export function RequestDetailSheet({
+  request,
+  visible,
+  onClose,
+  onViewProfile,
+  onAccept,
+  onDecline,
+  disabled,
+}: Readonly<RequestDetailSheetProps>) {
   if (!request) return null;
 
   const slotDate = request.slot_date;
@@ -20,10 +38,19 @@ export function RequestDetailSheet({ request, visible, onClose, onAccept, onDecl
   const slotEndTime = request.slot_end_time;
 
   return (
-    <Modal animationType="slide" transparent={true} visible={visible} onRequestClose={onClose}>
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={visible}
+      onRequestClose={onClose}
+    >
       <View className="flex-1 justify-end">
         {/* Backdrop — sibling to sheet so it never intercepts scroll events */}
-        <Pressable style={StyleSheet.absoluteFill} className="bg-black/40" onPress={onClose} />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          className="bg-black/40"
+          onPress={onClose}
+        />
 
         {/* Sheet */}
         <View className="bg-white w-full rounded-t-3xl shadow-2xl max-h-[88%]">
@@ -44,14 +71,26 @@ export function RequestDetailSheet({ request, visible, onClose, onAccept, onDecl
                   <Image
                     source={{ uri: request.avatarUrl }}
                     className="w-28 h-28 rounded-full border-4 border-white"
-                    style={{ shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }}
+                    style={{
+                      shadowColor: "#000",
+                      shadowOpacity: 0.1,
+                      shadowRadius: 8,
+                      shadowOffset: { width: 0, height: 2 },
+                    }}
                   />
                 ) : (
                   <View
                     className="w-28 h-28 rounded-full bg-surface-active items-center justify-center border-4 border-white"
-                    style={{ shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }}
+                    style={{
+                      shadowColor: "#000",
+                      shadowOpacity: 0.1,
+                      shadowRadius: 8,
+                      shadowOffset: { width: 0, height: 2 },
+                    }}
                   >
-                    <Text className="text-4xl font-bold text-primary">{request.name.charAt(0)}</Text>
+                    <Text className="text-4xl font-bold text-primary">
+                      {request.name.charAt(0)}
+                    </Text>
                   </View>
                 )}
                 {/* Verified badge */}
@@ -76,6 +115,18 @@ export function RequestDetailSheet({ request, visible, onClose, onAccept, onDecl
                   As Mentee
                 </Text>
               </View>
+
+              {!!request.username && (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => onViewProfile(request.username as string)}
+                  className="mt-3 bg-surface-active border border-divider px-4 py-2 rounded-lg"
+                >
+                  <Text className="text-sm font-semibold text-primary">
+                    Show Profile
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Divider */}
@@ -105,7 +156,7 @@ export function RequestDetailSheet({ request, visible, onClose, onAccept, onDecl
                     Date
                   </Text>
                   <Text className="text-[13px] font-bold text-on-surface text-center">
-                    {slotDate ?? '—'}
+                    {slotDate ?? "—"}
                   </Text>
                 </View>
                 <View className="flex-1 p-4 bg-gray-100 rounded-xl items-center gap-1">
@@ -114,7 +165,7 @@ export function RequestDetailSheet({ request, visible, onClose, onAccept, onDecl
                     Status
                   </Text>
                   <Text className="text-[13px] font-bold text-on-surface text-center">
-                    {request.isNew ? 'New Request' : 'Pending'}
+                    {request.isNew ? "New Request" : "Pending"}
                   </Text>
                 </View>
               </View>
@@ -134,7 +185,9 @@ export function RequestDetailSheet({ request, visible, onClose, onAccept, onDecl
                   <View className="flex-row items-center justify-between bg-surface-active px-4 py-3.5 rounded-xl">
                     <View className="flex-row items-center gap-2.5">
                       <View className="w-2 h-2 rounded-full bg-primary" />
-                      <Text className="text-[13px] font-bold text-on-surface">{slotDate}</Text>
+                      <Text className="text-[13px] font-bold text-on-surface">
+                        {slotDate}
+                      </Text>
                     </View>
                     <View className="flex-row items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg">
                       <Ionicons name="time-outline" size={12} color="#004ac6" />
@@ -168,10 +221,12 @@ export function RequestDetailSheet({ request, visible, onClose, onAccept, onDecl
                 onClose();
               }}
               disabled={disabled}
-              className={`flex-[2] py-3.5 rounded-full items-center justify-center flex-row gap-2 ${disabled ? 'bg-primary/50' : 'bg-primary'}`}
+              className={`flex-[2] py-3.5 rounded-full items-center justify-center flex-row gap-2 ${disabled ? "bg-primary/50" : "bg-primary"}`}
             >
               <Ionicons name="checkmark-circle" size={16} color="#ffffff" />
-              <Text className="font-bold text-white text-sm">Accept Request</Text>
+              <Text className="font-bold text-white text-sm">
+                Accept Request
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

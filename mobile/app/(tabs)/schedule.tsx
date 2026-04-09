@@ -19,6 +19,8 @@ import {
   useMentorshipUpcomingSessionsQuery,
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 // This grabs today's date dynamically and formats it as 'YYYY-MM-DD'
 const TODAY = new Date().toISOString().split("T")[0];
@@ -50,11 +52,14 @@ export default function ScheduleScreen() {
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [selectedSession, setSelectedSession] =
     useState<ScheduleSession | null>(null);
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
   const currentUsername = useAuthStore((state) => state.user?.username);
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
-  const upcomingSessionsQuery = useMentorshipUpcomingSessionsQuery(currentUsername);
+  const upcomingSessionsQuery =
+    useMentorshipUpcomingSessionsQuery(currentUsername);
 
   const isMenteeOnly = appUsageMode === "MENTEE";
   const isMentorOnly = appUsageMode === "MENTOR";
@@ -80,7 +85,10 @@ export default function ScheduleScreen() {
 
     mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []).forEach(
       (session) => {
-        byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
+        byKey.set(
+          `${session.rawDate}|${session.time}|${session.user}`,
+          session,
+        );
       },
     );
 
@@ -127,56 +135,56 @@ export default function ScheduleScreen() {
     marks[selectedDate] = {
       ...marks[selectedDate],
       selected: true,
-      selectedColor: "#2563eb",
+      selectedColor: theme.primary,
     };
 
     return marks;
-  }, [selectedDate, sessions]);
+  }, [selectedDate, sessions, theme.primary]);
 
   const selectedSessions = sessions.filter(
     (session) => session.rawDate === selectedDate,
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-surface dark:bg-surface-dark">
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="px-4 pt-6 mb-6">
-          <Text className="text-3xl font-extrabold text-gray-900">
+          <Text className="text-3xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Schedule
           </Text>
-          <Text className="text-base text-gray-500 mt-1">
+          <Text className="text-base text-on-surface-soft dark:text-on-surface-soft-dark mt-1">
             Manage your agenda.
           </Text>
         </View>
 
-        <View className="px-2 mb-6 shadow-sm">
+        <View className="mx-4 mb-6 shadow-sm rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-2">
           <Calendar
             current={TODAY}
             markingType={"multi-dot"}
             onDayPress={(day: DateData) => setSelectedDate(day.dateString)}
             markedDates={markedDates}
             theme={{
-              backgroundColor: "#fafafa",
-              calendarBackground: "#fafafa",
-              textSectionTitleColor: "#6b7280",
-              todayTextColor: "#2563eb",
-              dayTextColor: "#111827",
-              textDisabledColor: "#d1d5db",
-              monthTextColor: "#111827",
+              backgroundColor: theme.cardBackground,
+              calendarBackground: theme.cardBackground,
+              textSectionTitleColor: theme.textMuted,
+              todayTextColor: theme.primary,
+              dayTextColor: theme.textPrimary,
+              textDisabledColor: theme.divider,
+              monthTextColor: theme.textPrimary,
               textMonthFontWeight: "bold",
-              arrowColor: "#2563eb",
+              arrowColor: theme.primary,
             }}
           />
         </View>
 
         <View className="px-4 mb-8">
-          <Text className="text-xl font-bold text-gray-800 mb-4">
+          <Text className="text-xl font-bold text-on-surface dark:text-on-surface-dark mb-4">
             Sessions on {formatFriendlyDate(selectedDate)}
           </Text>
 
           {selectedSessions.length === 0 ? (
-            <View className="bg-white p-6 rounded-xl border border-gray-100 items-center justify-center">
-              <Text className="text-gray-400 font-medium">
+            <View className="bg-surface-card dark:bg-surface-card-dark p-6 rounded-xl border border-divider dark:border-divider-dark items-center justify-center">
+              <Text className="text-on-surface-soft dark:text-on-surface-soft-dark font-medium">
                 No sessions scheduled for this day.
               </Text>
             </View>

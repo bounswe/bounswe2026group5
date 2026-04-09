@@ -8,6 +8,7 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -45,6 +46,7 @@ function mapRequestToCardProps(
 ): PendingRequestCardProps {
   return {
     id: req.id,
+    username: req.mentee.username,
     name: req.mentee.display_name,
     cover_letter: req.cover_letter,
     slot_date: req.slot_date,
@@ -59,7 +61,7 @@ function mapRequestToCardProps(
 // Mock data — messaging has no API yet
 // ---------------------------------------------------------------------------
 
-// TODO: API connection — GET /api/messages/recent
+// NOTE: Replace with API-backed recent messages when messaging endpoint is available.
 const MOCK_MESSAGES: MessageCardProps[] = [
   {
     id: "msg-1",
@@ -85,7 +87,7 @@ const MOCK_MESSAGES: MessageCardProps[] = [
   },
 ];
 
-// TODO: API connection — GET /api/messages/recent (Mentee view — latest single message)
+// NOTE: Replace with API-backed latest message when messaging endpoint is available.
 const MOCK_MENTEE_MESSAGE = {
   name: "Elena Rodriguez",
   preview:
@@ -106,6 +108,7 @@ const MENTORS_PREVIEW_COUNT = 2;
 // ---------------------------------------------------------------------------
 
 function MentorConnections() {
+  const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [selectedRequest, setSelectedRequest] =
     useState<PendingRequestCardProps | null>(null);
@@ -129,10 +132,12 @@ function MentorConnections() {
     name: m.mentee.display_name,
     subtitle: m.mentee.title ?? "",
     avatarUrl: m.mentee.picture_url || undefined,
+    onPress: () =>
+      router.push(`/mentor/${encodeURIComponent(m.mentee.username)}`),
   }));
 
   const handleMessage = (_name: string) => {
-    // TODO: API connection — navigate to messaging thread with mentee
+    // NOTE: Route to messaging thread when chat screen is implemented.
   };
 
   const handleAccept = async (id: string) => {
@@ -184,6 +189,9 @@ function MentorConnections() {
         request={selectedRequest}
         visible={selectedRequest !== null}
         onClose={() => setSelectedRequest(null)}
+        onViewProfile={(username) =>
+          router.push(`/mentor/${encodeURIComponent(username)}`)
+        }
         onAccept={handleAccept}
         onDecline={(id) => setDeclineTargetId(id)}
         disabled={respondMutation.isPending}
@@ -200,7 +208,7 @@ function MentorConnections() {
               Upcoming Messages
             </Text>
           </View>
-          {/* TODO: API connection — navigate to full messages list */}
+          {/* NOTE: Route to full messages list when messaging screen is implemented. */}
           <TouchableOpacity>
             <Text className="text-[13px] font-bold text-primary">View All</Text>
           </TouchableOpacity>
@@ -254,6 +262,7 @@ function MentorConnections() {
           <MenteeCard
             key={mentee.id}
             {...mentee}
+            onPress={mentee.onPress}
             onMessage={() => handleMessage(mentee.name)}
           />
         ))}
@@ -309,6 +318,7 @@ function MentorConnections() {
 // ---------------------------------------------------------------------------
 
 function MenteeConnections() {
+  const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [showAllMentors, setShowAllMentors] = useState(false);
 
@@ -322,14 +332,16 @@ function MenteeConnections() {
     name: m.mentor.display_name,
     subtitle: m.mentor.title ?? "",
     avatarUrl: m.mentor.picture_url || undefined,
+    onPress: () =>
+      router.push(`/mentor/${encodeURIComponent(m.mentor.username)}`),
   }));
 
   const handleMessage = (_name: string) => {
-    // TODO: API connection — navigate to messaging thread with mentor
+    // NOTE: Route to messaging thread when chat screen is implemented.
   };
 
   const handleMore = (_name: string) => {
-    // TODO: API connection — show options sheet for mentor relationship
+    // NOTE: Add relationship options sheet when the action endpoint is ready.
   };
 
   const displayedMentors = showAllMentors
@@ -344,7 +356,7 @@ function MenteeConnections() {
           <Text className="text-[20px] font-bold text-on-surface">
             Upcoming Messages
           </Text>
-          {/* TODO: API connection — navigate to full messages list */}
+          {/* NOTE: Route to full messages list when messaging screen is implemented. */}
           <TouchableOpacity>
             <Text className="text-[13px] font-semibold text-primary">
               View All
@@ -402,7 +414,7 @@ function MenteeConnections() {
                 </Text>
               </TouchableOpacity>
             )}
-            {/* TODO: API connection — navigate to mentor discovery/search */}
+            {/* NOTE: Route to mentor discovery/search entry when flow is finalized. */}
             <TouchableOpacity activeOpacity={0.6}>
               <Text className="text-[13px] font-semibold text-primary">
                 Find New
@@ -421,6 +433,7 @@ function MenteeConnections() {
           <MentorCard
             key={mentor.id}
             {...mentor}
+            onPress={mentor.onPress}
             onMessage={() => handleMessage(mentor.name)}
             onMore={() => handleMore(mentor.name)}
           />
