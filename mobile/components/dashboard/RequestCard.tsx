@@ -73,7 +73,7 @@ export function RequestCard({
 
       {/* Bottom Row: Status */}
       <View className="flex-row justify-between items-center mt-1">
-        {isIncoming && onShowProfile ? (
+        {onShowProfile ? (
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={onShowProfile}

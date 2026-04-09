@@ -208,11 +208,7 @@ export default function DashboardScreen() {
               topic={req.topic}
               type={req.type}
               onPress={() => setSelectedRequest(req)}
-              onShowProfile={
-                req.type === "incoming"
-                  ? () => handleOpenRequestProfile(req)
-                  : undefined
-              }
+              onShowProfile={() => handleOpenRequestProfile(req)}
             />
           ))}
         </View>

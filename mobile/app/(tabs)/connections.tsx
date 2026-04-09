@@ -451,13 +451,14 @@ function MenteeConnections() {
             type={request.type}
             isReschedule={request.isReschedule}
             onPress={() => setSelectedRequest(request)}
-            onShowProfile={
-              request.type === "incoming"
-                ? () =>
-                    router.push(
-                      `/mentor/${encodeURIComponent(request.menteeUsername)}`,
-                    )
-                : undefined
+            onShowProfile={() =>
+              router.push(
+                `/mentor/${encodeURIComponent(
+                  request.type === "incoming"
+                    ? request.menteeUsername
+                    : request.mentorUsername,
+                )}`,
+              )
             }
           />
         ))}
@@ -492,7 +493,6 @@ function MenteeConnections() {
                 </Text>
               </TouchableOpacity>
             )}
-            {/* NOTE: Route to mentor discovery/search entry when flow is finalized. */}
             <TouchableOpacity
               activeOpacity={0.6}
               onPress={() => router.push("/(tabs)/discover")}
