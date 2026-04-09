@@ -15,6 +15,7 @@ export interface MenteeCardProps {
   avatarUrl?: string;
   onPress?: () => void;
   onMessage?: () => void;
+  onMore?: () => void;
 }
 
 export function MenteeCard({
@@ -24,6 +25,7 @@ export function MenteeCard({
   avatarUrl,
   onPress,
   onMessage,
+  onMore,
 }: Readonly<MenteeCardProps>) {
   return (
     <View className="bg-white p-5 rounded-xl shadow-sm mb-3">
@@ -88,6 +90,14 @@ export function MenteeCard({
         >
           <Ionicons name="chatbubble" size={16} color="#ffffff" />
           <Text className="text-white font-bold text-sm">Message</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={onMore}
+          className="w-11 h-12 rounded-full bg-gray-100 items-center justify-center"
+        >
+          <Ionicons name="ellipsis-vertical" size={18} color="#434655" />
         </TouchableOpacity>
       </View>
       {/* NOTE: Hook this to the dedicated messaging screen when chat API is ready. */}
