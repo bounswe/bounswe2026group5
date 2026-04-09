@@ -20,6 +20,7 @@ import {
   mapAvailabilityToSchedule,
   useAvailabilitySlotsQuery,
   useMentorshipMatchesQuery,
+  useMentorshipRequestsQuery,
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
 import { useProfileVisibilityStore } from "@/lib/profile/preferences";
@@ -56,6 +57,9 @@ export default function ProfileScreen() {
   const currentUsername = useAuthStore((state) => state.user?.username);
   const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
   const mentorshipMatchesQuery = useMentorshipMatchesQuery(
+    currentUsername || "",
+  );
+  const mentorshipRequestsQuery = useMentorshipRequestsQuery(
     currentUsername || "",
   );
   const updateProfileMutation = useUpdateOwnProfileMutation();
@@ -418,8 +422,16 @@ export default function ProfileScreen() {
         visible={isAvailabilityModalOpen}
         username={currentUsername || ""}
         slots={availabilityQuery.data ?? []}
+        requests={(mentorshipRequestsQuery.data ?? [])
+          .filter((request) => request.mentor.username === currentUsername)
+          .map((request) => ({
+            id: request.id,
+            slotId: request.slot_id,
+            status: request.status,
+          }))}
         onChanged={() => {
           availabilityQuery.refetch();
+          mentorshipRequestsQuery.refetch();
         }}
         onClose={() => setAvailabilityModalOpen(false)}
       />

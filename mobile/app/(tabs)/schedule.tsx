@@ -16,6 +16,7 @@ import {
   mapUpcomingSessionsToDashboard,
   useMentorshipMatchesQuery,
   useMentorshipRequestsQuery,
+  useRespondToMentorshipRequestMutation,
   useMentorshipUpcomingSessionsQuery,
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
@@ -58,6 +59,7 @@ export default function ScheduleScreen() {
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
+  const respondToRequestMutation = useRespondToMentorshipRequestMutation();
   const upcomingSessionsQuery =
     useMentorshipUpcomingSessionsQuery(currentUsername);
 
@@ -221,6 +223,40 @@ export default function ScheduleScreen() {
         visible={!!selectedSession}
         onClose={() => setSelectedSession(null)}
         session={selectedSession}
+        isCancelling={respondToRequestMutation.isPending}
+        onCancelSession={() => {
+          if (!selectedSession) {
+            return;
+          }
+
+          if (
+            selectedSession.status === "Pending" &&
+            selectedSession.myRole === "Mentor"
+          ) {
+            respondToRequestMutation
+              .mutateAsync({
+                requestId: selectedSession.requestId,
+                action: "reject",
+              })
+              .then(() => {
+                setSelectedSession(null);
+              })
+              .catch((error) => {
+                Alert.alert(
+                  "Cancellation Failed",
+                  error instanceof Error
+                    ? error.message
+                    : "Could not cancel this pending session request.",
+                );
+              });
+            return;
+          }
+
+          Alert.alert(
+            "TODO",
+            "Cancelling accepted/planned sessions from this screen needs a dedicated backend cancel-session endpoint.",
+          );
+        }}
         onReschedule={() => {
           Alert.alert(
             "Coming Soon",

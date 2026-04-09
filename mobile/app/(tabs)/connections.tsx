@@ -187,6 +187,7 @@ function MentorConnections() {
         visible={declineTargetId !== null}
         onCancel={() => setDeclineTargetId(null)}
         onConfirm={handleDeclineConfirmed}
+        isLoading={respondMutation.isPending}
       />
 
       <RequestDetailSheet

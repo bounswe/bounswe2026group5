@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   useCreateAvailabilitySlotMutation,
   useDeleteAvailabilitySlotMutation,
+  useRespondToMentorshipRequestMutation,
 } from "@/lib/queries/mentorship";
 
 interface BackendAvailabilitySlot {
@@ -29,6 +30,11 @@ interface EditAvailabilityModalProps {
   onClose: () => void;
   username: string;
   slots: BackendAvailabilitySlot[];
+  requests?: {
+    id: string;
+    slotId: string | null;
+    status: "PENDING" | "ACCEPTED" | "REJECTED";
+  }[];
   onChanged?: () => void;
 }
 
@@ -79,6 +85,7 @@ export function EditAvailabilityModal({
   onClose,
   username,
   slots,
+  requests = [],
   onChanged,
 }: Readonly<EditAvailabilityModalProps>) {
   const insets = useSafeAreaInsets();
@@ -96,6 +103,7 @@ export function EditAvailabilityModal({
 
   const createSlotMutation = useCreateAvailabilitySlotMutation(username);
   const deleteSlotMutation = useDeleteAvailabilitySlotMutation(username);
+  const respondToRequestMutation = useRespondToMentorshipRequestMutation();
 
   const monday = useMemo(
     () => getMonday(addDays(new Date(), weekOffset * 7)),
@@ -119,8 +127,63 @@ export function EditAvailabilityModal({
     return byDateHour;
   }, [slots]);
 
+  const requestsBySlotId = useMemo(() => {
+    const grouped: Record<
+      string,
+      {
+        id: string;
+        status: "PENDING" | "ACCEPTED" | "REJECTED";
+      }[]
+    > = {};
+
+    requests.forEach((request) => {
+      if (!request.slotId) {
+        return;
+      }
+
+      grouped[request.slotId] = grouped[request.slotId] ?? [];
+      grouped[request.slotId].push({
+        id: request.id,
+        status: request.status,
+      });
+    });
+
+    return grouped;
+  }, [requests]);
+
   const isPending =
-    createSlotMutation.isPending || deleteSlotMutation.isPending;
+    createSlotMutation.isPending ||
+    deleteSlotMutation.isPending ||
+    respondToRequestMutation.isPending;
+
+  const deactivateSlot = async (
+    key: string,
+    slotId: string,
+    pendingRequestIds: string[] = [],
+  ) => {
+    setTogglingKey(key);
+
+    try {
+      for (const requestId of pendingRequestIds) {
+        await respondToRequestMutation.mutateAsync({
+          requestId,
+          action: "reject",
+        });
+      }
+
+      await deleteSlotMutation.mutateAsync(slotId);
+      onChanged?.();
+    } catch (error) {
+      Alert.alert(
+        "Update Failed",
+        error instanceof Error
+          ? error.message
+          : "Could not update availability slot.",
+      );
+    } finally {
+      setTogglingKey(null);
+    }
+  };
 
   const handleToggleSlot = async (hour: number) => {
     const key = `${selectedDateString}-${hour}`;
@@ -130,22 +193,57 @@ export function EditAvailabilityModal({
       return;
     }
 
-    if (existing?.is_booked) {
+    if (existing) {
+      const linkedRequests = requestsBySlotId[existing.id] ?? [];
+      const pendingRequests = linkedRequests.filter(
+        (request) => request.status === "PENDING",
+      );
+      const acceptedRequests = linkedRequests.filter(
+        (request) => request.status === "ACCEPTED",
+      );
+
+      if (existing.is_booked || acceptedRequests.length > 0) {
+        Alert.alert(
+          "Cannot Make Slot Unavailable",
+          `This slot has ${acceptedRequests.length} planned session(s). TODO: Cancelling accepted sessions from availability editing requires a backend endpoint that is not available yet.`,
+        );
+        return;
+      }
+
+      if (pendingRequests.length > 0) {
+        Alert.alert(
+          "Confirm Make Unavailable",
+          `This will decline ${pendingRequests.length} pending request(s) for this slot and then make it unavailable.`,
+          [
+            { text: "Keep Slot", style: "cancel" },
+            {
+              text: "Make Unavailable",
+              style: "destructive",
+              onPress: () => {
+                void deactivateSlot(
+                  key,
+                  existing.id,
+                  pendingRequests.map((request) => request.id),
+                );
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      await deactivateSlot(key, existing.id);
       return;
     }
 
     setTogglingKey(key);
 
     try {
-      if (existing) {
-        await deleteSlotMutation.mutateAsync(existing.id);
-      } else {
-        await createSlotMutation.mutateAsync({
-          date: selectedDateString,
-          startTime: `${String(hour).padStart(2, "0")}:00:00`,
-          endTime: `${String(hour + 1).padStart(2, "0")}:00:00`,
-        });
-      }
+      await createSlotMutation.mutateAsync({
+        date: selectedDateString,
+        startTime: `${String(hour).padStart(2, "0")}:00:00`,
+        endTime: `${String(hour + 1).padStart(2, "0")}:00:00`,
+      });
 
       onChanged?.();
     } catch (error) {
@@ -265,7 +363,8 @@ export function EditAvailabilityModal({
 
           <Text className="text-xs text-gray-500 mt-4">
             Tap a 1-hour slot to activate/deactivate it. Active slots are saved
-            to the database instantly.
+            to the database instantly. Slots with pending requests or planned
+            sessions are highlighted below.
           </Text>
         </View>
 
@@ -277,9 +376,29 @@ export function EditAvailabilityModal({
             {HOURS.map((hour) => {
               const key = `${selectedDateString}-${hour}`;
               const slot = slotsByDateHour[key];
+              const linkedRequests = slot
+                ? (requestsBySlotId[slot.id] ?? [])
+                : [];
+              const pendingRequestsCount = linkedRequests.filter(
+                (request) => request.status === "PENDING",
+              ).length;
+              const acceptedRequestsCount = linkedRequests.filter(
+                (request) => request.status === "ACCEPTED",
+              ).length;
               const isToggling = togglingKey === key;
               const isBooked = Boolean(slot?.is_booked);
               const isActive = Boolean(slot) && !isBooked;
+              let impactLabel: string | null = null;
+              let impactLabelClass = "text-amber-700";
+
+              if (acceptedRequestsCount > 0 || isBooked) {
+                impactLabel = "Planned session exists";
+                impactLabelClass = "text-red-600";
+              } else if (pendingRequestsCount > 0) {
+                impactLabel = `${pendingRequestsCount} pending request${
+                  pendingRequestsCount > 1 ? "s" : ""
+                } will be declined`;
+              }
 
               let containerClass = "bg-white border-gray-200";
               let labelClass = "text-gray-900";
@@ -308,7 +427,7 @@ export function EditAvailabilityModal({
                 <TouchableOpacity
                   key={key}
                   onPress={() => handleToggleSlot(hour)}
-                  disabled={isBooked || isToggling || isPending}
+                  disabled={isToggling || isPending}
                   activeOpacity={isBooked ? 1 : 0.85}
                   className={`rounded-xl border px-4 py-4 flex-row items-center justify-between ${containerClass}`}
                 >
@@ -319,6 +438,13 @@ export function EditAvailabilityModal({
                     <Text className="text-xs text-gray-500 mt-1">
                       {stateLabel}
                     </Text>
+                    {impactLabel ? (
+                      <Text
+                        className={`text-xs mt-1 font-medium ${impactLabelClass}`}
+                      >
+                        {impactLabel}
+                      </Text>
+                    ) : null}
                   </View>
 
                   {isToggling ? (
