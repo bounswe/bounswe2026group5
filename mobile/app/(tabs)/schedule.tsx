@@ -12,10 +12,9 @@ import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import {
   type DashboardSessionItem,
-  mapMatchesToSessions,
+  mapMentorBookedSlotsToSessions,
   mapUpcomingSessionsToDashboard,
-  useMentorshipMatchesQuery,
-  useMentorshipRequestsQuery,
+  useAvailabilitySlotsQuery,
   useRespondToMentorshipRequestMutation,
   useMentorshipUpcomingSessionsQuery,
 } from "@/lib/queries/mentorship";
@@ -57,11 +56,10 @@ export default function ScheduleScreen() {
   const theme = Colors[colorScheme];
   const currentUsername = useAuthStore((state) => state.user?.username);
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
-  const requestsQuery = useMentorshipRequestsQuery(currentUsername);
-  const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const respondToRequestMutation = useRespondToMentorshipRequestMutation();
   const upcomingSessionsQuery =
     useMentorshipUpcomingSessionsQuery(currentUsername);
+  const mentorAvailabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
 
   const isMenteeOnly = appUsageMode === "MENTEE";
   const isMentorOnly = appUsageMode === "MENTOR";
@@ -76,11 +74,7 @@ export default function ScheduleScreen() {
     }
 
     if (isMentorOnly) {
-      return mapMatchesToSessions(
-        requestsQuery.data ?? [],
-        matchesQuery.data ?? [],
-        currentUsername,
-      );
+      return mapMentorBookedSlotsToSessions(mentorAvailabilityQuery.data ?? []);
     }
 
     const byKey = new Map<string, DashboardSessionItem>();
@@ -94,11 +88,7 @@ export default function ScheduleScreen() {
       },
     );
 
-    mapMatchesToSessions(
-      requestsQuery.data ?? [],
-      matchesQuery.data ?? [],
-      currentUsername,
-    ).forEach((session) => {
+    mapMentorBookedSlotsToSessions(mentorAvailabilityQuery.data ?? []).forEach((session) => {
       byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
     });
 
@@ -109,12 +99,10 @@ export default function ScheduleScreen() {
     });
   }, [
     currentUsername,
-    appUsageMode,
     isMenteeOnly,
     isMentorOnly,
     upcomingSessionsQuery.data,
-    requestsQuery.data,
-    matchesQuery.data,
+    mentorAvailabilityQuery.data,
   ]);
 
   const markedDates = useMemo(() => {

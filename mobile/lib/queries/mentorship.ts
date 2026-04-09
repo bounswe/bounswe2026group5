@@ -92,6 +92,8 @@ interface BackendAvailabilitySlot {
   startTime: string;
   endTime: string;
   is_booked: boolean;
+  bookedBy?: string | null;
+  bookedAt?: string | null;
 }
 
 interface CreateAvailabilitySlotPayload {
@@ -199,6 +201,21 @@ interface CreateMentorshipRequestPayload {
   cover_letter?: string;
 }
 
+interface BookAvailabilitySlotPayload {
+  mentorUsername: string;
+  slotId: string;
+}
+
+interface BookAvailabilitySlotResponse {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  is_booked: boolean;
+  bookedBy?: string | null;
+  bookedAt?: string | null;
+}
+
 /**
  * Create a mentorship request for a selected mentor slot.
  */
@@ -215,6 +232,36 @@ export function useCreateMentorshipRequestMutation() {
       await queryClient.invalidateQueries({
         queryKey: ["mentorship", "requests", "me"],
       });
+    },
+  });
+}
+
+/**
+ * Book a mentor availability slot directly (used when mentor-mentee connection already exists).
+ */
+export function useBookAvailabilitySlotMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ mentorUsername, slotId }: BookAvailabilitySlotPayload) =>
+      apiPost<BookAvailabilitySlotResponse>(
+        `/api/profiles/${mentorUsername}/availability-slots/${slotId}/book/`,
+      ),
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "sessions",
+            "me",
+            "upcoming",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles", variables.mentorUsername, "availability-slots"],
+        }),
+      ]);
     },
   });
 }
@@ -415,6 +462,39 @@ export function mapMatchesToSessions(
       parseLocalDateTime(b.rawDate, `${bStartTime}:00`).getTime()
     );
   });
+}
+
+/**
+ * Build mentor-side session cards from booked availability slots.
+ */
+export function mapMentorBookedSlotsToSessions(
+  slots: BackendAvailabilitySlot[],
+): DashboardSessionItem[] {
+  return slots
+    .filter((slot) => slot.is_booked && Boolean(slot.bookedBy))
+    .map((slot) => {
+      const sessionDate = parseLocalDateTime(slot.date, `${slot.startTime}:00`);
+
+      return {
+        id: slot.id,
+        requestId: slot.id,
+        user: slot.bookedBy ?? "Mentee",
+        date: SESSION_DATE_FORMATTER.format(sessionDate),
+        rawDate: slot.date,
+        time: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
+        status: "Upcoming" as const,
+        topic: "Mentorship Session",
+        myRole: "Mentor" as const,
+      };
+    })
+    .sort((a, b) => {
+      const aStartTime = a.time.split(" - ")[0] ?? "00:00";
+      const bStartTime = b.time.split(" - ")[0] ?? "00:00";
+      return (
+        parseLocalDateTime(a.rawDate, `${aStartTime}:00`).getTime() -
+        parseLocalDateTime(b.rawDate, `${bStartTime}:00`).getTime()
+      );
+    });
 }
 
 /**

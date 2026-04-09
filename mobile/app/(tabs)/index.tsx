@@ -11,9 +11,10 @@ import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal"
 import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
 
 import {
-  mapMatchesToSessions,
+  mapMentorBookedSlotsToSessions,
   mapUpcomingSessionsToDashboard,
   mapRequestsToDashboard,
+  useAvailabilitySlotsQuery,
   useMentorshipMatchesQuery,
   useMentorshipUpcomingSessionsQuery,
   useMentorshipRequestsQuery,
@@ -38,6 +39,9 @@ export default function DashboardScreen() {
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const upcomingSessionsQuery =
     useMentorshipUpcomingSessionsQuery(currentUsername);
+  const mentorAvailabilityQuery = useAvailabilitySlotsQuery(
+    currentUsername || "",
+  );
   const respondMutation = useRespondToMentorshipRequestMutation();
 
   const isMenteeOnly = appUsageMode === "MENTEE";
@@ -49,12 +53,7 @@ export default function DashboardScreen() {
       return mapRequestsToDashboard(requestsQuery.data, currentUsername);
     }
     return [];
-  }, [
-    requestsQuery.data,
-    requestsQuery.isLoading,
-    requestsQuery.error,
-    currentUsername,
-  ]);
+  }, [requestsQuery.data, currentUsername]);
 
   const sessions = useMemo(() => {
     if (!currentUsername) {
@@ -66,11 +65,7 @@ export default function DashboardScreen() {
     }
 
     if (isMentorOnly) {
-      return mapMatchesToSessions(
-        requestsQuery.data ?? [],
-        matchesQuery.data ?? [],
-        currentUsername,
-      );
+      return mapMentorBookedSlotsToSessions(mentorAvailabilityQuery.data ?? []);
     }
 
     const byKey = new Map<string, DashboardSessionItem>();
@@ -84,13 +79,14 @@ export default function DashboardScreen() {
       },
     );
 
-    mapMatchesToSessions(
-      requestsQuery.data ?? [],
-      matchesQuery.data ?? [],
-      currentUsername,
-    ).forEach((session) => {
-      byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
-    });
+    mapMentorBookedSlotsToSessions(mentorAvailabilityQuery.data ?? []).forEach(
+      (session) => {
+        byKey.set(
+          `${session.rawDate}|${session.time}|${session.user}`,
+          session,
+        );
+      },
+    );
 
     return Array.from(byKey.values()).sort((a, b) => {
       const aKey = `${a.rawDate}T${a.time.split(" - ")[0] ?? "00:00"}`;
@@ -99,12 +95,10 @@ export default function DashboardScreen() {
     });
   }, [
     currentUsername,
-    appUsageMode,
     isMenteeOnly,
     isMentorOnly,
     upcomingSessionsQuery.data,
-    requestsQuery.data,
-    matchesQuery.data,
+    mentorAvailabilityQuery.data,
   ]);
 
   // State for Modals
@@ -148,7 +142,7 @@ export default function DashboardScreen() {
       return;
     }
 
-    router.push(`/mentor/${encodeURIComponent(targetUsername)}`);
+    router.push(`/user/${encodeURIComponent(targetUsername)}`);
   };
 
   return (

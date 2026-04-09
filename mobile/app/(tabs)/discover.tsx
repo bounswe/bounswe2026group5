@@ -184,7 +184,7 @@ export default function DiscoverScreen() {
   };
 
   const handleOpenMentorProfile = (profile: DiscoverMentorProfile) => {
-    router.push(`/mentor/${encodeURIComponent(profile.username)}`);
+    router.push(`/user/${encodeURIComponent(profile.username)}`);
   };
 
   let bodyContent: React.ReactNode = null;
@@ -211,7 +211,8 @@ export default function DiscoverScreen() {
       <View>
         <View className="bg-surface-active dark:bg-surface-active-dark border border-divider dark:border-divider-dark rounded-xl p-3 mb-3">
           <Text className="text-on-surface-soft dark:text-on-surface-soft-dark text-sm mt-1">
-            No matches found. Try adjusting your search or filter criteria to find more mentors.
+            No matches found. Try adjusting your search or filter criteria to
+            find more mentors.
           </Text>
         </View>
         {visibleProfiles.map((profile) => (

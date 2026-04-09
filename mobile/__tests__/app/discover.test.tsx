@@ -86,6 +86,6 @@ describe("DiscoverScreen", () => {
 
     fireEvent.press(getByTestId("mentor-card-can-ozkan"));
 
-    expect(mockPush).toHaveBeenCalledWith("/mentor/can-ozkan");
+    expect(mockPush).toHaveBeenCalledWith("/user/can-ozkan");
   });
 });

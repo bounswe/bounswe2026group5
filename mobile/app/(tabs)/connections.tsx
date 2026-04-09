@@ -28,7 +28,6 @@ import {
   PendingRequestCard,
   PendingRequestCardProps,
 } from "@/components/connections/PendingRequestCard";
-import { MentorCard } from "@/components/connections/MentorCard";
 import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
 import { DeclineConfirmModal } from "@/components/connections/DeclineConfirmModal";
 import { ConnectionActionsSheet } from "@/components/connections/ConnectionActionsSheet";
@@ -227,7 +226,7 @@ function MentorConnections() {
             return;
           }
           setManagedMentee(null);
-          router.push(`/mentor/${encodeURIComponent(managedMentee.username)}`);
+          router.push(`/user/${encodeURIComponent(managedMentee.username)}`);
         }}
         onRemoveConnection={() => {
           if (!managedMentee) {
@@ -365,7 +364,7 @@ function MentorConnections() {
             subtitle={mentee.subtitle}
             avatarUrl={mentee.avatarUrl}
             onPress={() =>
-              router.push(`/mentor/${encodeURIComponent(mentee.username)}`)
+              router.push(`/user/${encodeURIComponent(mentee.username)}`)
             }
             onMessage={() => handleMessage(mentee.name)}
             onMore={() =>
@@ -413,8 +412,18 @@ function MenteeConnections() {
     requests,
     currentUsername ?? "",
   );
+  const activeMentorUsernames = new Set(
+    matches
+      .filter((match) => match.is_active)
+      .map((match) => match.mentor.username),
+  );
   const pendingRequests = dashboardRequests.filter(
-    (r) => r.status === "PENDING",
+    (request) =>
+      request.status === "PENDING" &&
+      !(
+        request.type === "outgoing" &&
+        activeMentorUsernames.has(request.mentorUsername)
+      ),
   );
 
   const mentors = matches.map((m) => ({
@@ -461,7 +470,7 @@ function MenteeConnections() {
             return;
           }
           setManagedMentor(null);
-          router.push(`/mentor/${encodeURIComponent(managedMentor.username)}`);
+          router.push(`/user/${encodeURIComponent(managedMentor.username)}`);
         }}
         onRemoveConnection={() => {
           if (!managedMentor) {
@@ -549,7 +558,7 @@ function MenteeConnections() {
                   onPress={() => setSelectedRequest(request)}
                   onShowProfile={() =>
                     router.push(
-                      `/mentor/${encodeURIComponent(
+                      `/user/${encodeURIComponent(
                         request.type === "incoming"
                           ? request.menteeUsername
                           : request.mentorUsername,
@@ -605,7 +614,7 @@ function MenteeConnections() {
             subtitle={mentor.subtitle}
             avatarUrl={mentor.avatarUrl}
             onPress={() =>
-              router.push(`/mentor/${encodeURIComponent(mentor.username)}`)
+              router.push(`/user/${encodeURIComponent(mentor.username)}`)
             }
             onMessage={() => handleMessage(mentor.name)}
             onMore={() =>

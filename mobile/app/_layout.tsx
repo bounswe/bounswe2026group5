@@ -44,17 +44,13 @@ export default function RootLayout() {
       </View>
     );
   }
-  
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         {isAuthenticated ? (
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="mentor/[username]"
-              options={{ headerShown: false }}
-            />
             <Stack.Screen name="settings" options={{ headerShown: false }} />
           </Stack>
         ) : (

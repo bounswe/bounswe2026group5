@@ -23,22 +23,25 @@ import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import {
+  useBookAvailabilitySlotMutation,
   useCreateMentorshipRequestMutation,
   useMentorshipMatchesQuery,
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
 
-interface MentorProfileResponse {
+interface PublicProfileResponse {
   full_name: string;
   bio: string;
   hidden: boolean;
   picture_url: string;
   title: string;
   show_initials_only: boolean;
-  expertises: string[];
+  app_usage_mode?: "MENTOR" | "MENTEE" | "BOTH";
+  expertises?: string[];
+  eager_to_learn?: string[];
   rating: number;
   total_mentee_count: number;
-  available_slots: {
+  available_slots?: {
     id: string;
     date: string;
     startTime: string;
@@ -50,7 +53,7 @@ interface MentorProfileResponse {
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", { weekday: "long" });
 
 function groupSlotsByWeekday(
-  slots: MentorProfileResponse["available_slots"],
+  slots: PublicProfileResponse["available_slots"] = [],
 ): AvailabilitySlot[] {
   const grouped = new Map<
     string,
@@ -77,25 +80,25 @@ type SelectedSlot = {
   label: string;
 };
 
+function includesMentor(mode?: string): boolean {
+  return mode === "MENTOR" || mode === "BOTH";
+}
+
+function includesMentee(mode?: string): boolean {
+  return mode === "MENTEE" || mode === "BOTH";
+}
+
 function getUsernameParam(
   value: string | string[] | undefined,
 ): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function getRequestSuccessFeedback(hasExistingMentorConnection: boolean): {
+function getRequestSuccessFeedback(): {
   feedback: string;
   title: string;
   description: string;
 } {
-  if (hasExistingMentorConnection) {
-    return {
-      feedback: "Session booked successfully.",
-      title: "Session Booked",
-      description: "Your session has been booked successfully.",
-    };
-  }
-
   return {
     feedback: "Request sent successfully.",
     title: "Request Sent",
@@ -117,15 +120,22 @@ function getSubmitButtonLabel(
 type BodyContentProps = {
   loading: boolean;
   error: string | null;
-  profile: MentorProfileResponse | null;
+  profile: PublicProfileResponse | null;
   requestFeedback: string | null;
   canRequestMentorship: boolean;
+  roleBadges: ("MENTOR" | "MENTEE")[];
+  isViewedMentor: boolean;
+  isViewedMentee: boolean;
   availability: AvailabilitySlot[];
   selectedSlot: SelectedSlot | null;
   hasExistingMentorConnection: boolean;
   coverLetter: string;
   setCoverLetter: (value: string) => void;
-  onViewAllSkills: () => void;
+  onOpenSkillsModal: (
+    title: string,
+    skills: string[],
+    variant: "mentor" | "mentee",
+  ) => void;
   onSelectSlot: (payload: {
     day: string;
     time: string;
@@ -141,12 +151,15 @@ function renderBodyContent({
   profile,
   requestFeedback,
   canRequestMentorship,
+  roleBadges,
+  isViewedMentor,
+  isViewedMentee,
   availability,
   selectedSlot,
   hasExistingMentorConnection,
   coverLetter,
   setCoverLetter,
-  onViewAllSkills,
+  onOpenSkillsModal,
   onSelectSlot,
   onSubmit,
   isRequestPending,
@@ -190,6 +203,8 @@ function renderBodyContent({
     isRequestPending,
     hasExistingMentorConnection,
   );
+  const expertise = profile.expertises ?? [];
+  const eagerToLearn = profile.eager_to_learn ?? [];
 
   return (
     <ScrollView
@@ -199,21 +214,36 @@ function renderBodyContent({
       <ProfileHeader
         name={profile.full_name}
         bio={profile.bio}
-        roleBadges={["MENTOR"]}
-        rating={profile.rating}
-        reviewCount={profile.total_mentee_count}
+        roleBadges={roleBadges}
+        rating={profile.rating ?? 0}
+        reviewCount={profile.total_mentee_count ?? 0}
         imageUrl={profile.picture_url || undefined}
       />
 
       <View className="px-4 mt-4">
-        <SkillsCloud
-          title="Expertise"
-          skills={profile.expertises || []}
-          variant="mentor"
-          onViewAll={onViewAllSkills}
-        />
+        {isViewedMentor && (
+          <SkillsCloud
+            title="Expertise"
+            skills={expertise}
+            variant="mentor"
+            onViewAll={() =>
+              onOpenSkillsModal("Expertise", expertise, "mentor")
+            }
+          />
+        )}
 
-        {!canRequestMentorship && (
+        {isViewedMentee && (
+          <SkillsCloud
+            title="Eager to Learn"
+            skills={eagerToLearn}
+            variant="mentee"
+            onViewAll={() =>
+              onOpenSkillsModal("Eager to Learn", eagerToLearn, "mentee")
+            }
+          />
+        )}
+
+        {isViewedMentor && !canRequestMentorship && (
           <View className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">
             <Text className="text-amber-800 text-sm font-semibold">
               Enable mentee mode in Settings to send requests.
@@ -225,13 +255,15 @@ function renderBodyContent({
           <Text className="text-sm text-gray-600 mb-4">{requestFeedback}</Text>
         )}
 
-        <AvailabilityPreview
-          schedule={availability}
-          selectedSlot={selectedSlotPreview}
-          onSelectSlot={onSelectSlot}
-        />
+        {isViewedMentor && (
+          <AvailabilityPreview
+            schedule={availability}
+            selectedSlot={selectedSlotPreview}
+            onSelectSlot={onSelectSlot}
+          />
+        )}
 
-        {selectedSlot && canRequestMentorship && (
+        {isViewedMentor && selectedSlot && canRequestMentorship && (
           <View className="mb-6 bg-gray-50 border border-gray-200 rounded-2xl p-4">
             <Text className="text-lg font-bold text-gray-900 mb-3">
               {sessionTitle}
@@ -291,14 +323,25 @@ export default function MentorProfileScreen() {
   const username = getUsernameParam(params.username);
   const createRequestMutation = useCreateMentorshipRequestMutation();
   const mentorshipMatchesQuery = useMentorshipMatchesQuery(currentUsername);
+  const bookSlotMutation = useBookAvailabilitySlotMutation(currentUsername);
 
-  const [profile, setProfile] = useState<MentorProfileResponse | null>(null);
+  const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requestFeedback, setRequestFeedback] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
-  const [skillsModalVisible, setSkillsModalVisible] = useState(false);
+  const [skillsModalConfig, setSkillsModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    skills: string[];
+    variant: "mentor" | "mentee";
+  }>({
+    visible: false,
+    title: "Expertise",
+    skills: [],
+    variant: "mentor",
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -324,7 +367,7 @@ export default function MentorProfileScreen() {
           throw new Error("Failed to load mentor profile.");
         }
 
-        return (await response.json()) as MentorProfileResponse;
+        return (await response.json()) as PublicProfileResponse;
       })
       .then((payload) => {
         if (mounted) {
@@ -355,6 +398,39 @@ export default function MentorProfileScreen() {
     () => groupSlotsByWeekday(profile?.available_slots ?? []),
     [profile?.available_slots],
   );
+
+  const expertise = profile?.expertises ?? [];
+  const eagerToLearn = profile?.eager_to_learn ?? [];
+
+  const isViewedMentor = useMemo(() => {
+    if (includesMentor(profile?.app_usage_mode)) {
+      return true;
+    }
+
+    return expertise.length > 0 || availability.length > 0;
+  }, [profile?.app_usage_mode, expertise.length, availability.length]);
+
+  const isViewedMentee = useMemo(() => {
+    if (includesMentee(profile?.app_usage_mode)) {
+      return true;
+    }
+
+    return eagerToLearn.length > 0;
+  }, [profile?.app_usage_mode, eagerToLearn.length]);
+
+  const roleBadges = useMemo(() => {
+    const badges: ("MENTOR" | "MENTEE")[] = [];
+
+    if (isViewedMentor) {
+      badges.push("MENTOR");
+    }
+
+    if (isViewedMentee) {
+      badges.push("MENTEE");
+    }
+
+    return badges;
+  }, [isViewedMentor, isViewedMentee]);
 
   const hasExistingMentorConnection = useMemo(() => {
     return (
@@ -415,15 +491,13 @@ export default function MentorProfileScreen() {
         prev
           ? {
               ...prev,
-              available_slots: prev.available_slots.filter(
+              available_slots: (prev.available_slots ?? []).filter(
                 (slot) => slot.id !== payload.slotId,
               ),
             }
           : prev,
       );
-      const successMessage = getRequestSuccessFeedback(
-        hasExistingMentorConnection,
-      );
+      const successMessage = getRequestSuccessFeedback();
       setRequestFeedback(successMessage.feedback);
       Alert.alert(successMessage.title, successMessage.description);
       setSelectedSlot(null);
@@ -437,8 +511,62 @@ export default function MentorProfileScreen() {
     }
   };
 
+  const handleBookConnectedSession = async (slot: SelectedSlot) => {
+    if (!username) {
+      return;
+    }
+
+    setRequestFeedback(null);
+    try {
+      await bookSlotMutation.mutateAsync({
+        mentorUsername: username,
+        slotId: slot.id,
+      });
+
+      setProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              available_slots: (prev.available_slots ?? []).filter(
+                (availableSlot) => availableSlot.id !== slot.id,
+              ),
+            }
+          : prev,
+      );
+      setSelectedSlot(null);
+      setRequestFeedback("Session booked successfully.");
+      Alert.alert(
+        "Session Booked",
+        "Your session has been booked successfully.",
+      );
+    } catch (mutationError) {
+      setRequestFeedback(
+        mutationError instanceof Error
+          ? mutationError.message
+          : "Failed to book the selected session.",
+      );
+    }
+  };
+
   const submitCoverLetter = async () => {
     if (!selectedSlot) {
+      return;
+    }
+
+    if (hasExistingMentorConnection) {
+      Alert.alert(
+        "Confirm Session Booking",
+        `Book this session on ${selectedSlot.day} at ${selectedSlot.label}?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Confirm",
+            onPress: () => {
+              void handleBookConnectedSession(selectedSlot);
+            },
+          },
+        ],
+      );
       return;
     }
 
@@ -461,16 +589,28 @@ export default function MentorProfileScreen() {
     profile,
     requestFeedback,
     canRequestMentorship,
+    roleBadges,
+    isViewedMentor,
+    isViewedMentee,
     availability,
     selectedSlot,
     hasExistingMentorConnection,
     coverLetter,
     setCoverLetter,
-    onViewAllSkills: () => setSkillsModalVisible(true),
+    onOpenSkillsModal: (title, skills, variant) =>
+      setSkillsModalConfig({
+        visible: true,
+        title,
+        skills,
+        variant,
+      }),
     onSelectSlot: handleSelectSlot,
     onSubmit: submitCoverLetter,
-    isRequestPending: createRequestMutation.isPending,
+    isRequestPending:
+      createRequestMutation.isPending || bookSlotMutation.isPending,
   });
+
+  const screenTitle = isViewedMentor ? "Mentor Profile" : "Profile";
 
   return (
     <View className="flex-1 bg-white">
@@ -486,7 +626,7 @@ export default function MentorProfileScreen() {
             <Ionicons name="chevron-back" size={20} color="#111827" />
           </TouchableOpacity>
           <Text className="text-xl font-extrabold text-gray-900">
-            Mentor Profile
+            {screenTitle}
           </Text>
         </View>
       </View>
@@ -499,11 +639,16 @@ export default function MentorProfileScreen() {
       </KeyboardAvoidingView>
 
       <ViewAllSkillsModal
-        visible={skillsModalVisible}
-        title="Expertise"
-        skills={profile?.expertises ?? []}
-        variant="mentor"
-        onClose={() => setSkillsModalVisible(false)}
+        visible={skillsModalConfig.visible}
+        title={skillsModalConfig.title}
+        skills={skillsModalConfig.skills}
+        variant={skillsModalConfig.variant}
+        onClose={() =>
+          setSkillsModalConfig((prev) => ({
+            ...prev,
+            visible: false,
+          }))
+        }
       />
     </View>
   );
