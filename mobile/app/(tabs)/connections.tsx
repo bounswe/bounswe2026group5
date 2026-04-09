@@ -493,7 +493,10 @@ function MenteeConnections() {
               </TouchableOpacity>
             )}
             {/* NOTE: Route to mentor discovery/search entry when flow is finalized. */}
-            <TouchableOpacity activeOpacity={0.6}>
+            <TouchableOpacity
+              activeOpacity={0.6}
+              onPress={() => router.push("/(tabs)/discover")}
+            >
               <Text className="text-[13px] font-semibold text-primary">
                 Find New
               </Text>

@@ -36,6 +36,7 @@ export function RequestDetailSheet({
   const slotDate = request.slot_date;
   const slotStartTime = request.slot_start_time;
   const slotEndTime = request.slot_end_time;
+  const requestUsername = request.username;
 
   return (
     <Modal
@@ -116,17 +117,6 @@ export function RequestDetailSheet({
                 </Text>
               </View>
 
-              {!!request.username && (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => onViewProfile(request.username as string)}
-                  className="mt-3 bg-surface-active border border-divider px-4 py-2 rounded-lg"
-                >
-                  <Text className="text-sm font-semibold text-primary">
-                    Show Profile
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
 
             {/* Divider */}
@@ -202,32 +192,49 @@ export function RequestDetailSheet({
           </ScrollView>
 
           {/* Footer Actions */}
-          <View className="border-t border-divider px-6 pt-4 pb-8 flex-row gap-3">
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => {
-                onDecline(request.id);
-                onClose();
-              }}
-              className="flex-1 py-3.5 rounded-full border-2 border-red-400 items-center justify-center"
-            >
-              <Text className="font-bold text-red-500 text-sm">Decline</Text>
-            </TouchableOpacity>
+          <View className="border-t border-divider px-6 pt-4 pb-8">
+            {!!requestUsername && (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => {
+                  onClose();
+                  onViewProfile(requestUsername);
+                }}
+                className="w-full mb-3.5 bg-surface-active border border-divider py-3.5 rounded-full items-center justify-center"
+              >
+                <Text className="text-base font-bold text-primary">
+                  Show Profile
+                </Text>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => {
-                onAccept(request.id);
-                onClose();
-              }}
-              disabled={disabled}
-              className={`flex-[2] py-3.5 rounded-full items-center justify-center flex-row gap-2 ${disabled ? "bg-primary/50" : "bg-primary"}`}
-            >
-              <Ionicons name="checkmark-circle" size={16} color="#ffffff" />
-              <Text className="font-bold text-white text-sm">
-                Accept Request
-              </Text>
-            </TouchableOpacity>
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  onDecline(request.id);
+                  onClose();
+                }}
+                className="flex-1 py-3.5 rounded-full border-2 border-red-400 items-center justify-center"
+              >
+                <Text className="font-bold text-red-500 text-sm">Decline</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => {
+                  onAccept(request.id);
+                  onClose();
+                }}
+                disabled={disabled}
+                className={`flex-[2] py-3.5 rounded-full items-center justify-center flex-row gap-2 ${disabled ? "bg-primary/50" : "bg-primary"}`}
+              >
+                <Ionicons name="checkmark-circle" size={16} color="#ffffff" />
+                <Text className="font-bold text-white text-sm">
+                  Accept Request
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
