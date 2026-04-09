@@ -250,19 +250,28 @@ function MentorConnections() {
             Failed to load requests.
           </Text>
         )}
-        {pendingRequests.map((req) => {
-          const cardProps = mapRequestToCardProps(req);
-          return (
-            <PendingRequestCard
-              key={req.id}
-              {...cardProps}
-              onPress={() => setSelectedRequest(cardProps)}
-              onAccept={() => handleAccept(req.id)}
-              onDecline={() => setDeclineTargetId(req.id)}
-              disabled={respondMutation.isPending}
-            />
-          );
-        })}
+        {pendingRequests.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingRight: 16 }}
+          >
+            {pendingRequests.map((req) => {
+              const cardProps = mapRequestToCardProps(req);
+              return (
+                <View key={req.id} style={{ width: 330, marginRight: 12 }}>
+                  <PendingRequestCard
+                    {...cardProps}
+                    onPress={() => setSelectedRequest(cardProps)}
+                    onAccept={() => handleAccept(req.id)}
+                    onDecline={() => setDeclineTargetId(req.id)}
+                    disabled={respondMutation.isPending}
+                  />
+                </View>
+              );
+            })}
+          </ScrollView>
+        )}
         {!requestsLoading && !requestsError && pendingRequests.length === 0 && (
           <Text className="text-[13px] text-on-surface-muted text-center mt-2">
             No pending requests.
@@ -443,25 +452,34 @@ function MenteeConnections() {
             Failed to load requests.
           </Text>
         )}
-        {pendingRequests.map((request) => (
-          <RequestCard
-            key={request.id}
-            user={request.user}
-            topic={request.topic}
-            type={request.type}
-            isReschedule={request.isReschedule}
-            onPress={() => setSelectedRequest(request)}
-            onShowProfile={() =>
-              router.push(
-                `/mentor/${encodeURIComponent(
-                  request.type === "incoming"
-                    ? request.menteeUsername
-                    : request.mentorUsername,
-                )}`,
-              )
-            }
-          />
-        ))}
+        {pendingRequests.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingRight: 16 }}
+          >
+            {pendingRequests.map((request) => (
+              <View key={request.id} style={{ width: 320, marginRight: 12 }}>
+                <RequestCard
+                  user={request.user}
+                  topic={request.topic}
+                  type={request.type}
+                  isReschedule={request.isReschedule}
+                  onPress={() => setSelectedRequest(request)}
+                  onShowProfile={() =>
+                    router.push(
+                      `/mentor/${encodeURIComponent(
+                        request.type === "incoming"
+                          ? request.menteeUsername
+                          : request.mentorUsername,
+                      )}`,
+                    )
+                  }
+                />
+              </View>
+            ))}
+          </ScrollView>
+        )}
         {!requestsLoading && !requestsError && pendingRequests.length === 0 && (
           <Text className="text-[13px] text-on-surface-muted text-center mt-2">
             No pending requests.
