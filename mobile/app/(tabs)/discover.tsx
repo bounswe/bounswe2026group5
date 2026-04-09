@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 
 import { DiscoverFilterModal } from "@/components/discover/DiscoverFilterModal";
 import { DiscoverSearchBar } from "@/components/discover/DiscoverSearchBar";
@@ -22,12 +23,17 @@ import {
   fetchDiscoverSkills,
 } from "@/lib/discover/client";
 import { type DiscoverMentorProfile } from "@/lib/discover/types";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 const PAGE_SIZE = 8;
 
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const navigation = useNavigation();
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -43,6 +49,23 @@ export default function DiscoverScreen() {
   const [errorText, setErrorText] = useState<string | null>(null);
 
   const [isFilterModalOpen, setFilterModalOpen] = useState(false);
+
+  const resetDiscoverFilters = useCallback(() => {
+    setSelectedSkills(new Set());
+    setPage(1);
+    setProfiles([]);
+    setTotalCount(0);
+    setErrorText(null);
+    setFilterModalOpen(false);
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("tabPress", () => {
+      resetDiscoverFilters();
+    });
+
+    return unsubscribe;
+  }, [navigation, resetDiscoverFilters]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -169,24 +192,28 @@ export default function DiscoverScreen() {
   if (loadingProfiles && page === 1) {
     bodyContent = (
       <View className="py-10 items-center">
-        <ActivityIndicator size="large" color="#4f46e5" />
-        <Text className="text-gray-500 mt-3">Loading mentors...</Text>
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text className="text-on-surface-soft dark:text-on-surface-soft-dark mt-3">
+          Loading mentors...
+        </Text>
       </View>
     );
   } else if (errorText) {
     bodyContent = (
-      <View className="bg-red-50 border border-red-200 rounded-xl p-4">
-        <Text className="text-red-700 font-semibold">{errorText}</Text>
+      <View className="bg-error-container dark:bg-red-950 border border-error dark:border-red-800 rounded-xl p-4">
+        <Text className="text-error dark:text-red-200 font-semibold">
+          {errorText}
+        </Text>
       </View>
     );
   } else if (profiles.length === 0) {
     bodyContent = (
       <View>
-        <View className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-3">
-          <Text className="text-indigo-700 text-xs font-semibold uppercase tracking-wide">
+        <View className="bg-surface-active dark:bg-surface-active-dark border border-divider dark:border-divider-dark rounded-xl p-3 mb-3">
+          <Text className="text-primary dark:text-primary-dim text-xs font-semibold uppercase tracking-wide">
             Demo preview data
           </Text>
-          <Text className="text-indigo-700/80 text-sm mt-1">
+          <Text className="text-on-surface-soft dark:text-on-surface-soft-dark text-sm mt-1">
             Temporary mentors are shown here until backend data is seeded.
           </Text>
         </View>
@@ -212,10 +239,10 @@ export default function DiscoverScreen() {
 
         {hasMore && (
           <TouchableOpacity
-            activeOpacity={1.0}
+            activeOpacity={1}
             onPress={() => setPage((prev) => prev + 1)}
             disabled={loadingProfiles}
-            className="bg-indigo-600 py-3 rounded-xl items-center mt-2"
+            className="bg-primary py-3 rounded-xl items-center mt-2"
           >
             <Text className="text-white font-semibold">
               {loadingProfiles ? "Loading..." : "Load More"}
@@ -227,13 +254,13 @@ export default function DiscoverScreen() {
   }
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-surface dark:bg-surface-dark">
       <View
-        className="bg-white z-10 shadow-sm border-b border-gray-100"
+        className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
         style={{ paddingTop: insets.top }}
       >
         <View className="px-4 pb-3 pt-2">
-          <Text className="text-2xl font-extrabold text-gray-900 mb-3">
+          <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark mb-3">
             Discover
           </Text>
 
@@ -243,12 +270,12 @@ export default function DiscoverScreen() {
             </View>
             <TouchableOpacity
               onPress={() => setFilterModalOpen(true)}
-              className="relative h-12 w-12 bg-indigo-600 rounded-xl justify-center items-center"
+              className="relative h-12 w-12 bg-primary rounded-xl justify-center items-center"
             >
               <Ionicons name="options-outline" size={17} color="#ffffff" />
               {selectedSkills.size > 0 && (
-                <View className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-white items-center justify-center border border-indigo-600">
-                  <Text className="text-[10px] font-bold text-indigo-700">
+                <View className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-surface-card dark:bg-surface-card-dark items-center justify-center border border-primary">
+                  <Text className="text-[10px] font-bold text-primary dark:text-primary-dim">
                     {selectedSkills.size}
                   </Text>
                 </View>
