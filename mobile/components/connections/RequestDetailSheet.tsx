@@ -16,7 +16,6 @@ interface RequestDetailSheetProps {
   request: PendingRequestCardProps | null;
   visible: boolean;
   onClose: () => void;
-  onViewProfile: (username: string) => void;
   onAccept: (id: string) => void;
   onDecline: (id: string) => void;
   disabled?: boolean;
@@ -26,7 +25,6 @@ export function RequestDetailSheet({
   request,
   visible,
   onClose,
-  onViewProfile,
   onAccept,
   onDecline,
   disabled,
@@ -36,7 +34,6 @@ export function RequestDetailSheet({
   const slotDate = request.slot_date;
   const slotStartTime = request.slot_start_time;
   const slotEndTime = request.slot_end_time;
-  const requestUsername = request.username;
 
   return (
     <Modal
@@ -116,7 +113,6 @@ export function RequestDetailSheet({
                   As Mentee
                 </Text>
               </View>
-
             </View>
 
             {/* Divider */}
@@ -127,7 +123,7 @@ export function RequestDetailSheet({
               <Text className="text-[10px] font-black text-on-surface-muted uppercase tracking-widest mb-3">
                 Cover Letter
               </Text>
-              <View className="bg-gray-50 p-5 rounded-xl">
+              <View className="bg-surface-active border border-divider p-5 rounded-xl">
                 <Text className="text-[14px] text-on-surface-soft leading-[22px] italic">
                   &ldquo;{request.cover_letter}&rdquo;
                 </Text>
@@ -140,7 +136,7 @@ export function RequestDetailSheet({
                 Quick Info
               </Text>
               <View className="flex-row gap-3">
-                <View className="flex-1 p-4 bg-gray-100 rounded-xl items-center gap-1">
+                <View className="flex-1 p-4 bg-gray-50 border border-gray-100 rounded-xl items-center gap-1">
                   <Ionicons name="calendar-outline" size={18} color="#434655" />
                   <Text className="text-[10px] font-bold text-on-surface-soft uppercase tracking-wide mt-0.5">
                     Date
@@ -149,7 +145,7 @@ export function RequestDetailSheet({
                     {slotDate ?? "—"}
                   </Text>
                 </View>
-                <View className="flex-1 p-4 bg-gray-100 rounded-xl items-center gap-1">
+                <View className="flex-1 p-4 bg-gray-50 border border-gray-100 rounded-xl items-center gap-1">
                   <Ionicons name="sparkles-outline" size={18} color="#434655" />
                   <Text className="text-[10px] font-bold text-on-surface-soft uppercase tracking-wide mt-0.5">
                     Status
@@ -172,7 +168,7 @@ export function RequestDetailSheet({
                       Requested Session
                     </Text>
                   </View>
-                  <View className="flex-row items-center justify-between bg-surface-active px-4 py-3.5 rounded-xl">
+                  <View className="flex-row items-center justify-between bg-surface-active border border-divider px-4 py-3.5 rounded-xl">
                     <View className="flex-row items-center gap-2.5">
                       <View className="w-2 h-2 rounded-full bg-primary" />
                       <Text className="text-[13px] font-bold text-on-surface">
@@ -193,21 +189,6 @@ export function RequestDetailSheet({
 
           {/* Footer Actions */}
           <View className="border-t border-divider px-6 pt-4 pb-8">
-            {!!requestUsername && (
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => {
-                  onClose();
-                  onViewProfile(requestUsername);
-                }}
-                className="w-full mb-3.5 bg-surface-active border border-divider py-3.5 rounded-full items-center justify-center"
-              >
-                <Text className="text-base font-bold text-primary">
-                  Show Profile
-                </Text>
-              </TouchableOpacity>
-            )}
-
             <View className="flex-row gap-3">
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -227,7 +208,7 @@ export function RequestDetailSheet({
                   onClose();
                 }}
                 disabled={disabled}
-                className={`flex-[2] py-3.5 rounded-full items-center justify-center flex-row gap-2 ${disabled ? "bg-primary/50" : "bg-primary"}`}
+                className={`flex-1 py-3.5 rounded-full items-center justify-center flex-row gap-2 ${disabled ? "bg-primary/50" : "bg-primary"}`}
               >
                 <Ionicons name="checkmark-circle" size={16} color="#ffffff" />
                 <Text className="font-bold text-white text-sm">

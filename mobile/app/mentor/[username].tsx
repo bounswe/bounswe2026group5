@@ -199,6 +199,7 @@ function renderBodyContent({
       <ProfileHeader
         name={profile.full_name}
         bio={profile.bio}
+        roleBadges={["MENTOR"]}
         rating={profile.rating}
         reviewCount={profile.total_mentee_count}
         imageUrl={profile.picture_url || undefined}
@@ -207,7 +208,7 @@ function renderBodyContent({
       <View className="px-4 mt-4">
         <SkillsCloud
           title="Expertise"
-          skills={profile.expertises}
+          skills={profile.expertises || []}
           variant="mentor"
           onViewAll={onViewAllSkills}
         />

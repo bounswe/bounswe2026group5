@@ -213,9 +213,6 @@ function MentorConnections() {
         request={selectedRequest}
         visible={selectedRequest !== null}
         onClose={() => setSelectedRequest(null)}
-        onViewProfile={(username) =>
-          router.push(`/mentor/${encodeURIComponent(username)}`)
-        }
         onAccept={handleAccept}
         onDecline={(id) => setDeclineTargetId(id)}
         disabled={respondMutation.isPending}
@@ -452,18 +449,6 @@ function MenteeConnections() {
         visible={!!selectedRequest}
         request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
-        onViewProfile={
-          selectedRequest
-            ? () =>
-                router.push(
-                  `/mentor/${encodeURIComponent(
-                    selectedRequest.type === "incoming"
-                      ? selectedRequest.menteeUsername
-                      : selectedRequest.mentorUsername,
-                  )}`,
-                )
-            : undefined
-        }
         onCancelOutgoing={() => setSelectedRequest(null)}
       />
 
@@ -500,43 +485,35 @@ function MenteeConnections() {
       />
 
       {/* Section: Upcoming Messages */}
-      <View className="mb-7">
-        <View className="flex-row justify-between items-center mb-3">
-          <Text className="text-[20px] font-bold text-on-surface">
-            Upcoming Messages
-          </Text>
-          {/* NOTE: Route to full messages list when messaging screen is implemented. */}
-          <TouchableOpacity>
-            <Text className="text-[13px] font-semibold text-primary">
-              View All
+      <View className="mb-8">
+        <View className="flex-row justify-between items-end mb-3.5">
+          <View>
+            <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
+              Recent Updates
             </Text>
+            <Text className="text-[22px] font-extrabold text-on-surface mt-0.5">
+              Upcoming Messages
+            </Text>
+          </View>
+          {/* NOTE: Route to full messages list when messaging screen is implemented. */}
+          <TouchableOpacity activeOpacity={0.85}>
+            <Text className="text-[13px] font-bold text-primary">View All</Text>
           </TouchableOpacity>
         </View>
 
-        <View className="bg-primary/5 border border-primary/10 rounded-[10px] p-4 flex-row items-center gap-3">
-          <View className="w-10 h-10 rounded-full bg-surface-active items-center justify-center">
-            <Text className="text-[15px] font-bold text-primary">
-              {MOCK_MENTEE_MESSAGE.name.charAt(0)}
-            </Text>
-          </View>
-          <View className="flex-1">
-            <Text className="text-[13px] font-bold text-on-surface">
-              {MOCK_MENTEE_MESSAGE.name}{" "}
-              <Text className="font-normal text-on-surface-muted text-[12px]">
-                • {MOCK_MENTEE_MESSAGE.timeAgo}
-              </Text>
-            </Text>
-            <Text
-              className="text-[12px] text-on-surface-soft mt-0.5"
-              numberOfLines={1}
-            >
-              {MOCK_MENTEE_MESSAGE.preview}
-            </Text>
-          </View>
-          {MOCK_MENTEE_MESSAGE.hasUnread && (
-            <View className="w-2 h-2 rounded-full bg-primary" />
-          )}
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingRight: 16 }}
+        >
+          {MOCK_MESSAGES.map((msg) => (
+            <MessageCard
+              key={msg.id}
+              {...msg}
+              onPress={() => handleMessage(msg.name)}
+            />
+          ))}
+        </ScrollView>
       </View>
 
       {/* Section: Requests */}
@@ -593,37 +570,25 @@ function MenteeConnections() {
 
       {/* Section: Active Mentors */}
       <View className="mb-10">
-        <View className="flex-row justify-between items-end mb-4">
+        <View className="flex-row justify-between items-end mb-3.5">
           <View>
             <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
-              Your Mentors
+              Direct Mentorship
             </Text>
             <Text className="text-[22px] font-extrabold text-on-surface mt-0.5">
               Mentors
             </Text>
           </View>
-          <View className="flex-row items-center gap-3">
-            {mentors.length > MENTORS_PREVIEW_COUNT && (
-              <TouchableOpacity
-                activeOpacity={0.6}
-                onPress={() => setShowAllMentors((prev) => !prev)}
-              >
-                <Text className="text-[13px] font-bold text-primary">
-                  {showAllMentors
-                    ? "Show Less"
-                    : `View All (${mentors.length})`}
-                </Text>
-              </TouchableOpacity>
-            )}
+          {mentors.length > MENTORS_PREVIEW_COUNT && (
             <TouchableOpacity
-              activeOpacity={0.6}
-              onPress={() => router.push("/(tabs)/discover")}
+              activeOpacity={0.85}
+              onPress={() => setShowAllMentors((prev) => !prev)}
             >
-              <Text className="text-[13px] font-semibold text-primary">
-                Find New
+              <Text className="text-[13px] font-bold text-primary">
+                {showAllMentors ? "Show Less" : `View All (${mentors.length})`}
               </Text>
             </TouchableOpacity>
-          </View>
+          )}
         </View>
 
         {matchesLoading && <ActivityIndicator className="mt-4" />}
@@ -633,7 +598,7 @@ function MenteeConnections() {
           </Text>
         )}
         {displayedMentors.map((mentor) => (
-          <MentorCard
+          <MenteeCard
             key={mentor.id}
             id={mentor.id}
             name={mentor.name}

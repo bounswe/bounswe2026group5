@@ -39,24 +39,13 @@ export function MentorCard({
         )}
 
         <View className="flex-1">
-          <View className="flex-row justify-between items-start">
-            <View className="flex-1">
-              <Text className="text-base font-bold text-on-surface">
-                {name}
-              </Text>
-              <Text
-                className="text-[13px] text-on-surface-soft mt-0.5"
-                numberOfLines={2}
-              >
-                {subtitle}
-              </Text>
-            </View>
-            <View className="px-2 py-1 bg-indigo-100 rounded-lg ml-2">
-              <Text className="text-[10px] font-bold text-indigo-800 uppercase tracking-widest">
-                Mentor
-              </Text>
-            </View>
-          </View>
+          <Text className="text-base font-bold text-on-surface">{name}</Text>
+          <Text
+            className="text-[13px] text-on-surface-soft mt-0.5"
+            numberOfLines={2}
+          >
+            {subtitle}
+          </Text>
         </View>
       </TouchableOpacity>
 

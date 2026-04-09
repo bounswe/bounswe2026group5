@@ -11,7 +11,6 @@ import {
 interface RequestDetailsModalProps {
   visible: boolean;
   onClose: () => void;
-  onViewProfile?: () => void;
   onAccept?: () => void;
   onReject?: () => void;
   onCancelOutgoing?: () => void;
@@ -29,7 +28,6 @@ interface RequestDetailsModalProps {
 export function RequestDetailsModal({
   visible,
   onClose,
-  onViewProfile,
   onAccept,
   onReject,
   onCancelOutgoing,
@@ -64,30 +62,11 @@ export function RequestDetailsModal({
             <Text className="text-base text-on-surface-soft dark:text-on-surface-soft-dark font-medium">
               {isIncoming ? `From ${request.user}` : `Sent to ${request.user}`}
             </Text>
-            {!!onViewProfile && (
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={onViewProfile}
-                className="self-start mt-3 bg-surface-active dark:bg-surface-active-dark border border-divider dark:border-divider-dark px-3 py-2 rounded-lg"
-              >
-                <Text className="text-primary dark:text-primary-dim text-sm font-semibold">
-                  Show Profile
-                </Text>
-              </TouchableOpacity>
-            )}
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} className="mb-6">
-            {/* Topic & Date */}
+            {/* Request Timing */}
             <View className="bg-surface-active dark:bg-surface-active-dark rounded-xl p-4 border border-divider dark:border-divider-dark mb-4">
-              <View className="flex-row justify-between mb-3">
-                <Text className="text-on-surface-soft dark:text-on-surface-soft-dark font-medium">
-                  Topic
-                </Text>
-                <Text className="text-on-surface dark:text-on-surface-dark font-semibold">
-                  {request.topic}
-                </Text>
-              </View>
               <View className="flex-row justify-between">
                 <Text className="text-on-surface-soft dark:text-on-surface-soft-dark font-medium">
                   Proposed Time

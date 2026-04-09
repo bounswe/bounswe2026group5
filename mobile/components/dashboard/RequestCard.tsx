@@ -18,11 +18,7 @@ export function RequestCard({
   onShowProfile,
 }: Readonly<RequestCardProps>) {
   const isIncoming = type === "incoming";
-
-  const myRole = isIncoming ? "Mentor" : "Mentee";
-  const badgeColor = isIncoming
-    ? "bg-indigo-100 text-indigo-700"
-    : "bg-emerald-100 text-emerald-700";
+  const avatarInitial = user.trim().charAt(0).toUpperCase() || "?";
 
   return (
     <TouchableOpacity
@@ -30,26 +26,26 @@ export function RequestCard({
       onPress={onPress}
       className={`p-4 rounded-xl shadow-sm border mb-3 ${isReschedule ? "bg-amber-50/30 border-amber-200" : "bg-white border-gray-100"}`}
     >
-      {/* Top Row: Name and Role Badge */}
+      {/* Top Row: Avatar, Name and Reschedule Badge */}
       <View className="flex-row justify-between items-start mb-2">
-        <Text className="text-lg font-semibold text-gray-900">{user}</Text>
-        <View className="flex-row gap-2">
-          {/* FIX: Add the Reschedule Badge if applicable */}
-          {isReschedule && (
-            <View className="bg-amber-100 px-2 py-1 rounded-md">
-              <Text className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                Reschedule
-              </Text>
-            </View>
-          )}
-          <View className={`px-2 py-1 rounded-md ${badgeColor.split(" ")[0]}`}>
-            <Text
-              className={`text-xs font-bold uppercase tracking-wider ${badgeColor.split(" ")[1]}`}
-            >
-              As {myRole}
+        <View className="flex-row items-center gap-3 flex-1 pr-3">
+          <View className="w-10 h-10 rounded-full bg-indigo-100 border border-indigo-200 items-center justify-center">
+            <Text className="text-sm font-extrabold text-indigo-700">
+              {avatarInitial}
             </Text>
           </View>
+          <Text className="text-lg font-semibold text-gray-900 flex-1">
+            {user}
+          </Text>
         </View>
+
+        {isReschedule && (
+          <View className="bg-amber-100 px-2 py-1 rounded-md">
+            <Text className="text-xs font-bold uppercase tracking-wider text-amber-700">
+              Reschedule
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Middle Row: Context Text */}

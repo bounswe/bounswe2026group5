@@ -252,11 +252,6 @@ export default function DashboardScreen() {
         visible={!!selectedRequest}
         request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
-        onViewProfile={
-          selectedRequest
-            ? () => handleOpenRequestProfile(selectedRequest)
-            : undefined
-        }
         onAccept={() => handleRespond("accept")}
         onReject={() => handleRespond("reject")}
         onCancelOutgoing={() => {
