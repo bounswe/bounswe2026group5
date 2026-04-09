@@ -1,11 +1,13 @@
-import React from "react";
-import { View, Text, Image, TouchableOpacity } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { Image, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+
+const BIO_PREVIEW_LENGTH = 240;
 
 interface ProfileHeaderProps {
   name: string;
   bio: string;
-  roleBadges?: Array<"MENTOR" | "MENTEE">;
+  roleBadges?: ("MENTOR" | "MENTEE")[];
   rating?: number;
   reviewCount?: number;
   totalSessions?: number;
@@ -27,26 +29,42 @@ export function ProfileHeader({
   coverUrl,
   onEdit,
 }: Readonly<ProfileHeaderProps>) {
+  const [isBioExpanded, setIsBioExpanded] = useState(false);
+
+  useEffect(() => {
+    setIsBioExpanded(false);
+  }, [bio]);
+
+  const trimmedBio = bio.trim();
+  const shouldShowReadMore = trimmedBio.length > BIO_PREVIEW_LENGTH;
+  const visibleBio = useMemo(() => {
+    if (isBioExpanded || !shouldShowReadMore) {
+      return trimmedBio;
+    }
+
+    return `${trimmedBio.slice(0, BIO_PREVIEW_LENGTH).trimEnd()}...`;
+  }, [isBioExpanded, shouldShowReadMore, trimmedBio]);
+
   return (
-    <View className="bg-white mb-6">
+    <View className="bg-surface-card dark:bg-surface-card-dark mb-6">
       {/* 1. Cover Photo Area */}
-      <View className="h-32 bg-indigo-100 w-full">
+      <View className="h-32 bg-surface-active dark:bg-surface-active-dark w-full">
         {coverUrl ? (
           <Image source={{ uri: coverUrl }} className="w-full h-full" />
         ) : (
-          <View className="flex-1 bg-indigo-50 border-b border-indigo-100" />
+          <View className="flex-1 bg-surface-active dark:bg-surface-active-dark border-b border-divider dark:border-divider-dark" />
         )}
       </View>
 
       {/* 2. Top Row: Avatar & Top-Right Actions */}
       <View className="flex-row justify-between px-4 -mt-12">
         {/* Left: Overlapping Avatar */}
-        <View className="w-24 h-24 bg-white rounded-full p-1 shadow-sm">
-          <View className="w-full h-full bg-gray-200 rounded-full items-center justify-center overflow-hidden">
+        <View className="w-24 h-24 bg-surface-card dark:bg-surface-card-dark rounded-full p-1 shadow-sm border border-divider dark:border-divider-dark">
+          <View className="w-full h-full bg-surface dark:bg-surface-dark rounded-full items-center justify-center overflow-hidden">
             {imageUrl ? (
               <Image source={{ uri: imageUrl }} className="w-full h-full" />
             ) : (
-              <Text className="text-3xl font-bold text-gray-400">
+              <Text className="text-3xl font-bold text-on-surface-soft dark:text-on-surface-soft-dark">
                 {name.charAt(0)}
               </Text>
             )}
@@ -55,22 +73,22 @@ export function ProfileHeader({
 
         {/* Right: Rating & Edit Button */}
         <View className="flex-row items-center pt-14 gap-2">
-          {rating ? (
-            <View className="h-8 flex-row items-center bg-amber-50 px-2 rounded-lg border border-amber-100">
+          {rating !== undefined && rating !== null ? (
+            <View className="h-8 flex-row items-center bg-amber-50 dark:bg-amber-950/40 px-2 rounded-lg border border-amber-200 dark:border-amber-800">
               <Ionicons name="star" size={14} color="#f59e0b" />
-              <Text className="text-amber-700 font-bold text-xs ml-1">
+              <Text className="text-amber-700 dark:text-amber-300 font-bold text-xs ml-1">
                 {rating.toFixed(1)}
               </Text>
             </View>
           ) : null}
 
           {onEdit ? (
-            <TouchableOpacity
-              className="h-8 w-8 items-center justify-center bg-gray-100 rounded-lg border border-gray-200"
+            <Pressable
+              className="h-8 w-8 items-center justify-center bg-surface dark:bg-surface-dark rounded-lg border border-divider dark:border-divider-dark"
               onPress={onEdit}
             >
               <Ionicons name="pencil" size={18} color="#4b5563" />
-            </TouchableOpacity>
+            </Pressable>
           ) : null}
         </View>
       </View>
@@ -78,19 +96,21 @@ export function ProfileHeader({
       {/* 3. Name + Role badges */}
       <View className="px-4 mt-2 items-start">
         <View className="flex-row items-center flex-wrap gap-2">
-          <Text className="text-2xl font-extrabold text-gray-900">{name}</Text>
+          <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
+            {name}
+          </Text>
 
           {roleBadges.includes("MENTOR") && (
-            <View className="px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100">
-              <Text className="text-indigo-700 font-semibold text-xs uppercase tracking-wide">
+            <View className="px-3 py-1 rounded-full bg-surface-active dark:bg-surface-active-dark border border-divider dark:border-divider-dark">
+              <Text className="text-primary dark:text-primary-dim font-semibold text-xs uppercase tracking-wide">
                 Mentor
               </Text>
             </View>
           )}
 
           {roleBadges.includes("MENTEE") && (
-            <View className="px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100">
-              <Text className="text-emerald-700 font-semibold text-xs uppercase tracking-wide">
+            <View className="px-3 py-1 rounded-full bg-surface-active dark:bg-surface-active-dark border border-divider dark:border-divider-dark">
+              <Text className="text-primary dark:text-primary-dim font-semibold text-xs uppercase tracking-wide">
                 Mentee
               </Text>
             </View>
@@ -100,35 +120,48 @@ export function ProfileHeader({
 
       {/* 4. Bio */}
       <View className="px-4 mt-3">
-        <Text className="text-base text-gray-600 leading-relaxed">{bio}</Text>
+        <Text className="text-base text-on-surface-soft dark:text-on-surface-soft-dark leading-relaxed">
+          {visibleBio}
+        </Text>
+        {shouldShowReadMore && (
+          <Pressable
+            onPress={() => setIsBioExpanded((current) => !current)}
+            style={({ pressed }) => [{ opacity: 1 } ]}
+            className="mt-2 self-start"
+          >
+            <Text className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+              {isBioExpanded ? "Show less" : "Read more"}
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Impact Stats Row */}
       <View className="px-4 mt-6">
-        <View className="flex-row items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100">
-          <View className="items-center flex-1 border-r border-gray-200">
-            <Text className="text-xl font-extrabold text-indigo-600 mb-0.5">
+        <View className="flex-row items-center justify-between bg-surface dark:bg-surface-dark p-4 rounded-2xl border border-divider dark:border-divider-dark">
+          <View className="items-center flex-1 border-r border-divider dark:border-divider-dark">
+            <Text className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mb-0.5">
               {totalSessions}
             </Text>
-            <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+            <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
               Sessions
             </Text>
           </View>
 
-          <View className="items-center flex-1 border-r border-gray-200">
-            <Text className="text-xl font-extrabold text-emerald-600 mb-0.5">
+          <View className="items-center flex-1 border-r border-divider dark:border-divider-dark">
+            <Text className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-0.5">
               {menteesHelped}
             </Text>
-            <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+            <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
               Mentees
             </Text>
           </View>
 
           <View className="items-center flex-1">
-            <Text className="text-xl font-extrabold text-gray-900 mb-0.5">
+            <Text className="text-xl font-extrabold text-on-surface dark:text-on-surface-dark mb-0.5">
               {reviewCount}
             </Text>
-            <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+            <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
               Reviews
             </Text>
           </View>
