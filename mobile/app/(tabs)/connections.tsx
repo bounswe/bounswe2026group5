@@ -12,6 +12,8 @@ import { useRouter } from "expo-router";
 
 import { useAuthStore } from "@/lib/auth/store";
 import {
+  mapRequestsToDashboard,
+  type DashboardRequestItem,
   type MentorshipRequest,
   useMentorshipMatchesQuery,
   useMentorshipRequestsQuery,
@@ -32,6 +34,8 @@ import {
 import { MentorCard } from "@/components/connections/MentorCard";
 import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
 import { DeclineConfirmModal } from "@/components/connections/DeclineConfirmModal";
+import { RequestCard } from "@/components/dashboard/RequestCard";
+import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -229,8 +233,45 @@ function MentorConnections() {
         </ScrollView>
       </View>
 
-      {/* Section: Active Mentees */}
+      {/* Section: Pending Requests */}
       <View className="mb-8">
+        <View className="mb-3.5">
+          <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
+            New Inbound
+          </Text>
+          <Text className="text-[22px] font-extrabold text-on-surface mt-0.5">
+            Pending Requests
+          </Text>
+        </View>
+
+        {requestsLoading && <ActivityIndicator className="mt-4" />}
+        {requestsError && (
+          <Text className="text-[13px] text-error text-center mt-2">
+            Failed to load requests.
+          </Text>
+        )}
+        {pendingRequests.map((req) => {
+          const cardProps = mapRequestToCardProps(req);
+          return (
+            <PendingRequestCard
+              key={req.id}
+              {...cardProps}
+              onPress={() => setSelectedRequest(cardProps)}
+              onAccept={() => handleAccept(req.id)}
+              onDecline={() => setDeclineTargetId(req.id)}
+              disabled={respondMutation.isPending}
+            />
+          );
+        })}
+        {!requestsLoading && !requestsError && pendingRequests.length === 0 && (
+          <Text className="text-[13px] text-on-surface-muted text-center mt-2">
+            No pending requests.
+          </Text>
+        )}
+      </View>
+
+      {/* Section: Active Mentees */}
+      <View className="mb-10">
         <View className="flex-row justify-between items-end mb-3.5">
           <View>
             <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
@@ -272,43 +313,6 @@ function MentorConnections() {
           </Text>
         )}
       </View>
-
-      {/* Section: Pending Requests */}
-      <View className="mb-10">
-        <View className="mb-3.5">
-          <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
-            New Inbound
-          </Text>
-          <Text className="text-[22px] font-extrabold text-on-surface mt-0.5">
-            Pending Requests
-          </Text>
-        </View>
-
-        {requestsLoading && <ActivityIndicator className="mt-4" />}
-        {requestsError && (
-          <Text className="text-[13px] text-error text-center mt-2">
-            Failed to load requests.
-          </Text>
-        )}
-        {pendingRequests.map((req) => {
-          const cardProps = mapRequestToCardProps(req);
-          return (
-            <PendingRequestCard
-              key={req.id}
-              {...cardProps}
-              onPress={() => setSelectedRequest(cardProps)}
-              onAccept={() => handleAccept(req.id)}
-              onDecline={() => setDeclineTargetId(req.id)}
-              disabled={respondMutation.isPending}
-            />
-          );
-        })}
-        {!requestsLoading && !requestsError && pendingRequests.length === 0 && (
-          <Text className="text-[13px] text-on-surface-muted text-center mt-2">
-            No pending requests.
-          </Text>
-        )}
-      </View>
     </>
   );
 }
@@ -321,11 +325,24 @@ function MenteeConnections() {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [showAllMentors, setShowAllMentors] = useState(false);
+  const [selectedRequest, setSelectedRequest] =
+    useState<DashboardRequestItem | null>(null);
 
+  const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
+  const requests = requestsQuery.data ?? [];
+  const requestsLoading = requestsQuery.isLoading;
+  const requestsError = requestsQuery.isError;
   const matches = matchesQuery.data ?? [];
   const matchesLoading = matchesQuery.isLoading;
   const matchesError = matchesQuery.isError;
+  const dashboardRequests = mapRequestsToDashboard(
+    requests,
+    currentUsername ?? "",
+  );
+  const pendingRequests = dashboardRequests.filter(
+    (r) => r.status === "PENDING",
+  );
 
   const mentors = matches.map((m) => ({
     id: m.id,
@@ -350,6 +367,25 @@ function MenteeConnections() {
 
   return (
     <>
+      <RequestDetailsModal
+        visible={!!selectedRequest}
+        request={selectedRequest}
+        onClose={() => setSelectedRequest(null)}
+        onViewProfile={
+          selectedRequest
+            ? () =>
+                router.push(
+                  `/mentor/${encodeURIComponent(
+                    selectedRequest.type === "incoming"
+                      ? selectedRequest.menteeUsername
+                      : selectedRequest.mentorUsername,
+                  )}`,
+                )
+            : undefined
+        }
+        onCancelOutgoing={() => setSelectedRequest(null)}
+      />
+
       {/* Section: Upcoming Messages */}
       <View className="mb-7">
         <View className="flex-row justify-between items-center mb-3">
@@ -388,6 +424,48 @@ function MenteeConnections() {
             <View className="w-2 h-2 rounded-full bg-primary" />
           )}
         </View>
+      </View>
+
+      {/* Section: Requests */}
+      <View className="mb-8">
+        <View className="mb-3.5">
+          <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
+            Request Activity
+          </Text>
+          <Text className="text-[22px] font-extrabold text-on-surface mt-0.5">
+            Pending Requests
+          </Text>
+        </View>
+
+        {requestsLoading && <ActivityIndicator className="mt-4" />}
+        {requestsError && (
+          <Text className="text-[13px] text-error text-center mt-2">
+            Failed to load requests.
+          </Text>
+        )}
+        {pendingRequests.map((request) => (
+          <RequestCard
+            key={request.id}
+            user={request.user}
+            topic={request.topic}
+            type={request.type}
+            isReschedule={request.isReschedule}
+            onPress={() => setSelectedRequest(request)}
+            onShowProfile={
+              request.type === "incoming"
+                ? () =>
+                    router.push(
+                      `/mentor/${encodeURIComponent(request.menteeUsername)}`,
+                    )
+                : undefined
+            }
+          />
+        ))}
+        {!requestsLoading && !requestsError && pendingRequests.length === 0 && (
+          <Text className="text-[13px] text-on-surface-muted text-center mt-2">
+            No pending requests.
+          </Text>
+        )}
       </View>
 
       {/* Section: Active Mentors */}
