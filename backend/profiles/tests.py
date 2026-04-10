@@ -1222,3 +1222,75 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         second_name = payload2["results"][0]["full_name"]
 
         self.assertNotEqual(first_name, second_name)
+
+
+def _token_for_profile_tests(user: Any) -> str:
+    """Return a JWT access token for the given user."""
+    from rest_framework_simplejwt.tokens import RefreshToken
+    return str(RefreshToken.for_user(user).access_token)
+
+
+class MentorPublicRatingAPITests(TestCase):
+    """Tests for GET /api/profiles/{username}/rating/."""
+
+    def setUp(self) -> None:
+        from django.contrib.auth.models import Group
+        from accounts.models import UserRole
+
+        Group.objects.get_or_create(name=UserRole.USER)
+
+        self.mentor_user = User.objects.create_user(
+            email="mentor.rating@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            display_name="Rating Mentor",
+            is_visible=True,
+        )
+        self.api_client = APIClient()
+
+    def _url(self, username: str) -> str:
+        return f"/api/profiles/{username}/rating/"
+
+    def test_returns_200_for_visible_profile(self) -> None:
+        response = self.api_client.get(self._url(self.mentor_profile.username))
+        self.assertEqual(response.status_code, 200)
+
+    def test_returns_username_average_rating_and_review_count(self) -> None:
+        response = self.api_client.get(self._url(self.mentor_profile.username))
+        data = response.json()
+        self.assertIn("username", data)
+        self.assertIn("average_rating", data)
+        self.assertIn("review_count", data)
+
+    def test_initial_average_rating_is_zero(self) -> None:
+        response = self.api_client.get(self._url(self.mentor_profile.username))
+        self.assertEqual(response.json()["average_rating"], "0.00")
+        self.assertEqual(response.json()["review_count"], 0)
+
+    def test_nonexistent_profile_returns_404(self) -> None:
+        response = self.api_client.get(self._url("does_not_exist"))
+        self.assertEqual(response.status_code, 404)
+
+    def test_invisible_profile_returns_404(self) -> None:
+        self.mentor_profile.is_visible = False
+        self.mentor_profile.save()
+        response = self.api_client.get(self._url(self.mentor_profile.username))
+        self.assertEqual(response.status_code, 404)
+
+    def test_accessible_without_authentication(self) -> None:
+        response = self.api_client.get(self._url(self.mentor_profile.username))
+        self.assertEqual(response.status_code, 200)
+
+    def test_rating_reflects_threshold_update(self) -> None:
+        """After review_count and average_rating are manually updated, endpoint returns new values."""
+        from decimal import Decimal
+        self.mentor_profile.review_count = 5
+        self.mentor_profile.average_rating = Decimal("4.20")
+        self.mentor_profile.save()
+
+        response = self.api_client.get(self._url(self.mentor_profile.username))
+        self.assertEqual(response.json()["average_rating"], "4.20")
+        self.assertEqual(response.json()["review_count"], 5)

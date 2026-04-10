@@ -11,8 +11,10 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from django.test import override_settings
+
 from accounts.models import AppUsageMode
-from mentorship.models import Match, MentorshipRequest
+from mentorship.models import Feedback, Match, MentorshipRequest
 from profiles.models import AvailabilitySlot, Profile
 
 User: Any = get_user_model()
@@ -619,3 +621,141 @@ class MyUpcomingSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
         response = self.mentee_client.get(self.UPCOMING_SESSIONS_ME_URL)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, [])
+
+
+class FeedbackAPIBaseTestCase(MentorshipRequestAPIBaseTestCase):
+    """Shared fixtures for feedback API tests: an active match between mentor and mentee."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        # Create an accepted mentorship request → triggers Match creation.
+        self.mentorship_request = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        self.match = Match.objects.get(request=self.mentorship_request)
+        self.feedback_url = f"/api/mentorship/matches/{self.match.id}/feedback/"
+
+
+@override_settings(RATING_UPDATE_THRESHOLD=5)
+class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
+    """Tests for POST and GET /api/mentorship/matches/{match_id}/feedback/."""
+
+    def test_unauthenticated_post_returns_401(self) -> None:
+        response = self.anon_client.post(self.feedback_url, {"rating": 4}, format="json")
+        self.assertEqual(response.status_code, 401)
+
+    def test_unauthenticated_get_returns_401(self) -> None:
+        response = self.anon_client.get(self.feedback_url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_nonexistent_match_post_returns_404(self) -> None:
+        import uuid
+        url = f"/api/mentorship/matches/{uuid.uuid4()}/feedback/"
+        response = self.mentee_client.post(url, {"rating": 4}, format="json")
+        self.assertEqual(response.status_code, 404)
+
+    def test_nonexistent_match_get_returns_404(self) -> None:
+        import uuid
+        url = f"/api/mentorship/matches/{uuid.uuid4()}/feedback/"
+        response = self.mentee_client.get(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_unrelated_user_cannot_submit_feedback(self) -> None:
+        response = self.other_client.post(self.feedback_url, {"rating": 3}, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_unrelated_user_cannot_view_feedback(self) -> None:
+        response = self.other_client.get(self.feedback_url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_mentee_can_submit_feedback(self) -> None:
+        response = self.mentee_client.post(
+            self.feedback_url, {"rating": 5, "text": "Great mentor!"}, format="json"
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["rating"], 5)
+        self.assertEqual(response.data["text"], "Great mentor!")
+
+    def test_mentor_can_submit_feedback(self) -> None:
+        response = self.mentor_client.post(
+            self.feedback_url, {"rating": 4, "text": "Motivated mentee."}, format="json"
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["rating"], 4)
+
+    def test_duplicate_feedback_returns_400(self) -> None:
+        self.mentee_client.post(self.feedback_url, {"rating": 5}, format="json")
+        response = self.mentee_client.post(self.feedback_url, {"rating": 3}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_rating_below_1_returns_400(self) -> None:
+        response = self.mentee_client.post(self.feedback_url, {"rating": 0}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_rating_above_5_returns_400(self) -> None:
+        response = self.mentee_client.post(self.feedback_url, {"rating": 6}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_mentor_can_list_feedback(self) -> None:
+        Feedback.objects.create(
+            match=self.match, submitted_by=self.mentee_profile, rating=4, text="Good"
+        )
+        response = self.mentor_client.get(self.feedback_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+
+    def test_mentee_can_list_feedback(self) -> None:
+        Feedback.objects.create(
+            match=self.match, submitted_by=self.mentor_profile, rating=5, text="Great"
+        )
+        response = self.mentee_client.get(self.feedback_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+
+    def test_review_count_incremented_when_mentee_submits(self) -> None:
+        self.mentee_client.post(self.feedback_url, {"rating": 4}, format="json")
+        self.mentor_profile.refresh_from_db()
+        self.assertEqual(self.mentor_profile.review_count, 1)
+
+    def test_mentor_feedback_does_not_increment_review_count(self) -> None:
+        self.mentor_client.post(self.feedback_url, {"rating": 4}, format="json")
+        self.mentor_profile.refresh_from_db()
+        self.assertEqual(self.mentor_profile.review_count, 0)
+
+    @override_settings(RATING_UPDATE_THRESHOLD=2)
+    def test_average_rating_updated_at_threshold(self) -> None:
+        """After every 2 mentee reviews, the public average_rating is recalculated."""
+        from decimal import Decimal
+
+        # Use two different mentees to avoid duplicate feedback constraint.
+        second_mentee_user = User.objects.create_user(
+            email="mentee2.feedback@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        second_mentee_profile = Profile.objects.create(
+            user=second_mentee_user, display_name="Second Mentee"
+        )
+        second_request = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=second_mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        second_match = Match.objects.get(request=second_request)
+        second_feedback_url = f"/api/mentorship/matches/{second_match.id}/feedback/"
+        second_mentee_client = APIClient()
+        second_mentee_client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {_token_for(second_mentee_user)}"
+        )
+
+        # First review (threshold=2, not yet reached).
+        self.mentee_client.post(self.feedback_url, {"rating": 4}, format="json")
+        self.mentor_profile.refresh_from_db()
+        self.assertEqual(self.mentor_profile.average_rating, Decimal("0.00"))
+
+        # Second review reaches threshold → average should update to (4+2)/2 = 3.00.
+        second_mentee_client.post(second_feedback_url, {"rating": 2}, format="json")
+        self.mentor_profile.refresh_from_db()
+        self.assertEqual(self.mentor_profile.average_rating, Decimal("3.00"))

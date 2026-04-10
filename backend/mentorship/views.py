@@ -1,9 +1,11 @@
 """Views for mentorship request and match API endpoints."""
 
+from decimal import Decimal
 from typing import Any, cast
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import CharField, OuterRef, Subquery, Value
+from django.db.models import Avg, CharField, OuterRef, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -22,8 +24,10 @@ from profiles.services import (
     book_availability_slot,
 )
 
-from .models import Match, MentorshipRequest
+from .models import Feedback, Match, MentorshipRequest
 from .serializers import (
+    FeedbackCreateSerializer,
+    FeedbackSerializer,
     MatchSerializer,
     MentorshipRequestCreateSerializer,
     MentorshipRequestSerializer,
@@ -291,4 +295,121 @@ class MyUpcomingSessionsListAPIView(APIView):
         return Response(
             UpcomingMenteeSessionSerializer(upcoming_slots, many=True).data,
             status=status.HTTP_200_OK,
+        )
+
+
+class MatchFeedbackListCreateAPIView(APIView):
+    """List and submit feedback for a match (participants only)."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: FeedbackSerializer(many=True),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Only match participants can view feedback."),
+            404: OpenApiResponse(description="Match not found."),
+        },
+        description=(
+            "List all feedback submitted for the given match. "
+            "Only the mentor or mentee of the match can view feedback."
+        ),
+        tags=["Mentorship"],
+    )
+    def get(self, request: Request, match_id: str) -> Response:
+        """Return all feedback entries for the identified match."""
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            match = Match.objects.select_related("mentor", "mentee").get(id=match_id)
+        except Match.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        if profile not in (match.mentor, match.mentee):
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+
+        feedbacks = (
+            Feedback.objects.filter(match=match)
+            .select_related("submitted_by")
+            .order_by("-created_at")
+        )
+        return Response(FeedbackSerializer(feedbacks, many=True).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        request=FeedbackCreateSerializer,
+        responses={
+            201: FeedbackSerializer,
+            400: OpenApiResponse(description="Validation error or duplicate feedback."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Only match participants can submit feedback."),
+            404: OpenApiResponse(description="Match not found."),
+        },
+        description=(
+            "Submit feedback (rating 1–5 and optional text) for a match. "
+            "Each participant (mentor and mentee) can submit feedback once. "
+            "When the mentee submits, the mentor's public rating may be updated "
+            "once the review count reaches a configured threshold."
+        ),
+        tags=["Mentorship"],
+    )
+    def post(self, request: Request, match_id: str) -> Response:
+        """Create feedback for the identified match from the authenticated participant."""
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            match = Match.objects.select_related("mentor", "mentee").get(id=match_id)
+        except Match.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        if profile not in (match.mentor, match.mentee):
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = FeedbackCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            feedback = Feedback.objects.create(
+                match=match,
+                submitted_by=profile,
+                rating=serializer.validated_data["rating"],
+                text=serializer.validated_data.get("text", ""),
+            )
+        except IntegrityError:
+            return Response(
+                {"detail": "You have already submitted feedback for this match."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # When the mentee submits, update the mentor's rating counter and
+        # recalculate the public average every RATING_UPDATE_THRESHOLD reviews.
+        if profile == match.mentee:
+            mentor = match.mentor
+            with transaction.atomic():
+                Profile.objects.filter(pk=mentor.pk).update(
+                    review_count=mentor.review_count + 1
+                )
+                mentor.refresh_from_db(fields=["review_count"])
+
+                threshold = getattr(settings, "RATING_UPDATE_THRESHOLD", 5)
+                if mentor.review_count % threshold == 0:
+                    avg = (
+                        Feedback.objects.filter(match__mentor=mentor)
+                        .exclude(submitted_by=mentor)
+                        .aggregate(avg=Avg("rating"))["avg"]
+                    )
+                    Profile.objects.filter(pk=mentor.pk).update(
+                        average_rating=Decimal(str(avg)).quantize(Decimal("0.01"))
+                        if avg is not None
+                        else Decimal("0.00")
+                    )
+
+        return Response(
+            FeedbackSerializer(feedback).data,
+            status=status.HTTP_201_CREATED,
         )
