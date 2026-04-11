@@ -6,6 +6,7 @@ from .views import (
     CreateRequestAPIView,
     MatchFeedbackListCreateAPIView,
     MyMatchesListAPIView,
+    MyPastSessionsListAPIView,
     MyRequestsListAPIView,
     MyUpcomingSessionsListAPIView,
     RespondToRequestAPIView,
@@ -29,5 +30,10 @@ urlpatterns = [
         "sessions/me/upcoming/",
         MyUpcomingSessionsListAPIView.as_view(),
         name="mentorship-upcoming-session-list",
+    ),
+    path(
+        "sessions/me/past/",
+        MyPastSessionsListAPIView.as_view(),
+        name="mentorship-past-session-list",
     ),
 ]

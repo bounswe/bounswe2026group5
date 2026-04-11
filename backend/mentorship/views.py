@@ -298,6 +298,66 @@ class MyUpcomingSessionsListAPIView(APIView):
         )
 
 
+class MyPastSessionsListAPIView(APIView):
+    """List past booked sessions for the authenticated mentee."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: UpcomingMenteeSessionSerializer(many=True),
+            401: OpenApiResponse(description="Authentication required."),
+        },
+        description=(
+            "List past booked sessions for the authenticated user as mentee. "
+            "Sessions are resolved from both active and inactive matches and mentor "
+            "availability slots booked by the current user whose start time has passed. "
+            "Ordered by most recent first."
+        ),
+        tags=["Mentorship"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return past booked slots by mentors who have or had a match with the caller."""
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response([], status=status.HTTP_200_OK)
+
+        mentor_profile_ids = Match.objects.filter(mentee=profile).values_list(
+            "mentor_id", flat=True
+        )
+
+        past_slots = (
+            AvailabilitySlot.objects.filter(
+                profile_id__in=mentor_profile_ids,
+                is_booked=True,
+                booked_by=request.user,
+                start_at__lt=timezone.now(),
+            )
+            .annotate(
+                request_status=Coalesce(
+                    Subquery(
+                        MentorshipRequest.objects.filter(
+                            slot_id=OuterRef("pk"),
+                            mentee=profile,
+                        )
+                        .order_by("-created_at")
+                        .values("status")[:1]
+                    ),
+                    Value(MentorshipRequest.Status.ACCEPTED),
+                    output_field=CharField(),
+                )
+            )
+            .select_related("profile")
+            .order_by("-start_at")
+        )
+
+        return Response(
+            UpcomingMenteeSessionSerializer(past_slots, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
 class MatchFeedbackListCreateAPIView(APIView):
     """List and submit feedback for a match (participants only)."""
 
