@@ -750,6 +750,59 @@ class FeedbackAPIBaseTestCase(MentorshipRequestAPIBaseTestCase):
         self.feedback_url = f"/api/mentorship/matches/{self.match.id}/feedback/"
 
 
+class DeactivateMatchAPIViewTests(FeedbackAPIBaseTestCase):
+    """Tests for POST /api/mentorship/matches/<match_id>/deactivate/."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.deactivate_url = f"/api/mentorship/matches/{self.match.id}/deactivate/"
+
+    def test_unauthenticated_returns_401(self) -> None:
+        response = self.anon_client.post(self.deactivate_url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_outsider_returns_403(self) -> None:
+        response = self.other_client.post(self.deactivate_url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_mentor_can_deactivate_match(self) -> None:
+        response = self.mentor_client.post(self.deactivate_url)
+        self.assertEqual(response.status_code, 200)
+        self.match.refresh_from_db()
+        self.assertFalse(self.match.is_active)
+
+    def test_mentee_can_deactivate_match(self) -> None:
+        response = self.mentee_client.post(self.deactivate_url)
+        self.assertEqual(response.status_code, 200)
+        self.match.refresh_from_db()
+        self.assertFalse(self.match.is_active)
+
+    def test_deactivate_idempotent(self) -> None:
+        self.mentor_client.post(self.deactivate_url)
+        response = self.mentor_client.post(self.deactivate_url)
+        self.assertEqual(response.status_code, 200)
+        self.match.refresh_from_db()
+        self.assertFalse(self.match.is_active)
+
+    def test_nonexistent_match_returns_404(self) -> None:
+        import uuid
+        url = f"/api/mentorship/matches/{uuid.uuid4()}/deactivate/"
+        response = self.mentor_client.post(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_deactivated_match_excluded_from_active_list(self) -> None:
+        self.mentor_client.post(self.deactivate_url)
+        response = self.mentor_client.get(self.MATCHES_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_response_contains_match_data(self) -> None:
+        response = self.mentor_client.post(self.deactivate_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["is_active"])
+        self.assertEqual(str(response.data["id"]), str(self.match.id))
+
+
 @override_settings(RATING_UPDATE_THRESHOLD=5)
 class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
     """Tests for POST and GET /api/mentorship/matches/{match_id}/feedback/."""

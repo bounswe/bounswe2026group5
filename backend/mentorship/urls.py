@@ -4,6 +4,7 @@ from django.urls import path
 
 from .views import (
     CreateRequestAPIView,
+    DeactivateMatchAPIView,
     MatchFeedbackListCreateAPIView,
     MentorUpcomingSessionsListAPIView,
     MyMatchesListAPIView,
@@ -22,6 +23,11 @@ urlpatterns = [
         name="mentorship-request-respond",
     ),
     path("matches/me/", MyMatchesListAPIView.as_view(), name="mentorship-match-list"),
+    path(
+        "matches/<uuid:match_id>/deactivate/",
+        DeactivateMatchAPIView.as_view(),
+        name="mentorship-match-deactivate",
+    ),
     path(
         "matches/<uuid:match_id>/feedback/",
         MatchFeedbackListCreateAPIView.as_view(),

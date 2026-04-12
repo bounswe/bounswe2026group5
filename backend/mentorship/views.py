@@ -405,6 +405,47 @@ class MentorUpcomingSessionsListAPIView(APIView):
         )
 
 
+class DeactivateMatchAPIView(APIView):
+    """End an active mentorship relationship by setting the match to inactive."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: MatchSerializer,
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Caller is not a participant of this match."),
+            404: OpenApiResponse(description="Match not found."),
+        },
+        description=(
+            "Deactivate a mentorship match, formally ending the relationship. "
+            "Either the mentor or the mentee of the match may call this endpoint. "
+            "The operation is idempotent: deactivating an already-inactive match returns 200."
+        ),
+        tags=["Mentorship"],
+    )
+    def post(self, request: Request, match_id: str) -> Response:
+        """Set the identified match to inactive."""
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            match = Match.objects.select_related("mentor", "mentee", "request").get(id=match_id)
+        except Match.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        if profile not in (match.mentor, match.mentee):
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+
+        Match.objects.filter(pk=match.pk).update(is_active=False)
+        match.is_active = False
+
+        return Response(MatchSerializer(match).data, status=status.HTTP_200_OK)
+
+
 class MatchFeedbackListCreateAPIView(APIView):
     """List and submit feedback for a match (participants only)."""
 
