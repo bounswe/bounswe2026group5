@@ -5,6 +5,7 @@ from django.urls import path
 from .views import (
     CreateRequestAPIView,
     MatchFeedbackListCreateAPIView,
+    MentorUpcomingSessionsListAPIView,
     MyMatchesListAPIView,
     MyPastSessionsListAPIView,
     MyRequestsListAPIView,
@@ -35,5 +36,10 @@ urlpatterns = [
         "sessions/me/past/",
         MyPastSessionsListAPIView.as_view(),
         name="mentorship-past-session-list",
+    ),
+    path(
+        "sessions/mentor/upcoming/",
+        MentorUpcomingSessionsListAPIView.as_view(),
+        name="mentorship-mentor-upcoming-session-list",
     ),
 ]

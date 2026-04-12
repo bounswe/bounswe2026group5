@@ -33,6 +33,7 @@ from .serializers import (
     MentorshipRequestSerializer,
     RespondToRequestSerializer,
     UpcomingMenteeSessionSerializer,
+    UpcomingMentorSessionSerializer,
 )
 
 _NOT_FOUND = {"detail": "Not found."}
@@ -40,6 +41,7 @@ _PERMISSION_DENIED = {"detail": "You do not have permission to perform this acti
 _DUPLICATE_PENDING = {"detail": "You already have a pending request with this mentor."}
 _NOT_PENDING = {"detail": "Only pending requests can be accepted or rejected."}
 _MENTEE_REQUIRED = {"detail": "You need a MENTEE or BOTH profile to send mentorship requests."}
+_MENTOR_REQUIRED = {"detail": "You need a MENTOR profile to access this resource."}
 _NO_PROFILE = {"detail": "Profile not found."}
 _SLOT_BOOKING_FAILED = {"detail": "Selected slot could not be booked while accepting this request."}
 
@@ -354,6 +356,51 @@ class MyPastSessionsListAPIView(APIView):
 
         return Response(
             UpcomingMenteeSessionSerializer(past_slots, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class MentorUpcomingSessionsListAPIView(APIView):
+    """List upcoming booked sessions for the authenticated mentor."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: UpcomingMentorSessionSerializer(many=True),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Caller does not have a MENTOR profile."),
+        },
+        description=(
+            "List upcoming booked sessions for the authenticated user as mentor. "
+            "Returns the caller's own availability slots that are booked and have not "
+            "yet started, ordered by start time ascending. "
+            "Only accessible to users with a MENTOR app usage mode."
+        ),
+        tags=["Mentorship"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return future booked slots owned by the caller's mentor profile."""
+        if request.user.app_usage_mode != AppUsageMode.MENTOR:
+            return Response(_MENTOR_REQUIRED, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response([], status=status.HTTP_200_OK)
+
+        upcoming_slots = (
+            AvailabilitySlot.objects.filter(
+                profile=profile,
+                is_booked=True,
+                start_at__gte=timezone.now(),
+            )
+            .select_related("booked_by__profile")
+            .order_by("start_at")
+        )
+
+        return Response(
+            UpcomingMentorSessionSerializer(upcoming_slots, many=True).data,
             status=status.HTTP_200_OK,
         )
 
