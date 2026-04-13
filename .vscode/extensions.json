@@ -2,6 +2,7 @@
   "recommendations": [
     "dbaeumer.vscode-eslint",
     "esbenp.prettier-vscode",
+    "expo.vscode-expo-tools",
     "ms-python.python",
     "ms-python.black-formatter",
     "ms-python.flake8",

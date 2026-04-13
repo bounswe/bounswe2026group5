@@ -13,6 +13,29 @@ import {
   clearAuthStorage,
 } from "./storage";
 
+const AUTH_INIT_TIMEOUT_MS = 5000;
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`Auth initialization timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
 interface AuthStore extends AuthState {
   /**
    * Initialize auth state from secure storage.
@@ -65,8 +88,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   initializeAuth: async () => {
     set({ isLoading: true });
     try {
-      const tokens = await getStoredTokens();
-      const user = await getStoredUser();
+      const [tokens, user] = await Promise.all([
+        withTimeout(getStoredTokens(), AUTH_INIT_TIMEOUT_MS),
+        withTimeout(getStoredUser(), AUTH_INIT_TIMEOUT_MS),
+      ]);
 
       if (tokens && user) {
         set({

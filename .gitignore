@@ -25,17 +25,16 @@ ehthumbs.db
 .env.local
 *.local
 !.env.example
+**/.env*.local
 
 # ==========================================
-# Backend (Python & Django)
+# Python / Django
 # ==========================================
-# Virtual Environments
-backend/venv/
-backend/.venv/
-venv/
+**/.venv/
+**/venv/
 
 # Compiled Python Files
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 
@@ -52,17 +51,17 @@ htmlcov/
 *.log
 
 # ==========================================
-# Frontend (React, Vite, TanStack)
+# Node / Frontend
 # ==========================================
-# Dependencies
-web/node_modules/
-node_modules/
+**/node_modules/
 
 # Build Outputs
 web/dist/
 web/dist-ssr/
 web/build/
 web/.output/
+mobile/dist/
+mobile/web-build/
 
 # Tool and Framework Caches
 web/.tanstack/
@@ -72,6 +71,9 @@ web/.wrangler/
 web/__unconfig*/
 web/.eslintcache
 web/todos.json
+mobile/.expo/
+mobile/.kotlin/
+mobile/.metro-health-check*
 
 # Package Manager Logs
 npm-debug.log*
@@ -80,5 +82,22 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Test Coverage
-web/coverage/
-mobile/coverage/
+**/coverage/
+
+# ==========================================
+# Mobile (Expo & React Native)
+# ==========================================
+mobile/expo-env.d.ts
+mobile/*.tsbuildinfo
+mobile/app-example
+mobile/ios
+mobile/android
+
+# Mobile signing and native key material
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
