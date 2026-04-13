@@ -104,52 +104,6 @@ export async function apiPatch<TResponse, TPayload>(
   return (await response.json()) as TResponse;
 }
 
-/**
- * Perform a multipart/form-data POST request (e.g. for file uploads).
- */
-export async function apiPostFormData<TResponse>(
-  path: string,
-  formData: FormData,
-): Promise<TResponse> {
-  const accessToken = useAuthStore.getState().accessToken;
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const message = await readErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-
-  return (await response.json()) as TResponse;
-}
-
-/**
- * Perform a typed DELETE request against the backend API.
- */
-export async function apiDelete(path: string): Promise<void> {
-  const accessToken = useAuthStore.getState().accessToken;
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "DELETE",
-    headers: {
-      Accept: "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-  });
-
-  if (!response.ok) {
-    const message = await readErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-}
-
 async function readErrorMessage(response: Response): Promise<string> {
   try {
     const payload = (await response.json()) as {
