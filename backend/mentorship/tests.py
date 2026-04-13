@@ -682,6 +682,7 @@ class CancelSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
 
     def test_nonexistent_match_returns_404(self) -> None:
         import uuid
+
         response = self.mentee_client.post(self._cancel_url(uuid.uuid4()))
         self.assertEqual(response.status_code, 404)
 
@@ -791,8 +792,32 @@ class RescheduleSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_failed_reschedule_keeps_existing_booking(self) -> None:
+        """Failed reschedule must keep the current slot booking and request slot unchanged."""
+        match, request_obj = self._setup_active_match_with_booking()
+        self.mentor_slot_2.mark_booked(self.other_user)
+
+        response = self.mentee_client.post(
+            self._reschedule_url(match.id),
+            {"new_slot_id": str(self.mentor_slot_2.id)},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        self.mentor_slot.refresh_from_db()
+        self.assertTrue(self.mentor_slot.is_booked)
+        self.assertEqual(self.mentor_slot.booked_by, self.mentee_user)
+
+        self.mentor_slot_2.refresh_from_db()
+        self.assertTrue(self.mentor_slot_2.is_booked)
+        self.assertEqual(self.mentor_slot_2.booked_by, self.other_user)
+
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.slot, self.mentor_slot)
+
     def test_nonexistent_match_returns_404(self) -> None:
         import uuid
+
         response = self.mentee_client.post(
             self._reschedule_url(uuid.uuid4()),
             {"new_slot_id": str(self.mentor_slot_2.id)},

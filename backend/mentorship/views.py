@@ -16,9 +16,11 @@ from accounts.models import AppUsageMode
 from accounts.permissions import IsUser
 from profiles.models import AvailabilitySlot, Profile
 from profiles.services import (
+    BookingCancelNotAllowedError,
     OwnSlotBookingError,
     SlotAlreadyBookedError,
     SlotInPastError,
+    SlotNotBookedError,
     book_availability_slot,
     cancel_availability_booking,
 )
@@ -265,9 +267,9 @@ class CancelSessionAPIView(APIView):
             return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            match = Match.objects.select_related(
-                "mentor", "mentee", "request__slot"
-            ).get(id=match_id, is_active=True)
+            match = Match.objects.select_related("mentor", "mentee", "request__slot").get(
+                id=match_id, is_active=True
+            )
         except Match.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
@@ -283,12 +285,22 @@ class CancelSessionAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        with transaction.atomic():
-            cancel_availability_booking(
-                profile=match.mentor,
-                slot_id=slot.id,
-                actor=request.user,
+        try:
+            with transaction.atomic():
+                cancel_availability_booking(
+                    profile=match.mentor,
+                    slot_id=slot.id,
+                    actor=request.user,
+                )
+        except SlotNotBookedError:
+            return Response(
+                {"detail": "This session has no active booking to cancel."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
+        except BookingCancelNotAllowedError:
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+        except AvailabilitySlot.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
         mentorship_request.refresh_from_db()
         return Response(
@@ -325,9 +337,9 @@ class RescheduleSessionAPIView(APIView):
             return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            match = Match.objects.select_related(
-                "mentor", "mentee", "request__slot"
-            ).get(id=match_id, is_active=True)
+            match = Match.objects.select_related("mentor", "mentee", "request__slot").get(
+                id=match_id, is_active=True
+            )
         except Match.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
@@ -352,35 +364,43 @@ class RescheduleSessionAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        with transaction.atomic():
-            if old_slot is not None and old_slot.is_booked:
-                cancel_availability_booking(
-                    profile=match.mentor,
-                    slot_id=old_slot.id,
-                    actor=request.user,
-                )
+        try:
+            with transaction.atomic():
+                if old_slot is not None and old_slot.is_booked:
+                    cancel_availability_booking(
+                        profile=match.mentor,
+                        slot_id=old_slot.id,
+                        actor=request.user,
+                    )
 
-            try:
                 book_availability_slot(
                     profile=match.mentor,
                     slot_id=new_slot.id,
                     actor=request.user,
                 )
-            except SlotAlreadyBookedError:
-                return Response(
-                    {"detail": "New slot is already booked."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            except SlotInPastError:
-                return Response(
-                    {"detail": "New slot is in the past."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            except OwnSlotBookingError:
-                return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
-
-            mentorship_request.slot = new_slot
-            mentorship_request.save(update_fields=["slot"])
+                mentorship_request.slot = new_slot
+                mentorship_request.save(update_fields=["slot"])
+        except SlotNotBookedError:
+            return Response(
+                {"detail": "Current slot is no longer booked."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except BookingCancelNotAllowedError:
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+        except SlotAlreadyBookedError:
+            return Response(
+                {"detail": "New slot is already booked."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except SlotInPastError:
+            return Response(
+                {"detail": "New slot is in the past."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except OwnSlotBookingError:
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+        except AvailabilitySlot.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
         mentorship_request.refresh_from_db()
         return Response(
