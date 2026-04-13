@@ -21,6 +21,7 @@ import { Route as OnBoardingGettingToKnowYouRouteImport } from './routes/_onBoar
 import { Route as AuthorizedScheduleRouteImport } from './routes/_authorized/schedule'
 import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/discover'
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
+import { Route as AuthorizedAdminRouteImport } from './routes/_authorized/admin'
 import { Route as AuthorizedConnectionsRouteImport } from './routes/_authorized/connections'
 
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
@@ -81,6 +82,11 @@ const AuthorizedDashboardRoute = AuthorizedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
+const AuthorizedAdminRoute = AuthorizedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthorizedRouteRoute,
+} as any)
 const AuthorizedConnectionsRoute = AuthorizedConnectionsRouteImport.update({
   id: '/connections',
   path: '/connections',
@@ -89,6 +95,7 @@ const AuthorizedConnectionsRoute = AuthorizedConnectionsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AuthorizedAdminRoute
   '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
@@ -101,6 +108,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AuthorizedAdminRoute
   '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/_authorized': typeof AuthorizedRouteRouteWithChildren
   '/_onBoarding': typeof OnBoardingRouteRouteWithChildren
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
+  '/_authorized/admin': typeof AuthorizedAdminRoute
   '/_authorized/connections': typeof AuthorizedConnectionsRoute
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
   '/_authorized/discover': typeof AuthorizedDiscoverRoute
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/connections'
     | '/dashboard'
     | '/discover'
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/connections'
     | '/dashboard'
     | '/discover'
@@ -158,6 +169,7 @@ export interface FileRouteTypes {
     | '/_authorized'
     | '/_onBoarding'
     | '/_unauthorized'
+    | '/_authorized/admin'
     | '/_authorized/connections'
     | '/_authorized/dashboard'
     | '/_authorized/discover'
@@ -263,6 +275,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedDashboardRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
+    '/_authorized/admin': {
+      id: '/_authorized/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthorizedAdminRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
     '/_authorized/connections': {
       id: '/_authorized/connections'
       path: '/connections'
@@ -274,6 +293,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthorizedRouteRouteChildren {
+  AuthorizedAdminRoute: typeof AuthorizedAdminRoute
   AuthorizedConnectionsRoute: typeof AuthorizedConnectionsRoute
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
   AuthorizedDiscoverRoute: typeof AuthorizedDiscoverRoute
@@ -281,6 +301,7 @@ interface AuthorizedRouteRouteChildren {
 }
 
 const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
+  AuthorizedAdminRoute: AuthorizedAdminRoute,
   AuthorizedConnectionsRoute: AuthorizedConnectionsRoute,
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,
   AuthorizedDiscoverRoute: AuthorizedDiscoverRoute,
