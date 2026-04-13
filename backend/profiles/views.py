@@ -475,7 +475,10 @@ class RecentlyAddedMentorsListAPIView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        responses={200: PublicMentorProfileSearchResultSerializer(many=True)},
+        responses={
+            200: PublicMentorProfileSearchListResponseSerializer,
+            400: OpenApiResponse(description="Invalid `limit` value."),
+        },
         description=(
             "Return the most recently created visible mentor profiles, "
             "sorted by creation date descending. "
@@ -514,7 +517,10 @@ class PopularMentorsListAPIView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        responses={200: PublicMentorProfileSearchResultSerializer(many=True)},
+        responses={
+            200: PublicMentorProfileSearchListResponseSerializer,
+            400: OpenApiResponse(description="Invalid `limit` value."),
+        },
         description=(
             "Return the most popular visible mentor profiles, sorted by rating "
             "descending with total mentee count as a tiebreaker. "
