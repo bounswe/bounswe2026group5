@@ -38,6 +38,11 @@ jest.mock("@/lib/queries/mentorship", () => {
     useMentorshipMatchesQuery: () => mockMentorshipMatchesQuery(),
     useMentorshipUpcomingSessionsQuery: () =>
       mockMentorshipUpcomingSessionsQuery(),
+    useRespondToMentorshipRequestMutation: () => ({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    }),
+    useAvailabilitySlotsQuery: () => ({ data: [] }),
   };
 });
 

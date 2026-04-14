@@ -1,5 +1,5 @@
 import ProfileScreen from "@/app/(tabs)/profile";
-import { render } from "@testing-library/react-native";
+import { render, waitFor } from "@testing-library/react-native";
 import React from "react";
 
 const mockMatchesQuery = jest.fn();
@@ -15,6 +15,19 @@ jest.mock("@/lib/queries/mentorship", () => {
     ...actual,
     useAvailabilitySlotsQuery: () => mockAvailabilityQuery(),
     useMentorshipMatchesQuery: () => mockMatchesQuery(),
+    useMentorshipRequestsQuery: () => ({ data: [] }),
+    useCreateAvailabilitySlotMutation: () => ({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    }),
+    useDeleteAvailabilitySlotMutation: () => ({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    }),
+    useRespondToMentorshipRequestMutation: () => ({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    }),
   };
 });
 
@@ -46,23 +59,44 @@ describe("ProfileScreen Layout", () => {
   beforeEach(() => {
     mockAvailabilityQuery.mockReturnValue({ data: undefined });
     mockMatchesQuery.mockReturnValue({ data: [] });
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        full_name: "Ali Aydin",
+        bio: "Profile bio",
+        expertises: ["React"],
+        eager_to_learn: ["Testing"],
+      }),
+    }) as unknown as typeof fetch;
+
+    (globalThis.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          full_name: "Ali Aydin",
+          bio: "Profile bio",
+          expertises: ["React"],
+          eager_to_learn: ["Testing"],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ name: "React" }, { name: "Testing" }],
+      });
   });
 
-  it("renders the user profile data and section headers", () => {
+  it("renders the user profile data and section headers", async () => {
     const { getByText } = render(<ProfileScreen />);
 
-    // Check page header
-    expect(getByText("Profile")).toBeTruthy();
-
-    // Check that the mock user data rendered
-    expect(getByText("Ali Aydin")).toBeTruthy();
-
-    // Check that the main sections rendered
-    expect(getByText("Expertise")).toBeTruthy();
-    expect(getByText("Eager to Learn")).toBeTruthy();
+    await waitFor(() => {
+      expect(getByText("Profile")).toBeTruthy();
+      expect(getByText("Ali Aydin")).toBeTruthy();
+      expect(getByText("Expertise")).toBeTruthy();
+      expect(getByText("Eager to Learn")).toBeTruthy();
+    });
   });
 
-  it("shows mentee count from active unique matches", () => {
+  it("shows mentee count from active unique matches", async () => {
     mockMatchesQuery.mockReturnValue({
       data: [
         {
@@ -90,7 +124,9 @@ describe("ProfileScreen Layout", () => {
 
     const { getByText } = render(<ProfileScreen />);
 
-    expect(getByText("2")).toBeTruthy();
-    expect(getByText("Mentees")).toBeTruthy();
+    await waitFor(() => {
+      expect(getByText("2")).toBeTruthy();
+      expect(getByText("Mentees")).toBeTruthy();
+    });
   });
 });

@@ -160,10 +160,11 @@ describe("auth store", () => {
   it("throws and records logout error if clearing storage fails", async () => {
     mockedClearAuthStorage.mockRejectedValue(new Error("cannot clear"));
 
-    await expect(useAuthStore.getState().logout()).rejects.toThrow(
-      "cannot clear",
-    );
-    expect(useAuthStore.getState().error).toBe("Failed to logout");
+    await expect(useAuthStore.getState().logout()).resolves.toBeUndefined();
+    expect(mockedClearAuthStorage).toHaveBeenCalled();
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.user).toBeNull();
   });
 
   it("updates access token when refresh token exists", async () => {

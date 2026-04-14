@@ -141,7 +141,14 @@ describe("mentorship query mappers", () => {
     expect(mapped).toEqual([
       {
         day: "Monday",
-        times: ["10:00 - 11:00", "15:00 - 16:30"],
+        times: [
+          { id: "slot-1", label: "10:00 - 11:00", isBooked: false },
+          { id: "slot-2", label: "15:00 - 16:30", isBooked: false },
+        ],
+      },
+      {
+        day: "Tuesday",
+        times: [{ id: "slot-3", label: "09:00 - 10:00", isBooked: true }],
       },
     ]);
   });

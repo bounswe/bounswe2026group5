@@ -1,89 +1,119 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act } from "react-test-renderer";
 import React from "react";
+import { Alert } from "react-native";
 
 import { EditAvailabilityModal } from "@/components/profile/EditAvailabilityModal";
 
+const mockCreateAvailabilitySlotMutation = jest.fn();
+const mockDeleteAvailabilitySlotMutation = jest.fn();
+const mockRespondToMentorshipRequestMutation = jest.fn();
+
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
+jest.mock("@/lib/queries/mentorship", () => ({
+  useCreateAvailabilitySlotMutation: () => mockCreateAvailabilitySlotMutation(),
+  useDeleteAvailabilitySlotMutation: () => mockDeleteAvailabilitySlotMutation(),
+  useRespondToMentorshipRequestMutation: () =>
+    mockRespondToMentorshipRequestMutation(),
+}));
+
+function toDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getMonday(date: Date): Date {
+  const result = new Date(date);
+  const day = result.getDay();
+  const diff = result.getDate() - day + (day === 0 ? -6 : 1);
+  result.setDate(diff);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
 describe("EditAvailabilityModal", () => {
+  const createMutateAsync = jest.fn();
+  const deleteMutateAsync = jest.fn();
+  const respondMutateAsync = jest.fn();
+
   beforeEach(() => {
     jest.clearAllMocks();
+    createMutateAsync.mockResolvedValue(undefined);
+    deleteMutateAsync.mockResolvedValue(undefined);
+    respondMutateAsync.mockResolvedValue(undefined);
+    mockCreateAvailabilitySlotMutation.mockReturnValue({
+      mutateAsync: createMutateAsync,
+      isPending: false,
+    });
+    mockDeleteAvailabilitySlotMutation.mockReturnValue({
+      mutateAsync: deleteMutateAsync,
+      isPending: false,
+    });
+    mockRespondToMentorshipRequestMutation.mockReturnValue({
+      mutateAsync: respondMutateAsync,
+      isPending: false,
+    });
   });
 
-  it("saves enabled days with valid slots", () => {
-    const onSave = jest.fn();
-    const onClose = jest.fn();
+  it("creates a new slot when tapping an inactive hour", async () => {
+    const onChanged = jest.fn();
+    const monday = toDateString(getMonday(new Date()));
 
-    const { getByText, getAllByDisplayValue } = render(
-      <EditAvailabilityModal
-        visible
-        onClose={onClose}
-        initialSchedule={[{ day: "Monday", times: ["09:00 - 17:00"] }]}
-        onSave={onSave}
-      />,
-    );
-
-    const startTimes = getAllByDisplayValue("09:00");
-    const endTimes = getAllByDisplayValue("17:00");
-
-    fireEvent.changeText(startTimes[0], "10:00");
-    fireEvent.changeText(endTimes[0], "12:30");
-
-    fireEvent.press(getByText("Save"));
-
-    expect(onSave).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({
-          day: "Monday",
-          times: ["10:00 - 12:30"],
-        }),
-      ]),
-    );
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it("alerts when time format is invalid", () => {
-    const alertSpy = jest.spyOn(require("react-native").Alert, "alert");
-
-    const { getByText, getAllByDisplayValue } = render(
+    const { getByText } = render(
       <EditAvailabilityModal
         visible
         onClose={jest.fn()}
-        initialSchedule={[{ day: "Monday", times: ["09:00 - 17:00"] }]}
-        onSave={jest.fn()}
+        username="mentor-1"
+        slots={[]}
+        onChanged={onChanged}
       />,
     );
 
-    fireEvent.changeText(getAllByDisplayValue("09:00")[0], "9am");
-    fireEvent.press(getByText("Save"));
+    await act(async () => {
+      fireEvent.press(getByText("09:00 - 10:00"));
+    });
 
-    expect(alertSpy).toHaveBeenCalledWith(
-      "Invalid Format",
-      "Please use the 24-hour format (e.g., 09:00, 14:30).",
-      [{ text: "Got it" }],
-    );
+    await waitFor(() => {
+      expect(createMutateAsync).toHaveBeenCalledWith({
+        date: monday,
+        startTime: "09:00:00",
+        endTime: "10:00:00",
+      });
+      expect(onChanged).toHaveBeenCalled();
+    });
   });
 
-  it("alerts when start time is not before end time", () => {
-    const alertSpy = jest.spyOn(require("react-native").Alert, "alert");
+  it("alerts when trying to deactivate a booked slot", () => {
+    const alertSpy = jest
+      .spyOn(Alert, "alert")
+      .mockImplementation(() => undefined);
+    const monday = toDateString(getMonday(new Date()));
 
-    const { getByText, getAllByDisplayValue } = render(
+    const { getByText } = render(
       <EditAvailabilityModal
         visible
         onClose={jest.fn()}
-        initialSchedule={[{ day: "Monday", times: ["09:00 - 17:00"] }]}
-        onSave={jest.fn()}
+        username="mentor-1"
+        slots={[
+          {
+            id: "slot-1",
+            date: monday,
+            startTime: "09:00:00",
+            endTime: "10:00:00",
+            is_booked: true,
+          },
+        ]}
       />,
     );
 
-    fireEvent.changeText(getAllByDisplayValue("09:00")[0], "18:00");
-    fireEvent.changeText(getAllByDisplayValue("17:00")[0], "17:00");
-    fireEvent.press(getByText("Save"));
+    fireEvent.press(getByText("09:00 - 10:00"));
 
     expect(alertSpy).toHaveBeenCalledWith(
-      "Invalid Time Range",
-      "The start time must be before the end time.",
-      [{ text: "Got it" }],
+      "Cannot Make Slot Unavailable",
+      expect.stringContaining("planned session"),
     );
   });
 });

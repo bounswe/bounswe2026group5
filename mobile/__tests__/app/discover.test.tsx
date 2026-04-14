@@ -17,6 +17,13 @@ jest.mock("expo-router", () => ({
   }),
 }));
 
+jest.mock("@react-navigation/native", () => ({
+  ...jest.requireActual("@react-navigation/native"),
+  useNavigation: () => ({
+    addListener: jest.fn(() => jest.fn()),
+  }),
+}));
+
 jest.mock("@/lib/discover/client", () => ({
   fetchDiscoverProfiles: jest.fn(),
   fetchDiscoverSkills: jest.fn(),
@@ -112,7 +119,11 @@ describe("DiscoverScreen", () => {
     const { getByText } = render(<DiscoverScreen />);
 
     await waitFor(() => {
-      expect(getByText("Demo preview data")).toBeTruthy();
+      expect(
+        getByText(
+          "No matches found. Try adjusting your search or filter criteria to find more mentors.",
+        ),
+      ).toBeTruthy();
     });
   });
 
