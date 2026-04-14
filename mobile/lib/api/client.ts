@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "@/lib/api/config";
 import { useAuthStore } from "@/lib/auth/store";
+import { fetchWithTimeout } from "@/lib/api/fetchWithTimeout";
 
 /**
  * Error type thrown when an API request fails.
@@ -22,7 +23,7 @@ export class ApiError extends Error {
 export async function apiGet<T>(path: string): Promise<T> {
   const accessToken = useAuthStore.getState().accessToken;
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     method: "GET",
     headers: {
       Accept: "application/json",
@@ -51,7 +52,7 @@ export async function apiPost<TResponse, TPayload = unknown>(
 ): Promise<TResponse> {
   const accessToken = useAuthStore.getState().accessToken;
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -86,7 +87,7 @@ export async function apiPatch<TResponse, TPayload>(
 ): Promise<TResponse> {
   const accessToken = useAuthStore.getState().accessToken;
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     method: "PATCH",
     headers: {
       Accept: "application/json",
@@ -116,12 +117,19 @@ async function readErrorMessage(response: Response): Promise<string> {
       return payload.detail;
     }
 
-    if (Array.isArray(payload.non_field_errors) && payload.non_field_errors[0]) {
+    if (
+      Array.isArray(payload.non_field_errors) &&
+      payload.non_field_errors[0]
+    ) {
       return payload.non_field_errors[0];
     }
 
     for (const value of Object.values(payload)) {
-      if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string") {
+      if (
+        Array.isArray(value) &&
+        value.length > 0 &&
+        typeof value[0] === "string"
+      ) {
         return value[0];
       }
       if (typeof value === "string" && value.trim()) {

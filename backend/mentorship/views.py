@@ -18,10 +18,13 @@ from accounts.models import AppUsageMode
 from accounts.permissions import IsUser
 from profiles.models import AvailabilitySlot, Profile
 from profiles.services import (
+    BookingCancelNotAllowedError,
     OwnSlotBookingError,
     SlotAlreadyBookedError,
     SlotInPastError,
+    SlotNotBookedError,
     book_availability_slot,
+    cancel_availability_booking,
 )
 
 from .models import Feedback, Match, MentorshipRequest
@@ -31,6 +34,7 @@ from .serializers import (
     MatchSerializer,
     MentorshipRequestCreateSerializer,
     MentorshipRequestSerializer,
+    RescheduleSessionSerializer,
     RespondToRequestSerializer,
     UpcomingMenteeSessionSerializer,
 )
@@ -237,6 +241,176 @@ class MyMatchesListAPIView(APIView):
         )
 
         return Response(MatchSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+
+class CancelSessionAPIView(APIView):
+    """Cancel a booked session for an active match."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: MentorshipRequestSerializer,
+            400: OpenApiResponse(description="Session is not booked or already cancelled."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Only the mentor or mentee of this match can cancel."),
+            404: OpenApiResponse(description="Match not found."),
+        },
+        description=(
+            "Cancel the booked session for an active match. "
+            "Both the mentor and the mentee can cancel. "
+            "The slot is freed and the match's request slot reference is cleared."
+        ),
+        tags=["Mentorship"],
+    )
+    def post(self, request: Request, match_id: str) -> Response:
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            match = Match.objects.select_related("mentor", "mentee", "request__slot").get(
+                id=match_id, is_active=True
+            )
+        except Match.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        if profile not in (match.mentor, match.mentee):
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+
+        mentorship_request = match.request
+        slot = mentorship_request.slot
+
+        if slot is None or not slot.is_booked:
+            return Response(
+                {"detail": "This session has no active booking to cancel."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            with transaction.atomic():
+                cancel_availability_booking(
+                    profile=match.mentor,
+                    slot_id=slot.id,
+                    actor=request.user,
+                )
+        except SlotNotBookedError:
+            return Response(
+                {"detail": "This session has no active booking to cancel."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except BookingCancelNotAllowedError:
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+        except AvailabilitySlot.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        mentorship_request.refresh_from_db()
+        return Response(
+            MentorshipRequestSerializer(mentorship_request).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class RescheduleSessionAPIView(APIView):
+    """Reschedule a booked session to a new availability slot."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=RescheduleSessionSerializer,
+        responses={
+            200: MentorshipRequestSerializer,
+            400: OpenApiResponse(description="New slot is invalid or unavailable."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Only the mentee can reschedule."),
+            404: OpenApiResponse(description="Match or new slot not found."),
+        },
+        description=(
+            "Reschedule the session for an active match to a new mentor availability slot. "
+            "Only the mentee can reschedule. "
+            "The old slot is freed and the new slot is booked atomically."
+        ),
+        tags=["Mentorship"],
+    )
+    def post(self, request: Request, match_id: str) -> Response:
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            match = Match.objects.select_related("mentor", "mentee", "request__slot").get(
+                id=match_id, is_active=True
+            )
+        except Match.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        if profile != match.mentee:
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = RescheduleSessionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_slot_id = serializer.validated_data["new_slot_id"]
+
+        try:
+            new_slot = AvailabilitySlot.objects.get(id=new_slot_id, profile=match.mentor)
+        except AvailabilitySlot.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        mentorship_request = match.request
+        old_slot = mentorship_request.slot
+
+        if new_slot == old_slot:
+            return Response(
+                {"detail": "New slot is the same as the current slot."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            with transaction.atomic():
+                if old_slot is not None and old_slot.is_booked:
+                    cancel_availability_booking(
+                        profile=match.mentor,
+                        slot_id=old_slot.id,
+                        actor=request.user,
+                    )
+
+                book_availability_slot(
+                    profile=match.mentor,
+                    slot_id=new_slot.id,
+                    actor=request.user,
+                )
+                mentorship_request.slot = new_slot
+                mentorship_request.save(update_fields=["slot"])
+        except SlotNotBookedError:
+            return Response(
+                {"detail": "Current slot is no longer booked."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except BookingCancelNotAllowedError:
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+        except SlotAlreadyBookedError:
+            return Response(
+                {"detail": "New slot is already booked."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except SlotInPastError:
+            return Response(
+                {"detail": "New slot is in the past."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except OwnSlotBookingError:
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+        except AvailabilitySlot.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        mentorship_request.refresh_from_db()
+        return Response(
+            MentorshipRequestSerializer(mentorship_request).data,
+            status=status.HTTP_200_OK,
+        )
 
 
 class MyUpcomingSessionsListAPIView(APIView):

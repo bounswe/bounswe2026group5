@@ -11,6 +11,7 @@ import {
 } from "../auth/types";
 import { useAuthStore } from "../auth/store";
 import { API_BASE_URL } from "@/lib/api/config";
+import { fetchWithTimeout } from "@/lib/api/fetchWithTimeout";
 
 const AUTH_BASE_PATH = "/api/auth";
 
@@ -50,7 +51,7 @@ async function postAuthEndpoint<TPayload>(
     });
   }
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "omit",

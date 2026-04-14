@@ -759,3 +759,209 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
         second_mentee_client.post(second_feedback_url, {"rating": 2}, format="json")
         self.mentor_profile.refresh_from_db()
         self.assertEqual(self.mentor_profile.average_rating, Decimal("3.00"))
+
+
+class CancelSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
+    """Tests for POST /api/mentorship/sessions/<match_id>/cancel/"""
+
+    def _setup_active_match_with_booking(self):
+        """Create an accepted request with a booked slot and return (match, request_obj)."""
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=self.mentor_slot,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        self.mentor_slot.mark_booked(self.mentee_user)
+        match = Match.objects.get(request=request_obj)
+        return match, request_obj
+
+    def _cancel_url(self, match_id) -> str:
+        return f"/api/mentorship/sessions/{match_id}/cancel/"
+
+    def test_mentee_can_cancel(self) -> None:
+        match, _ = self._setup_active_match_with_booking()
+        response = self.mentee_client.post(self._cancel_url(match.id))
+        self.assertEqual(response.status_code, 200)
+        self.mentor_slot.refresh_from_db()
+        self.assertFalse(self.mentor_slot.is_booked)
+
+    def test_mentor_can_cancel(self) -> None:
+        match, _ = self._setup_active_match_with_booking()
+        response = self.mentor_client.post(self._cancel_url(match.id))
+        self.assertEqual(response.status_code, 200)
+        self.mentor_slot.refresh_from_db()
+        self.assertFalse(self.mentor_slot.is_booked)
+
+    def test_slot_reference_cleared_after_cancel(self) -> None:
+        match, request_obj = self._setup_active_match_with_booking()
+        self.mentee_client.post(self._cancel_url(match.id))
+        request_obj.refresh_from_db()
+        self.assertIsNone(request_obj.slot)
+
+    def test_unrelated_user_cannot_cancel(self) -> None:
+        match, _ = self._setup_active_match_with_booking()
+        response = self.other_client.post(self._cancel_url(match.id))
+        self.assertEqual(response.status_code, 403)
+
+    def test_unauthenticated_returns_401(self) -> None:
+        match, _ = self._setup_active_match_with_booking()
+        response = self.anon_client.post(self._cancel_url(match.id))
+        self.assertEqual(response.status_code, 401)
+
+    def test_cancel_unbooked_slot_returns_400(self) -> None:
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=self.mentor_slot,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        match = Match.objects.get(request=request_obj)
+        # Slot is not booked
+        response = self.mentee_client.post(self._cancel_url(match.id))
+        self.assertEqual(response.status_code, 400)
+
+    def test_nonexistent_match_returns_404(self) -> None:
+        import uuid
+
+        response = self.mentee_client.post(self._cancel_url(uuid.uuid4()))
+        self.assertEqual(response.status_code, 404)
+
+
+class RescheduleSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
+    """Tests for POST /api/mentorship/sessions/<match_id>/reschedule/"""
+
+    def setUp(self) -> None:
+        super().setUp()
+        # Create a second slot on the mentor for rescheduling
+        new_start = timezone.now() + timedelta(days=5)
+        self.mentor_slot_2 = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=new_start,
+            end_at=new_start + timedelta(hours=1),
+        )
+
+    def _setup_active_match_with_booking(self):
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=self.mentor_slot,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        self.mentor_slot.mark_booked(self.mentee_user)
+        match = Match.objects.get(request=request_obj)
+        return match, request_obj
+
+    def _reschedule_url(self, match_id) -> str:
+        return f"/api/mentorship/sessions/{match_id}/reschedule/"
+
+    def test_mentee_can_reschedule(self) -> None:
+        match, _ = self._setup_active_match_with_booking()
+        response = self.mentee_client.post(
+            self._reschedule_url(match.id),
+            {"new_slot_id": str(self.mentor_slot_2.id)},
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_old_slot_freed_after_reschedule(self) -> None:
+        match, _ = self._setup_active_match_with_booking()
+        self.mentee_client.post(
+            self._reschedule_url(match.id),
+            {"new_slot_id": str(self.mentor_slot_2.id)},
+        )
+        self.mentor_slot.refresh_from_db()
+        self.assertFalse(self.mentor_slot.is_booked)
+
+    def test_new_slot_booked_after_reschedule(self) -> None:
+        match, _ = self._setup_active_match_with_booking()
+        self.mentee_client.post(
+            self._reschedule_url(match.id),
+            {"new_slot_id": str(self.mentor_slot_2.id)},
+        )
+        self.mentor_slot_2.refresh_from_db()
+        self.assertTrue(self.mentor_slot_2.is_booked)
+
+    def test_request_slot_updated_after_reschedule(self) -> None:
+        match, request_obj = self._setup_active_match_with_booking()
+        self.mentee_client.post(
+            self._reschedule_url(match.id),
+            {"new_slot_id": str(self.mentor_slot_2.id)},
+        )
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.slot, self.mentor_slot_2)
+
+    def test_mentor_cannot_reschedule(self) -> None:
+        match, _ = self._setup_active_match_with_booking()
+        response = self.mentor_client.post(
+            self._reschedule_url(match.id),
+            {"new_slot_id": str(self.mentor_slot_2.id)},
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_unauthenticated_returns_401(self) -> None:
+        match, _ = self._setup_active_match_with_booking()
+        response = self.anon_client.post(
+            self._reschedule_url(match.id),
+            {"new_slot_id": str(self.mentor_slot_2.id)},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_same_slot_returns_400(self) -> None:
+        match, _ = self._setup_active_match_with_booking()
+        response = self.mentee_client.post(
+            self._reschedule_url(match.id),
+            {"new_slot_id": str(self.mentor_slot.id)},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_slot_belonging_to_different_mentor_returns_404(self) -> None:
+        match, _ = self._setup_active_match_with_booking()
+        # other_mentor_slot belongs to other_profile, not the match's mentor
+        response = self.mentee_client.post(
+            self._reschedule_url(match.id),
+            {"new_slot_id": str(self.other_mentor_slot.id)},
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_already_booked_slot_returns_400(self) -> None:
+        match, _ = self._setup_active_match_with_booking()
+        # Book the second slot with someone else
+        self.mentor_slot_2.mark_booked(self.other_user)
+        response = self.mentee_client.post(
+            self._reschedule_url(match.id),
+            {"new_slot_id": str(self.mentor_slot_2.id)},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_failed_reschedule_keeps_existing_booking(self) -> None:
+        """Failed reschedule must keep the current slot booking and request slot unchanged."""
+        match, request_obj = self._setup_active_match_with_booking()
+        self.mentor_slot_2.mark_booked(self.other_user)
+
+        response = self.mentee_client.post(
+            self._reschedule_url(match.id),
+            {"new_slot_id": str(self.mentor_slot_2.id)},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        self.mentor_slot.refresh_from_db()
+        self.assertTrue(self.mentor_slot.is_booked)
+        self.assertEqual(self.mentor_slot.booked_by, self.mentee_user)
+
+        self.mentor_slot_2.refresh_from_db()
+        self.assertTrue(self.mentor_slot_2.is_booked)
+        self.assertEqual(self.mentor_slot_2.booked_by, self.other_user)
+
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.slot, self.mentor_slot)
+
+    def test_nonexistent_match_returns_404(self) -> None:
+        import uuid
+
+        response = self.mentee_client.post(
+            self._reschedule_url(uuid.uuid4()),
+            {"new_slot_id": str(self.mentor_slot_2.id)},
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data["detail"], "Not found.")

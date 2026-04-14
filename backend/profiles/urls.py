@@ -8,14 +8,18 @@ from .views import (
     AvailabilitySlotDetailAPIView,
     AvailabilitySlotListCreateAPIView,
     MentorPublicRatingAPIView,
+    PopularMentorsListAPIView,
     PublicMentorProfilesSearchListAPIView,
     ProfileByUsernameAPIView,
+    RecentlyAddedMentorsListAPIView,
     SkillListAPIView,
 )
 
 urlpatterns = [
     path("", PublicMentorProfilesSearchListAPIView.as_view(), name="mentor-profiles-search"),
     path("skills/", SkillListAPIView.as_view(), name="skill-list"),
+    path("recently-added/", RecentlyAddedMentorsListAPIView.as_view(), name="mentor-recently-added"),
+    path("popular/", PopularMentorsListAPIView.as_view(), name="mentor-popular"),
     path(
         "<str:username>/availability-slots/",
         AvailabilitySlotListCreateAPIView.as_view(),

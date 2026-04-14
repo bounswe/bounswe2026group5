@@ -1,9 +1,25 @@
+import { Platform } from "react-native";
+
 /**
  * Runtime API configuration for mobile backend calls.
  */
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://localhost:8000";
+const configuredBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+
+function normalizeUrl(value: string): string {
+  const withScheme = /^https?:\/\//i.test(value) ? value : `http://${value}`;
+  return withScheme.replace(/\/$/, "");
+}
+
+function devFallbackBaseUrl(): string {
+  // Android emulator maps host loopback to 10.0.2.2.
+  return Platform.OS === "android"
+    ? "http://10.0.2.2:8000"
+    : "http://127.0.0.1:8000";
+}
+
+const resolvedBaseUrl = normalizeUrl(configuredBaseUrl || devFallbackBaseUrl());
+
+export const API_BASE_URL = resolvedBaseUrl;
 
 export const API_ACCESS_TOKEN = process.env.EXPO_PUBLIC_ACCESS_TOKEN ?? "";
 
