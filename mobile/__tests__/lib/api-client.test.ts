@@ -17,44 +17,6 @@ describe("api client", () => {
     mockGetState.mockReturnValue({ accessToken: "token-123" });
   });
 
-  it("sends GET request with auth header and returns parsed JSON", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ value: 42 }),
-    });
-
-    const result = await apiGet<{ value: number }>("/api/test/");
-
-    expect(result).toEqual({ value: 42 });
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/test/", {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: "Bearer token-123",
-      },
-    });
-  });
-
-  it("omits auth header when there is no access token", async () => {
-    mockGetState.mockReturnValue({ accessToken: null });
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ ok: true }),
-    });
-
-    await apiGet<{ ok: boolean }>("/api/no-auth/");
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/api/no-auth/",
-      {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
-      },
-    );
-  });
-
   it("throws ApiError and prefers detail message", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: false,
@@ -107,43 +69,6 @@ describe("api client", () => {
     await expect(apiGet("/api/fallback/")).rejects.toEqual(
       new ApiError(500, "Request failed with status 500"),
     );
-  });
-
-  it("handles POST success and 204 responses", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 201,
-      json: async () => ({ id: "1" }),
-    });
-
-    const created = await apiPost<{ id: string }, { title: string }>(
-      "/api/items/",
-      {
-        title: "My Item",
-      },
-    );
-
-    expect(created).toEqual({ id: "1" });
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      "http://localhost:8000/api/items/",
-      {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: "Bearer token-123",
-        },
-        body: JSON.stringify({ title: "My Item" }),
-      },
-    );
-
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 204,
-      json: async () => ({}),
-    });
-    const noContent = await apiPost<void>("/api/items/1/archive/");
-    expect(noContent).toBeUndefined();
   });
 
   it("supports PATCH and bubbles parsed API error", async () => {

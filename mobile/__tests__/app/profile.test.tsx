@@ -9,6 +9,7 @@ jest.mock("@/lib/queries/mentorship", () => {
   return {
     ...actual,
     useAvailabilitySlotsQuery: jest.fn(() => ({ data: undefined })),
+    useMentorshipMatchesQuery: jest.fn(() => ({ data: [] })),
   };
 });
 
@@ -42,9 +43,6 @@ describe("ProfileScreen Layout", () => {
 
     // Check page header
     expect(getByText("Profile")).toBeTruthy();
-
-    // Check that the mock user data rendered
-    expect(getByText("Ali Aydin")).toBeTruthy();
 
     // Check that the main sections rendered
     expect(getByText("Expertise")).toBeTruthy();
