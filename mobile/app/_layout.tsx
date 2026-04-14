@@ -32,7 +32,7 @@ export default function RootLayout() {
    */
   useEffect(() => {
     initializeAuth();
-  }, []);
+  }, [initializeAuth]);
 
   /**
    * Show splash screen while initializing auth.
