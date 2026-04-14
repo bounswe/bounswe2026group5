@@ -17,6 +17,8 @@ jobs:
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_API_BASE_URL: https://neighborship.app
 
     defaults:
       run:
@@ -46,11 +48,8 @@ jobs:
 
       - name: Write mobile env file
         run: |
-          if [ -n "${{ secrets.EXPO_PUBLIC_API_BASE_URL }}" ]; then
-            echo "EXPO_PUBLIC_API_BASE_URL=${{ secrets.EXPO_PUBLIC_API_BASE_URL }}" > .env
-          else
-            echo "EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000" > .env
-          fi
+          echo "EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL" > .env
+          echo "Using EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL"
 
       - name: Generate native Android project
         run: npx expo prebuild --platform android --non-interactive
