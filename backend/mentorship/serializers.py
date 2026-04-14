@@ -6,7 +6,7 @@ from rest_framework import serializers
 from accounts.models import AppUsageMode
 from profiles.models import AvailabilitySlot, Profile
 
-from .models import Match, MentorshipRequest
+from .models import Feedback, Match, MentorshipRequest
 
 
 class ProfileSummarySerializer(serializers.ModelSerializer):
@@ -200,3 +200,21 @@ class UpcomingMenteeSessionSerializer(serializers.ModelSerializer):
     def get_slot_end_time(self, obj: AvailabilitySlot) -> str:
         """Return session end time in local timezone."""
         return timezone.localtime(obj.end_at).time().replace(microsecond=0).isoformat()
+
+
+class FeedbackSerializer(serializers.ModelSerializer):
+    """Read serializer for feedback entries."""
+
+    submitted_by = ProfileSummarySerializer(read_only=True)
+
+    class Meta:
+        model = Feedback
+        fields = ("id", "match", "submitted_by", "rating", "text", "created_at")
+        read_only_fields = fields
+
+
+class FeedbackCreateSerializer(serializers.Serializer):
+    """Write serializer for submitting feedback on a match."""
+
+    rating = serializers.IntegerField(min_value=1, max_value=5)
+    text = serializers.CharField(required=False, default="", allow_blank=True)

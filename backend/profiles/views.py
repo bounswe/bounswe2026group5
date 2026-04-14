@@ -752,3 +752,36 @@ class PublicMentorProfilesSearchListAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class MentorPublicRatingAPIView(ProfileLookupMixin, APIView):
+    """Return the public batch-updated rating for a mentor profile."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(description="Public rating data."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "Return the public average rating and review count for a mentor profile. "
+            "The average rating is updated in batches (per the configured threshold), "
+            "not on every individual review."
+        ),
+        tags=["Profiles"],
+    )
+    def get(self, request: Request, username: str) -> Response:
+        """Return average_rating and review_count for the named profile."""
+        profile = self._get_profile_or_404(username)
+        if profile is None or not profile.is_visible:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(
+            {
+                "username": profile.username,
+                "average_rating": str(profile.average_rating),
+                "review_count": profile.review_count,
+            },
+            status=status.HTTP_200_OK,
+        )

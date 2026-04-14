@@ -51,6 +51,12 @@ class Profile(models.Model):
     )
     rating = models.PositiveIntegerField(default=0)
     total_mentee_count = models.PositiveIntegerField(default=0)
+    average_rating = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+    review_count = models.PositiveIntegerField(default=0)
     expertise_fields = models.ManyToManyField(
         "ExpertiseField",
         through="ProfileExpertise",
