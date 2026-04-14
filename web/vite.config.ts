@@ -29,6 +29,7 @@ const config = defineConfig({
           changeOrigin: true,
         }
       },
+    allowedHosts: ['www.neighborship.app','neighborship.app','mentorhood.app','www.mentorhood.app'],
     host: '0.0.0.0',
     port: 3000,
     watch: {

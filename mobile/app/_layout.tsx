@@ -32,7 +32,7 @@ export default function RootLayout() {
    */
   useEffect(() => {
     initializeAuth();
-  }, []);
+  }, [initializeAuth]);
 
   /**
    * Show splash screen while initializing auth.
@@ -44,7 +44,7 @@ export default function RootLayout() {
       </View>
     );
   }
-  
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
@@ -54,7 +54,10 @@ export default function RootLayout() {
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="register" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="mentor/[username]" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="mentor/[username]"
+            options={{ headerShown: false }}
+          />
           <Stack.Screen
             name="modal"
             options={{ presentation: "modal", title: "Modal" }}
