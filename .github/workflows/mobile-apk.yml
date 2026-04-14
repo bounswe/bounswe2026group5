@@ -54,26 +54,21 @@ jobs:
       - name: Generate native Android project
         run: npx expo prebuild --platform android --non-interactive
 
-      - name: Build debug APK
+      - name: Build release APK
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64 --no-daemon
 
-      - name: Prepare renamed APK
+      - name: Prepare universal APK
         run: |
           mkdir -p apk-out
-          SAFE_REF=$(echo "${GITHUB_REF_NAME}" | tr '/\\' '-' | tr -cd '[:alnum:]._-')
-          APK_NAME="mentorship-mobile-${SAFE_REF}-${GITHUB_RUN_NUMBER}.apk"
-          ARM64_APK="android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk"
-          DEFAULT_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          UNIVERSAL_APK="android/app/build/outputs/apk/release/app-release.apk"
 
-          if [ -f "$ARM64_APK" ]; then
-            cp "$ARM64_APK" "apk-out/$APK_NAME"
-          elif [ -f "$DEFAULT_APK" ]; then
-            cp "$DEFAULT_APK" "apk-out/$APK_NAME"
+          if [ -f "$UNIVERSAL_APK" ]; then
+            cp "$UNIVERSAL_APK" "apk-out/Neighborship.apk"
           else
-            echo "Expected APK not found under android/app/build/outputs/apk/debug"
+            echo "Expected release APK not found under android/app/build/outputs/apk/release"
             ls -R android/app/build/outputs/apk || true
             exit 1
           fi
@@ -81,7 +76,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mobile-apk-debug
+          name: mobile-apk-release
           path: mobile/apk-out/*.apk
           if-no-files-found: error
           retention-days: 14
