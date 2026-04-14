@@ -1,14 +1,20 @@
-import React from "react";
-import { render } from "@testing-library/react-native";
 import ProfileScreen from "@/app/(tabs)/profile";
+import { render } from "@testing-library/react-native";
+import React from "react";
+
+const mockMatchesQuery = jest.fn();
+const mockAvailabilityQuery = jest.fn();
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
 jest.mock("@/lib/queries/mentorship", () => {
-  const actual = jest.requireActual("@/lib/queries/mentorship");
+  const actual = jest.requireActual<Record<string, unknown>>(
+    "@/lib/queries/mentorship",
+  );
   return {
     ...actual,
-    useAvailabilitySlotsQuery: jest.fn(() => ({ data: undefined })),
+    useAvailabilitySlotsQuery: () => mockAvailabilityQuery(),
+    useMentorshipMatchesQuery: () => mockMatchesQuery(),
   };
 });
 
@@ -37,6 +43,11 @@ jest.mock("expo-router", () => ({
 }));
 
 describe("ProfileScreen Layout", () => {
+  beforeEach(() => {
+    mockAvailabilityQuery.mockReturnValue({ data: undefined });
+    mockMatchesQuery.mockReturnValue({ data: [] });
+  });
+
   it("renders the user profile data and section headers", () => {
     const { getByText } = render(<ProfileScreen />);
 
@@ -49,5 +60,37 @@ describe("ProfileScreen Layout", () => {
     // Check that the main sections rendered
     expect(getByText("Expertise")).toBeTruthy();
     expect(getByText("Eager to Learn")).toBeTruthy();
+  });
+
+  it("shows mentee count from active unique matches", () => {
+    mockMatchesQuery.mockReturnValue({
+      data: [
+        {
+          id: "m-1",
+          is_active: true,
+          mentee: { username: "mentee-1" },
+        },
+        {
+          id: "m-2",
+          is_active: true,
+          mentee: { username: "mentee-1" },
+        },
+        {
+          id: "m-3",
+          is_active: true,
+          mentee: { username: "mentee-2" },
+        },
+        {
+          id: "m-4",
+          is_active: false,
+          mentee: { username: "mentee-3" },
+        },
+      ],
+    });
+
+    const { getByText } = render(<ProfileScreen />);
+
+    expect(getByText("2")).toBeTruthy();
+    expect(getByText("Mentees")).toBeTruthy();
   });
 });

@@ -1,5 +1,5 @@
-import React from "react";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import React from "react";
 
 import DiscoverScreen from "@/app/(tabs)/discover";
 import {
@@ -87,5 +87,90 @@ describe("DiscoverScreen", () => {
     fireEvent.press(getByTestId("mentor-card-can-ozkan"));
 
     expect(mockPush).toHaveBeenCalledWith("/user/can-ozkan");
+  });
+
+  it("shows API error message when profile query fails", async () => {
+    (fetchDiscoverProfiles as jest.Mock).mockRejectedValueOnce(
+      new Error("Failed to load discovery profiles (500)"),
+    );
+
+    const { getByText } = render(<DiscoverScreen />);
+
+    await waitFor(() => {
+      expect(getByText("Failed to load discovery profiles (500)")).toBeTruthy();
+    });
+  });
+
+  it("shows demo preview message when backend returns empty results", async () => {
+    (fetchDiscoverProfiles as jest.Mock).mockResolvedValueOnce({
+      count: 0,
+      page: 1,
+      pageSize: 8,
+      results: [],
+    });
+
+    const { getByText } = render(<DiscoverScreen />);
+
+    await waitFor(() => {
+      expect(getByText("Demo preview data")).toBeTruthy();
+    });
+  });
+
+  it("requests next page when pressing load more", async () => {
+    (fetchDiscoverProfiles as jest.Mock)
+      .mockResolvedValueOnce({
+        count: 2,
+        page: 1,
+        pageSize: 8,
+        results: [
+          {
+            id: "mentor-1",
+            username: "can-ozkan",
+            full_name: "Can Ozkan",
+            bio: "Supports code review and team planning.",
+            hidden: false,
+            picture_url: "",
+            title: "Mobile Engineer",
+            show_initials_only: false,
+            expertises: ["Docker", "GraphQL"],
+            rating: 5,
+            total_mentee_count: 12,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        count: 2,
+        page: 2,
+        pageSize: 8,
+        results: [
+          {
+            id: "mentor-2",
+            username: "elif-yildiz",
+            full_name: "Elif Yildiz",
+            bio: "Frontend and accessibility mentoring.",
+            hidden: false,
+            picture_url: "",
+            title: "Frontend Engineer",
+            show_initials_only: false,
+            expertises: ["React"],
+            rating: 4.8,
+            total_mentee_count: 9,
+          },
+        ],
+      });
+
+    const { getByText } = render(<DiscoverScreen />);
+
+    await waitFor(() => {
+      expect(getByText("Load More")).toBeTruthy();
+    });
+
+    fireEvent.press(getByText("Load More"));
+
+    await waitFor(() => {
+      expect(fetchDiscoverProfiles).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 2, pageSize: 8 }),
+      );
+    });
   });
 });
