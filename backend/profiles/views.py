@@ -448,7 +448,11 @@ class AvailabilitySlotCancelBookingAPIView(ProfileLookupMixin, APIView):
             403: OpenApiResponse(description="Permission denied."),
             404: OpenApiResponse(description="Availability slot not found."),
         },
-        description="Cancel a mentor availability slot booking.",
+        description=(
+            "Cancel a mentor availability slot booking by slot ID. "
+            "For accepted mentorship sessions tied to a match, prefer "
+            "`POST /api/mentorship/sessions/{match_id}/cancel/`."
+        ),
         tags=["Profiles"],
     )
     def post(self, request: Request, username: str, slot_id: str) -> Response:
