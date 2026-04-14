@@ -183,6 +183,7 @@ class MentorshipRequestAPIBaseTestCase(TestCase):
     REQUESTS_ME_URL = "/api/mentorship/requests/me/"
     MATCHES_ME_URL = "/api/mentorship/matches/me/"
     UPCOMING_SESSIONS_ME_URL = "/api/mentorship/sessions/me/upcoming/"
+    PAST_SESSIONS_ME_URL = "/api/mentorship/sessions/me/past/"
 
     def setUp(self) -> None:
         """Create mentor and mentee users with matching profiles."""
@@ -623,6 +624,117 @@ class MyUpcomingSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(response.data, [])
 
 
+class MyPastSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
+    """Tests for GET /api/mentorship/sessions/me/past/."""
+
+    def _create_past_slot(
+        self,
+        profile: Any,
+        booked_by: Any = None,
+        days_ago: int = 2,
+    ) -> AvailabilitySlot:
+        """Create a slot in the past, optionally marked as booked."""
+        past_start = timezone.now() - timedelta(days=days_ago)
+        kwargs: dict[str, Any] = {
+            "profile": profile,
+            "start_at": past_start,
+            "end_at": past_start + timedelta(hours=1),
+        }
+        if booked_by is not None:
+            kwargs["is_booked"] = True
+            kwargs["booked_by"] = booked_by
+            kwargs["booked_at"] = timezone.now() - timedelta(days=days_ago + 1)
+        return AvailabilitySlot.objects.create(**kwargs)
+
+    def test_unauthenticated_returns_401(self) -> None:
+        response = self.anon_client.get(self.PAST_SESSIONS_ME_URL)
+        self.assertEqual(response.status_code, 401)
+
+    def test_no_past_sessions_returns_empty_list(self) -> None:
+        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_returns_past_booked_sessions_for_mentee(self) -> None:
+        MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        past_slot = self._create_past_slot(self.mentor_profile, booked_by=self.mentee_user)
+
+        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(str(response.data[0]["slot_id"]), str(past_slot.id))
+
+    def test_excludes_upcoming_slots(self) -> None:
+        MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        self.mentor_slot.mark_booked(self.mentee_user)
+
+        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_includes_sessions_from_inactive_match(self) -> None:
+        """Past sessions from ended mentorships should still appear."""
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        Match.objects.filter(request=request_obj).update(is_active=False)
+        past_slot = self._create_past_slot(self.mentor_profile, booked_by=self.mentee_user)
+
+        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(str(response.data[0]["slot_id"]), str(past_slot.id))
+
+    def test_excludes_sessions_without_any_match(self) -> None:
+        """Past booked slots from mentors with no match with the caller are excluded."""
+        self._create_past_slot(self.mentor_profile, booked_by=self.mentee_user)
+
+        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_excludes_sessions_booked_by_different_user(self) -> None:
+        MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        self._create_past_slot(self.mentor_profile, booked_by=self.other_user)
+
+        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_results_ordered_most_recent_first(self) -> None:
+        MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        older_slot = self._create_past_slot(
+            self.mentor_profile, booked_by=self.mentee_user, days_ago=5
+        )
+        recent_slot = self._create_past_slot(
+            self.mentor_profile, booked_by=self.mentee_user, days_ago=1
+        )
+
+        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(str(response.data[0]["slot_id"]), str(recent_slot.id))
+        self.assertEqual(str(response.data[1]["slot_id"]), str(older_slot.id))
+
+
 class FeedbackAPIBaseTestCase(MentorshipRequestAPIBaseTestCase):
     """Shared fixtures for feedback API tests: an active match between mentor and mentee."""
 
@@ -759,6 +871,96 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
         second_mentee_client.post(second_feedback_url, {"rating": 2}, format="json")
         self.mentor_profile.refresh_from_db()
         self.assertEqual(self.mentor_profile.average_rating, Decimal("3.00"))
+
+
+class MentorUpcomingSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
+    """Tests for GET /api/mentorship/sessions/mentor/upcoming/."""
+
+    MENTOR_UPCOMING_SESSIONS_URL = "/api/mentorship/sessions/mentor/upcoming/"
+
+    def test_unauthenticated_returns_401(self) -> None:
+        response = self.anon_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
+        self.assertEqual(response.status_code, 401)
+
+    def test_mentee_only_user_returns_403(self) -> None:
+        response = self.mentee_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
+        self.assertEqual(response.status_code, 403)
+
+    def test_no_booked_slots_returns_empty_list(self) -> None:
+        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_returns_upcoming_booked_slots_for_mentor(self) -> None:
+        self.mentor_slot.mark_booked(self.mentee_user)
+
+        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(str(response.data[0]["slot_id"]), str(self.mentor_slot.id))
+
+    def test_response_includes_mentee_info(self) -> None:
+        self.mentor_slot.mark_booked(self.mentee_user)
+
+        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        mentee_data = response.data[0]["mentee"]
+        self.assertEqual(mentee_data["username"], self.mentee_profile.username)
+        self.assertEqual(mentee_data["display_name"], self.mentee_profile.display_name)
+
+    def test_excludes_unbooked_slots(self) -> None:
+        # mentor_slot is unbooked by default
+        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_excludes_past_booked_slots(self) -> None:
+        past_start = timezone.now() - timedelta(days=2)
+        AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=past_start,
+            end_at=past_start + timedelta(hours=1),
+            is_booked=True,
+            booked_by=self.mentee_user,
+            booked_at=timezone.now() - timedelta(days=3),
+        )
+
+        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_excludes_slots_owned_by_other_mentor(self) -> None:
+        self.other_mentor_slot.mark_booked(self.mentee_user)
+
+        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_results_ordered_by_start_time_ascending(self) -> None:
+        self.mentor_slot.mark_booked(self.mentee_user)
+
+        later_start = timezone.now() + timedelta(days=10)
+        later_slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=later_start,
+            end_at=later_start + timedelta(hours=1),
+        )
+        later_slot.mark_booked(self.mentee_user)
+
+        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(str(response.data[0]["slot_id"]), str(self.mentor_slot.id))
+        self.assertEqual(str(response.data[1]["slot_id"]), str(later_slot.id))
+
+    def test_response_contains_expected_fields(self) -> None:
+        self.mentor_slot.mark_booked(self.mentee_user)
+
+        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        item = response.data[0]
+        for field in ("slot_id", "mentee", "slot_date", "slot_start_time", "slot_end_time", "booked_at"):
+            self.assertIn(field, item)
 
 
 class CancelSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
