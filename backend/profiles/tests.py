@@ -1294,3 +1294,239 @@ class MentorPublicRatingAPITests(TestCase):
         response = self.api_client.get(self._url(self.mentor_profile.username))
         self.assertEqual(response.json()["average_rating"], "4.20")
         self.assertEqual(response.json()["review_count"], 5)
+
+
+class RecentlyAddedMentorsAPITests(TestCase):
+    """Tests for GET /api/profiles/recently-added/"""
+
+    def setUp(self) -> None:
+        self.client = APIClient()
+
+        self.mentor1_user = User.objects.create_user(
+            email="recent1@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor1_profile = Profile.objects.create(
+            user=self.mentor1_user,
+            display_name="First Mentor",
+            is_visible=True,
+            rating=3,
+        )
+
+        self.mentor2_user = User.objects.create_user(
+            email="recent2@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor2_profile = Profile.objects.create(
+            user=self.mentor2_user,
+            display_name="Second Mentor",
+            is_visible=True,
+            rating=5,
+        )
+
+        self.hidden_mentor_user = User.objects.create_user(
+            email="hidden@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.hidden_mentor_profile = Profile.objects.create(
+            user=self.hidden_mentor_user,
+            display_name="Hidden Mentor",
+            is_visible=False,
+        )
+
+        self.mentee_user = User.objects.create_user(
+            email="mentee_recent@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user,
+            display_name="Mentee Person",
+            is_visible=True,
+        )
+
+    def test_returns_200(self) -> None:
+        response = self.client.get("/api/profiles/recently-added/")
+        self.assertEqual(response.status_code, 200)
+
+    def test_response_has_results_key(self) -> None:
+        response = self.client.get("/api/profiles/recently-added/")
+        self.assertIn("results", response.json())
+
+    def test_only_visible_mentors_returned(self) -> None:
+        response = self.client.get("/api/profiles/recently-added/")
+        names = [p["full_name"] for p in response.json()["results"]]
+        self.assertNotIn("Hidden Mentor", names)
+        self.assertNotIn("Mentee Person", names)
+
+    def test_sorted_by_created_at_descending(self) -> None:
+        # mentor2 was created after mentor1 so should appear first
+        response = self.client.get("/api/profiles/recently-added/")
+        results = response.json()["results"]
+        self.assertGreaterEqual(len(results), 2)
+        ids = [r["id"] for r in results]
+        self.assertLess(ids.index(str(self.mentor2_profile.id)), ids.index(str(self.mentor1_profile.id)))
+
+    def test_default_limit_is_ten(self) -> None:
+        # Create 12 visible mentors in total (2 already exist)
+        for i in range(10):
+            u = User.objects.create_user(
+                email=f"extra{i}@example.com",
+                password="SecurePass123",
+                app_usage_mode=AppUsageMode.MENTOR,
+            )
+            Profile.objects.create(user=u, display_name=f"Extra {i}", is_visible=True)
+
+        response = self.client.get("/api/profiles/recently-added/")
+        self.assertEqual(len(response.json()["results"]), 10)
+
+    def test_custom_limit(self) -> None:
+        response = self.client.get("/api/profiles/recently-added/", {"limit": 1})
+        self.assertEqual(len(response.json()["results"]), 1)
+
+    def test_limit_capped_at_50(self) -> None:
+        for i in range(60):
+            u = User.objects.create_user(
+                email=f"cap{i}@example.com",
+                password="SecurePass123",
+                app_usage_mode=AppUsageMode.MENTOR,
+            )
+            Profile.objects.create(user=u, display_name=f"Cap {i}", is_visible=True)
+
+        response = self.client.get("/api/profiles/recently-added/", {"limit": 100})
+        self.assertLessEqual(len(response.json()["results"]), 50)
+
+    def test_invalid_limit_returns_400(self) -> None:
+        response = self.client.get("/api/profiles/recently-added/", {"limit": "abc"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_accessible_without_authentication(self) -> None:
+        response = self.client.get("/api/profiles/recently-added/")
+        self.assertEqual(response.status_code, 200)
+
+
+class PopularMentorsAPITests(TestCase):
+    """Tests for GET /api/profiles/popular/"""
+
+    def setUp(self) -> None:
+        self.client = APIClient()
+
+        self.low_rated_user = User.objects.create_user(
+            email="low@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.low_rated_profile = Profile.objects.create(
+            user=self.low_rated_user,
+            display_name="Low Rated",
+            is_visible=True,
+            rating=1,
+            total_mentee_count=5,
+        )
+
+        self.high_rated_user = User.objects.create_user(
+            email="high@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.high_rated_profile = Profile.objects.create(
+            user=self.high_rated_user,
+            display_name="High Rated",
+            is_visible=True,
+            rating=5,
+            total_mentee_count=10,
+        )
+
+        self.hidden_user = User.objects.create_user(
+            email="hiddenpop@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.hidden_profile = Profile.objects.create(
+            user=self.hidden_user,
+            display_name="Hidden Popular",
+            is_visible=False,
+            rating=5,
+        )
+
+        self.mentee_user = User.objects.create_user(
+            email="menteepop@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user,
+            display_name="Mentee Pop",
+            is_visible=True,
+            rating=5,
+        )
+
+    def test_returns_200(self) -> None:
+        response = self.client.get("/api/profiles/popular/")
+        self.assertEqual(response.status_code, 200)
+
+    def test_response_has_results_key(self) -> None:
+        response = self.client.get("/api/profiles/popular/")
+        self.assertIn("results", response.json())
+
+    def test_only_visible_mentors_returned(self) -> None:
+        response = self.client.get("/api/profiles/popular/")
+        names = [p["full_name"] for p in response.json()["results"]]
+        self.assertNotIn("Hidden Popular", names)
+        self.assertNotIn("Mentee Pop", names)
+
+    def test_sorted_by_rating_descending(self) -> None:
+        response = self.client.get("/api/profiles/popular/")
+        results = response.json()["results"]
+        self.assertGreaterEqual(len(results), 2)
+        ids = [r["id"] for r in results]
+        self.assertLess(
+            ids.index(str(self.high_rated_profile.id)),
+            ids.index(str(self.low_rated_profile.id)),
+        )
+
+    def test_tiebreaker_is_total_mentee_count(self) -> None:
+        # Two mentors with the same rating; the one with more mentees comes first
+        tied_low_user = User.objects.create_user(
+            email="tied_low@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        tied_low = Profile.objects.create(
+            user=tied_low_user,
+            display_name="Tied Low Mentees",
+            is_visible=True,
+            rating=3,
+            total_mentee_count=2,
+        )
+        tied_high_user = User.objects.create_user(
+            email="tied_high@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        tied_high = Profile.objects.create(
+            user=tied_high_user,
+            display_name="Tied High Mentees",
+            is_visible=True,
+            rating=3,
+            total_mentee_count=20,
+        )
+
+        response = self.client.get("/api/profiles/popular/")
+        ids = [r["id"] for r in response.json()["results"]]
+        self.assertLess(ids.index(str(tied_high.id)), ids.index(str(tied_low.id)))
+
+    def test_custom_limit(self) -> None:
+        response = self.client.get("/api/profiles/popular/", {"limit": 1})
+        self.assertEqual(len(response.json()["results"]), 1)
+
+    def test_invalid_limit_returns_400(self) -> None:
+        response = self.client.get("/api/profiles/popular/", {"limit": "xyz"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_accessible_without_authentication(self) -> None:
+        response = self.client.get("/api/profiles/popular/")
+        self.assertEqual(response.status_code, 200)

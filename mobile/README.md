@@ -10,15 +10,23 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Configure backend URL (optional)
+2. Configure backend URL
 
-   Create a `.env.local` file in the mobile directory:
+   Set `EXPO_PUBLIC_API_BASE_URL` in one of these ways:
+
+   Local development:
 
    ```bash
-   EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+   EXPO_PUBLIC_API_BASE_URL=http://192.168.1.42:8000
    ```
 
-   If not set, defaults to `http://localhost:8000`.
+   CI/CD (recommended): store `EXPO_PUBLIC_API_BASE_URL` as a GitHub Actions secret.
+
+   For physical phones and APK builds, do NOT use `localhost` or `127.0.0.1`.
+   Use your computer's LAN IP (same Wi-Fi) or an HTTPS public backend URL.
+
+   Android emulator example: `http://10.0.2.2:8000`
+   Physical Android phone example: `http://192.168.1.42:8000`
 
 3. Ensure backend is running
 
@@ -102,6 +110,20 @@ mobile/
 ## Environment Variables
 
 - `EXPO_PUBLIC_API_BASE_URL`: Backend API base URL (default: http://localhost:8000)
+
+## Build ARM APK
+
+Generate an arm64-only release APK:
+
+```bash
+npm run apk:arm64
+```
+
+Output APK path:
+
+```bash
+mobile/android/app/build/outputs/apk/release/app-release.apk
+```
 
 Note: `EXPO_PUBLIC_ENABLE_MOCK_FALLBACK` is deprecated. Use backend data or add mock fallback in specific queries.
 

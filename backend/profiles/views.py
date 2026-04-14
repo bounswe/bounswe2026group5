@@ -448,7 +448,11 @@ class AvailabilitySlotCancelBookingAPIView(ProfileLookupMixin, APIView):
             403: OpenApiResponse(description="Permission denied."),
             404: OpenApiResponse(description="Availability slot not found."),
         },
-        description="Cancel a mentor availability slot booking.",
+        description=(
+            "Cancel a mentor availability slot booking by slot ID. "
+            "For accepted mentorship sessions tied to a match, prefer "
+            "`POST /api/mentorship/sessions/{match_id}/cancel/`."
+        ),
         tags=["Profiles"],
     )
     def post(self, request: Request, username: str, slot_id: str) -> Response:
@@ -467,6 +471,90 @@ class AvailabilitySlotCancelBookingAPIView(ProfileLookupMixin, APIView):
             return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
 
         return Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_200_OK)
+
+
+class RecentlyAddedMentorsListAPIView(APIView):
+    """Public listing of the most recently created visible mentor profiles."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        responses={
+            200: PublicMentorProfileSearchListResponseSerializer,
+            400: OpenApiResponse(description="Invalid `limit` value."),
+        },
+        description=(
+            "Return the most recently created visible mentor profiles, "
+            "sorted by creation date descending. "
+            "Use `limit` (1–50, default 10) to control the list size."
+        ),
+        tags=["Profiles"],
+    )
+    def get(self, request: Request) -> Response:
+        try:
+            limit = int(request.query_params.get("limit", 10))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "`limit` must be an integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        limit = max(1, min(limit, 50))
+
+        qs = (
+            Profile.objects.select_related("user")
+            .filter(
+                is_visible=True,
+                user__app_usage_mode=AppUsageMode.MENTOR,
+                user__is_active=True,
+            )
+            .order_by("-created_at")[:limit]
+        )
+
+        serializer = PublicMentorProfileSearchResultSerializer(qs, many=True)
+        return Response({"results": serializer.data}, status=status.HTTP_200_OK)
+
+
+class PopularMentorsListAPIView(APIView):
+    """Public listing of the highest-rated visible mentor profiles."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        responses={
+            200: PublicMentorProfileSearchListResponseSerializer,
+            400: OpenApiResponse(description="Invalid `limit` value."),
+        },
+        description=(
+            "Return the most popular visible mentor profiles, sorted by rating "
+            "descending with total mentee count as a tiebreaker. "
+            "Use `limit` (1–50, default 10) to control the list size."
+        ),
+        tags=["Profiles"],
+    )
+    def get(self, request: Request) -> Response:
+        try:
+            limit = int(request.query_params.get("limit", 10))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "`limit` must be an integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        limit = max(1, min(limit, 50))
+
+        qs = (
+            Profile.objects.select_related("user")
+            .filter(
+                is_visible=True,
+                user__app_usage_mode=AppUsageMode.MENTOR,
+                user__is_active=True,
+            )
+            .order_by("-rating", "-total_mentee_count")[:limit]
+        )
+
+        serializer = PublicMentorProfileSearchResultSerializer(qs, many=True)
+        return Response({"results": serializer.data}, status=status.HTTP_200_OK)
 
 
 class PublicMentorProfilesSearchListAPIView(APIView):

@@ -147,6 +147,12 @@ class RespondToRequestSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=["accept", "reject"])
 
 
+class RescheduleSessionSerializer(serializers.Serializer):
+    """Write serializer for rescheduling a session to a new availability slot."""
+
+    new_slot_id = serializers.UUIDField()
+
+
 class MatchSerializer(serializers.ModelSerializer):
     """Read serializer for mentorship matches."""
 

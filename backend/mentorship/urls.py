@@ -3,6 +3,7 @@
 from django.urls import path
 
 from .views import (
+    CancelSessionAPIView,
     CreateRequestAPIView,
     MatchFeedbackListCreateAPIView,
     MentorUpcomingSessionsListAPIView,
@@ -10,6 +11,7 @@ from .views import (
     MyPastSessionsListAPIView,
     MyRequestsListAPIView,
     MyUpcomingSessionsListAPIView,
+    RescheduleSessionAPIView,
     RespondToRequestAPIView,
 )
 
@@ -41,5 +43,15 @@ urlpatterns = [
         "sessions/mentor/upcoming/",
         MentorUpcomingSessionsListAPIView.as_view(),
         name="mentorship-mentor-upcoming-session-list",
+    ),
+    path(
+        "sessions/<uuid:match_id>/cancel/",
+        CancelSessionAPIView.as_view(),
+        name="mentorship-session-cancel",
+    ),
+    path(
+        "sessions/<uuid:match_id>/reschedule/",
+        RescheduleSessionAPIView.as_view(),
+        name="mentorship-session-reschedule",
     ),
 ]
