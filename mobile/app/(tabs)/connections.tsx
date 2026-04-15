@@ -15,6 +15,7 @@ import {
   mapRequestsToDashboard,
   type DashboardRequestItem,
   type MentorshipRequest,
+  useDeactivateMatchMutation,
   useMentorshipMatchesQuery,
   useMentorshipRequestsQuery,
   useRespondToMentorshipRequestMutation,
@@ -58,12 +59,22 @@ function mapRequestToCardProps(
   };
 }
 
-function showRemoveConnectionNotSupported(roleLabel: string): void {
-  // NOTE: Backend endpoint for removing an active mentor-mentee match is not available yet.
-  Alert.alert(
-    "Not Supported Yet",
-    `Removing ${roleLabel} connections is not available on the current API.`,
-  );
+async function deactivateConnection(params: {
+  matchId: string;
+  name: string;
+  mutateAsync: (matchId: string) => Promise<unknown>;
+}): Promise<void> {
+  try {
+    await params.mutateAsync(params.matchId);
+    Alert.alert("Connection Removed", `${params.name} has been removed.`);
+  } catch (error) {
+    Alert.alert(
+      "Remove Failed",
+      error instanceof Error
+        ? error.message
+        : "Could not remove this connection.",
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -96,15 +107,6 @@ const MOCK_MESSAGES: MessageCardProps[] = [
   },
 ];
 
-// NOTE: Replace with API-backed latest message when messaging endpoint is available.
-const MOCK_MENTEE_MESSAGE = {
-  name: "Elena Rodriguez",
-  preview:
-    '"I finished the wireframes we discussed — take a look when you have a moment!"',
-  timeAgo: "15m ago",
-  hasUnread: true,
-};
-
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -126,11 +128,13 @@ function MentorConnections() {
   const [managedMentee, setManagedMentee] = useState<{
     name: string;
     username: string;
+    matchId: string;
   } | null>(null);
 
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const respondMutation = useRespondToMentorshipRequestMutation();
+  const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
 
   const requests = requestsQuery.data ?? [];
   const matches = matchesQuery.data ?? [];
@@ -142,6 +146,7 @@ function MentorConnections() {
   const pendingRequests = requests.filter((r) => r.status === "PENDING");
   const mentees = matches.map((m) => ({
     id: m.id,
+    matchId: m.id,
     username: m.mentee.username,
     name: m.mentee.display_name,
     subtitle: m.mentee.title ?? "",
@@ -155,11 +160,13 @@ function MentorConnections() {
   const handleMenteeMore = ({
     name,
     username,
+    matchId,
   }: {
     name: string;
     username: string;
+    matchId: string;
   }) => {
-    setManagedMentee({ name, username });
+    setManagedMentee({ name, username, matchId });
   };
 
   const handleAccept = async (id: string) => {
@@ -236,13 +243,19 @@ function MentorConnections() {
           setManagedMentee(null);
           Alert.alert(
             `Remove ${target.name}?`,
-            "This will remove the connection once backend support is available.",
+            "This will end the active mentorship connection.",
             [
               { text: "Cancel", style: "cancel" },
               {
                 text: "Remove",
                 style: "destructive",
-                onPress: () => showRemoveConnectionNotSupported("mentee"),
+                onPress: () => {
+                  void deactivateConnection({
+                    matchId: target.matchId,
+                    name: target.name,
+                    mutateAsync: deactivateMatchMutation.mutateAsync,
+                  });
+                },
               },
             ],
           );
@@ -371,6 +384,7 @@ function MentorConnections() {
               handleMenteeMore({
                 name: mentee.name,
                 username: mentee.username,
+                matchId: mentee.matchId,
               })
             }
           />
@@ -398,10 +412,12 @@ function MenteeConnections() {
   const [managedMentor, setManagedMentor] = useState<{
     name: string;
     username: string;
+    matchId: string;
   } | null>(null);
 
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
+  const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
   const requests = requestsQuery.data ?? [];
   const requestsLoading = requestsQuery.isLoading;
   const requestsError = requestsQuery.isError;
@@ -428,6 +444,7 @@ function MenteeConnections() {
 
   const mentors = matches.map((m) => ({
     id: m.id,
+    matchId: m.id,
     username: m.mentor.username,
     name: m.mentor.display_name,
     subtitle: m.mentor.title ?? "",
@@ -441,11 +458,13 @@ function MenteeConnections() {
   const handleMore = ({
     name,
     username,
+    matchId,
   }: {
     name: string;
     username: string;
+    matchId: string;
   }) => {
-    setManagedMentor({ name, username });
+    setManagedMentor({ name, username, matchId });
   };
 
   const displayedMentors = showAllMentors
@@ -480,13 +499,19 @@ function MenteeConnections() {
           setManagedMentor(null);
           Alert.alert(
             `Remove ${target.name}?`,
-            "This will remove the connection once backend support is available.",
+            "This will end the active mentorship connection.",
             [
               { text: "Cancel", style: "cancel" },
               {
                 text: "Remove",
                 style: "destructive",
-                onPress: () => showRemoveConnectionNotSupported("mentor"),
+                onPress: () => {
+                  void deactivateConnection({
+                    matchId: target.matchId,
+                    name: target.name,
+                    mutateAsync: deactivateMatchMutation.mutateAsync,
+                  });
+                },
               },
             ],
           );
@@ -618,7 +643,11 @@ function MenteeConnections() {
             }
             onMessage={() => handleMessage(mentor.name)}
             onMore={() =>
-              handleMore({ name: mentor.name, username: mentor.username })
+              handleMore({
+                name: mentor.name,
+                username: mentor.username,
+                matchId: mentor.matchId,
+              })
             }
           />
         ))}
