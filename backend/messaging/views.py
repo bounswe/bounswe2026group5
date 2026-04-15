@@ -50,7 +50,7 @@ class ConversationListAPIView(APIView):
 
 
 class ConversationDetailAPIView(APIView):
-    """List messages in a conversation with pagination."""
+    """List messages in a conversation with pagination, and send messages."""
 
     permission_classes = [IsRegularUser]
 
@@ -93,12 +93,6 @@ class ConversationDetailAPIView(APIView):
         serializer = MessageSerializer(messages, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-
-class MessageCreateAPIView(APIView):
-    """Send a message in a conversation."""
-
-    permission_classes = [IsRegularUser]
-
     @extend_schema(
         request=MessageCreateSerializer,
         responses={
@@ -119,15 +113,16 @@ class MessageCreateAPIView(APIView):
             return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            conversation = Conversation.objects.select_related(
-                "match__mentor", "match__mentee"
-            ).get(id=conversation_id)
+            conversation = Conversation.objects.select_related("match__mentor", "match__mentee").get(id=conversation_id)
         except Conversation.DoesNotExist:
             return Response({"detail": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Check if user is a participant
         if conversation.match.mentor != profile and conversation.match.mentee != profile:
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        if not conversation.match.is_active:
+            return Response({"error": "Cannot send messages to deactivated matches."}, status=403)
 
         serializer = MessageCreateSerializer(data=request.data)
         if not serializer.is_valid():
@@ -147,7 +142,7 @@ class MessageCreateAPIView(APIView):
 class MessageReportAPIView(APIView):
     """Report a problematic message."""
 
-    permission_classes = [IsAdmin]
+    permission_classes = []  # Allow any authenticated user, check participation inside
 
     @extend_schema(
         request=MessageReportSerializer,
@@ -163,6 +158,9 @@ class MessageReportAPIView(APIView):
     )
     def post(self, request: Request, message_id: str) -> Response:
         """Create a report for the message."""
+        if not request.user.is_authenticated:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
         try:
             message = Message.objects.select_related(
                 "conversation__match__mentor", "conversation__match__mentee"
@@ -174,14 +172,16 @@ class MessageReportAPIView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check if reporter is a participant (optional, but good practice)
+        # Check if reporter is a participant or admin
         try:
             profile = Profile.objects.get(user=request.user)
         except Profile.DoesNotExist:
             return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        is_admin = request.user.role == "ADMIN"
         if (
-            message.conversation.match.mentor != profile
+            not is_admin
+            and message.conversation.match.mentor != profile
             and message.conversation.match.mentee != profile
         ):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)

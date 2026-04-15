@@ -119,7 +119,7 @@ class MessagingAPIBaseTestCase(TestCase):
         return f"/api/messages/conversations/{conversation_id}/"
 
     def _message_report_url(self, message_id: str) -> str:
-        return f"/api/messages/{message_id}/report/"
+        return f"/api/messages/messages/{message_id}/report/"
 
 
 class ConversationListAPIViewTests(MessagingAPIBaseTestCase):
