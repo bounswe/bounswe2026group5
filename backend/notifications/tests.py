@@ -58,6 +58,14 @@ class NotificationAPITest(APITestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["message"], "Unread message")
 
+    def test_list_notifications_requires_auth(self):
+        """Test unauthenticated access is rejected for notification list."""
+        self.client.force_authenticate(user=None)
+
+        url = reverse("notification-list")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_mark_notification_read(self):
         """Test marking a notification as read."""
         notification = Notification.objects.create(
