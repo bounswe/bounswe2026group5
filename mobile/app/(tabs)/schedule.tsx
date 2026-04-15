@@ -449,13 +449,11 @@ export default function ScheduleScreen() {
         visible={!!selectedSession}
         onClose={() => setSelectedSession(null)}
         session={selectedSession}
-        // CLEANUP: Removed respondToRequestMutation.isPending
         isCancelling={
           cancelSessionMutation.isPending ||
           rescheduleSessionMutation.isPending
         }
         onCancelSession={() => {
-          // CLEANUP: Removed the entire "Pending" & "Mentor" rejection block
           if (!selectedSession?.matchId) {
             Alert.alert(
               "Cannot Cancel",

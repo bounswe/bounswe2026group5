@@ -31,6 +31,7 @@ export interface DashboardSessionItem {
   status: "Upcoming" | "Pending" | "Completed";
   topic: string;
   myRole: "Mentor" | "Mentee";
+  isSessionStarted?: boolean; 
 }
 
 export interface AvailabilityDayItem {
@@ -664,23 +665,34 @@ export function mapMentorBookedSlotsToSessions(
     ]),
   );
 
+  const now = new Date(); 
+
   return slots
     .filter((slot) => slot.is_booked && Boolean(slot.bookedBy))
     .map((slot) => {
-      const sessionDate = parseLocalDateTime(slot.date, `${slot.startTime}:00`);
+      const sessionStart = parseLocalDateTime(slot.date, `${slot.startTime}:00`);
+      const sessionEnd = parseLocalDateTime(slot.date, `${slot.endTime}:00`);
+      const isCompleted = now > sessionEnd;
+      const isStarted = now >= sessionStart;
+
       const menteeDisplay =
         menteeByUsername.get(slot.bookedBy ?? "") || slot.bookedBy || "Mentee";
+
+      const status: DashboardSessionItem["status"] = isCompleted
+        ? "Completed"
+        : "Upcoming";
 
       return {
         id: slot.id,
         requestId: slot.id,
         user: menteeDisplay,
-        date: SESSION_DATE_FORMATTER.format(sessionDate),
+        date: SESSION_DATE_FORMATTER.format(sessionStart),
         rawDate: slot.date,
         time: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
-        status: "Upcoming" as const,
+        status,
         topic: "Mentorship Session",
-        myRole: "Mentor" as const,
+        myRole: "Mentor" as "Mentor" | "Mentee",
+        isSessionStarted: isStarted,
       };
     })
     .sort((a, b) => {
@@ -699,25 +711,35 @@ export function mapMentorBookedSlotsToSessions(
 export function mapUpcomingSessionsToDashboard(
   sessions: BackendUpcomingSession[],
 ): DashboardSessionItem[] {
+  const now = new Date(); 
+
   return sessions
     .map((session) => {
-      const sessionDate = parseLocalDateTime(
-        session.slot_date,
-        session.slot_start_time,
-      );
-      const uiStatus: DashboardSessionItem["status"] =
-        session.status === "PENDING" ? "Pending" : "Upcoming";
+      const sessionStart = parseLocalDateTime(session.slot_date, session.slot_start_time);
+      const sessionEnd = session.slot_end_time
+        ? parseLocalDateTime(session.slot_date, session.slot_end_time)
+        : sessionStart;
+        
+      const isStarted = now >= sessionStart;
+
+      let uiStatus: DashboardSessionItem["status"] = "Upcoming";
+      if (session.status === "PENDING") {
+        uiStatus = "Pending";
+      } else if (now > sessionEnd) {
+        uiStatus = "Completed"; 
+      }
 
       return {
         id: session.slot_id,
         requestId: session.slot_id,
         user: session.mentor.display_name || session.mentor.username,
-        date: SESSION_DATE_FORMATTER.format(sessionDate),
+        date: SESSION_DATE_FORMATTER.format(sessionStart),
         rawDate: session.slot_date,
         time: `${toDisplayTime(session.slot_start_time)} - ${toDisplayTime(session.slot_end_time)}`,
         status: uiStatus,
         topic: "Mentorship Session",
-        myRole: "Mentee" as const,
+        myRole: "Mentee" as "Mentor" | "Mentee",
+        isSessionStarted: isStarted, 
       };
     })
     .sort((a, b) => {

@@ -26,6 +26,7 @@ interface SessionDetailsModalProps {
     myRole?: string;
     location?: string;
     meetingUrl?: string;
+    isSessionStarted?: boolean;
   } | null;
 }
 
@@ -150,98 +151,58 @@ export function SessionDetailsModal({
 
           {/* Secondary Actions - Hidden if session is Completed */}
           {session.status !== "Completed" && (
-            <>
-              {/* Only Mentees Can Reschedule */}
-              {session.myRole === "Mentee" ? (
-                <View className="flex-row justify-between gap-3 mb-2 mt-2">
-                  <TouchableOpacity
-                    className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
-                    disabled={isCancelling}
-                    onPress={() => {
-                      if (onReschedule) {
-                        onClose();
-                        setTimeout(() => onReschedule(), 300);
-                        return;
-                      }
-
-                      Alert.alert(
-                        "Reschedule",
-                        "Rescheduling is not available for this session.",
-                      );
-                    }}
-                  >
-                    <Text className="text-gray-700 font-bold text-base">
-                      Reschedule
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
-                    disabled={isCancelling}
-                    onPress={() => {
-                      Alert.alert(
-                        "Cancel Session",
-                        "Are you sure you want to cancel this session?",
-                        [
-                          { text: "Keep Session", style: "cancel" },
-                          {
-                            text: "Cancel Session",
-                            style: "destructive",
-                            onPress: () => {
-                              if (onCancelSession) {
-                                onCancelSession();
-                                return;
-                              }
-                            },
-                          },
-                        ],
-                      );
-                    }}
-                  >
-                    {isCancelling ? (
-                      <ActivityIndicator size="small" color="#dc2626" />
-                    ) : (
-                      <Text className="font-bold text-base text-red-600">
-                        Cancel
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                // Mentors only see Cancel button
-                <View className="flex-row justify-between gap-3 mb-2 mt-2">
-                  <TouchableOpacity
-                    className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
-                    disabled={isCancelling}
-                    onPress={() => {
-                      Alert.alert(
-                        "Cancel Session",
-                        "Are you sure you want to cancel this session?",
-                        [
-                          { text: "Keep Session", style: "cancel" },
-                          {
-                            text: "Cancel Session",
-                            style: "destructive",
-                            onPress: () => {
-                              if (onCancelSession) {
-                                onCancelSession();
-                                return;
-                              }
-                            },
-                          },
-                        ],
-                      );
-                    }}
-                  >
-                    {isCancelling ? (
-                      <ActivityIndicator size="small" color="#dc2626" />
-                    ) : (
-                      <Text className="font-bold text-base text-red-600">Cancel</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
+            <View className="flex-row justify-between gap-3 mb-2 mt-2">
+              
+              {/* RESCHEDULE BUTTON: Only for Mentees AND only if the session hasn't started */}
+              {session.myRole === "Mentee" && !session.isSessionStarted && (
+                <TouchableOpacity
+                  className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
+                  disabled={isCancelling}
+                  onPress={() => {
+                    if (onReschedule) {
+                      onClose();
+                      setTimeout(() => onReschedule(), 300);
+                    }
+                  }}
+                >
+                  <Text className="text-gray-700 font-bold text-base">
+                    Reschedule
+                  </Text>
+                </TouchableOpacity>
               )}
-            </>
+
+              {/* CANCEL BUTTON: Visible to both roles as long as the session isn't completed */}
+              <TouchableOpacity
+                className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
+                disabled={isCancelling}
+                onPress={() => {
+                  Alert.alert(
+                    "Cancel Session",
+                    "Are you sure you want to cancel this session?",
+                    [
+                      { text: "Keep Session", style: "cancel" },
+                      {
+                        text: "Cancel Session",
+                        style: "destructive",
+                        onPress: () => {
+                          if (onCancelSession) {
+                            onCancelSession();
+                          }
+                        },
+                      },
+                    ],
+                  );
+                }}
+              >
+                {isCancelling ? (
+                  <ActivityIndicator size="small" color="#dc2626" />
+                ) : (
+                  <Text className="font-bold text-base text-red-600">
+                    Cancel
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
           )}
         </Pressable>
       </Pressable>
