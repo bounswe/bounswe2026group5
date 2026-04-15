@@ -89,7 +89,7 @@ class MessageCreateSerializer(serializers.Serializer):
             "audio/wav",
             "audio/ogg",
         }
-        max_size_bytes = 10 * 1024 * 1024
+        max_size_bytes = settings.MAX_MESSAGE_ATTACHMENT_SIZE_BYTES
 
         if attachment.content_type not in allowed_content_types:
             raise serializers.ValidationError(
@@ -98,7 +98,7 @@ class MessageCreateSerializer(serializers.Serializer):
 
         if attachment.size > max_size_bytes:
             raise serializers.ValidationError(
-                f"Attachment size must be at most {max_size_bytes // (1024 * 1024)} MB."
+                f"Attachment size must be at most {settings.MAX_MESSAGE_ATTACHMENT_SIZE_MB} MB."
             )
 
         return attachment

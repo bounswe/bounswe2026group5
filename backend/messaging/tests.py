@@ -271,6 +271,15 @@ class MessageCreateAPIViewTests(MessagingAPIBaseTestCase):
         response = self.mentee_client.post(url, {"attachment": file}, format="multipart")
         self.assertEqual(response.status_code, 400)
 
+    def test_oversized_attachment_rejected(self) -> None:
+        # Create a file larger than 20 MB
+        large_content = b"A" * (21 * 1024 * 1024)  # 21 MB
+        file = ContentFile(large_content, name="large.pdf")
+
+        url = self._conversation_detail_url(self.conversation.id)
+        response = self.mentee_client.post(url, {"attachment": file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
     def test_message_requires_body_or_attachment(self) -> None:
         url = self._conversation_detail_url(self.conversation.id)
         response = self.mentee_client.post(url, {})
