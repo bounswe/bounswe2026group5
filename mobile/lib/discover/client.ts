@@ -17,6 +17,16 @@ interface DiscoverResultsResponse {
   results: DiscoverMentorProfile[];
 }
 
+async function fallbackToGenericProfiles(
+  limit: number,
+): Promise<DiscoverMentorProfile[]> {
+  const payload = await fetchDiscoverProfiles({
+    page: 1,
+    pageSize: limit,
+  });
+  return payload.results;
+}
+
 function normalizeProfilesResponse(
   payload: DiscoverProfilesResponse | DiscoverResultsResponse,
   page: number,
@@ -80,6 +90,9 @@ export async function fetchDiscoverPopularProfiles(
   });
 
   if (!response.ok) {
+    if (response.status === 404) {
+      return fallbackToGenericProfiles(limit);
+    }
     throw new Error(`Failed to load popular mentors (${response.status})`);
   }
 
@@ -100,6 +113,9 @@ export async function fetchDiscoverRecentlyAddedProfiles(
   });
 
   if (!response.ok) {
+    if (response.status === 404) {
+      return fallbackToGenericProfiles(limit);
+    }
     throw new Error(
       `Failed to load recently added mentors (${response.status})`,
     );

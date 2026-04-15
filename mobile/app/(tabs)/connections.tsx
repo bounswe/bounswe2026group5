@@ -643,14 +643,14 @@ export default function ConnectionsScreen() {
   const isMentor = user?.app_usage_mode !== "MENTEE";
 
   return (
-    <View className="flex-1 bg-surface">
+    <View className="flex-1 bg-surface dark:bg-surface-dark">
       {/* Fixed Header — paddingTop is dynamic (safe area inset) */}
       <View
-        className="bg-surface z-10 shadow-sm"
+        className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
         style={{ paddingTop: insets.top }}
       >
-        <View className="flex-row justify-between items-center px-5 pb-3 pt-2">
-          <Text className="text-2xl font-extrabold text-primary">
+        <View className="flex-row justify-between items-center px-4 pb-3 pt-2">
+          <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Connections
           </Text>
         </View>

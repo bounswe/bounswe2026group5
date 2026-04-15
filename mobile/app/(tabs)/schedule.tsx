@@ -4,23 +4,26 @@
  * @module ScheduleScreen
  */
 
-import React, { useState, useMemo } from "react";
-import { Alert, View, Text, ScrollView } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Calendar, DateData } from "react-native-calendars";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useAuthStore } from "@/lib/auth/store";
 import {
   type DashboardSessionItem,
   mapMentorBookedSlotsToSessions,
   mapUpcomingSessionsToDashboard,
   useAvailabilitySlotsQuery,
-  useRespondToMentorshipRequestMutation,
   useMentorshipUpcomingSessionsQuery,
+  useRespondToMentorshipRequestMutation,
 } from "@/lib/queries/mentorship";
-import { useAuthStore } from "@/lib/auth/store";
-import { Colors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
+import React, { useMemo, useState } from "react";
+import { Alert, ScrollView, Text, View } from "react-native";
+import { Calendar, DateData } from "react-native-calendars";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 // This grabs today's date dynamically and formats it as 'YYYY-MM-DD'
 const TODAY = new Date().toISOString().split("T")[0];
@@ -49,6 +52,7 @@ type ScheduleSession = {
 };
 
 export default function ScheduleScreen() {
+  const insets = useSafeAreaInsets();
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [selectedSession, setSelectedSession] =
     useState<ScheduleSession | null>(null);
@@ -59,7 +63,9 @@ export default function ScheduleScreen() {
   const respondToRequestMutation = useRespondToMentorshipRequestMutation();
   const upcomingSessionsQuery =
     useMentorshipUpcomingSessionsQuery(currentUsername);
-  const mentorAvailabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
+  const mentorAvailabilityQuery = useAvailabilitySlotsQuery(
+    currentUsername || "",
+  );
 
   const isMenteeOnly = appUsageMode === "MENTEE";
   const isMentorOnly = appUsageMode === "MENTOR";
@@ -88,9 +94,14 @@ export default function ScheduleScreen() {
       },
     );
 
-    mapMentorBookedSlotsToSessions(mentorAvailabilityQuery.data ?? []).forEach((session) => {
-      byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
-    });
+    mapMentorBookedSlotsToSessions(mentorAvailabilityQuery.data ?? []).forEach(
+      (session) => {
+        byKey.set(
+          `${session.rawDate}|${session.time}|${session.user}`,
+          session,
+        );
+      },
+    );
 
     return Array.from(byKey.values()).sort((a, b) => {
       const aKey = `${a.rawDate}T${a.time.split(" - ")[0] ?? "00:00"}`;
@@ -136,17 +147,22 @@ export default function ScheduleScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-surface dark:bg-surface-dark">
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="px-4 pt-6 mb-6">
-          <Text className="text-3xl font-extrabold text-on-surface dark:text-on-surface-dark">
+    <SafeAreaView
+      className="flex-1 bg-surface dark:bg-surface-dark"
+      edges={["left", "right", "bottom"]}
+    >
+      <View
+        className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
+        style={{ paddingTop: insets.top }}
+      >
+        <View className="flex-row justify-between items-center px-4 pb-3 pt-2">
+          <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Schedule
           </Text>
-          <Text className="text-base text-on-surface-soft dark:text-on-surface-soft-dark mt-1">
-            Manage your agenda.
-          </Text>
         </View>
+      </View>
 
+      <ScrollView className="flex-1 pt-4" showsVerticalScrollIndicator={false}>
         <View className="mx-4 mb-6 shadow-sm rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-2">
           <Calendar
             current={TODAY}
