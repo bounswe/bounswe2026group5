@@ -3,12 +3,12 @@ name: Mobile APK Build
 on:
   workflow_dispatch:
   push:
-    branches: [main, dev]
+    branches: [main]
     paths:
       - "mobile/**"
       - ".github/workflows/mobile-apk.yml"
   pull_request:
-    branches: [main, dev]
+    branches: [main]
     paths:
       - "mobile/**"
       - ".github/workflows/mobile-apk.yml"
@@ -17,6 +17,8 @@ jobs:
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_API_BASE_URL: https://neighborship.app
 
     defaults:
       run:
@@ -44,51 +46,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate API base URL
-        env:
-          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.EXPO_PUBLIC_API_BASE_URL }}
+      - name: Write mobile env file
         run: |
-          if [ -z "$EXPO_PUBLIC_API_BASE_URL" ]; then
-            echo "EXPO_PUBLIC_API_BASE_URL secret is empty."
-            exit 1
-          fi
-
-          case "$EXPO_PUBLIC_API_BASE_URL" in
-            http://*|https://*)
-              echo "API base URL format is valid."
-              ;;
-            *)
-              echo "EXPO_PUBLIC_API_BASE_URL must start with http:// or https://"
-              exit 1
-              ;;
-          esac
+          echo "EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL" > .env
+          echo "Using EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL"
 
       - name: Generate native Android project
-        env:
-          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.EXPO_PUBLIC_API_BASE_URL }}
         run: npx expo prebuild --platform android --non-interactive
 
-      - name: Build debug APK
-        env:
-          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.EXPO_PUBLIC_API_BASE_URL }}
+      - name: Build release APK
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64 --no-daemon
 
-      - name: Prepare renamed APK
+      - name: Prepare universal APK
         run: |
           mkdir -p apk-out
-          APK_NAME="neighborship-mobile-arm64-debug.apk"
-          ARM64_APK="android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk"
-          DEFAULT_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          UNIVERSAL_APK="android/app/build/outputs/apk/release/app-release.apk"
 
-          if [ -f "$ARM64_APK" ]; then
-            cp "$ARM64_APK" "apk-out/$APK_NAME"
-          elif [ -f "$DEFAULT_APK" ]; then
-            cp "$DEFAULT_APK" "apk-out/$APK_NAME"
+          if [ -f "$UNIVERSAL_APK" ]; then
+            cp "$UNIVERSAL_APK" "apk-out/Neighborship.apk"
           else
-            echo "Expected APK not found under android/app/build/outputs/apk/debug"
+            echo "Expected release APK not found under android/app/build/outputs/apk/release"
             ls -R android/app/build/outputs/apk || true
             exit 1
           fi
@@ -96,7 +76,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: neighborship-mobile-apk-debug
+          name: mobile-apk-release
           path: mobile/apk-out/*.apk
           if-no-files-found: error
           retention-days: 14
