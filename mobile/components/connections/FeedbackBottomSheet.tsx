@@ -20,11 +20,6 @@ interface FeedbackBottomSheetProps {
   isSubmitting?: boolean;
 }
 
-/**
- * FeedbackBottomSheet
- * Allows users to submit feedback (rating + optional text) on completed mentorship sessions.
- * Accessible only to session participants.
- */
 export function FeedbackBottomSheet({
   visible,
   onClose,
@@ -46,7 +41,6 @@ export function FeedbackBottomSheet({
     try {
       setError(null);
       await onSubmit(rating, text.trim() || undefined);
-      // Reset form after successful submission
       setRating(0);
       setText("");
     } catch (err) {
@@ -62,6 +56,7 @@ export function FeedbackBottomSheet({
         {[1, 2, 3, 4, 5].map((star) => (
           <TouchableOpacity
             key={star}
+            testID={`star-${star}`}
             onPress={() => {
               setRating(star);
               setError(null);
@@ -81,7 +76,7 @@ export function FeedbackBottomSheet({
 
   return (
     <Modal
-      animationType="fade"
+      animationType="fade" 
       transparent
       visible={visible}
       onRequestClose={onClose}
@@ -91,9 +86,14 @@ export function FeedbackBottomSheet({
           onPress={(e) => e.stopPropagation()}
           className="bg-white dark:bg-gray-900 w-full rounded-t-3xl shadow-2xl max-h-[85%]"
         >
+          {/* Drag Handle Component */}
+          <View className="items-center pt-4 pb-2">
+            <View className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full" />
+          </View>
+
           {/* Header */}
-          <View className="border-b border-gray-200 dark:border-gray-700 px-6 pt-6">
-            <View className="flex-row items-center justify-between mb-6">
+          <View className="border-b border-gray-200 dark:border-gray-700 px-6 pb-4">
+            <View className="flex-row items-center justify-between">
               <View className="flex-1">
                 <Text className="text-xl font-bold text-gray-900 dark:text-white">
                   Add Review
@@ -103,14 +103,13 @@ export function FeedbackBottomSheet({
                 </Text>
               </View>
               <TouchableOpacity onPress={onClose} className="p-2">
-                <Ionicons name="close" size={20} color="#6b7280" />
+                <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Content */}
+          {/* Content (Removed flex-1 so it stops collapsing) */}
           <ScrollView
-            className="flex-1"
             contentContainerStyle={{
               paddingHorizontal: 24,
               paddingVertical: 24,
@@ -145,7 +144,7 @@ export function FeedbackBottomSheet({
               </Text>
               {renderStars()}
               {rating > 0 && (
-                <Text className="text-center text-gray-600 dark:text-gray-400 text-sm">
+                <Text className="text-center text-gray-600 dark:text-gray-400 text-sm font-bold">
                   {
                     ["Poor", "Fair", "Good", "Very Good", "Excellent"][
                       rating - 1
@@ -156,7 +155,7 @@ export function FeedbackBottomSheet({
             </View>
 
             {/* Text Input */}
-            <View className="mb-6 mt-8">
+            <View className="mb-6 mt-4">
               <Text className="text-gray-600 dark:text-gray-300 text-sm font-medium mb-2">
                 Comments (optional)
               </Text>
@@ -170,8 +169,10 @@ export function FeedbackBottomSheet({
                 value={text}
                 onChangeText={setText}
                 editable={!isSubmitting}
+                textAlignVertical="top"
+                style={{ minHeight: 100 }}
               />
-              <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <Text className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-right">
                 {text.length}/500 characters
               </Text>
             </View>
@@ -189,25 +190,25 @@ export function FeedbackBottomSheet({
           {/* Actions */}
           <View className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-800/50 gap-3">
             <TouchableOpacity
-              className="bg-primary py-3 rounded-xl items-center active:opacity-90"
+              className="bg-indigo-600 py-4 rounded-xl items-center active:opacity-90 shadow-sm" // <-- Fixed color and padding
               onPress={handleSubmit}
               disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
-                <Text className="text-white font-semibold text-base">
+                <Text className="text-white font-bold text-lg">
                   Submit Review
                 </Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
-              className="bg-white dark:bg-gray-700 py-3 rounded-xl items-center border border-gray-300 dark:border-gray-600"
+              className="bg-white dark:bg-gray-700 py-4 rounded-xl items-center border border-gray-300 dark:border-gray-600"
               onPress={onClose}
               disabled={isSubmitting}
             >
-              <Text className="text-gray-700 dark:text-white font-semibold text-base">
+              <Text className="text-gray-700 dark:text-white font-bold text-lg">
                 Cancel
               </Text>
             </TouchableOpacity>

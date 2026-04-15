@@ -1,6 +1,6 @@
 import React from "react";
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
-import { FeedbackBottomSheet } from "@/components/dashboard/FeedbackBottomSheet"; 
+import { FeedbackBottomSheet } from "@/components/connections/FeedbackBottomSheet"; 
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 

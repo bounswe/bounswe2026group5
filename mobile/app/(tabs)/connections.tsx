@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +24,8 @@ import {
 import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
 import { RequestCard } from "@/components/dashboard/RequestCard";
 import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
+import { FeedbackBottomSheet } from "@/components/connections/FeedbackBottomSheet"; 
+
 import { useAuthStore } from "@/lib/auth/store";
 import {
   mapRequestsToDashboard,
@@ -31,6 +33,8 @@ import {
   useMentorshipMatchesQuery,
   useMentorshipRequestsQuery,
   useRespondToMentorshipRequestMutation,
+  useSubmitMatchFeedbackMutation,
+  useMatchFeedbackQuery,
   type DashboardRequestItem,
   type MentorshipRequest,
 } from "@/lib/queries/mentorship";
@@ -83,7 +87,6 @@ async function deactivateConnection(params: {
 // Mock data — messaging has no API yet
 // ---------------------------------------------------------------------------
 
-// NOTE: Replace with API-backed recent messages when messaging endpoint is available.
 const MOCK_MESSAGES: MessageCardProps[] = [
   {
     id: "msg-1",
@@ -120,7 +123,11 @@ const MENTORS_PREVIEW_COUNT = 2;
 // Mentor View
 // ---------------------------------------------------------------------------
 
-function MentorConnections() {
+function MentorConnections({
+  onOpenFeedback,
+}: {
+  onOpenFeedback: (matchId: string, name: string, myRole: "Mentor" | "Mentee") => void;
+}) {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [selectedRequest, setSelectedRequest] =
@@ -137,6 +144,16 @@ function MentorConnections() {
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const respondMutation = useRespondToMentorshipRequestMutation();
   const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
+
+  // CHECK FEEDBACK FOR SELECTED MENTEE
+  const activeMatchId = managedMentee?.matchIds[0];
+  const matchFeedbackQuery = useMatchFeedbackQuery(activeMatchId);
+  const hasReviewed = useMemo(() => {
+    if (!matchFeedbackQuery.data || !currentUsername) return false;
+    return matchFeedbackQuery.data.some(
+      (feedback: any) => feedback.submitted_by.username === currentUsername
+    );
+  }, [matchFeedbackQuery.data, currentUsername]);
 
   const requests = requestsQuery.data ?? [];
   const matches = matchesQuery.data ?? [];
@@ -257,12 +274,21 @@ function MentorConnections() {
         visible={managedMentee !== null}
         name={managedMentee?.name ?? ""}
         onClose={() => setManagedMentee(null)}
+        isCheckingReview={matchFeedbackQuery.isLoading}
+        hasReviewed={hasReviewed}
+        onLeaveReview={() => {
+          if (activeMatchId && managedMentee) {
+            onOpenFeedback(activeMatchId, managedMentee.name, "Mentor"); 
+            setManagedMentee(null);
+          }
+        }}
         onViewProfile={() => {
           if (!managedMentee) {
             return;
           }
+          const target = managedMentee;
           setManagedMentee(null);
-          router.push(`/user/${encodeURIComponent(managedMentee.username)}`);
+          router.push(`/user/${encodeURIComponent(target.username)}`);
         }}
         onRemoveConnection={() => {
           if (!managedMentee) {
@@ -302,7 +328,6 @@ function MentorConnections() {
               Upcoming Messages
             </Text>
           </View>
-          {/* NOTE: Route to full messages list when messaging screen is implemented. */}
           <TouchableOpacity>
             <Text className="text-[13px] font-bold text-primary">View All</Text>
           </TouchableOpacity>
@@ -432,7 +457,11 @@ function MentorConnections() {
 // Mentee View
 // ---------------------------------------------------------------------------
 
-function MenteeConnections() {
+function MenteeConnections({
+  onOpenFeedback,
+}: {
+  onOpenFeedback: (matchId: string, name: string, myRole: "Mentor" | "Mentee") => void;
+}) {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [showAllMentors, setShowAllMentors] = useState(false);
@@ -447,6 +476,17 @@ function MenteeConnections() {
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
+  
+  // CHECK FEEDBACK FOR SELECTED MENTOR
+  const activeMatchId = managedMentor?.matchIds[0];
+  const matchFeedbackQuery = useMatchFeedbackQuery(activeMatchId);
+  const hasReviewed = useMemo(() => {
+    if (!matchFeedbackQuery.data || !currentUsername) return false;
+    return matchFeedbackQuery.data.some(
+      (feedback: any) => feedback.submitted_by.username === currentUsername
+    );
+  }, [matchFeedbackQuery.data, currentUsername]);
+
   const requests = requestsQuery.data ?? [];
   const requestsLoading = requestsQuery.isLoading;
   const requestsError = requestsQuery.isError;
@@ -540,12 +580,21 @@ function MenteeConnections() {
         visible={managedMentor !== null}
         name={managedMentor?.name ?? ""}
         onClose={() => setManagedMentor(null)}
+        isCheckingReview={matchFeedbackQuery.isLoading}
+        hasReviewed={hasReviewed}
+        onLeaveReview={() => {
+          if (activeMatchId && managedMentor) {
+            onOpenFeedback(activeMatchId, managedMentor.name, "Mentee"); 
+            setManagedMentor(null);
+          }
+        }}
         onViewProfile={() => {
           if (!managedMentor) {
             return;
           }
+          const target = managedMentor;
           setManagedMentor(null);
-          router.push(`/user/${encodeURIComponent(managedMentor.username)}`);
+          router.push(`/user/${encodeURIComponent(target.username)}`);
         }}
         onRemoveConnection={() => {
           if (!managedMentor) {
@@ -585,7 +634,6 @@ function MenteeConnections() {
               Upcoming Messages
             </Text>
           </View>
-          {/* NOTE: Route to full messages list when messaging screen is implemented. */}
           <TouchableOpacity activeOpacity={0.85}>
             <Text className="text-[13px] font-bold text-primary">View All</Text>
           </TouchableOpacity>
@@ -725,6 +773,32 @@ export default function ConnectionsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
 
+  const submitFeedbackMutation = useSubmitMatchFeedbackMutation();
+  const [feedbackConnection, setFeedbackConnection] = useState<{
+    matchId: string;
+    userName: string;
+    role: "Mentor" | "Mentee";
+  } | null>(null);
+
+  const handleFeedbackSubmit = async (rating: number, text?: string) => {
+    if (!feedbackConnection?.matchId) return;
+    
+    try {
+      await submitFeedbackMutation.mutateAsync({
+        matchId: feedbackConnection.matchId,
+        rating,
+        text,
+      });
+      setFeedbackConnection(null);
+      Alert.alert("Review Submitted", "Thank you for your feedback!");
+    } catch (error) {
+      Alert.alert(
+        "Feedback Failed",
+        error instanceof Error ? error.message : "Could not submit feedback."
+      );
+    }
+  };
+
   const isMentor = user?.app_usage_mode !== "MENTEE";
 
   return (
@@ -751,8 +825,25 @@ export default function ConnectionsScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {isMentor ? <MentorConnections /> : <MenteeConnections />}
+        {isMentor ? (
+          <MentorConnections
+            onOpenFeedback={(matchId, name, role) => setFeedbackConnection({ matchId, userName: name, role })}
+          />
+        ) : (
+          <MenteeConnections
+            onOpenFeedback={(matchId, name, role) => setFeedbackConnection({ matchId, userName: name, role })}
+          />
+        )}
       </ScrollView>
+
+      <FeedbackBottomSheet
+        visible={!!feedbackConnection}
+        onClose={() => setFeedbackConnection(null)}
+        onSubmit={handleFeedbackSubmit}
+        otherUserName={feedbackConnection?.userName || ""}
+        yourRole={feedbackConnection?.role || "Mentee"}
+        isSubmitting={submitFeedbackMutation.isPending}
+      />
     </View>
   );
 }

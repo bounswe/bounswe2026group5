@@ -29,6 +29,32 @@ interface PublicProfileRatingResponse {
   review_count: number;
 }
 
+export interface ProfileReview {
+  id: string;
+  rating: number;
+  text?: string;
+  created_at: string;
+  submitted_by: {
+    username: string;
+    display_name: string;
+    picture_url?: string;
+  };
+}
+
+/**
+ * Retrieve the list of public reviews for a specific profile.
+ */
+export function useProfileReviewsQuery(username?: string) {
+  return useQuery({
+    queryKey: ["profiles", username ?? "anonymous", "reviews"],
+    queryFn: () =>
+      apiGet<ProfileReview[]>(
+        `/api/profiles/${encodeURIComponent(username || "")}/reviews/`
+      ),
+    enabled: Boolean(username),
+  });
+}
+
 /**
  * Retrieve public, batch-updated mentor rating by username.
  */

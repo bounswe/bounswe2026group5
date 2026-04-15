@@ -172,6 +172,24 @@ function toProposedDate(value: BackendMentorshipRequest): string | undefined {
 }
 
 /**
+ * Helper to sort sessions: Active sessions first, then sorted by date.
+ */
+function sortSessionsChronologically(a: DashboardSessionItem, b: DashboardSessionItem) {
+  const weightA = a.status === "Completed" ? 1 : 0;
+  const weightB = b.status === "Completed" ? 1 : 0;
+  if (weightA !== weightB) {
+    return weightA - weightB;
+  }
+
+  const aStartTime = a.time.split(" - ")[0] ?? "00:00";
+  const bStartTime = b.time.split(" - ")[0] ?? "00:00";
+  return (
+    parseLocalDateTime(a.rawDate, `${aStartTime}:00`).getTime() -
+    parseLocalDateTime(b.rawDate, `${bStartTime}:00`).getTime()
+  );
+}
+
+/**
  * Fetch all mentorship requests for the authenticated user.
  */
 export function useMentorshipRequestsQuery(currentUsername?: string) {
@@ -695,14 +713,7 @@ export function mapMentorBookedSlotsToSessions(
         isSessionStarted: isStarted,
       };
     })
-    .sort((a, b) => {
-      const aStartTime = a.time.split(" - ")[0] ?? "00:00";
-      const bStartTime = b.time.split(" - ")[0] ?? "00:00";
-      return (
-        parseLocalDateTime(a.rawDate, `${aStartTime}:00`).getTime() -
-        parseLocalDateTime(b.rawDate, `${bStartTime}:00`).getTime()
-      );
-    });
+    .sort(sortSessionsChronologically);
 }
 
 /**
@@ -742,14 +753,7 @@ export function mapUpcomingSessionsToDashboard(
         isSessionStarted: isStarted, 
       };
     })
-    .sort((a, b) => {
-      const aStartTime = a.time.split(" - ")[0] ?? "00:00";
-      const bStartTime = b.time.split(" - ")[0] ?? "00:00";
-      return (
-        parseLocalDateTime(a.rawDate, `${aStartTime}:00`).getTime() -
-        parseLocalDateTime(b.rawDate, `${bStartTime}:00`).getTime()
-      );
-    });
+    .sort(sortSessionsChronologically);
 }
 
 /**

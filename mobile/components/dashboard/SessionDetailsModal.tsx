@@ -8,16 +8,16 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 interface SessionDetailsModalProps {
   visible: boolean;
   onClose: () => void;
   onReschedule?: () => void;
   onCancelSession?: () => void;
-  onLeaveFeedback?: () => void; 
   isCancelling?: boolean;
   session: {
-    id?: string; 
+    id?: string;
     user: string;
     date: string;
     time: string;
@@ -35,7 +35,6 @@ export function SessionDetailsModal({
   onClose,
   onReschedule,
   onCancelSession,
-  onLeaveFeedback, // <-- ADDED
   isCancelling = false,
   session,
 }: Readonly<SessionDetailsModalProps>) {
@@ -48,37 +47,25 @@ export function SessionDetailsModal({
     statusTextClass = "text-amber-600";
   }
 
+  // 1. Primary Action: Only for Location or Video Call 
   let primaryAction: React.ReactNode = null;
-  
-  if (session.status === "Completed") {
+  if (session.location) {
     primaryAction = (
       <TouchableOpacity
-        className="bg-indigo-600 py-4 rounded-xl items-center mb-3 shadow-sm"
-        onPress={() => {
-          onClose();
-          if (onLeaveFeedback) {
-            setTimeout(() => onLeaveFeedback(), 300);
-          }
-        }}
-      >
-        <Text className="text-white font-bold text-lg">Leave Feedback</Text>
-      </TouchableOpacity>
-    );
-  } else if (session.location) {
-    primaryAction = (
-      <TouchableOpacity
-        className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm"
+        className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm flex-row justify-center gap-2"
         onPress={() => console.log(`TODO: Open Maps for ${session.location}`)}
       >
+        <Ionicons name="location" size={20} color="white" />
         <Text className="text-white font-bold text-lg">Get Directions</Text>
       </TouchableOpacity>
     );
   } else if (session.meetingUrl) {
     primaryAction = (
       <TouchableOpacity
-        className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm"
+        className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm flex-row justify-center gap-2"
         onPress={() => console.log(`TODO: Open Link ${session.meetingUrl}`)}
       >
+        <Ionicons name="videocam" size={20} color="white" />
         <Text className="text-white font-bold text-lg">Join Video Call</Text>
       </TouchableOpacity>
     );
@@ -149,12 +136,12 @@ export function SessionDetailsModal({
           {/* Dynamic Primary Action Button */}
           {primaryAction}
 
-          {/* Secondary Actions - Hidden if session is Completed */}
-          {session.status !== "Completed" && (
+          {/* 2. Secondary Actions: Hidden completely if session has started or is completed */}
+          {!session.isSessionStarted && session.status !== "Completed" && (
             <View className="flex-row justify-between gap-3 mb-2 mt-2">
               
-              {/* RESCHEDULE BUTTON: Only for Mentees AND only if the session hasn't started */}
-              {session.myRole === "Mentee" && !session.isSessionStarted && (
+              {/* RESCHEDULE BUTTON: Only for Mentees */}
+              {session.myRole === "Mentee" && (
                 <TouchableOpacity
                   className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
                   disabled={isCancelling}
@@ -171,7 +158,7 @@ export function SessionDetailsModal({
                 </TouchableOpacity>
               )}
 
-              {/* CANCEL BUTTON: Visible to both roles as long as the session isn't completed */}
+              {/* CANCEL BUTTON */}
               <TouchableOpacity
                 className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
                 disabled={isCancelling}

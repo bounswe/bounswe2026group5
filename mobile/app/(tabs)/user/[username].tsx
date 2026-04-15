@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { API_BASE_URL } from "@/constants/api";
 import {
   AvailabilityPreview,
   type AvailabilitySlot,
@@ -22,13 +21,15 @@ import {
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
+import { API_BASE_URL } from "@/constants/api";
+import { useAuthStore } from "@/lib/auth/store";
 import {
   useAvailabilitySlotsQuery,
   useBookAvailabilitySlotMutation,
   useCreateMentorshipRequestMutation,
   useMentorshipMatchesQuery,
 } from "@/lib/queries/mentorship";
-import { useAuthStore } from "@/lib/auth/store";
+import { useProfileRatingQuery } from "@/lib/queries/profile";
 
 interface PublicProfileResponse {
   full_name: string;
@@ -44,37 +45,18 @@ interface PublicProfileResponse {
   total_mentee_count: number;
   available_slots?: {
     id: string;
-    date: string;
-    startTime: string;
-    endTime: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    start_time?: string;
+    end_time?: string;
     is_booked: boolean;
   }[];
 }
 
-const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", { weekday: "long" });
-
-function groupSlotsByWeekday(
-  slots: PublicProfileResponse["available_slots"] = [],
-): AvailabilitySlot[] {
-  const grouped = new Map<
-    string,
-    { id: string; label: string; isBooked?: boolean; date?: string }[]
-  >();
-
-  slots.forEach((slot) => {
-    const day = WEEKDAY_FORMATTER.format(new Date(`${slot.date}T00:00:00`));
-    const dayTimes = grouped.get(day) ?? [];
-    dayTimes.push({
-      id: slot.id,
-      label: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
-      isBooked: slot.is_booked,
-      date: slot.date,
-    });
-    grouped.set(day, dayTimes);
-  });
-
-  return Array.from(grouped.entries()).map(([day, times]) => ({ day, times }));
-}
+const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  weekday: "long",
+});
 
 type SelectedSlot = {
   id: string;
@@ -96,33 +78,41 @@ function getUsernameParam(
   return Array.isArray(value) ? value[0] : value;
 }
 
-function getRequestSuccessFeedback(): {
-  feedback: string;
-  title: string;
-  description: string;
-} {
-  return {
-    feedback: "Request sent successfully.",
-    title: "Request Sent",
-    description: "Your mentorship request was sent successfully.",
-  };
-}
+function groupSlotsByWeekday(
+  slots: {
+    id: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    is_booked: boolean;
+  }[],
+): AvailabilitySlot[] {
+  const grouped = new Map<
+    string,
+    { id: string; label: string; isBooked?: boolean; date?: string }[]
+  >();
 
-function getSubmitButtonLabel(
-  isPending: boolean,
-  hasExistingMentorConnection: boolean,
-): string {
-  if (isPending) {
-    return hasExistingMentorConnection ? "Booking..." : "Sending...";
-  }
+  slots.forEach((slot) => {
+    const day = WEEKDAY_FORMATTER.format(new Date(`${slot.date}T00:00:00`));
+    const dayTimes = grouped.get(day) ?? [];
+    dayTimes.push({
+      id: slot.id,
+      label: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
+      isBooked: slot.is_booked,
+      date: slot.date,
+    });
+    grouped.set(day, dayTimes);
+  });
 
-  return hasExistingMentorConnection ? "Book Session" : "Send Request";
+  return Array.from(grouped.entries()).map(([day, times]) => ({ day, times }));
 }
 
 type BodyContentProps = {
   loading: boolean;
   error: string | null;
   profile: PublicProfileResponse | null;
+  liveRating?: number;
+  liveReviewCount?: number;
   requestFeedback: string | null;
   canRequestMentorship: boolean;
   roleBadges: ("MENTOR" | "MENTEE")[];
@@ -151,6 +141,8 @@ function renderBodyContent({
   loading,
   error,
   profile,
+  liveRating,
+  liveReviewCount,
   requestFeedback,
   canRequestMentorship,
   roleBadges,
@@ -198,13 +190,25 @@ function renderBodyContent({
         time: selectedSlot.label,
       }
     : null;
+
   const sessionTitle = hasExistingMentorConnection
     ? "Book a Session"
     : "Request a Session";
-  const submitButtonLabel = getSubmitButtonLabel(
-    isRequestPending,
-    hasExistingMentorConnection,
-  );
+
+  let submitButtonLabel = "";
+
+  if (isRequestPending) {
+    if (hasExistingMentorConnection) {
+      submitButtonLabel = "Booking...";
+    } else {
+      submitButtonLabel = "Sending...";
+    }
+  } else if (hasExistingMentorConnection) {
+    submitButtonLabel = "Book Session";
+  } else {
+    submitButtonLabel = "Send Request";
+  }
+
   const expertise = profile.expertises ?? [];
   const eagerToLearn = profile.eager_to_learn ?? [];
 
@@ -217,8 +221,8 @@ function renderBodyContent({
         name={profile.full_name}
         bio={profile.bio}
         roleBadges={roleBadges}
-        rating={profile.rating ?? 0}
-        reviewCount={profile.total_mentee_count ?? 0}
+        rating={liveRating ?? profile.rating ?? 0}
+        reviewCount={liveReviewCount ?? profile.total_mentee_count ?? 0}
         imageUrl={profile.picture_url || undefined}
       />
 
@@ -323,10 +327,12 @@ export default function MentorProfileScreen() {
   const currentUsername = useAuthStore((state) => state.user?.username);
   const params = useLocalSearchParams<{ username?: string }>();
   const username = getUsernameParam(params.username);
+
   const createRequestMutation = useCreateMentorshipRequestMutation();
   const mentorshipMatchesQuery = useMentorshipMatchesQuery(currentUsername);
   const bookSlotMutation = useBookAvailabilitySlotMutation(currentUsername);
   const availabilitySlotsQuery = useAvailabilitySlotsQuery(username ?? "");
+  const ratingQuery = useProfileRatingQuery(username ?? "");
 
   const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -398,16 +404,43 @@ export default function MentorProfileScreen() {
   }, [username]);
 
   const availability = useMemo(() => {
-    const sourceSlots = availabilitySlotsQuery.data ?? profile?.available_slots ?? [];
-    return groupSlotsByWeekday(
-      sourceSlots.map((slot) => ({
-        id: slot.id,
-        date: slot.date,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        is_booked: slot.is_booked,
-      })),
-    );
+    const sourceSlots =
+      availabilitySlotsQuery.data ?? profile?.available_slots ?? [];
+
+    const normalized = sourceSlots
+      .map((slot) => {
+        const legacyStart = "start_time" in slot ? slot.start_time : undefined;
+        const legacyEnd = "end_time" in slot ? slot.end_time : undefined;
+        const date = slot.date ?? legacyStart?.split("T")[0];
+        const startTime =
+          slot.startTime ?? legacyStart?.split("T")[1]?.slice(0, 8);
+        const endTime = slot.endTime ?? legacyEnd?.split("T")[1]?.slice(0, 8);
+
+        if (!date || !startTime || !endTime) {
+          return null;
+        }
+
+        return {
+          id: slot.id,
+          date,
+          startTime,
+          endTime,
+          is_booked: slot.is_booked,
+        };
+      })
+      .filter(
+        (
+          slot,
+        ): slot is {
+          id: string;
+          date: string;
+          startTime: string;
+          endTime: string;
+          is_booked: boolean;
+        } => Boolean(slot),
+      );
+
+    return groupSlotsByWeekday(normalized);
   }, [availabilitySlotsQuery.data, profile?.available_slots]);
 
   const expertise = profile?.expertises ?? [];
@@ -498,6 +531,7 @@ export default function MentorProfileScreen() {
             }
           : {}),
       });
+
       setProfile((prev) =>
         prev
           ? {
@@ -510,9 +544,12 @@ export default function MentorProfileScreen() {
             }
           : prev,
       );
-      const successMessage = getRequestSuccessFeedback();
-      setRequestFeedback(successMessage.feedback);
-      Alert.alert(successMessage.title, successMessage.description);
+
+      setRequestFeedback("Request sent successfully.");
+      Alert.alert(
+        "Request Sent",
+        "Your mentorship request was sent successfully.",
+      );
       setSelectedSlot(null);
       setCoverLetter("");
       availabilitySlotsQuery.refetch();
@@ -550,6 +587,7 @@ export default function MentorProfileScreen() {
             }
           : prev,
       );
+
       setSelectedSlot(null);
       setRequestFeedback("Session booked successfully.");
       Alert.alert(
@@ -588,7 +626,7 @@ export default function MentorProfileScreen() {
       return;
     }
 
-    if (!hasExistingMentorConnection && coverLetter.trim().length < 10) {
+    if (coverLetter.trim().length < 10) {
       setRequestFeedback(
         "Please provide at least 10 characters about what you want to discuss.",
       );
@@ -597,7 +635,7 @@ export default function MentorProfileScreen() {
 
     await handleCreateRequest({
       slotId: selectedSlot.id,
-      coverLetter: hasExistingMentorConnection ? undefined : coverLetter.trim(),
+      coverLetter: coverLetter.trim(),
     });
   };
 
@@ -605,6 +643,10 @@ export default function MentorProfileScreen() {
     loading,
     error,
     profile,
+    liveRating: ratingQuery.data
+      ? Number(ratingQuery.data.average_rating)
+      : undefined,
+    liveReviewCount: ratingQuery.data?.review_count,
     requestFeedback,
     canRequestMentorship,
     roleBadges,
@@ -662,10 +704,7 @@ export default function MentorProfileScreen() {
         skills={skillsModalConfig.skills}
         variant={skillsModalConfig.variant}
         onClose={() =>
-          setSkillsModalConfig((prev) => ({
-            ...prev,
-            visible: false,
-          }))
+          setSkillsModalConfig((prev) => ({ ...prev, visible: false }))
         }
       />
     </View>

@@ -7,7 +7,6 @@
 import { RescheduleBottomSheet } from "@/components/dashboard/RescheduleBottomSheet";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
-import { FeedbackBottomSheet } from "@/components/dashboard/FeedbackBottomSheet";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -23,7 +22,6 @@ import {
   useMentorshipUpcomingSessionsQuery,
   useRescheduleSessionMutation,
   useRespondToMentorshipRequestMutation,
-  useSubmitMatchFeedbackMutation,
 } from "@/lib/queries/mentorship";
 import React, { useMemo, useState } from "react";
 import { Alert, ScrollView, Text, View } from "react-native";
@@ -78,29 +76,6 @@ export default function ScheduleScreen() {
   const theme = Colors[colorScheme];
   const currentUsername = useAuthStore((state) => state.user?.username);
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
-  const [feedbackSession, setFeedbackSession] = useState<ScheduleSession | null>(null);
-  const submitFeedbackMutation = useSubmitMatchFeedbackMutation();
-
-  const handleFeedbackSubmit = async (rating: number, text?: string) => {
-    if (!feedbackSession?.matchId) {
-      Alert.alert("Error", "Could not resolve the match to submit feedback.");
-      return;
-    }
-    
-    try {
-      await submitFeedbackMutation.mutateAsync({
-        matchId: feedbackSession.matchId,
-        rating,
-        text,
-      });
-      setFeedbackSession(null);
-    } catch (error) {
-      Alert.alert(
-        "Feedback Failed",
-        error instanceof Error ? error.message : "Could not submit feedback."
-      );
-    }
-  };
 
   const respondToRequestMutation = useRespondToMentorshipRequestMutation();
   const cancelSessionMutation = useCancelSessionMutation(currentUsername);
@@ -504,20 +479,8 @@ export default function ScheduleScreen() {
           setRescheduleCurrentSlotId(selectedSession.slotId);
           setShowRescheduleSheet(true);
         }}
-        onLeaveFeedback={() => {
-          setFeedbackSession(selectedSession);
-          setSelectedSession(null);
-        }}
       />
 
-      <FeedbackBottomSheet
-        visible={!!feedbackSession}
-        onClose={() => setFeedbackSession(null)}
-        onSubmit={handleFeedbackSubmit}
-        otherUserName={feedbackSession?.user || ""}
-        yourRole={feedbackSession?.myRole === "Mentor" ? "Mentor" : "Mentee"}
-        isSubmitting={submitFeedbackMutation.isPending}
-      />
     </SafeAreaView>
   );
 }
