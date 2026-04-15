@@ -23,6 +23,7 @@ import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import {
+  useAvailabilitySlotsQuery,
   useBookAvailabilitySlotMutation,
   useCreateMentorshipRequestMutation,
   useMentorshipMatchesQuery,
@@ -325,6 +326,7 @@ export default function MentorProfileScreen() {
   const createRequestMutation = useCreateMentorshipRequestMutation();
   const mentorshipMatchesQuery = useMentorshipMatchesQuery(currentUsername);
   const bookSlotMutation = useBookAvailabilitySlotMutation(currentUsername);
+  const availabilitySlotsQuery = useAvailabilitySlotsQuery(username ?? "");
 
   const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -395,10 +397,18 @@ export default function MentorProfileScreen() {
     };
   }, [username]);
 
-  const availability = useMemo(
-    () => groupSlotsByWeekday(profile?.available_slots ?? []),
-    [profile?.available_slots],
-  );
+  const availability = useMemo(() => {
+    const sourceSlots = availabilitySlotsQuery.data ?? profile?.available_slots ?? [];
+    return groupSlotsByWeekday(
+      sourceSlots.map((slot) => ({
+        id: slot.id,
+        date: slot.date,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        is_booked: slot.is_booked,
+      })),
+    );
+  }, [availabilitySlotsQuery.data, profile?.available_slots]);
 
   const expertise = profile?.expertises ?? [];
   const eagerToLearn = profile?.eager_to_learn ?? [];
@@ -505,6 +515,7 @@ export default function MentorProfileScreen() {
       Alert.alert(successMessage.title, successMessage.description);
       setSelectedSlot(null);
       setCoverLetter("");
+      availabilitySlotsQuery.refetch();
     } catch (mutationError) {
       setRequestFeedback(
         mutationError instanceof Error
@@ -545,6 +556,7 @@ export default function MentorProfileScreen() {
         "Session Booked",
         "Your session has been booked successfully.",
       );
+      availabilitySlotsQuery.refetch();
     } catch (mutationError) {
       setRequestFeedback(
         mutationError instanceof Error

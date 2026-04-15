@@ -272,6 +272,9 @@ export function useCancelSessionMutation(currentUsername?: string) {
             currentUsername ?? "anonymous",
           ],
         }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles"],
+        }),
       ]);
     },
   });
@@ -309,6 +312,9 @@ export function useRescheduleSessionMutation(currentUsername?: string) {
             "me",
             currentUsername ?? "anonymous",
           ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles"],
         }),
       ]);
     },

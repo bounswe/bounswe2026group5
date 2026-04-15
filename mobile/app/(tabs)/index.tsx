@@ -1,31 +1,38 @@
-import { useMemo, useState } from "react";
-import { Alert, View, Text, ScrollView, TouchableOpacity } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useMemo, useState } from "react";
+import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Import the components for the dashboard
 import { RequestCard } from "@/components/dashboard/RequestCard";
+import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
+import { RescheduleBottomSheet } from "@/components/dashboard/RescheduleBottomSheet";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
-import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
 
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useAuthStore } from "@/lib/auth/store";
 import {
   mapMentorBookedSlotsToSessions,
-  mapUpcomingSessionsToDashboard,
   mapRequestsToDashboard,
+  mapUpcomingSessionsToDashboard,
   useAvailabilitySlotsQuery,
-  useMentorshipMatchesQuery,
-  useMentorshipUpcomingSessionsQuery,
-  useMentorshipRequestsQuery,
-  useRespondToMentorshipRequestMutation,
   useCancelSessionMutation,
+  useMentorshipMatchesQuery,
+  useMentorshipRequestsQuery,
+  useMentorshipUpcomingSessionsQuery,
+  useRescheduleSessionMutation,
+  useRespondToMentorshipRequestMutation,
   type DashboardRequestItem,
   type DashboardSessionItem,
 } from "@/lib/queries/mentorship";
-import { useAuthStore } from "@/lib/auth/store";
-import { Colors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
+
+type DashboardSessionWithMatch = DashboardSessionItem & {
+  matchId?: string;
+  mentorUsername?: string;
+};
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
@@ -45,6 +52,8 @@ export default function DashboardScreen() {
   );
   const respondMutation = useRespondToMentorshipRequestMutation();
   const cancelSessionMutation = useCancelSessionMutation(currentUsername);
+  const rescheduleSessionMutation =
+    useRescheduleSessionMutation(currentUsername);
 
   const isMenteeOnly = appUsageMode === "MENTEE";
   const isMentorOnly = appUsageMode === "MENTOR";
@@ -59,17 +68,126 @@ export default function DashboardScreen() {
 
   const sessions = useMemo(() => {
     if (!currentUsername) {
-      return [];
+      return [] as DashboardSessionWithMatch[];
     }
 
+    const requests = requestsQuery.data ?? [];
+    const activeMatches = (matchesQuery.data ?? []).filter((m) => m.is_active);
+    const activeMatchByRequestId = new Map(
+      activeMatches.map((match) => [match.request_id, match.id]),
+    );
+
+    const requestBySlotId = new Map<string, typeof requests>();
+    requests.forEach((request) => {
+      if (!request.slot_id) {
+        return;
+      }
+      const existing = requestBySlotId.get(request.slot_id) ?? [];
+      existing.push(request);
+      requestBySlotId.set(request.slot_id, existing);
+    });
+
+    const resolveRelatedRequest = (session: DashboardSessionItem) => {
+      const slotRequests = requestBySlotId.get(session.id) ?? [];
+      if (session.myRole === "Mentee") {
+        for (const request of slotRequests) {
+          if (request.mentee.username === currentUsername) {
+            return request;
+          }
+        }
+        return undefined;
+      }
+
+      for (const request of slotRequests) {
+        if (request.mentor.username === currentUsername) {
+          return request;
+        }
+      }
+      return undefined;
+    };
+
+    const resolveMatchFallback = (
+      session: DashboardSessionItem,
+    ): string | undefined => {
+      if (session.myRole === "Mentee") {
+        for (const match of activeMatches) {
+          if (
+            match.mentee.username === currentUsername &&
+            (match.mentor.display_name === session.user ||
+              match.mentor.username === session.user)
+          ) {
+            return match.id;
+          }
+        }
+        return undefined;
+      }
+
+      for (const match of activeMatches) {
+        if (
+          match.mentor.username === currentUsername &&
+          (match.mentee.display_name === session.user ||
+            match.mentee.username === session.user)
+        ) {
+          return match.id;
+        }
+      }
+      return undefined;
+    };
+
+    const resolveMentorUsername = (
+      session: DashboardSessionItem,
+      relatedRequest: (typeof requests)[number] | undefined,
+      matchId: string | undefined,
+    ): string | undefined => {
+      if (session.myRole !== "Mentee") {
+        return undefined;
+      }
+      if (relatedRequest?.mentor.username) {
+        return relatedRequest.mentor.username;
+      }
+      if (!matchId) {
+        return undefined;
+      }
+      for (const match of activeMatches) {
+        if (match.id === matchId) {
+          return match.mentor.username;
+        }
+      }
+      return undefined;
+    };
+
+    const enrichSessions = (items: DashboardSessionItem[]) =>
+      items.map((session) => {
+        const relatedRequest = resolveRelatedRequest(session);
+        const matchId =
+          (relatedRequest
+            ? activeMatchByRequestId.get(relatedRequest.id)
+            : undefined) ?? resolveMatchFallback(session);
+
+        return {
+          ...session,
+          requestId: relatedRequest?.id ?? session.requestId,
+          matchId,
+          mentorUsername: resolveMentorUsername(
+            session,
+            relatedRequest,
+            matchId,
+          ),
+        };
+      });
+
     if (isMenteeOnly) {
-      return mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []);
+      return enrichSessions(
+        mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []),
+      );
     }
 
     if (isMentorOnly) {
-      return mapMentorBookedSlotsToSessions(
-        mentorAvailabilityQuery.data ?? [],
-        matchesQuery.data,
+      return enrichSessions(
+        mapMentorBookedSlotsToSessions(
+          mentorAvailabilityQuery.data ?? [],
+          matchesQuery.data,
+        ),
       );
     }
 
@@ -88,13 +206,10 @@ export default function DashboardScreen() {
       mentorAvailabilityQuery.data ?? [],
       matchesQuery.data,
     ).forEach((session) => {
-      byKey.set(
-        `${session.rawDate}|${session.time}|${session.user}`,
-        session,
-      );
+      byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
     });
 
-    return Array.from(byKey.values()).sort((a, b) => {
+    return enrichSessions(Array.from(byKey.values())).sort((a, b) => {
       const aKey = `${a.rawDate}T${a.time.split(" - ")[0] ?? "00:00"}`;
       const bKey = `${b.rawDate}T${b.time.split(" - ")[0] ?? "00:00"}`;
       return aKey.localeCompare(bKey);
@@ -103,6 +218,7 @@ export default function DashboardScreen() {
     currentUsername,
     isMenteeOnly,
     isMentorOnly,
+    requestsQuery.data,
     upcomingSessionsQuery.data,
     mentorAvailabilityQuery.data,
     matchesQuery.data,
@@ -111,9 +227,24 @@ export default function DashboardScreen() {
   // State for Modals
   const [selectedRequest, setSelectedRequest] =
     useState<DashboardRequestItem | null>(null);
-  const [selectedSession, setSelectedSession] = useState<
-    (typeof sessions)[0] | null
-  >(null);
+  const [selectedSession, setSelectedSession] =
+    useState<DashboardSessionWithMatch | null>(null);
+  const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
+  const [rescheduleMatchId, setRescheduleMatchId] = useState<string | null>(
+    null,
+  );
+  const [rescheduleSessionMentorUsername, setRescheduleSessionMentorUsername] =
+    useState<string | null>(null);
+  const [rescheduleCurrentSlotId, setRescheduleCurrentSlotId] = useState("");
+  const selectedMentorUsername =
+    selectedSession?.myRole === "Mentee"
+      ? (selectedSession.mentorUsername ??
+        (matchesQuery.data ?? []).find((m) => m.id === selectedSession.matchId)
+          ?.mentor.username)
+      : undefined;
+  const mentorAvailabilityForReschedule = useAvailabilitySlotsQuery(
+    rescheduleSessionMentorUsername || "",
+  );
 
   const handleRespond = async (action: "accept" | "reject") => {
     if (!selectedRequest) {
@@ -189,11 +320,23 @@ export default function DashboardScreen() {
   };
 
   const handleRescheduleSession = () => {
-    Alert.alert(
-      "Reschedule",
-      "Please use the Schedule tab to reschedule sessions.",
-    );
-    setSelectedSession(null);
+    if (selectedSession?.myRole !== "Mentee") {
+      Alert.alert("Not Available", "Only mentees can reschedule sessions.");
+      return;
+    }
+
+    if (!selectedSession.matchId || !selectedMentorUsername) {
+      Alert.alert(
+        "Cannot Reschedule",
+        "Could not resolve session details. Please refresh and try again.",
+      );
+      return;
+    }
+
+    setRescheduleMatchId(selectedSession.matchId);
+    setRescheduleSessionMentorUsername(selectedMentorUsername);
+    setRescheduleCurrentSlotId(selectedSession.id);
+    setShowRescheduleSheet(true);
   };
 
   return (
@@ -315,6 +458,41 @@ export default function DashboardScreen() {
         onCancelSession={handleCancelSession}
         onReschedule={handleRescheduleSession}
         isCancelling={cancelSessionMutation.isPending}
+      />
+
+      <RescheduleBottomSheet
+        visible={showRescheduleSheet}
+        onClose={() => {
+          setShowRescheduleSheet(false);
+          setRescheduleMatchId(null);
+          setRescheduleSessionMentorUsername(null);
+          setRescheduleCurrentSlotId("");
+        }}
+        slots={mentorAvailabilityForReschedule.data ?? []}
+        isLoading={mentorAvailabilityForReschedule.isLoading}
+        currentSlotId={rescheduleCurrentSlotId}
+        onSelectSlot={(newSlotId: string) => {
+          if (rescheduleMatchId) {
+            rescheduleSessionMutation
+              .mutateAsync({
+                matchId: rescheduleMatchId,
+                newSlotId,
+              })
+              .then(() => {
+                setSelectedSession(null);
+                setShowRescheduleSheet(false);
+                Alert.alert("Session Rescheduled", "Your session was updated.");
+              })
+              .catch((error) => {
+                Alert.alert(
+                  "Reschedule Failed",
+                  error instanceof Error
+                    ? error.message
+                    : "Could not reschedule this session.",
+                );
+              });
+          }
+        }}
       />
     </View>
   );
