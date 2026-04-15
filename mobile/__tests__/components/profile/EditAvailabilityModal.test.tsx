@@ -1,5 +1,4 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
-import { act } from "react-test-renderer";
 import React from "react";
 import { Alert } from "react-native";
 
@@ -40,6 +39,15 @@ describe("EditAvailabilityModal", () => {
   const respondMutateAsync = jest.fn();
 
   beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 3, 13, 8, 0, 0));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  beforeEach(() => {
     jest.clearAllMocks();
     createMutateAsync.mockResolvedValue(undefined);
     deleteMutateAsync.mockResolvedValue(undefined);
@@ -72,9 +80,7 @@ describe("EditAvailabilityModal", () => {
       />,
     );
 
-    await act(async () => {
-      fireEvent.press(getByText("09:00 - 10:00"));
-    });
+    fireEvent.press(getByText("09:00 - 10:00"));
 
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledWith({

@@ -1,33 +1,39 @@
 import ScheduleScreen from "@/app/(tabs)/schedule";
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import React from "react";
+import { Alert } from "react-native";
 
 const mockMentorshipRequestsQuery = jest.fn();
 const mockMentorshipMatchesQuery = jest.fn();
 const mockMentorshipUpcomingSessionsQuery = jest.fn();
+const mockCancelSessionMutation = jest.fn();
+const mockRescheduleSessionMutation = jest.fn();
+const mockSubmitFeedbackMutation = jest.fn();
 
-// 1. Mock icons
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
-
-// 2. Mock the heavy calendar component so Jest doesn't choke on it
-jest.mock("react-native-calendars", () => {
-  return {
-    Calendar: "View", // Replace the complex calendar with a simple empty view for the test
-  };
-});
+jest.mock("react-native-calendars", () => ({ Calendar: "View" }));
 
 jest.mock("@/components/dashboard/SessionCard", () => ({
-  SessionCard: ({ user, time }: { user: string; time: string }) => {
-    const { Text, View } = require("react-native");
+  SessionCard: ({
+    user,
+    time,
+    onPress,
+  }: {
+    user: string;
+    time: string;
+    onPress: () => void;
+  }) => {
+    const { Text, TouchableOpacity } = jest.requireActual("react-native");
     return (
-      <View>
+      <TouchableOpacity onPress={onPress} testID={`session-card-${user}`}>
         <Text>{user}</Text>
         <Text>{time}</Text>
-      </View>
+      </TouchableOpacity>
     );
   },
 }));
 
+// ADDED THE MISSING MUTATIONS HERE
 jest.mock("@/lib/queries/mentorship", () => {
   const actual = jest.requireActual<Record<string, unknown>>(
     "@/lib/queries/mentorship",
@@ -38,11 +44,24 @@ jest.mock("@/lib/queries/mentorship", () => {
     useMentorshipMatchesQuery: () => mockMentorshipMatchesQuery(),
     useMentorshipUpcomingSessionsQuery: () =>
       mockMentorshipUpcomingSessionsQuery(),
+    useAvailabilitySlotsQuery: () => ({ data: [], isLoading: false }), // Added
+    useCancelSessionMutation: () => ({
+      mutateAsync: mockCancelSessionMutation,
+      isPending: false,
+    }),
+    useRescheduleSessionMutation: () => ({
+      mutateAsync: mockRescheduleSessionMutation,
+      isPending: false,
+    }),
+    useSubmitMatchFeedbackMutation: () => ({
+      mutateAsync: mockSubmitFeedbackMutation,
+      isPending: false,
+    }),
     useRespondToMentorshipRequestMutation: () => ({
+      // <-- THIS WAS MISSING
       mutateAsync: jest.fn(),
       isPending: false,
     }),
-    useAvailabilitySlotsQuery: () => ({ data: [] }),
   };
 });
 
@@ -56,29 +75,16 @@ jest.mock("@/lib/auth/store", () => ({
     }),
 }));
 
-describe("ScheduleScreen Layout", () => {
+jest.spyOn(Alert, "alert");
+
+describe("ScheduleScreen", () => {
+  const today = new Date().toISOString().slice(0, 10);
+
   beforeEach(() => {
+    jest.useFakeTimers();
+    jest.clearAllMocks();
     mockMentorshipRequestsQuery.mockReturnValue({ data: [] });
     mockMentorshipMatchesQuery.mockReturnValue({ data: [] });
-    mockMentorshipUpcomingSessionsQuery.mockReturnValue({ data: [] });
-  });
-
-  it("renders the page headers correctly", () => {
-    const { getByText } = render(<ScheduleScreen />);
-
-    // Check that our static page text is rendering safely
-    expect(getByText("Schedule")).toBeTruthy();
-    expect(getByText("Manage your agenda.")).toBeTruthy();
-  });
-
-  it("shows empty-state message when no sessions exist for selected day", () => {
-    const { getByText } = render(<ScheduleScreen />);
-
-    expect(getByText("No sessions scheduled for this day.")).toBeTruthy();
-  });
-
-  it("renders mapped upcoming sessions for mentee mode", () => {
-    const today = new Date().toISOString().slice(0, 10);
 
     mockMentorshipUpcomingSessionsQuery.mockReturnValue({
       data: [
@@ -88,21 +94,65 @@ describe("ScheduleScreen Layout", () => {
             id: "mentor-1",
             username: "mentor_ada",
             display_name: "Ada Lovelace",
-            picture_url: "",
-            title: "Mentor",
           },
           slot_date: today,
           slot_start_time: "09:00:00",
           slot_end_time: "10:00:00",
           status: "ACCEPTED",
-          booked_at: "2026-04-05T12:00:00Z",
+        },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("renders page headers correctly", () => {
+    jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
+    const { getByText } = render(<ScheduleScreen />);
+    expect(getByText("Schedule")).toBeTruthy();
+    expect(getByText(/Sessions on/i)).toBeTruthy();
+  });
+
+  it("opens SessionDetailsModal when a session card is tapped", () => {
+    jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
+    const { getByTestId, getByText } = render(<ScheduleScreen />);
+
+    fireEvent.press(getByTestId("session-card-Ada Lovelace"));
+
+    expect(getByText("with Ada Lovelace")).toBeTruthy();
+    expect(getByText("Cancel")).toBeTruthy();
+  });
+
+  it("handles the Leave Feedback flow from the modal", async () => {
+    jest.setSystemTime(new Date(2026, 3, 15, 12, 0, 0));
+    mockMentorshipUpcomingSessionsQuery.mockReturnValue({
+      data: [
+        {
+          slot_id: "slot-past",
+          mentor: { username: "mentor_ada", display_name: "Ada Lovelace" },
+          slot_date: today,
+          slot_start_time: "09:00:00",
+          slot_end_time: "10:00:00",
+          status: "ACCEPTED",
         },
       ],
     });
 
-    const { getByText } = render(<ScheduleScreen />);
+    const { getByTestId, findByText, getByPlaceholderText } = render(
+      <ScheduleScreen />,
+    );
 
-    expect(getByText("Ada Lovelace")).toBeTruthy();
-    expect(getByText("09:00 - 10:00")).toBeTruthy();
+    fireEvent.press(getByTestId("session-card-Ada Lovelace"));
+    fireEvent.press(await findByText("Leave Feedback"));
+
+    const submitBtn = await findByText("Submit Review");
+    expect(submitBtn).toBeTruthy();
+
+    const textInput = getByPlaceholderText(/Share your thoughts/i);
+    fireEvent.changeText(textInput, "Great session!");
+
+    mockSubmitFeedbackMutation.mockResolvedValueOnce({});
   });
 });

@@ -3,7 +3,7 @@ import React from "react";
 
 import DiscoverScreen from "@/app/(tabs)/discover";
 import {
-  fetchDiscoverProfiles,
+  fetchDiscoverPopularProfiles,
   fetchDiscoverSkills,
 } from "@/lib/discover/client";
 
@@ -26,12 +26,14 @@ jest.mock("@react-navigation/native", () => ({
 
 jest.mock("@/lib/discover/client", () => ({
   fetchDiscoverProfiles: jest.fn(),
+  fetchDiscoverPopularProfiles: jest.fn(),
+  fetchDiscoverRecentlyAddedProfiles: jest.fn(),
   fetchDiscoverSkills: jest.fn(),
 }));
 
 jest.mock("@/components/discover/MentorCard", () => ({
   MentorCard: ({ profile, onPress }: any) => {
-    const { Text, TouchableOpacity } = require("react-native");
+    const { Text, TouchableOpacity } = jest.requireActual("react-native");
 
     return (
       <TouchableOpacity
@@ -52,26 +54,21 @@ jest.mock("@/components/discover/DiscoverFilterModal", () => ({
 describe("DiscoverScreen", () => {
   beforeEach(() => {
     mockPush.mockClear();
-    (fetchDiscoverProfiles as jest.Mock).mockResolvedValue({
-      count: 2,
-      page: 1,
-      pageSize: 8,
-      results: [
-        {
-          id: "mentor-1",
-          username: "can-ozkan",
-          full_name: "Can Ozkan",
-          bio: "Supports code review and team planning.",
-          hidden: false,
-          picture_url: "",
-          title: "Mobile Engineer",
-          show_initials_only: false,
-          expertises: ["Docker", "GraphQL"],
-          rating: 5,
-          total_mentee_count: 12,
-        },
-      ],
-    });
+    (fetchDiscoverPopularProfiles as jest.Mock).mockResolvedValue(
+      Array.from({ length: 8 }, (_, index) => ({
+        id: `mentor-${index + 1}`,
+        username: index === 0 ? "can-ozkan" : `mentor-${index + 1}`,
+        full_name: index === 0 ? "Can Ozkan" : `Mentor ${index + 1}`,
+        bio: "Supports code review and team planning.",
+        hidden: false,
+        picture_url: "",
+        title: "Mobile Engineer",
+        show_initials_only: false,
+        expertises: ["Docker", "GraphQL"],
+        rating: 5,
+        total_mentee_count: 12,
+      })),
+    );
     (fetchDiscoverSkills as jest.Mock).mockResolvedValue([
       { id: "skill-1", name: "Docker" },
       { id: "skill-2", name: "GraphQL" },
@@ -84,7 +81,7 @@ describe("DiscoverScreen", () => {
     expect(getByText("Discover")).toBeTruthy();
 
     await waitFor(() => {
-      expect(fetchDiscoverProfiles).toHaveBeenCalled();
+      expect(fetchDiscoverPopularProfiles).toHaveBeenCalled();
       expect(fetchDiscoverSkills).toHaveBeenCalled();
       expect(getByText("Can Ozkan")).toBeTruthy();
     });
@@ -97,7 +94,7 @@ describe("DiscoverScreen", () => {
   });
 
   it("shows API error message when profile query fails", async () => {
-    (fetchDiscoverProfiles as jest.Mock).mockRejectedValueOnce(
+    (fetchDiscoverPopularProfiles as jest.Mock).mockRejectedValueOnce(
       new Error("Failed to load discovery profiles (500)"),
     );
 
@@ -109,12 +106,7 @@ describe("DiscoverScreen", () => {
   });
 
   it("shows demo preview message when backend returns empty results", async () => {
-    (fetchDiscoverProfiles as jest.Mock).mockResolvedValueOnce({
-      count: 0,
-      page: 1,
-      pageSize: 8,
-      results: [],
-    });
+    (fetchDiscoverPopularProfiles as jest.Mock).mockResolvedValueOnce([]);
 
     const { getByText } = render(<DiscoverScreen />);
 
@@ -128,47 +120,37 @@ describe("DiscoverScreen", () => {
   });
 
   it("requests next page when pressing load more", async () => {
-    (fetchDiscoverProfiles as jest.Mock)
-      .mockResolvedValueOnce({
-        count: 2,
-        page: 1,
-        pageSize: 8,
-        results: [
-          {
-            id: "mentor-1",
-            username: "can-ozkan",
-            full_name: "Can Ozkan",
-            bio: "Supports code review and team planning.",
-            hidden: false,
-            picture_url: "",
-            title: "Mobile Engineer",
-            show_initials_only: false,
-            expertises: ["Docker", "GraphQL"],
-            rating: 5,
-            total_mentee_count: 12,
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        count: 2,
-        page: 2,
-        pageSize: 8,
-        results: [
-          {
-            id: "mentor-2",
-            username: "elif-yildiz",
-            full_name: "Elif Yildiz",
-            bio: "Frontend and accessibility mentoring.",
-            hidden: false,
-            picture_url: "",
-            title: "Frontend Engineer",
-            show_initials_only: false,
-            expertises: ["React"],
-            rating: 4.8,
-            total_mentee_count: 9,
-          },
-        ],
-      });
+    (fetchDiscoverPopularProfiles as jest.Mock)
+      .mockResolvedValueOnce(
+        Array.from({ length: 8 }, (_, index) => ({
+          id: `mentor-${index + 1}`,
+          username: index === 0 ? "can-ozkan" : `mentor-${index + 1}`,
+          full_name: index === 0 ? "Can Ozkan" : `Mentor ${index + 1}`,
+          bio: "Supports code review and team planning.",
+          hidden: false,
+          picture_url: "",
+          title: "Mobile Engineer",
+          show_initials_only: false,
+          expertises: ["Docker", "GraphQL"],
+          rating: 5,
+          total_mentee_count: 12,
+        })),
+      )
+      .mockResolvedValueOnce([
+        {
+          id: "mentor-9",
+          username: "elif-yildiz",
+          full_name: "Elif Yildiz",
+          bio: "Frontend and accessibility mentoring.",
+          hidden: false,
+          picture_url: "",
+          title: "Frontend Engineer",
+          show_initials_only: false,
+          expertises: ["React"],
+          rating: 4.8,
+          total_mentee_count: 9,
+        },
+      ]);
 
     const { getByText } = render(<DiscoverScreen />);
 
@@ -179,9 +161,7 @@ describe("DiscoverScreen", () => {
     fireEvent.press(getByText("Load More"));
 
     await waitFor(() => {
-      expect(fetchDiscoverProfiles).toHaveBeenLastCalledWith(
-        expect.objectContaining({ page: 2, pageSize: 8 }),
-      );
+      expect(fetchDiscoverPopularProfiles).toHaveBeenLastCalledWith(16);
     });
   });
 });
