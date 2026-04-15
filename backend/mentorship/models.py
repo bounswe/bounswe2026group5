@@ -138,3 +138,39 @@ class Match(models.Model):
 
     def __str__(self) -> str:
         return f"{self.mentor.display_name} <> {self.mentee.display_name}"
+
+
+class Feedback(models.Model):
+    """Feedback left by a match participant (mentor or mentee) about the interaction."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    match = models.ForeignKey(
+        Match,
+        on_delete=models.CASCADE,
+        related_name="feedbacks",
+    )
+    submitted_by = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name="submitted_feedbacks",
+    )
+    rating = models.PositiveSmallIntegerField()
+    text = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "feedback"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["match", "submitted_by"],
+                name="uniq_feedback_per_match_participant",
+            ),
+            models.CheckConstraint(
+                condition=Q(rating__gte=1) & Q(rating__lte=5),
+                name="feedback_rating_between_1_and_5",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.submitted_by.display_name} on {self.match} ({self.rating}/5)"

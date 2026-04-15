@@ -1,9 +1,11 @@
 """Views for mentorship request and match API endpoints."""
 
+from decimal import Decimal
 from typing import Any, cast
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import CharField, OuterRef, Subquery, Value
+from django.db.models import Avg, CharField, OuterRef, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -25,14 +27,17 @@ from profiles.services import (
     cancel_availability_booking,
 )
 
-from .models import Match, MentorshipRequest
+from .models import Feedback, Match, MentorshipRequest
 from .serializers import (
+    FeedbackCreateSerializer,
+    FeedbackSerializer,
     MatchSerializer,
     MentorshipRequestCreateSerializer,
     MentorshipRequestSerializer,
     RescheduleSessionSerializer,
     RespondToRequestSerializer,
     UpcomingMenteeSessionSerializer,
+    UpcomingMentorSessionSerializer,
 )
 
 _NOT_FOUND = {"detail": "Not found."}
@@ -40,6 +45,7 @@ _PERMISSION_DENIED = {"detail": "You do not have permission to perform this acti
 _DUPLICATE_PENDING = {"detail": "You already have a pending request with this mentor."}
 _NOT_PENDING = {"detail": "Only pending requests can be accepted or rejected."}
 _MENTEE_REQUIRED = {"detail": "You need a MENTEE or BOTH profile to send mentorship requests."}
+_MENTOR_REQUIRED = {"detail": "You need a MENTOR profile to access this resource."}
 _NO_PROFILE = {"detail": "Profile not found."}
 _SLOT_BOOKING_FAILED = {"detail": "Selected slot could not be booked while accepting this request."}
 
@@ -465,4 +471,312 @@ class MyUpcomingSessionsListAPIView(APIView):
         return Response(
             UpcomingMenteeSessionSerializer(upcoming_slots, many=True).data,
             status=status.HTTP_200_OK,
+        )
+
+
+class MyPastSessionsListAPIView(APIView):
+    """List past booked sessions for the authenticated mentee."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: UpcomingMenteeSessionSerializer(many=True),
+            401: OpenApiResponse(description="Authentication required."),
+        },
+        description=(
+            "List past booked sessions for the authenticated user as mentee. "
+            "Sessions are resolved from both active and inactive matches and mentor "
+            "availability slots booked by the current user whose start time has passed. "
+            "Ordered by most recent first."
+        ),
+        tags=["Mentorship"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return past booked slots by mentors who have or had a match with the caller."""
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response([], status=status.HTTP_200_OK)
+
+        mentor_profile_ids = Match.objects.filter(mentee=profile).values_list(
+            "mentor_id", flat=True
+        )
+
+        past_slots = (
+            AvailabilitySlot.objects.filter(
+                profile_id__in=mentor_profile_ids,
+                is_booked=True,
+                booked_by=request.user,
+                start_at__lt=timezone.now(),
+            )
+            .annotate(
+                request_status=Coalesce(
+                    Subquery(
+                        MentorshipRequest.objects.filter(
+                            slot_id=OuterRef("pk"),
+                            mentee=profile,
+                        )
+                        .order_by("-created_at")
+                        .values("status")[:1]
+                    ),
+                    Value(MentorshipRequest.Status.ACCEPTED),
+                    output_field=CharField(),
+                )
+            )
+            .select_related("profile")
+            .order_by("-start_at")
+        )
+
+        return Response(
+            UpcomingMenteeSessionSerializer(past_slots, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class MentorUpcomingSessionsListAPIView(APIView):
+    """List upcoming booked sessions for the authenticated mentor."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: UpcomingMentorSessionSerializer(many=True),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Caller does not have a MENTOR profile."),
+        },
+        description=(
+            "List upcoming booked sessions for the authenticated user as mentor. "
+            "Returns the caller's own availability slots that are booked and have not "
+            "yet started, ordered by start time ascending. "
+            "Only accessible to users with a MENTOR app usage mode."
+        ),
+        tags=["Mentorship"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return future booked slots owned by the caller's mentor profile."""
+        if request.user.app_usage_mode != AppUsageMode.MENTOR:
+            return Response(_MENTOR_REQUIRED, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response([], status=status.HTTP_200_OK)
+
+        upcoming_slots = (
+            AvailabilitySlot.objects.filter(
+                profile=profile,
+                is_booked=True,
+                start_at__gte=timezone.now(),
+            )
+            .select_related("booked_by__profile")
+            .order_by("start_at")
+        )
+
+        return Response(
+            UpcomingMentorSessionSerializer(upcoming_slots, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class MentorPastSessionsListAPIView(APIView):
+    """List past booked sessions for the authenticated mentor."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: UpcomingMentorSessionSerializer(many=True),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Caller does not have a MENTOR profile."),
+        },
+        description=(
+            "List past booked sessions for the authenticated user as mentor. "
+            "Returns the caller's own availability slots that are booked and whose "
+            "start time has already passed, ordered by most recent first. "
+            "Only accessible to users with a MENTOR app usage mode."
+        ),
+        tags=["Mentorship"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return past booked slots owned by the caller's mentor profile."""
+        if request.user.app_usage_mode != AppUsageMode.MENTOR:
+            return Response(_MENTOR_REQUIRED, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response([], status=status.HTTP_200_OK)
+
+        past_slots = (
+            AvailabilitySlot.objects.filter(
+                profile=profile,
+                is_booked=True,
+                start_at__lt=timezone.now(),
+            )
+            .select_related("booked_by__profile")
+            .order_by("-start_at")
+        )
+
+        return Response(
+            UpcomingMentorSessionSerializer(past_slots, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class DeactivateMatchAPIView(APIView):
+    """End an active mentorship relationship by setting the match to inactive."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: MatchSerializer,
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Caller is not a participant of this match."),
+            404: OpenApiResponse(description="Match not found."),
+        },
+        description=(
+            "Deactivate a mentorship match, formally ending the relationship. "
+            "Either the mentor or the mentee of the match may call this endpoint. "
+            "The operation is idempotent: deactivating an already-inactive match returns 200."
+        ),
+        tags=["Mentorship"],
+    )
+    def post(self, request: Request, match_id: str) -> Response:
+        """Set the identified match to inactive."""
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            match = Match.objects.select_related("mentor", "mentee", "request").get(id=match_id)
+        except Match.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        if profile not in (match.mentor, match.mentee):
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+
+        Match.objects.filter(pk=match.pk).update(is_active=False)
+        match.is_active = False
+
+        return Response(MatchSerializer(match).data, status=status.HTTP_200_OK)
+
+
+class MatchFeedbackListCreateAPIView(APIView):
+    """List and submit feedback for a match (participants only)."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: FeedbackSerializer(many=True),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Only match participants can view feedback."),
+            404: OpenApiResponse(description="Match not found."),
+        },
+        description=(
+            "List all feedback submitted for the given match. "
+            "Only the mentor or mentee of the match can view feedback."
+        ),
+        tags=["Mentorship"],
+    )
+    def get(self, request: Request, match_id: str) -> Response:
+        """Return all feedback entries for the identified match."""
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            match = Match.objects.select_related("mentor", "mentee").get(id=match_id)
+        except Match.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        if profile not in (match.mentor, match.mentee):
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+
+        feedbacks = (
+            Feedback.objects.filter(match=match)
+            .select_related("submitted_by")
+            .order_by("-created_at")
+        )
+        return Response(FeedbackSerializer(feedbacks, many=True).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        request=FeedbackCreateSerializer,
+        responses={
+            201: FeedbackSerializer,
+            400: OpenApiResponse(description="Validation error or duplicate feedback."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Only match participants can submit feedback."),
+            404: OpenApiResponse(description="Match not found."),
+        },
+        description=(
+            "Submit feedback (rating 1–5 and optional text) for a match. "
+            "Each participant (mentor and mentee) can submit feedback once. "
+            "When the mentee submits, the mentor's public rating may be updated "
+            "once the review count reaches a configured threshold."
+        ),
+        tags=["Mentorship"],
+    )
+    def post(self, request: Request, match_id: str) -> Response:
+        """Create feedback for the identified match from the authenticated participant."""
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            match = Match.objects.select_related("mentor", "mentee").get(id=match_id)
+        except Match.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        if profile not in (match.mentor, match.mentee):
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = FeedbackCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            feedback = Feedback.objects.create(
+                match=match,
+                submitted_by=profile,
+                rating=serializer.validated_data["rating"],
+                text=serializer.validated_data.get("text", ""),
+            )
+        except IntegrityError:
+            return Response(
+                {"detail": "You have already submitted feedback for this match."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # When the mentee submits, update the mentor's rating counter and
+        # recalculate the public average every RATING_UPDATE_THRESHOLD reviews.
+        if profile == match.mentee:
+            mentor = match.mentor
+            with transaction.atomic():
+                Profile.objects.filter(pk=mentor.pk).update(
+                    review_count=mentor.review_count + 1
+                )
+                mentor.refresh_from_db(fields=["review_count"])
+
+                threshold = getattr(settings, "RATING_UPDATE_THRESHOLD", 5)
+                if mentor.review_count % threshold == 0:
+                    avg = (
+                        Feedback.objects.filter(match__mentor=mentor)
+                        .exclude(submitted_by=mentor)
+                        .aggregate(avg=Avg("rating"))["avg"]
+                    )
+                    Profile.objects.filter(pk=mentor.pk).update(
+                        average_rating=Decimal(str(avg)).quantize(Decimal("0.01"))
+                        if avg is not None
+                        else Decimal("0.00")
+                    )
+
+        return Response(
+            FeedbackSerializer(feedback).data,
+            status=status.HTTP_201_CREATED,
         )

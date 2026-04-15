@@ -7,6 +7,7 @@ from .views import (
     AvailabilitySlotCancelBookingAPIView,
     AvailabilitySlotDetailAPIView,
     AvailabilitySlotListCreateAPIView,
+    MentorPublicRatingAPIView,
     PopularMentorsListAPIView,
     PublicMentorProfilesSearchListAPIView,
     ProfileByUsernameAPIView,
@@ -38,6 +39,11 @@ urlpatterns = [
         "<str:username>/availability-slots/<uuid:slot_id>/cancel-booking/",
         AvailabilitySlotCancelBookingAPIView.as_view(),
         name="availability-slot-cancel-booking",
+    ),
+    path(
+        "<str:username>/rating/",
+        MentorPublicRatingAPIView.as_view(),
+        name="mentor-public-rating",
     ),
     path("<str:username>/", ProfileByUsernameAPIView.as_view(), name="profile-by-username"),
 ]

@@ -180,3 +180,6 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Feedback & rating
+RATING_UPDATE_THRESHOLD = int(os.getenv("RATING_UPDATE_THRESHOLD", "5"))

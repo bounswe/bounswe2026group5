@@ -6,7 +6,7 @@ from rest_framework import serializers
 from accounts.models import AppUsageMode
 from profiles.models import AvailabilitySlot, Profile
 
-from .models import Match, MentorshipRequest
+from .models import Feedback, Match, MentorshipRequest
 
 
 class ProfileSummarySerializer(serializers.ModelSerializer):
@@ -200,3 +200,64 @@ class UpcomingMenteeSessionSerializer(serializers.ModelSerializer):
     def get_slot_end_time(self, obj: AvailabilitySlot) -> str:
         """Return session end time in local timezone."""
         return timezone.localtime(obj.end_at).time().replace(microsecond=0).isoformat()
+
+
+class UpcomingMentorSessionSerializer(serializers.ModelSerializer):
+    """Read serializer for upcoming booked sessions viewed from the mentor's perspective."""
+
+    slot_id = serializers.UUIDField(source="id", read_only=True)
+    mentee = serializers.SerializerMethodField()
+    slot_date = serializers.SerializerMethodField()
+    slot_start_time = serializers.SerializerMethodField()
+    slot_end_time = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AvailabilitySlot
+        fields = (
+            "slot_id",
+            "mentee",
+            "slot_date",
+            "slot_start_time",
+            "slot_end_time",
+            "booked_at",
+        )
+        read_only_fields = fields
+
+    def get_mentee(self, obj: AvailabilitySlot) -> dict | None:
+        """Return the mentee's profile summary derived from the booking user."""
+        if obj.booked_by is None:
+            return None
+        try:
+            return ProfileSummarySerializer(obj.booked_by.profile).data
+        except Profile.DoesNotExist:
+            return None
+
+    def get_slot_date(self, obj: AvailabilitySlot) -> str:
+        """Return session date in local timezone."""
+        return timezone.localtime(obj.start_at).date().isoformat()
+
+    def get_slot_start_time(self, obj: AvailabilitySlot) -> str:
+        """Return session start time in local timezone."""
+        return timezone.localtime(obj.start_at).time().replace(microsecond=0).isoformat()
+
+    def get_slot_end_time(self, obj: AvailabilitySlot) -> str:
+        """Return session end time in local timezone."""
+        return timezone.localtime(obj.end_at).time().replace(microsecond=0).isoformat()
+
+
+class FeedbackSerializer(serializers.ModelSerializer):
+    """Read serializer for feedback entries."""
+
+    submitted_by = ProfileSummarySerializer(read_only=True)
+
+    class Meta:
+        model = Feedback
+        fields = ("id", "match", "submitted_by", "rating", "text", "created_at")
+        read_only_fields = fields
+
+
+class FeedbackCreateSerializer(serializers.Serializer):
+    """Write serializer for submitting feedback on a match."""
+
+    rating = serializers.IntegerField(min_value=1, max_value=5)
+    text = serializers.CharField(required=False, default="", allow_blank=True)
