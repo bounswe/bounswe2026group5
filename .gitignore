@@ -42,6 +42,7 @@ ehthumbs.db
 backend/db.sqlite3
 backend/db.sqlite3-journal
 backend/media/
+backend/message_attachments/
 backend/staticfiles/
 
 # Testing and Logs
