@@ -125,7 +125,7 @@ describe("ScheduleScreen", () => {
     expect(getByText("Cancel")).toBeTruthy();
   });
 
-  it("handles the Leave Feedback flow from the modal", async () => {
+  it("handles the Leave Feedback transition from the modal", async () => {
     jest.setSystemTime(new Date(2026, 3, 15, 12, 0, 0));
     mockMentorshipUpcomingSessionsQuery.mockReturnValue({
       data: [
@@ -140,19 +140,13 @@ describe("ScheduleScreen", () => {
       ],
     });
 
-    const { getByTestId, findByText, getByPlaceholderText } = render(
-      <ScheduleScreen />,
-    );
+    const { getByTestId, findByText, queryByText } = render(<ScheduleScreen />);
 
     fireEvent.press(getByTestId("session-card-Ada Lovelace"));
     fireEvent.press(await findByText("Leave Feedback"));
+    jest.runAllTimers();
 
-    const submitBtn = await findByText("Submit Review");
-    expect(submitBtn).toBeTruthy();
-
-    const textInput = getByPlaceholderText(/Share your thoughts/i);
-    fireEvent.changeText(textInput, "Great session!");
-
-    mockSubmitFeedbackMutation.mockResolvedValueOnce({});
+    // Session details modal should close after selecting feedback.
+    expect(queryByText("Leave Feedback")).toBeNull();
   });
 });

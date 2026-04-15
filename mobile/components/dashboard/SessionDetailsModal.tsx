@@ -15,6 +15,7 @@ interface SessionDetailsModalProps {
   onClose: () => void;
   onReschedule?: () => void;
   onCancelSession?: () => void;
+  onLeaveFeedback?: () => void;
   isCancelling?: boolean;
   session: {
     id?: string;
@@ -35,6 +36,7 @@ export function SessionDetailsModal({
   onClose,
   onReschedule,
   onCancelSession,
+  onLeaveFeedback,
   isCancelling = false,
   session,
 }: Readonly<SessionDetailsModalProps>) {
@@ -47,9 +49,23 @@ export function SessionDetailsModal({
     statusTextClass = "text-amber-600";
   }
 
-  // 1. Primary Action: Only for Location or Video Call 
+  // 1. Primary Action: completed sessions show feedback CTA.
   let primaryAction: React.ReactNode = null;
-  if (session.location) {
+  if (session.status === "Completed") {
+    primaryAction = (
+      <TouchableOpacity
+        className="bg-indigo-600 py-4 rounded-xl items-center mb-3 shadow-sm"
+        onPress={() => {
+          onClose();
+          if (onLeaveFeedback) {
+            setTimeout(() => onLeaveFeedback(), 300);
+          }
+        }}
+      >
+        <Text className="text-white font-bold text-lg">Leave Feedback</Text>
+      </TouchableOpacity>
+    );
+  } else if (session.location) {
     primaryAction = (
       <TouchableOpacity
         className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm flex-row justify-center gap-2"
