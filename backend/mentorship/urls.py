@@ -7,6 +7,7 @@ from .views import (
     CreateRequestAPIView,
     DeactivateMatchAPIView,
     MatchFeedbackListCreateAPIView,
+    MentorPastSessionsListAPIView,
     MentorUpcomingSessionsListAPIView,
     MyMatchesListAPIView,
     MyPastSessionsListAPIView,
@@ -49,6 +50,11 @@ urlpatterns = [
         "sessions/mentor/upcoming/",
         MentorUpcomingSessionsListAPIView.as_view(),
         name="mentorship-mentor-upcoming-session-list",
+    ),
+    path(
+        "sessions/mentor/past/",
+        MentorPastSessionsListAPIView.as_view(),
+        name="mentorship-mentor-past-session-list",
     ),
     path(
         "sessions/<uuid:match_id>/cancel/",

@@ -1220,3 +1220,101 @@ class RescheduleSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
         )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data["detail"], "Not found.")
+
+
+class MentorPastSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
+    """Tests for GET /api/mentorship/sessions/mentor/past/."""
+
+    MENTOR_PAST_SESSIONS_URL = "/api/mentorship/sessions/mentor/past/"
+
+    def _create_past_slot(self, days_ago: int = 2, booked_by=None) -> AvailabilitySlot:
+        """Create a past availability slot on the mentor's profile."""
+        past_start = timezone.now() - timedelta(days=days_ago)
+        kwargs: dict = {
+            "profile": self.mentor_profile,
+            "start_at": past_start,
+            "end_at": past_start + timedelta(hours=1),
+        }
+        if booked_by is not None:
+            kwargs["is_booked"] = True
+            kwargs["booked_by"] = booked_by
+            kwargs["booked_at"] = timezone.now() - timedelta(days=days_ago + 1)
+        return AvailabilitySlot.objects.create(**kwargs)
+
+    def test_unauthenticated_returns_401(self) -> None:
+        response = self.anon_client.get(self.MENTOR_PAST_SESSIONS_URL)
+        self.assertEqual(response.status_code, 401)
+
+    def test_mentee_only_user_returns_403(self) -> None:
+        response = self.mentee_client.get(self.MENTOR_PAST_SESSIONS_URL)
+        self.assertEqual(response.status_code, 403)
+
+    def test_no_past_sessions_returns_empty_list(self) -> None:
+        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_returns_past_booked_slots_for_mentor(self) -> None:
+        past_slot = self._create_past_slot(booked_by=self.mentee_user)
+
+        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(str(response.data[0]["slot_id"]), str(past_slot.id))
+
+    def test_response_includes_mentee_info(self) -> None:
+        self._create_past_slot(booked_by=self.mentee_user)
+
+        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        mentee_data = response.data[0]["mentee"]
+        self.assertEqual(mentee_data["username"], self.mentee_profile.username)
+        self.assertEqual(mentee_data["display_name"], self.mentee_profile.display_name)
+
+    def test_excludes_unbooked_past_slots(self) -> None:
+        self._create_past_slot()  # not booked
+
+        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_excludes_upcoming_booked_slots(self) -> None:
+        self.mentor_slot.mark_booked(self.mentee_user)
+
+        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_excludes_slots_owned_by_other_mentor(self) -> None:
+        past_start = timezone.now() - timedelta(days=2)
+        AvailabilitySlot.objects.create(
+            profile=self.other_profile,
+            start_at=past_start,
+            end_at=past_start + timedelta(hours=1),
+            is_booked=True,
+            booked_by=self.mentee_user,
+            booked_at=timezone.now() - timedelta(days=3),
+        )
+
+        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_results_ordered_most_recent_first(self) -> None:
+        older_slot = self._create_past_slot(days_ago=5, booked_by=self.mentee_user)
+        recent_slot = self._create_past_slot(days_ago=1, booked_by=self.mentee_user)
+
+        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(str(response.data[0]["slot_id"]), str(recent_slot.id))
+        self.assertEqual(str(response.data[1]["slot_id"]), str(older_slot.id))
+
+    def test_response_contains_expected_fields(self) -> None:
+        self._create_past_slot(booked_by=self.mentee_user)
+
+        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
+        self.assertEqual(response.status_code, 200)
+        item = response.data[0]
+        for field in ("slot_id", "mentee", "slot_date", "slot_start_time", "slot_end_time", "booked_at"):
+            self.assertIn(field, item)

@@ -579,6 +579,51 @@ class MentorUpcomingSessionsListAPIView(APIView):
         )
 
 
+class MentorPastSessionsListAPIView(APIView):
+    """List past booked sessions for the authenticated mentor."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: UpcomingMentorSessionSerializer(many=True),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Caller does not have a MENTOR profile."),
+        },
+        description=(
+            "List past booked sessions for the authenticated user as mentor. "
+            "Returns the caller's own availability slots that are booked and whose "
+            "start time has already passed, ordered by most recent first. "
+            "Only accessible to users with a MENTOR app usage mode."
+        ),
+        tags=["Mentorship"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return past booked slots owned by the caller's mentor profile."""
+        if request.user.app_usage_mode != AppUsageMode.MENTOR:
+            return Response(_MENTOR_REQUIRED, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response([], status=status.HTTP_200_OK)
+
+        past_slots = (
+            AvailabilitySlot.objects.filter(
+                profile=profile,
+                is_booked=True,
+                start_at__lt=timezone.now(),
+            )
+            .select_related("booked_by__profile")
+            .order_by("-start_at")
+        )
+
+        return Response(
+            UpcomingMentorSessionSerializer(past_slots, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
 class DeactivateMatchAPIView(APIView):
     """End an active mentorship relationship by setting the match to inactive."""
 
