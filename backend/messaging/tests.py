@@ -200,6 +200,29 @@ class ConversationDetailAPIViewTests(MessagingAPIBaseTestCase):
         response = self.admin_client.get(url)
         self.assertEqual(response.status_code, 403)
 
+    def test_messages_ordered_most_recent_last(self) -> None:
+        # Create messages with different timestamps
+        old_message = Message.objects.create(
+            conversation=self.conversation,
+            sender=self.mentor_profile,
+            body="Old message",
+            created_at=timezone.now() - timedelta(hours=2),
+        )
+        new_message = Message.objects.create(
+            conversation=self.conversation,
+            sender=self.mentee_profile,
+            body="New message",
+            created_at=timezone.now() - timedelta(hours=1),
+        )
+
+        url = self._conversation_detail_url(self.conversation.id)
+        response = self.mentee_client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 2)
+        # Should be ordered by created_at ascending (oldest first)
+        self.assertEqual(response.data[0]["id"], str(old_message.id))
+        self.assertEqual(response.data[1]["id"], str(new_message.id))
+
 
 class MessageCreateAPIViewTests(MessagingAPIBaseTestCase):
     """Tests for POST /api/messages/conversations/{id}/."""
@@ -256,6 +279,15 @@ class MessageCreateAPIViewTests(MessagingAPIBaseTestCase):
     def test_admin_cannot_send_messages(self) -> None:
         url = self._conversation_detail_url(self.conversation.id)
         response = self.admin_client.post(url, {"body": "Test"})
+        self.assertEqual(response.status_code, 403)
+
+    def test_sending_to_deactivated_match_rejected(self) -> None:
+        # Deactivate the match
+        self.match.is_active = False
+        self.match.save()
+
+        url = self._conversation_detail_url(self.conversation.id)
+        response = self.mentee_client.post(url, {"body": "Test"})
         self.assertEqual(response.status_code, 403)
 
 
