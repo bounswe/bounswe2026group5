@@ -57,7 +57,7 @@ function groupSlotsByWeekday(
 ): AvailabilitySlot[] {
   const grouped = new Map<
     string,
-    { id: string; label: string; isBooked?: boolean }[]
+    { id: string; label: string; isBooked?: boolean; date?: string }[]
   >();
 
   slots.forEach((slot) => {
@@ -67,6 +67,7 @@ function groupSlotsByWeekday(
       id: slot.id,
       label: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
       isBooked: slot.is_booked,
+      date: slot.date,
     });
     grouped.set(day, dayTimes);
   });
@@ -491,8 +492,10 @@ export default function MentorProfileScreen() {
         prev
           ? {
               ...prev,
-              available_slots: (prev.available_slots ?? []).filter(
-                (slot) => slot.id !== payload.slotId,
+              available_slots: (prev.available_slots ?? []).map((slot) =>
+                slot.id === payload.slotId
+                  ? { ...slot, is_booked: true }
+                  : slot,
               ),
             }
           : prev,
@@ -527,8 +530,11 @@ export default function MentorProfileScreen() {
         prev
           ? {
               ...prev,
-              available_slots: (prev.available_slots ?? []).filter(
-                (availableSlot) => availableSlot.id !== slot.id,
+              available_slots: (prev.available_slots ?? []).map(
+                (availableSlot) =>
+                  availableSlot.id === slot.id
+                    ? { ...availableSlot, is_booked: true }
+                    : availableSlot,
               ),
             }
           : prev,

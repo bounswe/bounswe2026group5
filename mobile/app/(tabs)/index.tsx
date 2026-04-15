@@ -19,6 +19,7 @@ import {
   useMentorshipUpcomingSessionsQuery,
   useMentorshipRequestsQuery,
   useRespondToMentorshipRequestMutation,
+  useCancelSessionMutation,
   type DashboardRequestItem,
   type DashboardSessionItem,
 } from "@/lib/queries/mentorship";
@@ -43,6 +44,7 @@ export default function DashboardScreen() {
     currentUsername || "",
   );
   const respondMutation = useRespondToMentorshipRequestMutation();
+  const cancelSessionMutation = useCancelSessionMutation(currentUsername);
 
   const isMenteeOnly = appUsageMode === "MENTEE";
   const isMentorOnly = appUsageMode === "MENTOR";
@@ -65,7 +67,10 @@ export default function DashboardScreen() {
     }
 
     if (isMentorOnly) {
-      return mapMentorBookedSlotsToSessions(mentorAvailabilityQuery.data ?? []);
+      return mapMentorBookedSlotsToSessions(
+        mentorAvailabilityQuery.data ?? [],
+        matchesQuery.data,
+      );
     }
 
     const byKey = new Map<string, DashboardSessionItem>();
@@ -79,14 +84,15 @@ export default function DashboardScreen() {
       },
     );
 
-    mapMentorBookedSlotsToSessions(mentorAvailabilityQuery.data ?? []).forEach(
-      (session) => {
-        byKey.set(
-          `${session.rawDate}|${session.time}|${session.user}`,
-          session,
-        );
-      },
-    );
+    mapMentorBookedSlotsToSessions(
+      mentorAvailabilityQuery.data ?? [],
+      matchesQuery.data,
+    ).forEach((session) => {
+      byKey.set(
+        `${session.rawDate}|${session.time}|${session.user}`,
+        session,
+      );
+    });
 
     return Array.from(byKey.values()).sort((a, b) => {
       const aKey = `${a.rawDate}T${a.time.split(" - ")[0] ?? "00:00"}`;
@@ -99,6 +105,7 @@ export default function DashboardScreen() {
     isMentorOnly,
     upcomingSessionsQuery.data,
     mentorAvailabilityQuery.data,
+    matchesQuery.data,
   ]);
 
   // State for Modals
@@ -143,6 +150,50 @@ export default function DashboardScreen() {
     }
 
     router.push(`/user/${encodeURIComponent(targetUsername)}`);
+  };
+
+  const handleCancelSession = async () => {
+    if (!selectedSession) {
+      return;
+    }
+
+    try {
+      const matchData = matchesQuery.data ?? [];
+      const slotToFind = selectedSession.id;
+
+      const slot = (mentorAvailabilityQuery.data ?? []).find(
+        (s) => s.id === slotToFind,
+      );
+      if (!slot?.bookedBy) {
+        Alert.alert("Error", "Could not find session details.");
+        return;
+      }
+
+      const match = matchData.find((m) => m.mentee.username === slot.bookedBy);
+      if (!match) {
+        Alert.alert("Error", "Could not find associated match.");
+        return;
+      }
+
+      await cancelSessionMutation.mutateAsync(match.id);
+      setSelectedSession(null);
+      Alert.alert("Session Cancelled", "The session was cancelled.");
+    } catch (error) {
+      Alert.alert(
+        "Cancel Failed",
+        error instanceof Error
+          ? error.message
+          : "Could not cancel the session.",
+      );
+    }
+  };
+
+  const handleRescheduleSession = () => {
+    Alert.alert(
+      "Reschedule",
+      "Please use the Schedule tab to reschedule sessions.",
+    );
+    setSelectedSession(null);
   };
 
   return (
@@ -261,12 +312,9 @@ export default function DashboardScreen() {
         visible={!!selectedSession}
         session={selectedSession}
         onClose={() => setSelectedSession(null)}
-        onReschedule={() => {
-          Alert.alert(
-            "Coming Soon",
-            "Rescheduling will be wired after the dedicated API endpoint is finalized.",
-          );
-        }}
+        onCancelSession={handleCancelSession}
+        onReschedule={handleRescheduleSession}
+        isCancelling={cancelSessionMutation.isPending}
       />
     </View>
   );

@@ -143,11 +143,18 @@ export function SessionDetailsModal({
           <View className="flex-row justify-between gap-3 mb-2 mt-2">
             <TouchableOpacity
               className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
+              disabled={isCancelling}
               onPress={() => {
-                onClose();
                 if (onReschedule) {
+                  onClose();
                   setTimeout(() => onReschedule(), 300);
+                  return;
                 }
+
+                Alert.alert(
+                  "Reschedule",
+                  "Rescheduling is not available for this session.",
+                );
               }}
             >
               <Text className="text-gray-700 font-bold text-base">Reschedule</Text>

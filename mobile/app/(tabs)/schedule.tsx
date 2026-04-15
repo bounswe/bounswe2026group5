@@ -11,10 +11,15 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   type DashboardSessionItem,
+  type MentorshipRequest,
   mapMentorBookedSlotsToSessions,
   mapUpcomingSessionsToDashboard,
   useAvailabilitySlotsQuery,
+  useCancelSessionMutation,
+  useMentorshipMatchesQuery,
+  useMentorshipRequestsQuery,
   useMentorshipUpcomingSessionsQuery,
+  useRescheduleSessionMutation,
   useRespondToMentorshipRequestMutation,
 } from "@/lib/queries/mentorship";
 import React, { useMemo, useState } from "react";
@@ -25,21 +30,14 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
-// This grabs today's date dynamically and formats it as 'YYYY-MM-DD'
 const TODAY = new Date().toISOString().split("T")[0];
-
-const formatFriendlyDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-};
 
 type ScheduleSession = {
   id: string;
   requestId: string;
+  slotId: string;
+  matchId?: string;
+  mentorUsername?: string;
   rawDate: string;
   date: string;
   time: string;
@@ -51,6 +49,48 @@ type ScheduleSession = {
   meetingUrl?: string;
 };
 
+const formatFriendlyDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const toSlotDateTime = (date: string, time: string): Date =>
+  new Date(`${date}T${time}:00`);
+
+const formatRescheduleOption = (slot: {
+  date: string;
+  startTime: string;
+  endTime: string;
+}): string => {
+  const date = new Date(`${slot.date}T00:00:00`);
+  return `${date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })} ${slot.startTime.slice(0, 5)}-${slot.endTime.slice(0, 5)}`;
+};
+
+function resolveRelatedRequest(
+  slotRequests: MentorshipRequest[],
+  role: "Mentor" | "Mentee",
+  username: string,
+): MentorshipRequest | undefined {
+  for (const request of slotRequests) {
+    if (role === "Mentor" && request.mentor.username === username) {
+      return request;
+    }
+
+    if (role === "Mentee" && request.mentee.username === username) {
+      return request;
+    }
+  }
+
+  return undefined;
+}
+
 export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const [selectedDate, setSelectedDate] = useState(TODAY);
@@ -60,27 +100,75 @@ export default function ScheduleScreen() {
   const theme = Colors[colorScheme];
   const currentUsername = useAuthStore((state) => state.user?.username);
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
+
   const respondToRequestMutation = useRespondToMentorshipRequestMutation();
+  const cancelSessionMutation = useCancelSessionMutation(currentUsername);
+  const rescheduleSessionMutation =
+    useRescheduleSessionMutation(currentUsername);
+
   const upcomingSessionsQuery =
     useMentorshipUpcomingSessionsQuery(currentUsername);
   const mentorAvailabilityQuery = useAvailabilitySlotsQuery(
     currentUsername || "",
   );
+  const mentorshipRequestsQuery = useMentorshipRequestsQuery(currentUsername);
+  const mentorshipMatchesQuery = useMentorshipMatchesQuery(currentUsername);
 
   const isMenteeOnly = appUsageMode === "MENTEE";
   const isMentorOnly = appUsageMode === "MENTOR";
 
   const sessions = useMemo(() => {
     if (!currentUsername) {
-      return [];
+      return [] as ScheduleSession[];
     }
 
+    const requests = mentorshipRequestsQuery.data ?? [];
+    const activeMatchByRequestId = new Map(
+      (mentorshipMatchesQuery.data ?? [])
+        .filter((match) => match.is_active)
+        .map((match) => [match.request_id, match.id]),
+    );
+
+    const requestBySlot = new Map<string, MentorshipRequest[]>();
+    requests.forEach((request) => {
+      if (!request.slot_id) {
+        return;
+      }
+      const existing = requestBySlot.get(request.slot_id) ?? [];
+      existing.push(request);
+      requestBySlot.set(request.slot_id, existing);
+    });
+
+    const enrichSessions = (baseSessions: DashboardSessionItem[]) =>
+      baseSessions.map((session) => {
+        const related = resolveRelatedRequest(
+          requestBySlot.get(session.id) ?? [],
+          session.myRole,
+          currentUsername,
+        );
+
+        return {
+          ...session,
+          slotId: session.id,
+          requestId: related?.id ?? session.requestId,
+          matchId: related ? activeMatchByRequestId.get(related.id) : undefined,
+          mentorUsername: related?.mentor.username,
+        } as ScheduleSession;
+      });
+
     if (isMenteeOnly) {
-      return mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []);
+      return enrichSessions(
+        mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []),
+      );
     }
 
     if (isMentorOnly) {
-      return mapMentorBookedSlotsToSessions(mentorAvailabilityQuery.data ?? []);
+      return enrichSessions(
+        mapMentorBookedSlotsToSessions(
+          mentorAvailabilityQuery.data ?? [],
+          mentorshipMatchesQuery.data,
+        ),
+      );
     }
 
     const byKey = new Map<string, DashboardSessionItem>();
@@ -94,16 +182,14 @@ export default function ScheduleScreen() {
       },
     );
 
-    mapMentorBookedSlotsToSessions(mentorAvailabilityQuery.data ?? []).forEach(
-      (session) => {
-        byKey.set(
-          `${session.rawDate}|${session.time}|${session.user}`,
-          session,
-        );
-      },
-    );
+    mapMentorBookedSlotsToSessions(
+      mentorAvailabilityQuery.data ?? [],
+      mentorshipMatchesQuery.data,
+    ).forEach((session) => {
+      byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
+    });
 
-    return Array.from(byKey.values()).sort((a, b) => {
+    return enrichSessions(Array.from(byKey.values())).sort((a, b) => {
       const aKey = `${a.rawDate}T${a.time.split(" - ")[0] ?? "00:00"}`;
       const bKey = `${b.rawDate}T${b.time.split(" - ")[0] ?? "00:00"}`;
       return aKey.localeCompare(bKey);
@@ -114,24 +200,64 @@ export default function ScheduleScreen() {
     isMentorOnly,
     upcomingSessionsQuery.data,
     mentorAvailabilityQuery.data,
+    mentorshipRequestsQuery.data,
+    mentorshipMatchesQuery.data,
   ]);
 
+  const rescheduleTargetMentor =
+    selectedSession?.myRole === "Mentee" ? selectedSession.mentorUsername : "";
+  const mentorAvailabilityForReschedule = useAvailabilitySlotsQuery(
+    rescheduleTargetMentor || "",
+  );
+
+  const handleSubmitReschedule = (matchId: string, newSlotId: string): void => {
+    rescheduleSessionMutation
+      .mutateAsync({
+        matchId,
+        newSlotId,
+      })
+      .then(() => {
+        setSelectedSession(null);
+        Alert.alert("Session Rescheduled", "Your session was updated.");
+      })
+      .catch((error) => {
+        Alert.alert(
+          "Reschedule Failed",
+          error instanceof Error
+            ? error.message
+            : "Could not reschedule this session.",
+        );
+      });
+  };
+
   const markedDates = useMemo(() => {
-    const marks: any = {};
+    const marks: Record<
+      string,
+      {
+        dots: { key: string; color: string }[];
+        selected?: boolean;
+        selectedColor?: string;
+      }
+    > = {};
+
     sessions.forEach((session) => {
       if (!marks[session.rawDate]) {
         marks[session.rawDate] = { dots: [] };
       }
+
       let dotColor = "#9ca3af";
       if (session.status === "Upcoming") {
         dotColor = "#10b981";
       } else if (session.status === "Pending") {
         dotColor = "#f59e0b";
       }
+
       marks[session.rawDate].dots.push({ key: session.id, color: dotColor });
     });
 
-    if (!marks[selectedDate]) marks[selectedDate] = { dots: [] };
+    if (!marks[selectedDate]) {
+      marks[selectedDate] = { dots: [] };
+    }
 
     marks[selectedDate] = {
       ...marks[selectedDate],
@@ -166,7 +292,7 @@ export default function ScheduleScreen() {
         <View className="mx-4 mb-6 shadow-sm rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-2">
           <Calendar
             current={TODAY}
-            markingType={"multi-dot"}
+            markingType="multi-dot"
             onDayPress={(day: DateData) => setSelectedDate(day.dateString)}
             markedDates={markedDates}
             theme={{
@@ -204,15 +330,8 @@ export default function ScheduleScreen() {
                 status={session.status}
                 onPress={() =>
                   setSelectedSession({
-                    id: session.id,
-                    requestId: session.requestId,
-                    user: session.user,
+                    ...session,
                     date: formatFriendlyDate(session.rawDate),
-                    rawDate: session.rawDate,
-                    time: session.time,
-                    status: session.status,
-                    topic: session.topic,
-                    myRole: session.myRole,
                   })
                 }
               />
@@ -222,12 +341,15 @@ export default function ScheduleScreen() {
         <View className="h-20" />
       </ScrollView>
 
-      {/* The Session Details Modal */}
       <SessionDetailsModal
         visible={!!selectedSession}
         onClose={() => setSelectedSession(null)}
         session={selectedSession}
-        isCancelling={respondToRequestMutation.isPending}
+        isCancelling={
+          respondToRequestMutation.isPending ||
+          cancelSessionMutation.isPending ||
+          rescheduleSessionMutation.isPending
+        }
         onCancelSession={() => {
           if (!selectedSession) {
             return;
@@ -256,16 +378,75 @@ export default function ScheduleScreen() {
             return;
           }
 
-          Alert.alert(
-            "TODO",
-            "Cancelling accepted/planned sessions from this screen needs a dedicated backend cancel-session endpoint.",
-          );
+          if (!selectedSession.matchId) {
+            Alert.alert(
+              "Cannot Cancel",
+              "Could not resolve this session's match. Please refresh and try again.",
+            );
+            return;
+          }
+
+          cancelSessionMutation
+            .mutateAsync(selectedSession.matchId)
+            .then(() => {
+              setSelectedSession(null);
+              Alert.alert("Session Cancelled", "The session was cancelled.");
+            })
+            .catch((error) => {
+              Alert.alert(
+                "Cancellation Failed",
+                error instanceof Error
+                  ? error.message
+                  : "Could not cancel this session.",
+              );
+            });
         }}
         onReschedule={() => {
-          Alert.alert(
-            "Coming Soon",
-            "Rescheduling will be wired after the dedicated API endpoint is finalized.",
-          );
+          if (!selectedSession) {
+            return;
+          }
+
+          if (selectedSession.myRole !== "Mentee") {
+            Alert.alert("Not Allowed", "Only mentees can reschedule sessions.");
+            return;
+          }
+
+          if (!selectedSession.matchId) {
+            Alert.alert(
+              "Cannot Reschedule",
+              "Could not resolve this session's match. Please refresh and try again.",
+            );
+            return;
+          }
+          const matchId = selectedSession.matchId;
+
+          const now = new Date();
+          const candidates = (mentorAvailabilityForReschedule.data ?? [])
+            .filter((slot) => !slot.is_booked)
+            .filter(
+              (slot) =>
+                toSlotDateTime(slot.date, slot.startTime.slice(0, 5)) > now,
+            )
+            .filter((slot) => slot.id !== selectedSession.slotId)
+            .slice(0, 6);
+
+          if (candidates.length === 0) {
+            Alert.alert(
+              "No Alternative Slots",
+              "No available future slots were found for this mentor.",
+            );
+            return;
+          }
+
+          Alert.alert("Reschedule Session", "Select a new slot:", [
+            ...candidates.map((slot) => ({
+              text: formatRescheduleOption(slot),
+              onPress: () => {
+                handleSubmitReschedule(matchId, slot.id);
+              },
+            })),
+            { text: "Cancel", style: "cancel" },
+          ]);
         }}
       />
     </SafeAreaView>

@@ -4,7 +4,10 @@ import { Ionicons } from "@expo/vector-icons";
 
 export interface AvailabilitySlot {
   day: string;
-  times: (string | { id: string; label: string; isBooked?: boolean })[];
+  times: (
+    | string
+    | { id: string; label: string; isBooked?: boolean; date?: string }
+  )[];
 }
 
 interface AvailabilityPreviewProps {
@@ -28,6 +31,41 @@ const WEEK_DAYS = [
   "Sunday",
 ];
 
+function getTodayStart(): Date {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function extractStartTime(label: string): string {
+  return (label.split(" - ")[0] ?? "00:00").trim();
+}
+
+function isPastSlotEntry(
+  entry: string | { id: string; label: string; isBooked?: boolean; date?: string },
+  now: Date,
+): boolean {
+  if (typeof entry === "string" || !entry.date) {
+    return false;
+  }
+
+  const today = getTodayStart();
+  const slotDay = new Date(`${entry.date}T00:00:00`);
+  slotDay.setHours(0, 0, 0, 0);
+
+  if (slotDay < today) {
+    return true;
+  }
+
+  if (slotDay > today) {
+    return false;
+  }
+
+  const startTime = extractStartTime(entry.label);
+  const slotStart = new Date(`${entry.date}T${startTime}:00`);
+  return slotStart <= now;
+}
+
 export function AvailabilityPreview({
   schedule = [],
   onEdit,
@@ -35,10 +73,16 @@ export function AvailabilityPreview({
   selectedSlot = null,
 }: Readonly<AvailabilityPreviewProps>) {
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const now = new Date();
 
   const currentSlots = expandedDay
     ? schedule?.find((s) => s.day === expandedDay)?.times || []
     : [];
+
+  const dayHasActiveSlots = (day: string): boolean => {
+    const daySlots = schedule.find((slot) => slot.day === day)?.times ?? [];
+    return daySlots.some((entry) => !isPastSlotEntry(entry, now));
+  };
 
   const dotClassByAvailability = (hasSlots: boolean, isExpanded: boolean) => {
     if (!hasSlots) {
@@ -54,7 +98,6 @@ export function AvailabilityPreview({
 
   return (
     <View className="mb-6">
-      {/* Header Row */}
       <View className="flex-row justify-between items-center mb-4">
         <Text className="text-lg font-bold text-gray-900">Availability</Text>
         {onEdit ? (
@@ -67,7 +110,6 @@ export function AvailabilityPreview({
         ) : null}
       </View>
 
-      {/* 1. Horizontal Swipeable Day Strip */}
       <View>
         <ScrollView
           horizontal
@@ -76,9 +118,7 @@ export function AvailabilityPreview({
         >
           {WEEK_DAYS.map((day) => {
             const isExpanded = expandedDay === day;
-            const hasSlots = schedule?.some(
-              (s) => s.day === day && s?.times?.length > 0,
-            );
+            const hasSlots = dayHasActiveSlots(day);
 
             return (
               <TouchableOpacity
@@ -114,7 +154,6 @@ export function AvailabilityPreview({
         </ScrollView>
       </View>
 
-      {/* 2. Stacked Time Slots (ONLY renders if a day is expanded) */}
       {expandedDay !== null && (
         <View className="bg-gray-50 p-4 rounded-2xl border border-gray-100 mt-4 min-h-[120px] justify-center animate-fade-in">
           {currentSlots.length === 0 ? (
@@ -136,18 +175,30 @@ export function AvailabilityPreview({
                 const slotId = typeof entry === "string" ? undefined : entry.id;
                 const isBooked =
                   typeof entry === "string" ? false : Boolean(entry.isBooked);
+                const isPast = isPastSlotEntry(entry, now);
                 const isSelected =
                   selectedSlot?.day === expandedDay &&
                   selectedSlot?.time === time;
+
                 let slotContainerClass = "bg-white border-gray-200";
                 let slotTextClass = "text-gray-900";
+                let badgeClass = "text-emerald-600";
+                let badgeText = "Not Booked";
 
-                if (isBooked) {
+                if (isPast) {
                   slotContainerClass = "bg-gray-100 border-gray-200";
                   slotTextClass = "text-gray-400";
+                  badgeClass = "text-gray-400";
+                  badgeText = "Past";
+                } else if (isBooked) {
+                  slotContainerClass = "bg-gray-100 border-gray-200";
+                  slotTextClass = "text-gray-400";
+                  badgeClass = "text-gray-400";
+                  badgeText = "Booked";
                 } else if (isSelected) {
                   slotContainerClass = "bg-indigo-600 border-indigo-600";
                   slotTextClass = "text-white";
+                  badgeClass = "text-indigo-100";
                 }
 
                 return (
@@ -161,20 +212,16 @@ export function AvailabilityPreview({
                         slotId,
                       })
                     }
-                    activeOpacity={onSelectSlot && !isBooked ? 0.85 : 1}
-                    disabled={isBooked}
+                    activeOpacity={onSelectSlot && !isBooked && !isPast ? 0.85 : 1}
+                    disabled={isBooked || isPast}
                     className={`rounded-xl py-4 items-center justify-center shadow-sm border ${slotContainerClass}`}
                   >
                     <Text className={`text-base font-bold ${slotTextClass}`}>
                       {time}
                     </Text>
                     {typeof entry === "string" ? null : (
-                      <Text
-                        className={`text-xs mt-1 font-medium ${
-                          isBooked ? "text-gray-400" : "text-emerald-600"
-                        }`}
-                      >
-                        {isBooked ? "Booked" : "Not Booked"}
+                      <Text className={`text-xs mt-1 font-medium ${badgeClass}`}>
+                        {badgeText}
                       </Text>
                     )}
                   </TouchableOpacity>

@@ -39,6 +39,7 @@ export interface AvailabilityDayItem {
     id: string;
     label: string;
     isBooked: boolean;
+    date?: string;
   }[];
 }
 
@@ -336,7 +337,13 @@ export function useDeactivateMatchMutation(currentUsername?: string) {
           ],
         }),
         queryClient.invalidateQueries({
+          queryKey: ["mentorship", "requests", "me"],
+        }),
+        queryClient.invalidateQueries({
           queryKey: ["mentorship", "sessions", "me", "upcoming"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles"],
         }),
       ]);
     },
@@ -638,19 +645,30 @@ export function mapMatchesToSessions(
 
 /**
  * Build mentor-side session cards from booked availability slots.
+ * Enriches with mentee display_name from matches data.
  */
 export function mapMentorBookedSlotsToSessions(
   slots: BackendAvailabilitySlot[],
+  matches?: BackendMatch[],
 ): DashboardSessionItem[] {
+  const menteeByUsername = new Map(
+    (matches ?? []).map((match) => [
+      match.mentee.username,
+      match.mentee.display_name || match.mentee.username,
+    ]),
+  );
+
   return slots
     .filter((slot) => slot.is_booked && Boolean(slot.bookedBy))
     .map((slot) => {
       const sessionDate = parseLocalDateTime(slot.date, `${slot.startTime}:00`);
+      const menteeDisplay =
+        menteeByUsername.get(slot.bookedBy ?? "") || slot.bookedBy || "Mentee";
 
       return {
         id: slot.id,
         requestId: slot.id,
-        user: slot.bookedBy ?? "Mentee",
+        user: menteeDisplay,
         date: SESSION_DATE_FORMATTER.format(sessionDate),
         rawDate: slot.date,
         time: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
@@ -720,6 +738,7 @@ export function mapAvailabilityToSchedule(
       id: string;
       label: string;
       isBooked: boolean;
+      date?: string;
     }[]
   >();
 
@@ -731,6 +750,7 @@ export function mapAvailabilityToSchedule(
       id: slot.id,
       label: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
       isBooked: slot.is_booked,
+      date: slot.date,
     });
 
     dayMap.set(day, daySlots);

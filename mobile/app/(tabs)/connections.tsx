@@ -1,39 +1,39 @@
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
 
-import { useAuthStore } from "@/lib/auth/store";
-import {
-  mapRequestsToDashboard,
-  type DashboardRequestItem,
-  type MentorshipRequest,
-  useDeactivateMatchMutation,
-  useMentorshipMatchesQuery,
-  useMentorshipRequestsQuery,
-  useRespondToMentorshipRequestMutation,
-} from "@/lib/queries/mentorship";
+import { ConnectionActionsSheet } from "@/components/connections/ConnectionActionsSheet";
+import { DeclineConfirmModal } from "@/components/connections/DeclineConfirmModal";
+import { MenteeCard } from "@/components/connections/MenteeCard";
 import {
   MessageCard,
   MessageCardProps,
 } from "@/components/connections/MessageCard";
-import { MenteeCard } from "@/components/connections/MenteeCard";
 import {
   PendingRequestCard,
   PendingRequestCardProps,
 } from "@/components/connections/PendingRequestCard";
 import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
-import { DeclineConfirmModal } from "@/components/connections/DeclineConfirmModal";
-import { ConnectionActionsSheet } from "@/components/connections/ConnectionActionsSheet";
 import { RequestCard } from "@/components/dashboard/RequestCard";
 import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
+import { useAuthStore } from "@/lib/auth/store";
+import {
+  mapRequestsToDashboard,
+  useDeactivateMatchMutation,
+  useMentorshipMatchesQuery,
+  useMentorshipRequestsQuery,
+  useRespondToMentorshipRequestMutation,
+  type DashboardRequestItem,
+  type MentorshipRequest,
+} from "@/lib/queries/mentorship";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -60,12 +60,14 @@ function mapRequestToCardProps(
 }
 
 async function deactivateConnection(params: {
-  matchId: string;
+  matchIds: string[];
   name: string;
   mutateAsync: (matchId: string) => Promise<unknown>;
 }): Promise<void> {
   try {
-    await params.mutateAsync(params.matchId);
+    for (const matchId of params.matchIds) {
+      await params.mutateAsync(matchId);
+    }
     Alert.alert("Connection Removed", `${params.name} has been removed.`);
   } catch (error) {
     Alert.alert(
@@ -128,7 +130,7 @@ function MentorConnections() {
   const [managedMentee, setManagedMentee] = useState<{
     name: string;
     username: string;
-    matchId: string;
+    matchIds: string[];
   } | null>(null);
 
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
@@ -144,14 +146,41 @@ function MentorConnections() {
   const matchesError = matchesQuery.isError;
 
   const pendingRequests = requests.filter((r) => r.status === "PENDING");
-  const mentees = matches.map((m) => ({
-    id: m.id,
-    matchId: m.id,
-    username: m.mentee.username,
-    name: m.mentee.display_name,
-    subtitle: m.mentee.title ?? "",
-    avatarUrl: m.mentee.picture_url || undefined,
-  }));
+  const mentees = Array.from(
+    matches
+      .reduce(
+        (acc, match) => {
+          const key = match.mentee.username;
+          const existing = acc.get(key);
+          if (existing) {
+            existing.matchIds.push(match.id);
+            return acc;
+          }
+
+          acc.set(key, {
+            id: key,
+            username: match.mentee.username,
+            name: match.mentee.display_name,
+            subtitle: match.mentee.title ?? "",
+            avatarUrl: match.mentee.picture_url || undefined,
+            matchIds: [match.id],
+          });
+          return acc;
+        },
+        new Map<
+          string,
+          {
+            id: string;
+            username: string;
+            name: string;
+            subtitle: string;
+            avatarUrl?: string;
+            matchIds: string[];
+          }
+        >(),
+      )
+      .values(),
+  );
 
   const handleMessage = (_name: string) => {
     // NOTE: Route to messaging thread when chat screen is implemented.
@@ -160,13 +189,13 @@ function MentorConnections() {
   const handleMenteeMore = ({
     name,
     username,
-    matchId,
+    matchIds,
   }: {
     name: string;
     username: string;
-    matchId: string;
+    matchIds: string[];
   }) => {
-    setManagedMentee({ name, username, matchId });
+    setManagedMentee({ name, username, matchIds });
   };
 
   const handleAccept = async (id: string) => {
@@ -251,7 +280,7 @@ function MentorConnections() {
                 style: "destructive",
                 onPress: () => {
                   void deactivateConnection({
-                    matchId: target.matchId,
+                    matchIds: target.matchIds,
                     name: target.name,
                     mutateAsync: deactivateMatchMutation.mutateAsync,
                   });
@@ -384,7 +413,7 @@ function MentorConnections() {
               handleMenteeMore({
                 name: mentee.name,
                 username: mentee.username,
-                matchId: mentee.matchId,
+                matchIds: mentee.matchIds,
               })
             }
           />
@@ -412,7 +441,7 @@ function MenteeConnections() {
   const [managedMentor, setManagedMentor] = useState<{
     name: string;
     username: string;
-    matchId: string;
+    matchIds: string[];
   } | null>(null);
 
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
@@ -442,14 +471,41 @@ function MenteeConnections() {
       ),
   );
 
-  const mentors = matches.map((m) => ({
-    id: m.id,
-    matchId: m.id,
-    username: m.mentor.username,
-    name: m.mentor.display_name,
-    subtitle: m.mentor.title ?? "",
-    avatarUrl: m.mentor.picture_url || undefined,
-  }));
+  const mentors = Array.from(
+    matches
+      .reduce(
+        (acc, match) => {
+          const key = match.mentor.username;
+          const existing = acc.get(key);
+          if (existing) {
+            existing.matchIds.push(match.id);
+            return acc;
+          }
+
+          acc.set(key, {
+            id: key,
+            username: match.mentor.username,
+            name: match.mentor.display_name,
+            subtitle: match.mentor.title ?? "",
+            avatarUrl: match.mentor.picture_url || undefined,
+            matchIds: [match.id],
+          });
+          return acc;
+        },
+        new Map<
+          string,
+          {
+            id: string;
+            username: string;
+            name: string;
+            subtitle: string;
+            avatarUrl?: string;
+            matchIds: string[];
+          }
+        >(),
+      )
+      .values(),
+  );
 
   const handleMessage = (_name: string) => {
     // NOTE: Route to messaging thread when chat screen is implemented.
@@ -458,13 +514,13 @@ function MenteeConnections() {
   const handleMore = ({
     name,
     username,
-    matchId,
+    matchIds,
   }: {
     name: string;
     username: string;
-    matchId: string;
+    matchIds: string[];
   }) => {
-    setManagedMentor({ name, username, matchId });
+    setManagedMentor({ name, username, matchIds });
   };
 
   const displayedMentors = showAllMentors
@@ -507,7 +563,7 @@ function MenteeConnections() {
                 style: "destructive",
                 onPress: () => {
                   void deactivateConnection({
-                    matchId: target.matchId,
+                    matchIds: target.matchIds,
                     name: target.name,
                     mutateAsync: deactivateMatchMutation.mutateAsync,
                   });
@@ -646,7 +702,7 @@ function MenteeConnections() {
               handleMore({
                 name: mentor.name,
                 username: mentor.username,
-                matchId: mentor.matchId,
+                matchIds: mentor.matchIds,
               })
             }
           />
