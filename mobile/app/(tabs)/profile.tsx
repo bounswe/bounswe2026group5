@@ -24,11 +24,12 @@ import {
 } from "@/lib/queries/mentorship";
 import { useAuthStore } from "@/lib/auth/store";
 import { useProfileVisibilityStore } from "@/lib/profile/preferences";
-import { useUpdateOwnProfileMutation } from "@/lib/queries/profile";
+import {
+  useProfileRatingQuery,
+  useUpdateOwnProfileMutation,
+} from "@/lib/queries/profile";
 
 const PROFILE_DEFAULTS = {
-  rating: 0,
-  reviewCount: 0,
   expertise: [] as string[],
   eagerToLearn: [] as string[],
 };
@@ -63,6 +64,7 @@ export default function ProfileScreen() {
     currentUsername || "",
   );
   const updateProfileMutation = useUpdateOwnProfileMutation();
+  const profileRatingQuery = useProfileRatingQuery(currentUsername);
 
   const showExpertise = useProfileVisibilityStore(
     (state) => state.showExpertise,
@@ -308,6 +310,12 @@ export default function ProfileScreen() {
     setSkillsModalConfig({ visible: true, title, skills, variant });
   };
 
+  const normalizedRating = Number.parseFloat(
+    profileRatingQuery.data?.average_rating ?? "0",
+  );
+  const rating = Number.isFinite(normalizedRating) ? normalizedRating : 0;
+  const reviewCount = profileRatingQuery.data?.review_count ?? 0;
+
   return (
     <View className="flex-1 bg-white">
       <View
@@ -337,8 +345,8 @@ export default function ProfileScreen() {
             ...(isMentorMode ? (["MENTOR"] as const) : []),
             ...(isMenteeMode ? (["MENTEE"] as const) : []),
           ]}
-          rating={PROFILE_DEFAULTS.rating}
-          reviewCount={PROFILE_DEFAULTS.reviewCount}
+          reviewCount={reviewCount}
+          rating={rating}
           totalSessions={0}
           menteesHelped={isMentorMode ? menteesCount : 0}
           onEdit={() => setEditProfileModalOpen(true)}

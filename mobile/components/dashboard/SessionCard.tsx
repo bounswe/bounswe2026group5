@@ -4,7 +4,7 @@ interface SessionCardProps {
   user: string;
   date: string;
   time: string;
-  status: "Upcoming" | "Pending" | "Completed";
+  status: "Upcoming" | "Pending" | "Completed" | "Cancelled";
   onPress?: () => void;
 }
 
@@ -24,6 +24,8 @@ export function SessionCard({
         return { bg: "bg-amber-100", text: "text-amber-700" };
       case "Completed":
         return { bg: "bg-gray-100", text: "text-gray-600" };
+      case "Cancelled":
+        return { bg: "bg-red-100", text: "text-red-700" };
       default:
         return { bg: "bg-blue-100", text: "text-blue-700" };
     }
@@ -39,6 +41,7 @@ export function SessionCard({
     <TouchableOpacity
       activeOpacity={0.7}
       accessibilityRole="button"
+      accessibilityState={{ disabled: !onPress }}
       onPress={onPress}
       className="bg-surface-card dark:bg-surface-card-dark p-4 rounded-xl shadow-sm border border-divider dark:border-divider-dark mb-3 flex-row items-center"
     >

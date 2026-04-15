@@ -35,11 +35,11 @@ export interface DashboardSessionItem {
 
 export interface AvailabilityDayItem {
   day: string;
-  times: Array<{
+  times: {
     id: string;
     label: string;
     isBooked: boolean;
-  }>;
+  }[];
 }
 
 interface BackendProfileSummary {
@@ -74,7 +74,28 @@ interface BackendMatch {
   is_active: boolean;
 }
 
+interface BackendFeedback {
+  id: string;
+  match: string;
+  submitted_by: BackendProfileSummary;
+  rating: number;
+  text: string;
+  created_at: string;
+}
+
+interface SubmitFeedbackPayload {
+  matchId: string;
+  rating: number;
+  text?: string;
+}
+
+interface RescheduleSessionPayload {
+  matchId: string;
+  newSlotId: string;
+}
+
 export type MentorshipMatch = BackendMatch;
+export type MatchFeedback = BackendFeedback;
 
 interface BackendUpcomingSession {
   slot_id: string;
@@ -176,6 +197,153 @@ export function useMentorshipMatchesQuery(currentUsername?: string) {
 }
 
 /**
+ * List feedback entries for a match (mentor/mentee participants only).
+ */
+export function useMatchFeedbackQuery(matchId?: string) {
+  return useQuery({
+    queryKey: ["mentorship", "matches", matchId ?? "unknown", "feedback"],
+    queryFn: () =>
+      apiGet<BackendFeedback[]>(
+        `/api/mentorship/matches/${encodeURIComponent(matchId || "")}/feedback/`,
+      ),
+    enabled: Boolean(matchId),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Submit match feedback as mentor or mentee.
+ */
+export function useSubmitMatchFeedbackMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ matchId, rating, text }: SubmitFeedbackPayload) =>
+      apiPost<BackendFeedback, { rating: number; text?: string }>(
+        `/api/mentorship/matches/${encodeURIComponent(matchId)}/feedback/`,
+        {
+          rating,
+          ...(text ? { text } : {}),
+        },
+      ),
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "matches", variables.matchId, "feedback"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles"],
+        }),
+      ]);
+    },
+  });
+}
+
+/**
+ * Cancel a booked session for a match. Mentor and mentee are both permitted.
+ */
+export function useCancelSessionMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (matchId: string) =>
+      apiPost<BackendMentorshipRequest>(
+        `/api/mentorship/sessions/${encodeURIComponent(matchId)}/cancel/`,
+      ),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "sessions", "me", "upcoming"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "matches",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "requests",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+      ]);
+    },
+  });
+}
+
+/**
+ * Reschedule a booked session to another mentor availability slot.
+ */
+export function useRescheduleSessionMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ matchId, newSlotId }: RescheduleSessionPayload) =>
+      apiPost<BackendMentorshipRequest, { new_slot_id: string }>(
+        `/api/mentorship/sessions/${encodeURIComponent(matchId)}/reschedule/`,
+        { new_slot_id: newSlotId },
+      ),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "sessions", "me", "upcoming"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "matches",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "requests",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+      ]);
+    },
+  });
+}
+
+/**
+ * Deactivate a mentorship match (idempotent endpoint).
+ */
+export function useDeactivateMatchMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (matchId: string) =>
+      apiPost<BackendMatch>(
+        `/api/mentorship/matches/${encodeURIComponent(matchId)}/deactivate/`,
+      ),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "matches",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "sessions", "me", "upcoming"],
+        }),
+      ]);
+    },
+  });
+}
+
+/**
  * Fetch upcoming sessions for the authenticated mentee.
  */
 export function useMentorshipUpcomingSessionsQuery(currentUsername?: string) {
@@ -259,7 +427,11 @@ export function useBookAvailabilitySlotMutation(currentUsername?: string) {
           ],
         }),
         queryClient.invalidateQueries({
-          queryKey: ["profiles", variables.mentorUsername, "availability-slots"],
+          queryKey: [
+            "profiles",
+            variables.mentorUsername,
+            "availability-slots",
+          ],
         }),
       ]);
     },
@@ -544,11 +716,11 @@ export function mapAvailabilityToSchedule(
 ): AvailabilityDayItem[] {
   const dayMap = new Map<
     string,
-    Array<{
+    {
       id: string;
       label: string;
       isBooked: boolean;
-    }>
+    }[]
   >();
 
   slots.forEach((slot) => {
