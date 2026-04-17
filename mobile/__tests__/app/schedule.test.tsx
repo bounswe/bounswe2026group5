@@ -2,6 +2,7 @@ import ScheduleScreen from "@/app/(tabs)/schedule";
 import { fireEvent, render } from "@testing-library/react-native";
 import React from "react";
 import { Alert } from "react-native";
+import { act } from "react-test-renderer";
 
 const mockMentorshipRequestsQuery = jest.fn();
 const mockMentorshipMatchesQuery = jest.fn();
@@ -126,7 +127,7 @@ describe("ScheduleScreen", () => {
   });
 
   it("handles the Leave Feedback transition from the modal", async () => {
-    jest.setSystemTime(new Date(2026, 3, 15, 12, 0, 0));
+    jest.setSystemTime(new Date(2026, 3, 17, 12, 0, 0));
     mockMentorshipUpcomingSessionsQuery.mockReturnValue({
       data: [
         {
@@ -144,7 +145,9 @@ describe("ScheduleScreen", () => {
 
     fireEvent.press(getByTestId("session-card-Ada Lovelace"));
     fireEvent.press(await findByText("Leave Feedback"));
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
 
     // Session details modal should close after selecting feedback.
     expect(queryByText("Leave Feedback")).toBeNull();

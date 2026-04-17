@@ -68,9 +68,7 @@ export default function ScheduleScreen() {
   const [rescheduleMatchId, setRescheduleMatchId] = useState<string | null>(
     null,
   );
-  const [rescheduleMentorUsername, setRescheduleMentorUsername] = useState(
-    "",
-  );
+  const [rescheduleMentorUsername, setRescheduleMentorUsername] = useState("");
   const [rescheduleCurrentSlotId, setRescheduleCurrentSlotId] = useState("");
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
@@ -425,8 +423,7 @@ export default function ScheduleScreen() {
         onClose={() => setSelectedSession(null)}
         session={selectedSession}
         isCancelling={
-          cancelSessionMutation.isPending ||
-          rescheduleSessionMutation.isPending
+          cancelSessionMutation.isPending || rescheduleSessionMutation.isPending
         }
         onCancelSession={() => {
           if (!selectedSession?.matchId) {
@@ -479,8 +476,15 @@ export default function ScheduleScreen() {
           setRescheduleCurrentSlotId(selectedSession.slotId);
           setShowRescheduleSheet(true);
         }}
+        onLeaveFeedback={() => {
+          // Navigate to feedback screen or show feedback modal
+          setSelectedSession(null);
+          Alert.alert(
+            "Leave Feedback",
+            "Feedback submission feature coming soon.",
+          );
+        }}
       />
-
     </SafeAreaView>
   );
 }
