@@ -252,6 +252,7 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.owner_url = f"/api/profiles/{self.owner_profile.username}/"
         self.other_url = f"/api/profiles/{self.other_profile.username}/"
         self.public_url = f"/api/profiles/{self.public_profile.username}/"
+        self.me_url = "/api/profiles/me/"
 
     def test_get_profile_success(self) -> None:
         """Authenticated user can get own profile by username."""
@@ -265,6 +266,17 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertIn("full_name", payload)
         self.assertEqual(payload["full_name"], "Owner User")
         self.assertIn("eager_to_learn", payload)
+
+    def test_get_profile_success_via_me_endpoint(self) -> None:
+        """Authenticated user can get own profile by canonical me route."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.get(self.me_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("full_name", payload)
+        self.assertEqual(payload["full_name"], "Owner User")
 
     def test_get_mentor_profile_returns_mentor_shape(self) -> None:
         """Mentor profile returns mentor-specific fields."""
@@ -339,6 +351,24 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.owner_profile.refresh_from_db()
         self.assertEqual(self.owner_profile.display_name, "Owner Updated")
         self.assertEqual(self.owner_profile.bio, "Updated bio")
+        self.assertEqual(response.get("Deprecation"), "true")
+        self.assertEqual(response.get("Sunset"), "Wed, 31 Dec 2026 23:59:59 GMT")
+        self.assertIn("/api/profiles/me/", response.get("Link", ""))
+
+    def test_patch_profile_success_via_me_endpoint(self) -> None:
+        """Authenticated user can patch own profile by canonical me route."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.me_url,
+            {"display_name": "Owner Via Me", "bio": "Updated via me route"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertEqual(self.owner_profile.display_name, "Owner Via Me")
+        self.assertEqual(self.owner_profile.bio, "Updated via me route")
 
     def test_patch_profile_accepts_blank_location(self) -> None:
         """Blank string location is accepted and normalized to null."""
@@ -521,6 +551,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
         self.other_collection_url = (
             f"/api/profiles/{self.other_mentor_profile.username}/availability-slots/"
         )
+        self.me_collection_url = "/api/profiles/me/availability-slots/"
 
     def test_create_availability_slot_success(self) -> None:
         """Mentor can create a slot with date/startTime/endTime payload."""
@@ -543,6 +574,54 @@ class AvailabilitySlotAPIViewTests(TestCase):
         self.assertTrue(
             AvailabilitySlot.objects.filter(id=body["id"], profile=self.mentor_profile).exists()
         )
+        self.assertEqual(response.get("Deprecation"), "true")
+        self.assertEqual(response.get("Sunset"), "Wed, 31 Dec 2026 23:59:59 GMT")
+        self.assertIn("/api/profiles/me/availability-slots/", response.get("Link", ""))
+
+    def test_create_availability_slot_success_via_me_endpoint(self) -> None:
+        """Mentor can create a slot using canonical me availability route."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+
+        response = self.api_client.post(
+            self.me_collection_url,
+            {
+                "date": (timezone.localdate() + timedelta(days=1)).isoformat(),
+                "startTime": "13:00:00",
+                "endTime": "14:00:00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertTrue(
+            AvailabilitySlot.objects.filter(id=body["id"], profile=self.mentor_profile).exists()
+        )
+
+    def test_patch_availability_slot_success_via_me_endpoint(self) -> None:
+        """Mentor can patch own slot via canonical me detail route."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        slot_start = timezone.now() + timedelta(days=3)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+        )
+
+        response = self.api_client.patch(
+            f"/api/profiles/me/availability-slots/{slot.id}/",
+            {
+                "date": (timezone.localdate() + timedelta(days=4)).isoformat(),
+                "startTime": "16:00:00",
+                "endTime": "17:00:00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        slot.refresh_from_db()
+        self.assertEqual(timezone.localtime(slot.start_at).hour, 16)
+        self.assertEqual(timezone.localtime(slot.end_at).hour, 17)
 
     def test_create_availability_slot_rejects_past_date(self) -> None:
         """Serializer rejects past dates for slot creation."""
@@ -627,6 +706,12 @@ class AvailabilitySlotAPIViewTests(TestCase):
         slot.refresh_from_db()
         self.assertEqual(timezone.localtime(slot.start_at).hour, 15)
         self.assertEqual(timezone.localtime(slot.end_at).hour, 16)
+        self.assertEqual(response.get("Deprecation"), "true")
+        self.assertEqual(response.get("Sunset"), "Wed, 31 Dec 2026 23:59:59 GMT")
+        self.assertIn(
+            f"/api/profiles/me/availability-slots/{slot.id}/",
+            response.get("Link", ""),
+        )
 
     def test_delete_availability_slot_success(self) -> None:
         """Mentor can delete own availability slot."""
@@ -643,6 +728,12 @@ class AvailabilitySlotAPIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 204)
         self.assertFalse(AvailabilitySlot.objects.filter(id=slot.id).exists())
+        self.assertEqual(response.get("Deprecation"), "true")
+        self.assertEqual(response.get("Sunset"), "Wed, 31 Dec 2026 23:59:59 GMT")
+        self.assertIn(
+            f"/api/profiles/me/availability-slots/{slot.id}/",
+            response.get("Link", ""),
+        )
 
     def test_delete_slot_after_canceling_accepted_first_session(self) -> None:
         """Mentor can delete first-session slot after booking cancellation."""
@@ -1304,7 +1395,7 @@ class MentorPublicRatingAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_rating_reflects_threshold_update(self) -> None:
-        """After review_count and average_rating are manually updated, endpoint returns new values."""
+        """After manual threshold updates, endpoint returns current public rating values."""
         from decimal import Decimal
 
         self.mentor_profile.review_count = 5

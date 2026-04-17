@@ -41,6 +41,15 @@ from .services import (
 NOT_FOUND_DETAIL = {"detail": "Not found."}
 OVERLAP_DETAIL = {"detail": "Availability slot overlaps with an existing slot."}
 PERMISSION_DENIED_DETAIL = {"detail": "You do not have permission to perform this action."}
+DEPRECATED_ALIAS_SUNSET = "Wed, 31 Dec 2026 23:59:59 GMT"
+
+
+def _add_deprecation_headers(response: Response, successor_path: str) -> Response:
+    """Attach deprecation metadata headers to temporary compatibility aliases."""
+    response["Deprecation"] = "true"
+    response["Sunset"] = DEPRECATED_ALIAS_SUNSET
+    response["Link"] = f'<{successor_path}>; rel="successor-version"'
+    return response
 
 
 class ProfileLookupMixin:
@@ -56,6 +65,25 @@ class ProfileLookupMixin:
     def _is_mentor_profile(self, profile: Profile) -> bool:
         """Return True when the user's app usage mode is MENTOR."""
         return profile.user.app_usage_mode == AppUsageMode.MENTOR
+
+    def _get_request_profile_or_404(self, request: Request) -> Profile | None:
+        """Return profile bound to authenticated request user when it exists."""
+        try:
+            return Profile.objects.select_related("user").get(user=request.user)
+        except Profile.DoesNotExist:
+            return None
+
+    def _serialize_profile_by_mode(self, profile: Profile) -> dict[str, object]:
+        """Serialize profile response using role-appropriate schema shape."""
+        app_usage_mode = profile.user.app_usage_mode
+        if app_usage_mode == AppUsageMode.MENTEE:
+            serializer = MenteeProfileResponseSerializer(profile)
+        elif app_usage_mode == AppUsageMode.MENTOR:
+            serializer = MentorProfileResponseSerializer(profile)
+        else:
+            serializer = ProfileResponseSerializer(profile)
+
+        return serializer.data
 
 
 class SkillListAPIView(APIView):
@@ -124,16 +152,7 @@ class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
         if not is_owner and not profile.is_visible:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
-        app_usage_mode = profile.user.app_usage_mode
-        if app_usage_mode == AppUsageMode.MENTEE:
-            serializer = MenteeProfileResponseSerializer(profile)
-        elif app_usage_mode == AppUsageMode.MENTOR:
-            serializer = MentorProfileResponseSerializer(profile)
-        else:
-            # Fallback for users who haven't set their usage mode yet
-            serializer = ProfileResponseSerializer(profile)
-
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(self._serialize_profile_by_mode(profile), status=status.HTTP_200_OK)
 
     @extend_schema(
         request=ProfileUpdateSerializer,
@@ -144,12 +163,67 @@ class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
             403: OpenApiResponse(description="Account banned."),
             404: OpenApiResponse(description="Profile not found."),
         },
-        description="Partially update authenticated user's profile by username.",
+        description=(
+            "Deprecated alias. Partially update authenticated user's profile by username. "
+            "Use `/api/profiles/me/` instead."
+        ),
+        deprecated=True,
         tags=["Profiles"],
     )
     def patch(self, request: Request, username: str) -> Response:
         """Handle PATCH requests for own profile by username."""
+        successor_path = "/api/profiles/me/"
         profile = self._get_owned_profile_or_404(request, username)
+        if profile is None:
+            response = Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+            return _add_deprecation_headers(response, successor_path)
+
+        serializer = ProfileUpdateSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        response = Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
+        return _add_deprecation_headers(response, successor_path)
+
+
+class ProfileMeAPIView(ProfileLookupMixin, APIView):
+    """Canonical self-scoped profile read/update endpoint."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: ProfileResponseSerializer,
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Account banned."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Get authenticated user's own profile using canonical `/api/profiles/me/`.",
+        tags=["Profiles"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return authenticated user's own profile using role-shaped response."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(self._serialize_profile_by_mode(profile), status=status.HTTP_200_OK)
+
+    @extend_schema(
+        request=ProfileUpdateSerializer,
+        responses={
+            200: ProfileResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Account banned."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Partially update authenticated user's profile using `/api/profiles/me/`.",
+        tags=["Profiles"],
+    )
+    def patch(self, request: Request) -> Response:
+        """Partially update authenticated user's own profile."""
+        profile = self._get_request_profile_or_404(request)
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -174,18 +248,92 @@ class AvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
             403: OpenApiResponse(description="Permission denied."),
         },
         description=(
-            "Create a mentor availability slot using date/startTime/endTime. "
-            "endTime must be later than startTime."
+            "Deprecated alias. Create a mentor availability slot using date/startTime/endTime. "
+            "Use `/api/profiles/me/availability-slots/` for owner mutations."
         ),
+        deprecated=True,
         tags=["Profiles"],
     )
     def post(self, request: Request, username: str) -> Response:
         """Create an availability slot for mentor matching requested username."""
+        successor_path = "/api/profiles/me/availability-slots/"
         profile = self._get_profile_or_404(username)
+        if profile is None:
+            response = Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+            return _add_deprecation_headers(response, successor_path)
+
+        if request.user != profile.user or not self._is_mentor_profile(profile):
+            response = Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
+            return _add_deprecation_headers(response, successor_path)
+
+        serializer = AvailabilitySlotWriteSerializer(
+            data=request.data,
+            context={"profile": profile},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            slot = serializer.save()
+        except IntegrityError:
+            response = Response(OVERLAP_DETAIL, status=status.HTTP_400_BAD_REQUEST)
+            return _add_deprecation_headers(response, successor_path)
+
+        response = Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_201_CREATED)
+        return _add_deprecation_headers(response, successor_path)
+
+    @extend_schema(
+        responses={
+            200: AvailabilitySlotSerializer(many=True),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
+        },
+        description="List upcoming availability slots for authenticated mentor.",
+        tags=["Profiles"],
+    )
+    def get(self, request: Request, username: str) -> Response:
+        """List upcoming availability slots for the mentor matching username."""
+        profile = self._get_profile_or_404(username)
+        if profile is None or not self._is_mentor_profile(profile):
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        upcoming_slots = AvailabilitySlot.objects.filter(
+            profile=profile,
+            start_at__gte=timezone.now(),
+        ).order_by("start_at")
+
+        return Response(
+            AvailabilitySlotSerializer(upcoming_slots, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class MyAvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
+    """Canonical owner-scoped availability slot list/create endpoint."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=AvailabilitySlotWriteSerializer,
+        responses={
+            201: AvailabilitySlotSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "Create an availability slot for the authenticated mentor using "
+            "canonical `/api/profiles/me/availability-slots/`."
+        ),
+        tags=["Profiles"],
+    )
+    def post(self, request: Request) -> Response:
+        """Create an availability slot for authenticated mentor profile."""
+        profile = self._get_request_profile_or_404(request)
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
-        if request.user != profile.user or not self._is_mentor_profile(profile):
+        if not self._is_mentor_profile(profile):
             return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
 
         serializer = AvailabilitySlotWriteSerializer(
@@ -206,15 +354,22 @@ class AvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
             200: AvailabilitySlotSerializer(many=True),
             401: OpenApiResponse(description="Authentication required."),
             403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Profile not found."),
         },
-        description="List upcoming availability slots for authenticated mentor.",
+        description=(
+            "List upcoming availability slots owned by authenticated mentor via "
+            "canonical `/api/profiles/me/availability-slots/`."
+        ),
         tags=["Profiles"],
     )
-    def get(self, request: Request, username: str) -> Response:
-        """List upcoming availability slots for the mentor matching username."""
-        profile = self._get_profile_or_404(username)
-        if profile is None or not self._is_mentor_profile(profile):
+    def get(self, request: Request) -> Response:
+        """List upcoming availability slots for authenticated mentor profile."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        if not self._is_mentor_profile(profile):
+            return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
 
         upcoming_slots = AvailabilitySlot.objects.filter(
             profile=profile,
@@ -259,19 +414,245 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
             400: OpenApiResponse(description="Validation error."),
             404: OpenApiResponse(description="Availability slot not found."),
         },
-        description="Update a mentor-owned availability slot.",
+        description=(
+            "Deprecated alias. Update a mentor-owned availability slot. "
+            "Use `/api/profiles/me/availability-slots/{slot_id}/` for owner mutations."
+        ),
+        deprecated=True,
         tags=["Profiles"],
     )
     def patch(self, request: Request, username: str, slot_id: str) -> Response:
         """Partially update one availability slot for owner mentor only."""
+        successor_path = f"/api/profiles/me/availability-slots/{slot_id}/"
         profile = self._get_profile_or_404(username)
         if profile is None:
-            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+            response = Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+            return _add_deprecation_headers(response, successor_path)
 
         if request.user != profile.user or not self._is_mentor_profile(profile):
-            return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
+            response = Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
+            return _add_deprecation_headers(response, successor_path)
 
         slot = self._get_slot_or_404(profile, slot_id)
+        if slot is None:
+            response = Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+            return _add_deprecation_headers(response, successor_path)
+
+        serializer = AvailabilitySlotWriteSerializer(slot, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_slot = serializer.save()
+        except IntegrityError:
+            response = Response(OVERLAP_DETAIL, status=status.HTTP_400_BAD_REQUEST)
+            return _add_deprecation_headers(response, successor_path)
+
+        response = Response(
+            AvailabilitySlotSerializer(updated_slot).data,
+            status=status.HTTP_200_OK,
+        )
+        return _add_deprecation_headers(response, successor_path)
+
+    @extend_schema(
+        request=AvailabilitySlotWriteSerializer,
+        responses={
+            200: AvailabilitySlotSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            404: OpenApiResponse(description="Availability slot not found."),
+        },
+        description=(
+            "Deprecated alias. Replace a mentor-owned availability slot. "
+            "Use `/api/profiles/me/availability-slots/{slot_id}/` for owner mutations."
+        ),
+        deprecated=True,
+        tags=["Profiles"],
+    )
+    def put(self, request: Request, username: str, slot_id: str) -> Response:
+        """Fully update one availability slot for owner mentor only."""
+        successor_path = f"/api/profiles/me/availability-slots/{slot_id}/"
+        profile = self._get_profile_or_404(username)
+        if profile is None:
+            response = Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+            return _add_deprecation_headers(response, successor_path)
+
+        if request.user != profile.user or not self._is_mentor_profile(profile):
+            response = Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
+            return _add_deprecation_headers(response, successor_path)
+
+        slot = self._get_slot_or_404(profile, slot_id)
+        if slot is None:
+            response = Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+            return _add_deprecation_headers(response, successor_path)
+
+        serializer = AvailabilitySlotWriteSerializer(slot, data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_slot = serializer.save()
+        except IntegrityError:
+            response = Response(OVERLAP_DETAIL, status=status.HTTP_400_BAD_REQUEST)
+            return _add_deprecation_headers(response, successor_path)
+
+        response = Response(
+            AvailabilitySlotSerializer(updated_slot).data,
+            status=status.HTTP_200_OK,
+        )
+        return _add_deprecation_headers(response, successor_path)
+
+    @extend_schema(
+        responses={
+            204: OpenApiResponse(description="Availability slot deleted."),
+            404: OpenApiResponse(description="Availability slot not found."),
+        },
+        description=(
+            "Deprecated alias. Delete a mentor-owned availability slot. "
+            "Use `/api/profiles/me/availability-slots/{slot_id}/` for owner mutations."
+        ),
+        deprecated=True,
+        tags=["Profiles"],
+    )
+    def delete(self, request: Request, username: str, slot_id: str) -> Response:
+        """Delete one availability slot for owner mentor only."""
+        successor_path = f"/api/profiles/me/availability-slots/{slot_id}/"
+        profile = self._get_profile_or_404(username)
+        if profile is None:
+            response = Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+            return _add_deprecation_headers(response, successor_path)
+
+        if request.user != profile.user or not self._is_mentor_profile(profile):
+            response = Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
+            return _add_deprecation_headers(response, successor_path)
+
+        slot = self._get_slot_or_404(profile, slot_id)
+        if slot is None:
+            response = Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+            return _add_deprecation_headers(response, successor_path)
+
+        try:
+            from mentorship.models import MentorshipRequest
+
+            with transaction.atomic():
+                locked_slot = AvailabilitySlot.objects.select_for_update().get(id=slot.id)
+
+                if locked_slot.is_booked:
+                    response = Response(
+                        {"detail": ("Cannot delete a booked slot. Cancel the booking first.")},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                    return _add_deprecation_headers(response, successor_path)
+
+                has_pending_requests = MentorshipRequest.objects.filter(
+                    slot=locked_slot,
+                    status=MentorshipRequest.Status.PENDING,
+                ).exists()
+                if has_pending_requests:
+                    response = Response(
+                        {
+                            "detail": (
+                                "Cannot delete this slot while it has pending mentorship "
+                                "requests."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                    return _add_deprecation_headers(response, successor_path)
+
+                non_pending_requests = MentorshipRequest.objects.select_for_update().filter(
+                    slot=locked_slot
+                )
+                for request_obj in non_pending_requests:
+                    if request_obj.initial_session_start_at is None:
+                        request_obj.initial_session_start_at = locked_slot.start_at
+                    if request_obj.initial_session_end_at is None:
+                        request_obj.initial_session_end_at = locked_slot.end_at
+                    request_obj.slot = None
+                    request_obj.save(
+                        update_fields=[
+                            "slot",
+                            "initial_session_start_at",
+                            "initial_session_end_at",
+                        ]
+                    )
+
+                locked_slot.delete()
+        except ProtectedError:
+            response = Response(
+                {
+                    "detail": (
+                        "Cannot delete this slot while it is still referenced by an "
+                        "existing mentorship request."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+            return _add_deprecation_headers(response, successor_path)
+
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        return _add_deprecation_headers(response, successor_path)
+
+
+class MyAvailabilitySlotDetailAPIView(ProfileLookupMixin, APIView):
+    """Canonical owner-scoped availability slot detail/update/delete endpoint."""
+
+    permission_classes = [IsUser]
+
+    def _get_owned_slot_or_404(
+        self,
+        request: Request,
+        slot_id: str,
+    ) -> tuple[Profile | None, AvailabilitySlot | None]:
+        """Return authenticated mentor profile and owned slot, or None values when missing."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return None, None
+
+        if not self._is_mentor_profile(profile):
+            return profile, None
+
+        slot = AvailabilitySlot.objects.filter(id=slot_id, profile=profile).first()
+        return profile, slot
+
+    @extend_schema(
+        responses={
+            200: AvailabilitySlotSerializer,
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Availability slot not found."),
+        },
+        description="Retrieve one availability slot owned by authenticated mentor.",
+        tags=["Profiles"],
+    )
+    def get(self, request: Request, slot_id: str) -> Response:
+        """Retrieve one availability slot for authenticated mentor."""
+        profile, slot = self._get_owned_slot_or_404(request, slot_id)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+        if not self._is_mentor_profile(profile):
+            return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
+        if slot is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        request=AvailabilitySlotWriteSerializer,
+        responses={
+            200: AvailabilitySlotSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Availability slot not found."),
+        },
+        description="Partially update one availability slot owned by authenticated mentor.",
+        tags=["Profiles"],
+    )
+    def patch(self, request: Request, slot_id: str) -> Response:
+        """Partially update one availability slot for authenticated mentor."""
+        profile, slot = self._get_owned_slot_or_404(request, slot_id)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+        if not self._is_mentor_profile(profile):
+            return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
         if slot is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -290,21 +671,20 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
         responses={
             200: AvailabilitySlotSerializer,
             400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
             404: OpenApiResponse(description="Availability slot not found."),
         },
-        description="Replace a mentor-owned availability slot.",
+        description="Replace one availability slot owned by authenticated mentor.",
         tags=["Profiles"],
     )
-    def put(self, request: Request, username: str, slot_id: str) -> Response:
-        """Fully update one availability slot for owner mentor only."""
-        profile = self._get_profile_or_404(username)
+    def put(self, request: Request, slot_id: str) -> Response:
+        """Fully update one availability slot for authenticated mentor."""
+        profile, slot = self._get_owned_slot_or_404(request, slot_id)
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-
-        if request.user != profile.user or not self._is_mentor_profile(profile):
+        if not self._is_mentor_profile(profile):
             return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
-
-        slot = self._get_slot_or_404(profile, slot_id)
         if slot is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -321,21 +701,20 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
     @extend_schema(
         responses={
             204: OpenApiResponse(description="Availability slot deleted."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
             404: OpenApiResponse(description="Availability slot not found."),
         },
-        description="Delete a mentor-owned availability slot.",
+        description="Delete one availability slot owned by authenticated mentor.",
         tags=["Profiles"],
     )
-    def delete(self, request: Request, username: str, slot_id: str) -> Response:
-        """Delete one availability slot for owner mentor only."""
-        profile = self._get_profile_or_404(username)
+    def delete(self, request: Request, slot_id: str) -> Response:
+        """Delete one availability slot for authenticated mentor."""
+        profile, slot = self._get_owned_slot_or_404(request, slot_id)
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-
-        if request.user != profile.user or not self._is_mentor_profile(profile):
+        if not self._is_mentor_profile(profile):
             return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
-
-        slot = self._get_slot_or_404(profile, slot_id)
         if slot is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -347,7 +726,7 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
 
                 if locked_slot.is_booked:
                     return Response(
-                        {"detail": ("Cannot delete a booked slot. Cancel the booking first.")},
+                        {"detail": "Cannot delete a booked slot. Cancel the booking first."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
@@ -394,6 +773,7 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

@@ -68,6 +68,17 @@ def _clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(key=settings.AUTH_REFRESH_COOKIE_NAME)
 
 
+DEPRECATED_ALIAS_SUNSET = "Wed, 31 Dec 2026 23:59:59 GMT"
+
+
+def _add_deprecation_headers(response: Response, successor_path: str) -> Response:
+    """Attach deprecation metadata headers to temporary compatibility aliases."""
+    response["Deprecation"] = "true"
+    response["Sunset"] = DEPRECATED_ALIAS_SUNSET
+    response["Link"] = f'<{successor_path}>; rel="successor-version"'
+    return response
+
+
 class RegisterAPIView(APIView):
     permission_classes = [AllowAny]
 
@@ -209,10 +220,30 @@ class TokenRefreshAPIView(TokenRefreshView):
         return response
 
 
-class AuthUserByIdAPIView(APIView):
-    """Return authenticated user metadata for the matching user id route."""
+class AuthMeAPIView(APIView):
+    """Return authenticated user metadata from a canonical self-scoped route."""
 
     permission_classes = [IsAuthenticated, IsNotBanned]
+
+    @extend_schema(
+        responses={
+            200: UserResponseSerializer,
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Account banned."),
+        },
+        description="Get authenticated user details from the canonical `/api/auth/me/` route.",
+        tags=["Auth"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return the currently authenticated user's metadata."""
+        return Response(
+            UserResponseSerializer(cast(User, request.user)).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class AuthUserByIdAPIView(AuthMeAPIView):
+    """Legacy alias for authenticated user metadata by user id."""
 
     @extend_schema(
         responses={
@@ -221,16 +252,47 @@ class AuthUserByIdAPIView(APIView):
             404: OpenApiResponse(description="User not found."),
             403: OpenApiResponse(description="Account banned."),
         },
-        description="Get authenticated user details by own user id route.",
+        description=(
+            "Deprecated alias. Get authenticated user details by own user id route. "
+            "Use `/api/auth/me/` instead."
+        ),
+        deprecated=True,
         tags=["Auth"],
     )
     def get(self, request: Request, user_id: UUID) -> Response:
-        request_user_id = getattr(request.user, "id", None)
-        if request_user_id is None:
-            request_user_id = getattr(request.user, "pk", None)
+        request_user_id = getattr(request.user, "id", None) or getattr(request.user, "pk", None)
 
         if str(request_user_id) != str(user_id):
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            response = Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            return _add_deprecation_headers(response, "/api/auth/me/")
+
+        response = super().get(request)
+        return _add_deprecation_headers(response, "/api/auth/me/")
+
+
+class UserAppUsageModeMeAPIView(APIView):
+    """Set app usage mode from canonical self-scoped route."""
+
+    permission_classes = [IsAuthenticated, IsNotBanned]
+
+    @extend_schema(
+        request=UserAppUsageModeUpdateSerializer,
+        responses={
+            200: UserResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+        },
+        description=(
+            "Set app usage mode for the authenticated user. "
+            "Role can be assigned once and cannot be switched after assignment."
+        ),
+        tags=["Auth"],
+    )
+    def patch(self, request: Request) -> Response:
+        """Set app usage mode for the currently authenticated user."""
+        serializer = UserAppUsageModeUpdateSerializer(request.user, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
 
         return Response(
             UserResponseSerializer(cast(User, request.user)).data,
@@ -238,10 +300,8 @@ class AuthUserByIdAPIView(APIView):
         )
 
 
-class UserAppUsageModeAPIView(APIView):
-    """Set app usage mode for the authenticated user route."""
-
-    permission_classes = [IsAuthenticated, IsNotBanned]
+class UserAppUsageModeAPIView(UserAppUsageModeMeAPIView):
+    """Legacy alias for app usage mode update by user id."""
 
     @extend_schema(
         request=UserAppUsageModeUpdateSerializer,
@@ -252,27 +312,21 @@ class UserAppUsageModeAPIView(APIView):
             404: OpenApiResponse(description="User not found."),
         },
         description=(
-            "Set app usage mode for the authenticated user. "
-            "Role can be assigned once and cannot be switched after assignment."
+            "Deprecated alias. Set app usage mode for the authenticated user. "
+            "Use `/api/auth/me/role/` instead."
         ),
+        deprecated=True,
         tags=["Auth"],
     )
     def patch(self, request: Request, user_id: UUID) -> Response:
-        request_user_id = getattr(request.user, "id", None)
-        if request_user_id is None:
-            request_user_id = getattr(request.user, "pk", None)
+        request_user_id = getattr(request.user, "id", None) or getattr(request.user, "pk", None)
 
         if str(request_user_id) != str(user_id):
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            response = Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            return _add_deprecation_headers(response, "/api/auth/me/role/")
 
-        serializer = UserAppUsageModeUpdateSerializer(request.user, data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-
-        return Response(
-            UserResponseSerializer(cast(User, request.user)).data,
-            status=status.HTTP_200_OK,
-        )
+        response = super().patch(request)
+        return _add_deprecation_headers(response, "/api/auth/me/role/")
 
 
 class AdminUsersListAPIView(APIView):

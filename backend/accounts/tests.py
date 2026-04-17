@@ -493,12 +493,26 @@ class TokenRefreshAndAuthUserByIdAPIViewTests(TestCase):
         self.assertEqual(data["email"], self.user.email)
         self.assertEqual(data["role"], self.user.role)
         self.assertEqual(data["username"], self.profile.username)
+        self.assertEqual(response.get("Deprecation"), "true")
+        self.assertEqual(response.get("Sunset"), "Wed, 31 Dec 2026 23:59:59 GMT")
+        self.assertIn("/api/auth/me/", response.get("Link", ""))
 
     def test_auth_user_endpoint_with_cookie_token(self) -> None:
         """Test authenticated user details endpoint with cookie authentication."""
         self.api_client.cookies[settings.AUTH_ACCESS_COOKIE_NAME] = self.access_token
 
         response = self.api_client.get(f"/api/auth/{self.user.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["email"], self.user.email)
+        self.assertEqual(data["username"], self.profile.username)
+
+    def test_auth_me_endpoint_with_bearer_token(self) -> None:
+        """Canonical self endpoint returns authenticated user metadata."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+
+        response = self.api_client.get("/api/auth/me/")
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -526,7 +540,8 @@ class UserAppUsageModeAPIViewTests(TestCase):
         )
         refresh = RefreshToken.for_user(self.user)
         self.access_token = str(refresh.access_token)
-        self.url = f"/api/auth/{self.user.id}/app-usage-mode/"
+        self.url = "/api/auth/me/role/"
+        self.legacy_url = f"/api/auth/{self.user.id}/app-usage-mode/"
 
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
 
@@ -581,6 +596,21 @@ class UserAppUsageModeAPIViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+    def test_legacy_user_id_alias_still_works(self) -> None:
+        """Legacy user-id route remains available as compatibility alias."""
+        response = self.api_client.patch(
+            self.legacy_url,
+            {"app_usage_mode": AppUsageMode.MENTEE},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db(from_queryset=None)
+        self.assertEqual(self.user.app_usage_mode, AppUsageMode.MENTEE)
+        self.assertEqual(response.get("Deprecation"), "true")
+        self.assertEqual(response.get("Sunset"), "Wed, 31 Dec 2026 23:59:59 GMT")
+        self.assertIn("/api/auth/me/role/", response.get("Link", ""))
 
 
 class RBACPermissionTests(TestCase):
