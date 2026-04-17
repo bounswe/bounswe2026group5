@@ -5,7 +5,7 @@ from typing import Any, cast
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, CharField, OuterRef, Subquery, Value
+from django.db.models import Avg, CharField, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -27,11 +27,12 @@ from profiles.services import (
     cancel_availability_booking,
 )
 
-from .models import Feedback, Match, MentorshipRequest
+from .models import Feedback, Match, MeetingSession, MentorshipRequest
 from .serializers import (
     FeedbackCreateSerializer,
     FeedbackSerializer,
     MatchSerializer,
+    MeetingSessionSerializer,
     MentorshipRequestCreateSerializer,
     MentorshipRequestSerializer,
     RescheduleSessionSerializer,
@@ -48,6 +49,12 @@ _MENTEE_REQUIRED = {"detail": "You need a MENTEE profile to send mentorship requ
 _MENTOR_REQUIRED = {"detail": "You need a MENTOR profile to access this resource."}
 _NO_PROFILE = {"detail": "Profile not found."}
 _SLOT_BOOKING_FAILED = {"detail": "Selected slot could not be booked while accepting this request."}
+_INVALID_MEETING_SESSION_STATUS = {
+    "detail": (
+        "Invalid status. Use one of: upcoming, past, scheduled, rescheduled, canceled, completed."
+    )
+}
+_INVALID_MEETING_SESSION_ROLE = {"detail": "Invalid role. Use one of: mentor, mentee, all."}
 
 
 class MyRequestsListAPIView(APIView):
@@ -245,6 +252,84 @@ class MyMatchesListAPIView(APIView):
         return Response(MatchSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
 
+class MyMeetingSessionsListAPIView(APIView):
+    """List canonical meeting sessions for the authenticated user profile."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: MeetingSessionSerializer(many=True),
+            400: OpenApiResponse(description="Invalid query parameters."),
+            401: OpenApiResponse(description="Authentication required."),
+        },
+        description=(
+            "List canonical mentorship sessions for the authenticated user. "
+            "Optional query params: role={mentor|mentee|all} and "
+            "status={upcoming|past|scheduled|rescheduled|canceled|completed}."
+        ),
+        tags=["Mentorship"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return canonical sessions with optional role and status filtering."""
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response([], status=status.HTTP_200_OK)
+
+        qs = MeetingSession.objects.filter(Q(mentor=profile) | Q(mentee=profile)).select_related(
+            "mentor__user", "mentee__user", "match", "source_slot"
+        )
+
+        role_filter = request.query_params.get("role", "all").strip().lower()
+        if role_filter == "mentor":
+            qs = qs.filter(mentor=profile)
+        elif role_filter == "mentee":
+            qs = qs.filter(mentee=profile)
+        elif role_filter != "all":
+            return Response(_INVALID_MEETING_SESSION_ROLE, status=status.HTTP_400_BAD_REQUEST)
+
+        status_filter = request.query_params.get("status", "").strip().lower()
+        now = timezone.now()
+        if status_filter == "upcoming":
+            qs = qs.exclude(status=MeetingSession.Status.CANCELED).filter(
+                scheduled_start_at_utc__gte=now
+            )
+            qs = qs.order_by("scheduled_start_at_utc")
+        elif status_filter == "past":
+            qs = qs.filter(scheduled_start_at_utc__lt=now).order_by("-scheduled_start_at_utc")
+        elif status_filter == "scheduled":
+            qs = qs.filter(status=MeetingSession.Status.SCHEDULED).order_by(
+                "scheduled_start_at_utc"
+            )
+        elif status_filter == "rescheduled":
+            qs = qs.filter(status=MeetingSession.Status.RESCHEDULED).order_by(
+                "scheduled_start_at_utc"
+            )
+        elif status_filter == "canceled":
+            qs = qs.filter(status=MeetingSession.Status.CANCELED).order_by("-updated_at")
+        elif status_filter == "completed":
+            qs = qs.filter(
+                Q(status=MeetingSession.Status.COMPLETED)
+                | (
+                    Q(
+                        status__in=[
+                            MeetingSession.Status.SCHEDULED,
+                            MeetingSession.Status.RESCHEDULED,
+                        ]
+                    )
+                    & Q(scheduled_end_at_utc__lt=now)
+                )
+            ).order_by("-scheduled_start_at_utc")
+        elif status_filter:
+            return Response(_INVALID_MEETING_SESSION_STATUS, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            qs = qs.order_by("scheduled_start_at_utc")
+
+        serializer = MeetingSessionSerializer(qs, many=True, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class CancelSessionAPIView(APIView):
     """Cancel a booked session for an active match."""
 
@@ -307,6 +392,27 @@ class CancelSessionAPIView(APIView):
             return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        meeting_session = MeetingSession.objects.filter(match=match).order_by("-created_at").first()
+        if meeting_session is not None:
+            canceled_by_role = (
+                MeetingSession.CanceledByRole.MENTOR
+                if profile == match.mentor
+                else MeetingSession.CanceledByRole.MENTEE
+            )
+            meeting_session.status = MeetingSession.Status.CANCELED
+            meeting_session.source_slot = None
+            meeting_session.canceled_by_role = canceled_by_role
+            meeting_session.cancel_reason = "Session canceled by participant."
+            meeting_session.save(
+                update_fields=[
+                    "status",
+                    "source_slot",
+                    "canceled_by_role",
+                    "cancel_reason",
+                    "updated_at",
+                ]
+            )
 
         mentorship_request.refresh_from_db()
         return Response(
@@ -386,6 +492,41 @@ class RescheduleSessionAPIView(APIView):
                 )
                 mentorship_request.slot = new_slot
                 mentorship_request.save(update_fields=["slot"])
+
+                meeting_session = (
+                    MeetingSession.objects.select_for_update()
+                    .filter(match=match)
+                    .order_by("-created_at")
+                    .first()
+                )
+                if meeting_session is None:
+                    MeetingSession.objects.create(
+                        match=match,
+                        mentor=match.mentor,
+                        mentee=match.mentee,
+                        source_slot=new_slot,
+                        scheduled_start_at_utc=new_slot.start_at,
+                        scheduled_end_at_utc=new_slot.end_at,
+                        status=MeetingSession.Status.RESCHEDULED,
+                    )
+                else:
+                    meeting_session.source_slot = new_slot
+                    meeting_session.scheduled_start_at_utc = new_slot.start_at
+                    meeting_session.scheduled_end_at_utc = new_slot.end_at
+                    meeting_session.status = MeetingSession.Status.RESCHEDULED
+                    meeting_session.canceled_by_role = ""
+                    meeting_session.cancel_reason = ""
+                    meeting_session.save(
+                        update_fields=[
+                            "source_slot",
+                            "scheduled_start_at_utc",
+                            "scheduled_end_at_utc",
+                            "status",
+                            "canceled_by_role",
+                            "cancel_reason",
+                            "updated_at",
+                        ]
+                    )
         except SlotNotBookedError:
             return Response(
                 {"detail": "Current slot is no longer booked."},

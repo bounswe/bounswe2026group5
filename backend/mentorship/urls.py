@@ -10,6 +10,7 @@ from .views import (
     MentorPastSessionsListAPIView,
     MentorUpcomingSessionsListAPIView,
     MyMatchesListAPIView,
+    MyMeetingSessionsListAPIView,
     MyPastSessionsListAPIView,
     MyRequestsListAPIView,
     MyUpcomingSessionsListAPIView,
@@ -26,6 +27,11 @@ urlpatterns = [
         name="mentorship-request-respond",
     ),
     path("matches/me/", MyMatchesListAPIView.as_view(), name="mentorship-match-list"),
+    path(
+        "meeting-sessions/me/",
+        MyMeetingSessionsListAPIView.as_view(),
+        name="mentorship-meeting-session-list",
+    ),
     path(
         "matches/<uuid:match_id>/deactivate/",
         DeactivateMatchAPIView.as_view(),

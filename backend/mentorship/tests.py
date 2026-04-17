@@ -12,7 +12,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode
-from mentorship.models import Feedback, Match, MentorshipRequest
+from mentorship.models import Feedback, Match, MeetingSession, MentorshipRequest
 from profiles.models import AvailabilitySlot, Profile
 
 User: Any = get_user_model()
@@ -180,6 +180,7 @@ class MentorshipRequestAPIBaseTestCase(TestCase):
     REQUESTS_URL = "/api/mentorship/requests/"
     REQUESTS_ME_URL = "/api/mentorship/requests/me/"
     MATCHES_ME_URL = "/api/mentorship/matches/me/"
+    MEETING_SESSIONS_ME_URL = "/api/mentorship/meeting-sessions/me/"
     UPCOMING_SESSIONS_ME_URL = "/api/mentorship/sessions/me/upcoming/"
     PAST_SESSIONS_ME_URL = "/api/mentorship/sessions/me/past/"
 
@@ -488,6 +489,86 @@ class MyMatchesListAPIViewTests(MentorshipRequestAPIBaseTestCase):
         response = self.mentee_client.get(self.MATCHES_ME_URL)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, [])
+
+
+class MeetingSessionPhaseTwoTests(MentorshipRequestAPIBaseTestCase):
+    """Phase 2 tests for canonical MeetingSession creation and sync behavior."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        new_start = timezone.now() + timedelta(days=5)
+        self.second_slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=new_start,
+            end_at=new_start + timedelta(hours=1),
+        )
+
+    def _create_pending_request(self) -> MentorshipRequest:
+        return MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=self.mentor_slot,
+        )
+
+    def test_accept_creates_meeting_session(self) -> None:
+        request_obj = self._create_pending_request()
+        respond_url = self._respond_url(request_obj.id)
+
+        response = self.mentor_client.post(respond_url, {"action": "accept"})
+        self.assertEqual(response.status_code, 200)
+
+        match = Match.objects.get(request=request_obj)
+        session = MeetingSession.objects.get(match=match)
+        self.assertEqual(session.status, MeetingSession.Status.SCHEDULED)
+        self.assertEqual(session.source_slot, self.mentor_slot)
+        self.assertEqual(session.scheduled_start_at_utc, self.mentor_slot.start_at)
+        self.assertEqual(session.scheduled_end_at_utc, self.mentor_slot.end_at)
+
+    def test_cancel_marks_meeting_session_canceled(self) -> None:
+        request_obj = self._create_pending_request()
+        self.mentor_client.post(self._respond_url(request_obj.id), {"action": "accept"})
+
+        match = Match.objects.get(request=request_obj)
+        cancel_url = f"/api/mentorship/sessions/{match.id}/cancel/"
+        response = self.mentee_client.post(cancel_url)
+        self.assertEqual(response.status_code, 200)
+
+        session = MeetingSession.objects.get(match=match)
+        self.assertEqual(session.status, MeetingSession.Status.CANCELED)
+        self.assertIsNone(session.source_slot)
+        self.assertEqual(session.canceled_by_role, MeetingSession.CanceledByRole.MENTEE)
+
+    def test_reschedule_updates_meeting_session(self) -> None:
+        request_obj = self._create_pending_request()
+        self.mentor_client.post(self._respond_url(request_obj.id), {"action": "accept"})
+
+        match = Match.objects.get(request=request_obj)
+        reschedule_url = f"/api/mentorship/sessions/{match.id}/reschedule/"
+        response = self.mentee_client.post(
+            reschedule_url,
+            {"new_slot_id": str(self.second_slot.id)},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        session = MeetingSession.objects.get(match=match)
+        self.assertEqual(session.status, MeetingSession.Status.RESCHEDULED)
+        self.assertEqual(session.source_slot, self.second_slot)
+        self.assertEqual(session.scheduled_start_at_utc, self.second_slot.start_at)
+        self.assertEqual(session.scheduled_end_at_utc, self.second_slot.end_at)
+
+    def test_meeting_sessions_me_endpoint_returns_canonical_payload(self) -> None:
+        request_obj = self._create_pending_request()
+        self.mentor_client.post(self._respond_url(request_obj.id), {"action": "accept"})
+
+        response = self.mentee_client.get(self.MEETING_SESSIONS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["my_role"], "MENTEE")
+        self.assertIn("allowed_actions", response.data[0])
+
+    def test_meeting_sessions_me_endpoint_rejects_invalid_status(self) -> None:
+        response = self.mentee_client.get(self.MEETING_SESSIONS_ME_URL, {"status": "invalid"})
+        self.assertEqual(response.status_code, 400)
 
     def test_accepted_request_appears_in_matches(self) -> None:
         req = MentorshipRequest.objects.create(

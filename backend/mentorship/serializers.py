@@ -6,7 +6,7 @@ from rest_framework import serializers
 from accounts.models import AppUsageMode
 from profiles.models import AvailabilitySlot, Profile
 
-from .models import Feedback, Match, MentorshipRequest
+from .models import Feedback, Match, MeetingSession, MentorshipRequest
 
 
 class ProfileSummarySerializer(serializers.ModelSerializer):
@@ -243,6 +243,76 @@ class UpcomingMentorSessionSerializer(serializers.ModelSerializer):
     def get_slot_end_time(self, obj: AvailabilitySlot) -> str:
         """Return session end time in local timezone."""
         return timezone.localtime(obj.end_at).time().replace(microsecond=0).isoformat()
+
+
+class MeetingSessionSerializer(serializers.ModelSerializer):
+    """Read serializer for canonical mentorship meeting sessions."""
+
+    session_id = serializers.UUIDField(source="id", read_only=True)
+    match_id = serializers.UUIDField(source="match.id", read_only=True)
+    mentor = ProfileSummarySerializer(read_only=True)
+    mentee = ProfileSummarySerializer(read_only=True)
+    source_slot_id = serializers.UUIDField(source="source_slot.id", read_only=True, allow_null=True)
+    scheduled_start_at = serializers.DateTimeField(source="scheduled_start_at_utc", read_only=True)
+    scheduled_end_at = serializers.DateTimeField(source="scheduled_end_at_utc", read_only=True)
+    my_role = serializers.SerializerMethodField()
+    display_status = serializers.SerializerMethodField()
+    allowed_actions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MeetingSession
+        fields = (
+            "session_id",
+            "match_id",
+            "mentor",
+            "mentee",
+            "source_slot_id",
+            "scheduled_start_at",
+            "scheduled_end_at",
+            "status",
+            "display_status",
+            "my_role",
+            "allowed_actions",
+            "canceled_by_role",
+            "cancel_reason",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def get_my_role(self, obj: MeetingSession) -> str:
+        """Return the authenticated caller role for this session."""
+        request = self.context.get("request")
+        if request is None or request.user.is_anonymous:
+            return "UNKNOWN"
+
+        if request.user.id == obj.mentor.user_id:
+            return "MENTOR"
+        if request.user.id == obj.mentee.user_id:
+            return "MENTEE"
+        return "UNKNOWN"
+
+    def get_display_status(self, obj: MeetingSession) -> str:
+        """Return computed status including implicit completion for past sessions."""
+        if (
+            obj.status in {MeetingSession.Status.SCHEDULED, MeetingSession.Status.RESCHEDULED}
+            and obj.scheduled_end_at_utc <= timezone.now()
+        ):
+            return MeetingSession.Status.COMPLETED
+        return obj.status
+
+    def get_allowed_actions(self, obj: MeetingSession) -> list[str]:
+        """Return allowed actions for the authenticated caller."""
+        display_status = self.get_display_status(obj)
+        if display_status in {MeetingSession.Status.CANCELED, MeetingSession.Status.COMPLETED}:
+            return []
+
+        my_role = self.get_my_role(obj)
+        if my_role == "MENTEE":
+            return ["cancel", "reschedule"]
+        if my_role == "MENTOR":
+            return ["cancel"]
+        return []
 
 
 class FeedbackSerializer(serializers.ModelSerializer):
