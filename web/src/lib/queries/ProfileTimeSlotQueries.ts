@@ -108,6 +108,9 @@ export const availabilitySlotsQueryOptions = (username: string) =>
         gcTime: Infinity,
     })
 
-export function useAvailabilitySlots(username: string) {
-    return useQuery(availabilitySlotsQueryOptions(username))
+export function useAvailabilitySlots(username: string, enabled: boolean = true) {
+    return useQuery({
+        ...availabilitySlotsQueryOptions(username),
+        enabled
+    })
 }

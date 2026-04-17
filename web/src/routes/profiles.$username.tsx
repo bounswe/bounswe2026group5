@@ -68,7 +68,6 @@ function PublicProfileRoute() {
             skills: profile.skills ?? [],
             rating: profile.rating,
             total_mentee_count: profile.total_mentee_count,
-            available_slots: profile.available_slots ?? [],
             username: username,
         }
         : {

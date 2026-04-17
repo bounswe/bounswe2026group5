@@ -1,5 +1,5 @@
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
-import { useProfile, useUpdateProfile } from '#/lib/queries/ProfileQueries.ts'
+import { useOwnProfile, useUpdateProfile } from '#/lib/queries/ProfileQueries.ts'
 import { SkillPicker } from '@/components/SkillPicker'
 import { Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
@@ -33,7 +33,7 @@ interface EditProfileModalProps {
 
 export function EditProfileModal({ mode, initialValues, onClose }: EditProfileModalProps) {
     const { data: me } = useQuery(meQueryOptions)
-    const { data: profileData } = useProfile(me?.username ?? '')
+    const { data: profileData } = useOwnProfile()
     const updateProfile = useUpdateProfile()
     const queryClient = useQueryClient()
 
@@ -145,6 +145,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                         <Muted className="text-xs block">{skillsHint}</Muted>
                         <SkillPicker
                             selected={skills}
+                            available={profileData?.available_catalog_skills ?? []}
                             onChange={setSkills}
                             mode={isMentor ? 'mentor' : 'mentee'}
                         />

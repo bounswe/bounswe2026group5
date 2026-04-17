@@ -75,7 +75,9 @@ class ProfileLookupMixin:
         else:
             serializer = ProfileResponseSerializer(profile)
 
-        return serializer.data
+        data = serializer.data
+        data["app_usage_mode"] = app_usage_mode
+        return data
 
 
 class SkillListAPIView(APIView):
@@ -106,6 +108,36 @@ class AvailabilitySlotLookupMixin(ProfileLookupMixin):
 
 
 
+class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
+    """Retrieve profile by username for public reads."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        responses={
+            200: MentorProfileResponseSerializer,
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "Get profile by username. Returns a mentee or mentor profile shape "
+            "based on the user's app usage mode. Returns profile when requester "
+            "is the owner or when the profile is marked visible."
+        ),
+        tags=["Profiles"],
+    )
+    def get(self, request: Request, username: str) -> Response:
+        """Handle GET requests by applying visibility and ownership rules."""
+        profile = self._get_profile_or_404(username)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        is_owner = request.user.is_authenticated and request.user == profile.user
+        if not is_owner and not profile.is_visible:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(self._serialize_profile_by_mode(profile), status=status.HTTP_200_OK)
+
+
 class ProfileMeAPIView(ProfileLookupMixin, APIView):
     """Canonical self-scoped profile read/update endpoint."""
 
@@ -127,7 +159,10 @@ class ProfileMeAPIView(ProfileLookupMixin, APIView):
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
-        return Response(self._serialize_profile_by_mode(profile), status=status.HTTP_200_OK)
+        data = self._serialize_profile_by_mode(profile)
+        data["available_catalog_skills"] = list(Skill.objects.values_list("name", flat=True))
+
+        return Response(data, status=status.HTTP_200_OK)
 
     @extend_schema(
         request=ProfileUpdateSerializer,
@@ -326,8 +361,6 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         return Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_200_OK)
-
-
 
 
 class MyAvailabilitySlotDetailAPIView(ProfileLookupMixin, APIView):

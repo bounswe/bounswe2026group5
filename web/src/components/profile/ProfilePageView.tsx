@@ -4,9 +4,9 @@ import { Body, Heading, Muted } from '@/components/Typography'
 import { Star, Sparkles, Pencil, EyeOff } from 'lucide-react'
 import { EditProfileModal } from '#/components/profile/EditProfileModal.tsx'
 import { useState } from 'react'
-import type { AvailabilitySlot } from '#/lib/queries/ProfileQueries.ts'
 import { getInitials } from '#/lib/utils.ts'
-import {AvailabilityCalendar} from "#/components/profile/AvailabilityCalendar.tsx";
+import { AvailabilityCalendar } from "#/components/profile/AvailabilityCalendar.tsx";
+import { useAvailabilitySlots } from "#/lib/queries/ProfileTimeSlotQueries.ts";
 
 interface BaseMappedProfile {
   full_name: string
@@ -22,7 +22,6 @@ interface MentorMappedProfile extends BaseMappedProfile {
   title: string
   rating: number
   total_mentee_count: number
-  available_slots: AvailabilitySlot[]
 }
 
 interface MenteeMappedProfile extends BaseMappedProfile {
@@ -49,6 +48,7 @@ function HiddenField({ label }: { label: string }) {
 export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: ProfilePageViewProps) {
   const [editOpen, setEditOpen] = useState(false)
   const isHidden = profile.hidden && !isOwner
+  const { data: slots = [] } = useAvailabilitySlots(profile.username, profile.isMentor)
 
   const avatarBlock = (
       <div className="flex flex-wrap items-center gap-5">
@@ -156,8 +156,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
         </main>
     )
   }
-
-  const openSlots = profile.available_slots.filter(s => !s.is_booked)
+  const openSlots = slots.filter(s => !s.is_booked)
 
     // MENTOR layout — restructure to put calendar full width below
     return (

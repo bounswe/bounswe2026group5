@@ -42,15 +42,6 @@ interface PublicProfileResponse {
   skills?: string[];
   rating: number;
   total_mentee_count: number;
-  available_slots?: {
-    id: string;
-    date?: string;
-    startTime?: string;
-    endTime?: string;
-    start_time?: string;
-    end_time?: string;
-    is_booked: boolean;
-  }[];
 }
 
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", {
@@ -318,7 +309,10 @@ export default function MentorProfileScreen() {
   const createRequestMutation = useCreateMentorshipRequestMutation();
   const mentorshipMatchesQuery = useMentorshipMatchesQuery(currentUsername);
   const bookSlotMutation = useBookAvailabilitySlotMutation(currentUsername);
-  const availabilitySlotsQuery = useAvailabilitySlotsQuery(username ?? "");
+  const availabilitySlotsQuery = useAvailabilitySlotsQuery(
+    username ?? "",
+    profile ? includesMentor(profile.app_usage_mode) : false,
+  );
   const ratingQuery = useProfileRatingQuery(username ?? "");
 
   const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
@@ -391,8 +385,8 @@ export default function MentorProfileScreen() {
   }, [username]);
 
   const availability = useMemo(() => {
-    const sourceSlots =
-      availabilitySlotsQuery.data ?? profile?.available_slots ?? [];
+  const availability = useMemo(() => {
+    const sourceSlots = availabilitySlotsQuery.data ?? [];
 
     const normalized = sourceSlots
       .map((slot) => {
@@ -428,7 +422,7 @@ export default function MentorProfileScreen() {
       );
 
     return groupSlotsByWeekday(normalized);
-  }, [availabilitySlotsQuery.data, profile?.available_slots]);
+  }, [availabilitySlotsQuery.data]);
 
   const userSkills = profile?.skills ?? [];
 
@@ -518,18 +512,7 @@ export default function MentorProfileScreen() {
           : {}),
       });
 
-      setProfile((prev) =>
-        prev
-          ? {
-              ...prev,
-              available_slots: (prev.available_slots ?? []).map((slot) =>
-                slot.id === payload.slotId
-                  ? { ...slot, is_booked: true }
-                  : slot,
-              ),
-            }
-          : prev,
-      );
+      setProfile((prev) => prev);
 
       setRequestFeedback("Request sent successfully.");
       Alert.alert(
@@ -560,19 +543,7 @@ export default function MentorProfileScreen() {
         slotId: slot.id,
       });
 
-      setProfile((prev) =>
-        prev
-          ? {
-              ...prev,
-              available_slots: (prev.available_slots ?? []).map(
-                (availableSlot) =>
-                  availableSlot.id === slot.id
-                    ? { ...availableSlot, is_booked: true }
-                    : availableSlot,
-              ),
-            }
-          : prev,
-      );
+      setProfile((prev) => prev);
 
       setSelectedSlot(null);
       setRequestFeedback("Session booked successfully.");

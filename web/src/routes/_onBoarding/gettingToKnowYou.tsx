@@ -4,7 +4,7 @@ import { Button } from "#/components/ui/button.tsx"
 import { Input } from "#/components/ui/input.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
 import { meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/AuthQueries.ts"
-import { useUpdateProfile } from "#/lib/queries/ProfileQueries.ts"
+import { useOwnProfile, useUpdateProfile } from "#/lib/queries/ProfileQueries.ts"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -112,6 +112,7 @@ function getQuestions(primaryUsage: UserAnswers['primaryUsage']): Question[] {
 function RouteComponent() {
     const router = useRouter()
     const { data: me } = useQuery(meQueryOptions)
+    const { data: profileData } = useOwnProfile()
     const queryClient = useQueryClient();
 
     const [activeIndex, setActiveIndex] = useState(0)
@@ -256,6 +257,7 @@ function RouteComponent() {
                     {current.type === 'skills' && current.skillsKey && (
                         <SkillPicker
                             selected={answers[current.skillsKey]}
+                            available={profileData?.available_catalog_skills ?? []}
                             onChange={skills => setAnswers(prev => ({ ...prev, [current.skillsKey!]: skills }))}
                             mode={answers.primaryUsage === 'mentor' ? 'mentor' : 'mentee'}
                         />

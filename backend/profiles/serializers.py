@@ -143,7 +143,6 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     )
     rating = serializers.IntegerField(read_only=True)
     total_mentee_count = serializers.IntegerField(read_only=True)
-    available_slots = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -157,7 +156,6 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
             "skills",
             "rating",
             "total_mentee_count",
-            "available_slots",
         )
         read_only_fields = fields
 
@@ -167,21 +165,13 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
         ret["hidden"] = not instance.is_visible
         return ret
 
-    @extend_schema_field(AvailabilitySlotSerializer(many=True))
-    def get_available_slots(self, obj: Profile):
-        """Return upcoming unbooked availability slots."""
-        upcoming_slots = AvailabilitySlot.objects.filter(
-            profile=obj,
-            start_at__gte=timezone.now(),
-            is_booked=False,
-        ).order_by("start_at")
-        return AvailabilitySlotSerializer(upcoming_slots, many=True).data
-
-
 class ProfileResponseSerializer(serializers.ModelSerializer):
     """Fallback read serializer for profile data (when app_usage_mode is not set)."""
 
     location = LocationField(read_only=True)
+    skills = serializers.ListField(
+        child=serializers.CharField(), read_only=True
+    )
 
     class Meta:
         model = Profile
@@ -195,6 +185,7 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
             "location",
             "is_visible",
             "show_initials_only",
+            "skills",
             "created_at",
             "updated_at",
         )

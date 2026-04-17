@@ -4,10 +4,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 // ---- Types ----
 
-export interface Skill {
-    id: number
-    name: string
-}
+
 
 // GET response types
 export interface AvailabilitySlot {
@@ -29,6 +26,7 @@ export interface MenteeProfile {
     hidden: boolean
     picture_url: string
     skills: string[] | null
+    app_usage_mode: "MENTOR" | "MENTEE"
 }
 
 export interface MentorProfile {
@@ -41,13 +39,13 @@ export interface MentorProfile {
     skills: string[] | null
     rating: number
     total_mentee_count: number
-    available_slots: AvailabilitySlot[]
+    app_usage_mode: "MENTOR" | "MENTEE"
 }
 
 export type ProfileResponse = MenteeProfile | MentorProfile
 
 export function isMentorProfile(p: ProfileResponse): p is MentorProfile {
-    return 'available_slots' in p
+    return 'rating' in p
 }
 
 // PATCH request body
@@ -67,6 +65,17 @@ export interface UpdateProfileBody {
 async function fetchProfile(username: string): Promise<ProfileResponse> {
     const token = localStorage.getItem('access_token')
     const res = await fetch(`${API_BASE_URL}/profiles/${username}/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error(`${res.status}`)
+    return res.json()
+}
+
+export type OwnProfileResponse = ProfileResponse & { available_catalog_skills?: string[] }
+
+async function fetchOwnProfile(): Promise<OwnProfileResponse> {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`${API_BASE_URL}/profiles/me/`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
     if (!res.ok) throw new Error(`${res.status}`)
@@ -96,23 +105,21 @@ export const profileQueryOptions = (username: string) =>
         gcTime: Infinity,
     })
 
-export const skillsQueryOptions = queryOptions({
-    queryKey: ['skills'],
-    queryFn: async () => {
-        const token = localStorage.getItem('access_token')
-        const res = await fetch(`${API_BASE_URL}/profiles/skills/`, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
-        if (!res.ok) throw new Error('Failed to fetch skills')
-        return res.json() as Promise<Skill[]>
-    },
-    staleTime: Infinity,
+export const ownProfileQueryOptions = queryOptions({
+    queryKey: ['profiles', 'me'],
+    queryFn: fetchOwnProfile,
+    staleTime: 5 * 60 * 1000,
+    gcTime: Infinity,
 })
 
 // ---- Custom Hooks ----
 
 export function useProfile(username: string) {
     return useQuery(profileQueryOptions(username))
+}
+
+export function useOwnProfile() {
+    return useQuery(ownProfileQueryOptions)
 }
 
 export function useUpdateProfile() {

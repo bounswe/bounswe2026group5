@@ -599,14 +599,14 @@ export function useRespondToMentorshipRequestMutation() {
  *
  * @param username Profile username path parameter.
  */
-export function useAvailabilitySlotsQuery(username: string) {
+export function useAvailabilitySlotsQuery(username: string, enabled: boolean = true) {
   return useQuery({
     queryKey: ["profiles", username, "availability-slots"],
     queryFn: () =>
       apiGet<BackendAvailabilitySlot[]>(
         `/api/profiles/${username}/availability-slots/`,
       ),
-    enabled: Boolean(username),
+    enabled: Boolean(username) && enabled,
     staleTime: 60_000,
   });
 }
