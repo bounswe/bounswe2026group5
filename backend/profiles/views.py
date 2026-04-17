@@ -586,44 +586,6 @@ class AvailabilitySlotBookAPIView(ProfileLookupMixin, APIView):
         return Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_200_OK)
 
 
-class AvailabilitySlotCancelBookingAPIView(ProfileLookupMixin, APIView):
-    """Cancel an existing slot booking."""
-
-    permission_classes = [IsUser]
-
-    @extend_schema(
-        request=None,
-        responses={
-            200: AvailabilitySlotSerializer,
-            400: OpenApiResponse(description="Cancellation validation error."),
-            401: OpenApiResponse(description="Authentication required."),
-            403: OpenApiResponse(description="Permission denied."),
-            404: OpenApiResponse(description="Availability slot not found."),
-        },
-        description=(
-            "Cancel a mentor availability slot booking by slot ID. "
-            "For accepted mentorship sessions tied to a match, prefer "
-            "`POST /api/mentorship/sessions/{match_id}/cancel/`."
-        ),
-        tags=["Profiles"],
-    )
-    def post(self, request: Request, username: str, slot_id: str) -> Response:
-        """Cancel an existing booking when requester is permitted."""
-        profile = self._get_profile_or_404(username)
-        if profile is None or not self._is_mentor_profile(profile):
-            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-
-        try:
-            slot = cancel_availability_booking(profile=profile, slot_id=slot_id, actor=request.user)
-        except AvailabilitySlot.DoesNotExist:
-            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-        except SlotNotBookedError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except BookingCancelNotAllowedError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
-
-        return Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_200_OK)
-
 
 class RecentlyAddedMentorsListAPIView(APIView):
     """Public listing of the most recently created visible mentor profiles."""

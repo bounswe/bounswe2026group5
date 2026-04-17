@@ -1,9 +1,12 @@
 import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
-import { useMyMatches, useSendMentorshipRequest } from '#/lib/queries/MentorshipQueries.ts'
+import {
+    useMyMatches,
+    useSendMentorshipRequest,
+    useCancelSession
+} from '#/lib/queries/MentorshipQueries.ts'
 import {
     useAvailabilitySlots,
     useBookSlot,
-    useCancelBooking,
     useCreateSlot,
     useDeleteSlot,
     type AvailabilitySlot,
@@ -79,8 +82,15 @@ interface CancelModalProps {
 }
 
 function CancelModal({ slot, username, onClose, onSuccess }: CancelModalProps) {
-    const cancelBooking = useCancelBooking(username)
+    const cancelSession = useCancelSession()
 
+    const handleCancel = () => {
+        if (slot.sessionId) {
+            cancelSession.mutate(slot.sessionId, { onSuccess })
+        } else {
+            console.error('No session ID found for this booked slot — cannot cancel via mentorship API.')
+        }
+    }
     return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
             <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -93,22 +103,22 @@ function CancelModal({ slot, username, onClose, onSuccess }: CancelModalProps) {
                 </div>
                 <div className="px-6 py-5">
                     <Muted className="text-sm">
-                        This slot is already booked. Cancelling will remove the booking and make the slot available again.
+                        This slot is already booked. Cancelling will remove the mentorship session and make the slot available again.
                     </Muted>
-                    {cancelBooking.isError && (
-                        <p className="text-xs text-destructive mt-3">{cancelBooking.error.message}</p>
+                    {cancelSession.isError && (
+                        <p className="text-xs text-destructive mt-3">{cancelSession.error.message}</p>
                     )}
                 </div>
                 <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line">
-                    <Button variant="outline" onClick={onClose} disabled={cancelBooking.isPending}>
+                     <Button variant="outline" onClick={onClose} disabled={cancelSession.isPending}>
                         Keep booking
                     </Button>
                     <Button
                         className="bg-red-500 hover:bg-red-600 text-white min-w-[90px]"
-                        onClick={() => cancelBooking.mutate(slot.id, { onSuccess })}
-                        disabled={cancelBooking.isPending}
+                        onClick={handleCancel}
+                        disabled={cancelSession.isPending || !slot.sessionId}
                     >
-                        {cancelBooking.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Cancel booking'}
+                        {cancelSession.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Cancel booking'}
                     </Button>
                 </div>
             </div>

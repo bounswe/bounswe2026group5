@@ -1105,10 +1105,10 @@ class MentorUpcomingSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
 
 
 class CancelSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
-    """Tests for POST /api/mentorship/sessions/<match_id>/cancel/"""
+    """Tests for POST /api/mentorship/sessions/<session_id>/cancel/"""
 
     def _setup_active_match_with_booking(self):
-        """Create an accepted request with a booked slot and return (match, request_obj)."""
+        """Create an accepted request with a booked slot and return (match, session)."""
         request_obj = _create_accepted_request(
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
@@ -1116,53 +1116,51 @@ class CancelSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
         )
         self.mentor_slot.mark_booked(self.mentee_user)
         match = Match.objects.get(request=request_obj)
-        return match, request_obj
+        session = MeetingSession.objects.get(match=match)
+        return match, session
 
-    def _cancel_url(self, match_id) -> str:
-        return f"/api/mentorship/sessions/{match_id}/cancel/"
+    def _cancel_url(self, session_id) -> str:
+        return f"/api/mentorship/sessions/{session_id}/cancel/"
 
     def test_mentee_can_cancel(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
-        response = self.mentee_client.post(self._cancel_url(match.id))
+        match, session = self._setup_active_match_with_booking()
+        response = self.mentee_client.post(self._cancel_url(session.id))
         self.assertEqual(response.status_code, 200)
         self.mentor_slot.refresh_from_db()
         self.assertFalse(self.mentor_slot.is_booked)
 
     def test_mentor_can_cancel(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
-        response = self.mentor_client.post(self._cancel_url(match.id))
+        match, session = self._setup_active_match_with_booking()
+        response = self.mentor_client.post(self._cancel_url(session.id))
         self.assertEqual(response.status_code, 200)
         self.mentor_slot.refresh_from_db()
         self.assertFalse(self.mentor_slot.is_booked)
 
     def test_slot_reference_cleared_after_cancel(self) -> None:
-        match, request_obj = self._setup_active_match_with_booking()
-        self.mentee_client.post(self._cancel_url(match.id))
+        match, session = self._setup_active_match_with_booking()
+        request_obj = match.request
+        self.mentee_client.post(self._cancel_url(session.id))
         request_obj.refresh_from_db()
         self.assertIsNone(request_obj.slot)
 
     def test_unrelated_user_cannot_cancel(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
-        response = self.other_client.post(self._cancel_url(match.id))
+        match, session = self._setup_active_match_with_booking()
+        response = self.other_client.post(self._cancel_url(session.id))
         self.assertEqual(response.status_code, 403)
 
     def test_unauthenticated_returns_401(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
-        response = self.anon_client.post(self._cancel_url(match.id))
+        match, session = self._setup_active_match_with_booking()
+        response = self.anon_client.post(self._cancel_url(session.id))
         self.assertEqual(response.status_code, 401)
 
     def test_cancel_unbooked_slot_returns_400(self) -> None:
-        request_obj = _create_accepted_request(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            slot=self.mentor_slot,
-        )
-        match = Match.objects.get(request=request_obj)
-        # Slot is not booked
-        response = self.mentee_client.post(self._cancel_url(match.id))
+        match, session = self._setup_active_match_with_booking()
+        # Free the slot manually
+        self.mentor_slot.mark_available()
+        response = self.mentee_client.post(self._cancel_url(session.id))
         self.assertEqual(response.status_code, 400)
 
-    def test_nonexistent_match_returns_404(self) -> None:
+    def test_nonexistent_session_returns_404(self) -> None:
         import uuid
 
         response = self.mentee_client.post(self._cancel_url(uuid.uuid4()))

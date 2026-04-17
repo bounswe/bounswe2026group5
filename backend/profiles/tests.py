@@ -680,44 +680,6 @@ class AvailabilitySlotAPIViewTests(TestCase):
             response.get("Link", ""),
         )
 
-    def test_delete_slot_after_canceling_accepted_first_session(self) -> None:
-        """Mentor can delete first-session slot after booking cancellation."""
-        slot_start = timezone.now() + timedelta(days=1)
-        slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=slot_start,
-            end_at=slot_start + timedelta(hours=1),
-            is_booked=True,
-            booked_by=self.mentee_user,
-            booked_at=timezone.now(),
-        )
-        request_obj = MentorshipRequest.objects.create(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            slot=slot,
-            status=MentorshipRequest.Status.ACCEPTED,
-        )
-
-        cancel_url = (
-            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-            "cancel-booking/"
-        )
-        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
-        cancel_response = self.api_client.post(cancel_url)
-        self.assertEqual(cancel_response.status_code, 200)
-
-        request_obj.refresh_from_db()
-        self.assertIsNone(request_obj.slot)
-        self.assertEqual(request_obj.initial_session_start_at, slot.start_at)
-        self.assertEqual(request_obj.initial_session_end_at, slot.end_at)
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
-        delete_response = self.api_client.delete(detail_url)
-
-        self.assertEqual(delete_response.status_code, 204)
-        self.assertFalse(AvailabilitySlot.objects.filter(id=slot.id).exists())
 
     def test_delete_slot_unlinks_accepted_request_without_cancel_step(self) -> None:
         """Delete can unlink stale accepted references when slot is not booked."""
@@ -978,93 +940,6 @@ class AvailabilitySlotBookingAPIViewTests(TestCase):
         response = self.api_client.post(book_url)
 
         self.assertEqual(response.status_code, 403)
-
-    def test_cancel_booking_by_booking_owner_success(self) -> None:
-        """Booking owner can cancel their booking."""
-        slot_start = timezone.now() + timedelta(days=1)
-        slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=slot_start,
-            end_at=slot_start + timedelta(hours=1),
-            is_booked=True,
-            booked_by=self.mentee_user,
-            booked_at=timezone.now(),
-        )
-        cancel_url = (
-            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-            "cancel-booking/"
-        )
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
-        response = self.api_client.post(cancel_url)
-
-        self.assertEqual(response.status_code, 200)
-        slot.refresh_from_db()
-        self.assertFalse(slot.is_booked)
-        self.assertIsNone(slot.booked_by)
-        self.assertIsNone(slot.booked_at)
-
-    def test_cancel_booking_by_mentor_owner_success(self) -> None:
-        """Mentor owner can cancel booking on their own slot."""
-        slot_start = timezone.now() + timedelta(days=1)
-        slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=slot_start,
-            end_at=slot_start + timedelta(hours=1),
-            is_booked=True,
-            booked_by=self.mentee_user,
-            booked_at=timezone.now(),
-        )
-        cancel_url = (
-            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-            "cancel-booking/"
-        )
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
-        response = self.api_client.post(cancel_url)
-
-        self.assertEqual(response.status_code, 200)
-        slot.refresh_from_db()
-        self.assertFalse(slot.is_booked)
-
-    def test_cancel_booking_rejects_unrelated_user(self) -> None:
-        """Unrelated users cannot cancel someone else's booking."""
-        slot_start = timezone.now() + timedelta(days=1)
-        slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=slot_start,
-            end_at=slot_start + timedelta(hours=1),
-            is_booked=True,
-            booked_by=self.mentee_user,
-            booked_at=timezone.now(),
-        )
-        cancel_url = (
-            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-            "cancel-booking/"
-        )
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.other_access_token}")
-        response = self.api_client.post(cancel_url)
-
-        self.assertEqual(response.status_code, 403)
-
-    def test_cancel_booking_rejects_unbooked_slot(self) -> None:
-        """Cancellation fails when slot is currently not booked."""
-        slot_start = timezone.now() + timedelta(days=1)
-        slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=slot_start,
-            end_at=slot_start + timedelta(hours=1),
-        )
-        cancel_url = (
-            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-            "cancel-booking/"
-        )
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
-        response = self.api_client.post(cancel_url)
-
-        self.assertEqual(response.status_code, 400)
 
 
 class PublicMentorProfilesSearchListAPIViewTests(TestCase):

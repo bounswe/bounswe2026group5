@@ -58,6 +58,7 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
     endTime = serializers.SerializerMethodField()
     bookedBy = serializers.SerializerMethodField()
     bookedAt = serializers.DateTimeField(source="booked_at", read_only=True)
+    sessionId = serializers.SerializerMethodField()
 
     class Meta:
         model = AvailabilitySlot
@@ -69,6 +70,7 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
             "is_booked",
             "bookedBy",
             "bookedAt",
+            "sessionId",
             "created_at",
             "updated_at",
         )
@@ -100,6 +102,20 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
             return None
 
         return booked_profile.username
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_sessionId(self, obj: AvailabilitySlot) -> str | None:
+        """Return the ID of an active MeetingSession associated with this slot."""
+        if not obj.is_booked:
+            return None
+
+        # Inline import to avoid circular dependency
+        from mentorship.models import MeetingSession
+        session = MeetingSession.objects.filter(
+            source_slot=obj,
+            status__in=[MeetingSession.Status.SCHEDULED, MeetingSession.Status.RESCHEDULED]
+        ).first()
+        return str(session.id) if session else None
 
 
 class MenteeProfileResponseSerializer(serializers.ModelSerializer):

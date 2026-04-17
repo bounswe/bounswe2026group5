@@ -4,7 +4,6 @@ from django.urls import path
 
 from .views import (
     AvailabilitySlotBookAPIView,
-    AvailabilitySlotCancelBookingAPIView,
     AvailabilitySlotDetailAPIView,
     AvailabilitySlotListCreateAPIView,
     MentorPublicRatingAPIView,
@@ -52,11 +51,6 @@ urlpatterns = [
         "<str:username>/availability-slots/<uuid:slot_id>/book/",
         AvailabilitySlotBookAPIView.as_view(),
         name="availability-slot-book",
-    ),
-    path(
-        "<str:username>/availability-slots/<uuid:slot_id>/cancel-booking/",
-        AvailabilitySlotCancelBookingAPIView.as_view(),
-        name="availability-slot-cancel-booking",
     ),
     path(
         "<str:username>/rating/",

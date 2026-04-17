@@ -152,6 +152,7 @@ interface BackendAvailabilitySlot {
   is_booked: boolean;
   bookedBy?: string | null;
   bookedAt?: string | null;
+  sessionId?: string | null;
 }
 
 interface CreateAvailabilitySlotPayload {

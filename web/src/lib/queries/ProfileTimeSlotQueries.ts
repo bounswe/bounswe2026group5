@@ -12,6 +12,7 @@ export interface AvailabilitySlot {
     is_booked: boolean
     bookedBy: string | null
     bookedAt: string | null
+    sessionId: string | null
     created_at: string
     updated_at: string
     status?: 'SCHEDULED' | 'RESCHEDULED' | 'CANCELED' | 'COMPLETED'
