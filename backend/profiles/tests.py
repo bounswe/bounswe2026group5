@@ -1132,6 +1132,23 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         # Default discovery is mentors only.
         self.assertNotIn("Mentee Person", returned_names)
 
+    def test_mode_filter_can_target_mentee_profiles(self) -> None:
+        """`mentorshipMode=MENTEE` returns visible mentee profiles."""
+        response = self.api_client.get("/api/profiles/", {"mentorshipMode": "MENTEE"})
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        returned_names = {p["full_name"] for p in payload["results"]}
+
+        self.assertIn("Mentee Person", returned_names)
+        self.assertNotIn("Alice Mentor", returned_names)
+
+    def test_mode_filter_rejects_legacy_both_value(self) -> None:
+        """`mentorshipMode=BOTH` is rejected by strict role filtering."""
+        response = self.api_client.get("/api/profiles/", {"mentorshipMode": "BOTH"})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("MENTOR or MENTEE", response.json()["detail"])
+
     def test_search_by_q_matches_display_name(self) -> None:
         """`q` filters by name/keyword fields."""
         response = self.api_client.get("/api/profiles/", {"q": "Alice"})
@@ -1227,6 +1244,7 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
 def _token_for_profile_tests(user: Any) -> str:
     """Return a JWT access token for the given user."""
     from rest_framework_simplejwt.tokens import RefreshToken
+
     return str(RefreshToken.for_user(user).access_token)
 
 
@@ -1235,6 +1253,7 @@ class MentorPublicRatingAPITests(TestCase):
 
     def setUp(self) -> None:
         from django.contrib.auth.models import Group
+
         from accounts.models import UserRole
 
         Group.objects.get_or_create(name=UserRole.USER)
@@ -1287,6 +1306,7 @@ class MentorPublicRatingAPITests(TestCase):
     def test_rating_reflects_threshold_update(self) -> None:
         """After review_count and average_rating are manually updated, endpoint returns new values."""
         from decimal import Decimal
+
         self.mentor_profile.review_count = 5
         self.mentor_profile.average_rating = Decimal("4.20")
         self.mentor_profile.save()
@@ -1368,7 +1388,9 @@ class RecentlyAddedMentorsAPITests(TestCase):
         results = response.json()["results"]
         self.assertGreaterEqual(len(results), 2)
         ids = [r["id"] for r in results]
-        self.assertLess(ids.index(str(self.mentor2_profile.id)), ids.index(str(self.mentor1_profile.id)))
+        self.assertLess(
+            ids.index(str(self.mentor2_profile.id)), ids.index(str(self.mentor1_profile.id))
+        )
 
     def test_default_limit_is_ten(self) -> None:
         # Create 12 visible mentors in total (2 already exist)

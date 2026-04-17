@@ -1,6 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+<<<<<<< Updated upstream
 import React, { useEffect, useMemo, useState } from "react";
+=======
+import React, { useEffect, useState } from "react";
+>>>>>>> Stashed changes
 import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -24,10 +28,14 @@ import {
   useMentorshipMatchesQuery,
   useMentorshipRequestsQuery,
 } from "@/lib/queries/mentorship";
+<<<<<<< Updated upstream
 import {
   useProfileRatingQuery,
   useUpdateOwnProfileMutation,
 } from "@/lib/queries/profile";
+=======
+import { useUpdateOwnProfileMutation } from "@/lib/queries/profile";
+>>>>>>> Stashed changes
 
 const PROFILE_DEFAULTS = {
   expertise: [] as string[],
@@ -40,14 +48,6 @@ interface OwnProfileResponse {
   picture_url: string;
   expertises?: string[];
   eager_to_learn?: string[];
-}
-
-function includesMentor(mode?: string): boolean {
-  return mode === "MENTOR" || mode === "BOTH";
-}
-
-function includesMentee(mode?: string): boolean {
-  return mode === "MENTEE" || mode === "BOTH";
 }
 
 export default function ProfileScreen() {
@@ -103,9 +103,9 @@ export default function ProfileScreen() {
   const hasExpertiseData = expertiseData.length > 0;
   const hasEagerToLearnData = eagerToLearnData.length > 0;
   const isMentorMode =
-    includesMentor(appUsageMode) || (!appUsageMode && hasExpertiseData);
+    appUsageMode === "MENTOR" || (!appUsageMode && hasExpertiseData);
   const isMenteeMode =
-    includesMentee(appUsageMode) || (!appUsageMode && hasEagerToLearnData);
+    appUsageMode === "MENTEE" || (!appUsageMode && hasEagerToLearnData);
 
   useEffect(() => {
     let mounted = true;

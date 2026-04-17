@@ -36,7 +36,7 @@ jest.mock("@/lib/auth/store", () => ({
     selector({
       user: {
         username: "Ali Aydin",
-        app_usage_mode: "BOTH",
+        app_usage_mode: "MENTOR",
       },
     }),
 }));

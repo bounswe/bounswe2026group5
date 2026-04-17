@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import Profile
 
-from .models import AuthProvider, User, UserRole
+from .models import AppUsageMode, AuthProvider, User, UserRole
 
 
 class UserResponseSerializer(serializers.ModelSerializer):
@@ -33,6 +33,19 @@ class UserAppUsageModeUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("app_usage_mode",)
+
+    def validate_app_usage_mode(self, value: str) -> str:
+        """Allow setting role once; prevent switching between mentor and mentee."""
+        if not value:
+            raise serializers.ValidationError("App usage mode must be either MENTOR or MENTEE.")
+
+        current_mode = getattr(self.instance, "app_usage_mode", "")
+        if current_mode in AppUsageMode.values and current_mode != value:
+            raise serializers.ValidationError(
+                "Account role is immutable. Create a separate account to use the other role."
+            )
+
+        return value
 
 
 class AuthResponseSerializer(serializers.Serializer):

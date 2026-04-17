@@ -239,7 +239,7 @@ class AuthUserByIdAPIView(APIView):
 
 
 class UserAppUsageModeAPIView(APIView):
-    """Update app usage mode for the authenticated user route."""
+    """Set app usage mode for the authenticated user route."""
 
     permission_classes = [IsAuthenticated, IsNotBanned]
 
@@ -251,7 +251,10 @@ class UserAppUsageModeAPIView(APIView):
             401: OpenApiResponse(description="Authentication required."),
             404: OpenApiResponse(description="User not found."),
         },
-        description="Update app usage mode for the authenticated user.",
+        description=(
+            "Set app usage mode for the authenticated user. "
+            "Role can be assigned once and cannot be switched after assignment."
+        ),
         tags=["Auth"],
     )
     def patch(self, request: Request, user_id: UUID) -> Response:
@@ -262,7 +265,7 @@ class UserAppUsageModeAPIView(APIView):
         if str(request_user_id) != str(user_id):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = UserAppUsageModeUpdateSerializer(request.user, data=request.data, partial=True)
+        serializer = UserAppUsageModeUpdateSerializer(request.user, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 

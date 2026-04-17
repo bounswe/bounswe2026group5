@@ -6,12 +6,10 @@ from typing import Any
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
-
-from django.test import override_settings
 
 from accounts.models import AppUsageMode
 from mentorship.models import Feedback, Match, MentorshipRequest
@@ -279,8 +277,8 @@ class MyRequestsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["mentor"]["username"], self.mentor_profile.username)
 
-    def test_user_sees_requests_as_both_parties(self) -> None:
-        """BOTH-mode user sees requests where they are mentor or mentee."""
+    def test_user_sees_requests_as_mentor_and_mentee_parties(self) -> None:
+        """Users see requests where they are involved as mentor or mentee."""
         MentorshipRequest.objects.create(
             mentor=self.other_profile,
             mentee=self.mentee_profile,
@@ -786,6 +784,7 @@ class DeactivateMatchAPIViewTests(FeedbackAPIBaseTestCase):
 
     def test_nonexistent_match_returns_404(self) -> None:
         import uuid
+
         url = f"/api/mentorship/matches/{uuid.uuid4()}/deactivate/"
         response = self.mentor_client.post(url)
         self.assertEqual(response.status_code, 404)
@@ -817,12 +816,14 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
 
     def test_nonexistent_match_post_returns_404(self) -> None:
         import uuid
+
         url = f"/api/mentorship/matches/{uuid.uuid4()}/feedback/"
         response = self.mentee_client.post(url, {"rating": 4}, format="json")
         self.assertEqual(response.status_code, 404)
 
     def test_nonexistent_match_get_returns_404(self) -> None:
         import uuid
+
         url = f"/api/mentorship/matches/{uuid.uuid4()}/feedback/"
         response = self.mentee_client.get(url)
         self.assertEqual(response.status_code, 404)
@@ -1012,7 +1013,14 @@ class MentorUpcomingSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
         response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
         self.assertEqual(response.status_code, 200)
         item = response.data[0]
-        for field in ("slot_id", "mentee", "slot_date", "slot_start_time", "slot_end_time", "booked_at"):
+        for field in (
+            "slot_id",
+            "mentee",
+            "slot_date",
+            "slot_start_time",
+            "slot_end_time",
+            "booked_at",
+        ):
             self.assertIn(field, item)
 
 
@@ -1316,5 +1324,12 @@ class MentorPastSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
         response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
         self.assertEqual(response.status_code, 200)
         item = response.data[0]
-        for field in ("slot_id", "mentee", "slot_date", "slot_start_time", "slot_end_time", "booked_at"):
+        for field in (
+            "slot_id",
+            "mentee",
+            "slot_date",
+            "slot_start_time",
+            "slot_end_time",
+            "booked_at",
+        ):
             self.assertIn(field, item)

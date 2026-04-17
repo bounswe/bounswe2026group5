@@ -1,11 +1,6 @@
-import React, { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, Stack } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { SettingItem } from "@/components/settings/SettingItem";
-import { useLogoutMutation } from "@/lib/queries/auth";
 import { useAuthStore } from "@/lib/auth/store";
+<<<<<<< Updated upstream
 import { API_BASE_URL } from "@/constants/api";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -19,21 +14,64 @@ function includesMentor(mode?: string): boolean {
 function includesMentee(mode?: string): boolean {
   return mode === "MENTEE" || mode === "BOTH";
 }
+=======
+import { useProfileVisibilityStore } from "@/lib/profile/preferences";
+import { useLogoutMutation } from "@/lib/queries/auth";
+import { Ionicons } from "@expo/vector-icons";
+import { Stack, useRouter } from "expo-router";
+import React, { useState } from "react";
+import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+>>>>>>> Stashed changes
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const logoutMutation = useLogoutMutation();
   const authUser = useAuthStore((state) => state.user);
+<<<<<<< Updated upstream
   const accessToken = useAuthStore((state) => state.accessToken);
   const updateUser = useAuthStore((state) => state.updateUser);
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
+=======
 
-  const [roleState, setRoleState] = useState({
-    mentor: includesMentor(authUser?.app_usage_mode),
-    mentee: includesMentee(authUser?.app_usage_mode),
-  });
+  const showExpertise = useProfileVisibilityStore(
+    (state) => state.showExpertise,
+  );
+  const showEagerToLearn = useProfileVisibilityStore(
+    (state) => state.showEagerToLearn,
+  );
+  const showAvailability = useProfileVisibilityStore(
+    (state) => state.showAvailability,
+  );
+  const showOfferings = useProfileVisibilityStore(
+    (state) => state.showOfferings,
+  );
+  const setShowExpertise = useProfileVisibilityStore(
+    (state) => state.setShowExpertise,
+  );
+  const setShowEagerToLearn = useProfileVisibilityStore(
+    (state) => state.setShowEagerToLearn,
+  );
+  const setShowAvailability = useProfileVisibilityStore(
+    (state) => state.setShowAvailability,
+  );
+  const setShowOfferings = useProfileVisibilityStore(
+    (state) => state.setShowOfferings,
+  );
+>>>>>>> Stashed changes
+
+  let roleModeLabel = "Not Set";
+  if (authUser?.app_usage_mode === "MENTOR") {
+    roleModeLabel = "Mentor";
+  } else if (authUser?.app_usage_mode === "MENTEE") {
+    roleModeLabel = "Mentee";
+  }
+
+  const roleModeDescription = authUser?.app_usage_mode
+    ? "Account role is fixed. Use a separate account to use the other role."
+    : "Choose your account role during onboarding.";
 
   const [prefs, setPrefs] = useState({
     notifRequests: true,
@@ -43,68 +81,6 @@ export default function SettingsScreen() {
 
   const togglePref = (key: keyof typeof prefs) => {
     setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const syncUsageMode = async (mode: UsageMode) => {
-    if (!authUser?.id || !accessToken) {
-      return;
-    }
-
-    if (mode === "BOTH") {
-      await updateUser({ app_usage_mode: "BOTH" });
-      return;
-    }
-
-    const response = await fetch(
-      `${API_BASE_URL}/api/auth/${encodeURIComponent(authUser.id)}/app-usage-mode/`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ app_usage_mode: mode }),
-      },
-    );
-
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => ({}))) as {
-        detail?: string;
-      };
-      throw new Error(payload.detail || "Failed to update app usage mode.");
-    }
-
-    await updateUser({ app_usage_mode: mode });
-  };
-
-  const handleRoleToggle = async (key: "mentor" | "mentee", value: boolean) => {
-    const next = {
-      ...roleState,
-      [key]: value,
-    };
-
-    if (!next.mentor && !next.mentee) {
-      Alert.alert("Role Required", "At least one role must remain enabled.");
-      return;
-    }
-
-    let nextMode: UsageMode = "MENTEE";
-    if (next.mentor && next.mentee) {
-      nextMode = "BOTH";
-    } else if (next.mentor) {
-      nextMode = "MENTOR";
-    }
-
-    try {
-      await syncUsageMode(nextMode);
-      setRoleState(next);
-    } catch (error) {
-      Alert.alert(
-        "Update Failed",
-        error instanceof Error ? error.message : "Could not update role mode.",
-      );
-    }
   };
 
   const handleLogout = () => {
@@ -172,24 +148,22 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 60 }}
       >
+<<<<<<< Updated upstream
         {/* Section: Role Mode */}
         <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-6 mb-2">
           Role Mode
+=======
+        {/* Section: Account Role */}
+        <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-4 mt-6 mb-2">
+          Account Role
+>>>>>>> Stashed changes
         </Text>
         <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
           <SettingItem
-            type="toggle"
-            icon="school-outline"
-            label="Mentor Mode"
-            isToggled={roleState.mentor}
-            onToggle={(value) => handleRoleToggle("mentor", value)}
-          />
-          <SettingItem
-            type="toggle"
-            icon="rocket-outline"
-            label="Mentee Mode"
-            isToggled={roleState.mentee}
-            onToggle={(value) => handleRoleToggle("mentee", value)}
+            icon="person-circle-outline"
+            label="Role"
+            value={roleModeLabel}
+            onPress={() => Alert.alert("Role Policy", roleModeDescription)}
           />
         </View>
 

@@ -616,11 +616,7 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         if mode == AppUsageMode.MENTEE:
             return [AppUsageMode.MENTEE]
 
-        # "BOTH" isn't a first-class value in our backend, but we treat it as mentor.
-        if mode == "BOTH":
-            return [AppUsageMode.MENTOR]
-
-        raise ValueError("Invalid mentorshipMode. Expected MENTOR, MENTEE, or BOTH.")
+        raise ValueError("Invalid mentorshipMode. Expected MENTOR or MENTEE.")
 
     @staticmethod
     def _maybe_parse_coordinates(request: Request) -> tuple[float, float] | None:

@@ -44,7 +44,7 @@ _NOT_FOUND = {"detail": "Not found."}
 _PERMISSION_DENIED = {"detail": "You do not have permission to perform this action."}
 _DUPLICATE_PENDING = {"detail": "You already have a pending request with this mentor."}
 _NOT_PENDING = {"detail": "Only pending requests can be accepted or rejected."}
-_MENTEE_REQUIRED = {"detail": "You need a MENTEE or BOTH profile to send mentorship requests."}
+_MENTEE_REQUIRED = {"detail": "You need a MENTEE profile to send mentorship requests."}
 _MENTOR_REQUIRED = {"detail": "You need a MENTOR profile to access this resource."}
 _NO_PROFILE = {"detail": "Profile not found."}
 _SLOT_BOOKING_FAILED = {"detail": "Selected slot could not be booked while accepting this request."}
@@ -101,7 +101,7 @@ class CreateRequestAPIView(APIView):
         },
         description=(
             "Send a mentorship request to a mentor by their username. "
-            "The caller must have a MENTEE or BOTH profile. "
+            "The caller must have a MENTEE profile. "
             "Only one pending request per mentor is allowed at a time."
         ),
         tags=["Mentorship"],
@@ -758,9 +758,7 @@ class MatchFeedbackListCreateAPIView(APIView):
         if profile == match.mentee:
             mentor = match.mentor
             with transaction.atomic():
-                Profile.objects.filter(pk=mentor.pk).update(
-                    review_count=mentor.review_count + 1
-                )
+                Profile.objects.filter(pk=mentor.pk).update(review_count=mentor.review_count + 1)
                 mentor.refresh_from_db(fields=["review_count"])
 
                 threshold = getattr(settings, "RATING_UPDATE_THRESHOLD", 5)
@@ -771,9 +769,11 @@ class MatchFeedbackListCreateAPIView(APIView):
                         .aggregate(avg=Avg("rating"))["avg"]
                     )
                     Profile.objects.filter(pk=mentor.pk).update(
-                        average_rating=Decimal(str(avg)).quantize(Decimal("0.01"))
-                        if avg is not None
-                        else Decimal("0.00")
+                        average_rating=(
+                            Decimal(str(avg)).quantize(Decimal("0.01"))
+                            if avg is not None
+                            else Decimal("0.00")
+                        )
                     )
 
         return Response(

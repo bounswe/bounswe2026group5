@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import Profile
 
-from .models import AuthProvider, User, UserRole
+from .models import AppUsageMode, AuthProvider, User, UserRole
 
 
 class UserModelTests(TestCase):
@@ -510,6 +510,75 @@ class TokenRefreshAndAuthUserByIdAPIViewTests(TestCase):
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
 
         response = self.api_client.get(f"/api/auth/{uuid.uuid4()}/")
+
+        self.assertEqual(response.status_code, 404)
+
+
+class UserAppUsageModeAPIViewTests(TestCase):
+    """Tests for PATCH /api/auth/{user_id}/app-usage-mode/."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+        self.user = User.objects.create_user(
+            email="modeuser@example.com",
+            password="SecurePass123",
+            is_active=True,
+        )
+        refresh = RefreshToken.for_user(self.user)
+        self.access_token = str(refresh.access_token)
+        self.url = f"/api/auth/{self.user.id}/app-usage-mode/"
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+
+    def test_can_set_mode_when_unset(self) -> None:
+        """Users can assign their mode when it is not set yet."""
+        response = self.api_client.patch(
+            self.url,
+            {"app_usage_mode": AppUsageMode.MENTEE},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db(from_queryset=None)
+        self.assertEqual(self.user.app_usage_mode, AppUsageMode.MENTEE)
+
+    def test_cannot_switch_mode_after_assignment(self) -> None:
+        """Users cannot change role once a mode is already assigned."""
+        self.user.app_usage_mode = AppUsageMode.MENTEE
+        self.user.save(update_fields=["app_usage_mode"])
+
+        response = self.api_client.patch(
+            self.url,
+            {"app_usage_mode": AppUsageMode.MENTOR},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("immutable", str(response.json()).lower())
+
+        self.user.refresh_from_db(from_queryset=None)
+        self.assertEqual(self.user.app_usage_mode, AppUsageMode.MENTEE)
+
+    def test_same_mode_update_is_allowed(self) -> None:
+        """Re-submitting the same assigned mode remains a no-op success."""
+        self.user.app_usage_mode = AppUsageMode.MENTOR
+        self.user.save(update_fields=["app_usage_mode"])
+
+        response = self.api_client.patch(
+            self.url,
+            {"app_usage_mode": AppUsageMode.MENTOR},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_other_user_id_returns_not_found(self) -> None:
+        """Caller cannot set another user's mode via a different route id."""
+        response = self.api_client.patch(
+            f"/api/auth/{uuid.uuid4()}/app-usage-mode/",
+            {"app_usage_mode": AppUsageMode.MENTEE},
+            format="json",
+        )
 
         self.assertEqual(response.status_code, 404)
 
