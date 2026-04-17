@@ -1,23 +1,23 @@
-import { useState, useMemo } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { Heading, Body } from '@/components/Typography'
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X, Globe, Loader2 } from 'lucide-react'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { useQuery } from '@tanstack/react-query'
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 import { useUpcomingSessions } from '#/lib/queries/MentorshipQueries.ts'
 import { useMentorUpcomingSessions } from '#/lib/queries/ProfileTimeSlotQueries.ts'
 import { getInitials } from '#/lib/utils.ts'
+import { Body, Heading } from '@/components/Typography'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table"
+import { useQuery } from '@tanstack/react-query'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Globe, Loader2, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
 
 export const Route = createFileRoute('/_authorized/schedule')({
   component: SchedulePage,
@@ -45,6 +45,13 @@ interface NormalizedSession {
 
 function isPast(isoDate: string, endTime: string): boolean {
   return new Date(`${isoDate}T${endTime}`) < new Date()
+}
+
+function toUiStatus(status: string): 'Upcoming' | 'Completed' {
+  if (status === 'COMPLETED' || status === 'CANCELED') {
+    return 'Completed'
+  }
+  return 'Upcoming'
 }
 
 function toIso(date: Date): string {
@@ -151,6 +158,7 @@ export function SchedulePage() {
     if (isMentor) {
       return mentorSlots.map(slot => {
         const profile = slot.bookedBy ? profilesByUsername[slot.bookedBy] : null
+        const fallbackStatus = isPast(slot.date, slot.endTime) ? 'COMPLETED' : 'SCHEDULED'
         return {
           id: slot.id,
           isoDate: slot.date,
@@ -160,7 +168,7 @@ export function SchedulePage() {
           peerUsername: slot.bookedBy ?? '',
           peerPicture: profile?.picture_url ?? null,
           peerTitle: null,
-          status: isPast(slot.date, slot.endTime) ? 'Completed' : 'Upcoming',
+          status: toUiStatus(slot.status ?? fallbackStatus),
         }
       })
     } else {
@@ -173,7 +181,7 @@ export function SchedulePage() {
         peerUsername: session.mentor.username,
         peerPicture: session.mentor.picture_url,
         peerTitle: session.mentor.title,
-        status: isPast(session.slot_date, session.slot_end_time) ? 'Completed' : 'Upcoming',
+        status: toUiStatus(session.status),
       }))
     }
   }, [isMentor, mentorSlots, profilesByUsername, menteeSessions])
@@ -300,7 +308,7 @@ export function SchedulePage() {
                                 <div
                                     key={event.id}
                                     className={`text-[10px] leading-tight px-1.5 py-1 rounded font-medium truncate ${
-                                        isPast(event.isoDate, event.endTime)
+                                  event.status === 'Completed'
                                             ? 'bg-gray-100 text-gray-600'
                                             : 'bg-green-100 text-green-800'
                                     }`}

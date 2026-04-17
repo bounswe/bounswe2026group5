@@ -24,6 +24,8 @@ type BackendRequestStatus = "PENDING" | "ACCEPTED" | "REJECTED";
 export interface DashboardSessionItem {
   id: string;
   requestId: string;
+  matchId?: string;
+  mentorUsername?: string;
   user: string;
   date: string;
   rawDate: string;
@@ -109,6 +111,38 @@ interface BackendUpcomingSession {
   booked_at: string;
 }
 
+type MeetingSessionRoleFilter = "mentor" | "mentee" | "all";
+type MeetingSessionStatusFilter =
+  | "upcoming"
+  | "past"
+  | "scheduled"
+  | "rescheduled"
+  | "canceled"
+  | "completed";
+
+interface BackendMeetingSession {
+  session_id: string;
+  match_id: string;
+  mentor: BackendProfileSummary;
+  mentee: BackendProfileSummary;
+  source_slot_id: string | null;
+  scheduled_start_at: string;
+  scheduled_end_at: string;
+  status: "SCHEDULED" | "RESCHEDULED" | "CANCELED" | "COMPLETED";
+  display_status: "SCHEDULED" | "RESCHEDULED" | "CANCELED" | "COMPLETED";
+  my_role: "MENTOR" | "MENTEE" | "UNKNOWN";
+  allowed_actions: string[];
+  canceled_by_role: "MENTOR" | "MENTEE" | null;
+  cancel_reason: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface MeetingSessionQueryParams {
+  role?: MeetingSessionRoleFilter;
+  status?: MeetingSessionStatusFilter;
+}
+
 interface BackendAvailabilitySlot {
   id: string;
   date: string;
@@ -155,6 +189,29 @@ function parseLocalDateTime(dateValue: string, timeValue: string): Date {
     Number(minutes),
     Number(seconds),
   );
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function toLocalIsoDate(value: string): string {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function toLocalIsoTime(value: string): string {
+  const date = new Date(value);
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+}
+
+function toDashboardSessionStatus(
+  status: BackendMeetingSession["display_status"],
+): DashboardSessionItem["status"] {
+  if (status === "COMPLETED" || status === "CANCELED") {
+    return "Completed";
+  }
+  return "Upcoming";
 }
 
 function toProposedDate(value: BackendMentorshipRequest): string | undefined {
@@ -279,6 +336,9 @@ export function useCancelSessionMutation(currentUsername?: string) {
           queryKey: ["mentorship", "sessions", "me", "upcoming"],
         }),
         queryClient.invalidateQueries({
+          queryKey: ["mentorship", "meeting-sessions", "me"],
+        }),
+        queryClient.invalidateQueries({
           queryKey: [
             "mentorship",
             "matches",
@@ -318,6 +378,9 @@ export function useRescheduleSessionMutation(currentUsername?: string) {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: ["mentorship", "sessions", "me", "upcoming"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "meeting-sessions", "me"],
         }),
         queryClient.invalidateQueries({
           queryKey: [
@@ -371,10 +434,58 @@ export function useDeactivateMatchMutation(currentUsername?: string) {
           queryKey: ["mentorship", "sessions", "me", "upcoming"],
         }),
         queryClient.invalidateQueries({
+          queryKey: ["mentorship", "meeting-sessions", "me"],
+        }),
+        queryClient.invalidateQueries({
           queryKey: ["profiles"],
         }),
       ]);
     },
+  });
+}
+
+/**
+ * Fetch canonical meeting sessions for the authenticated user.
+ */
+async function fetchMeetingSessions(
+  params: MeetingSessionQueryParams = {},
+): Promise<BackendMeetingSession[]> {
+  const query = new URLSearchParams();
+  if (params.role && params.role !== "all") {
+    query.set("role", params.role);
+  }
+  if (params.status) {
+    query.set("status", params.status);
+  }
+
+  const queryString = query.toString();
+  const suffix = queryString ? `?${queryString}` : "";
+
+  return apiGet<BackendMeetingSession[]>(
+    `/api/mentorship/meeting-sessions/me/${suffix}`,
+  );
+}
+
+/**
+ * Fetch canonical meeting sessions for mobile dashboard/schedule consumers.
+ */
+export function useMentorshipMeetingSessionsQuery(
+  currentUsername?: string,
+  params: MeetingSessionQueryParams = {},
+) {
+  return useQuery({
+    queryKey: [
+      "mentorship",
+      "meeting-sessions",
+      "me",
+      params.role ?? "all",
+      params.status ?? "all",
+      currentUsername ?? "anonymous",
+    ],
+    queryFn: () => fetchMeetingSessions(params),
+    enabled: Boolean(currentUsername),
+    refetchOnMount: "always",
+    staleTime: 60_000,
   });
 }
 
@@ -390,8 +501,22 @@ export function useMentorshipUpcomingSessionsQuery(currentUsername?: string) {
       "upcoming",
       currentUsername ?? "anonymous",
     ],
-    queryFn: () =>
-      apiGet<BackendUpcomingSession[]>("/api/mentorship/sessions/me/upcoming/"),
+    queryFn: async () => {
+      const sessions = await fetchMeetingSessions({
+        role: "mentee",
+        status: "upcoming",
+      });
+
+      return sessions.map((session) => ({
+        slot_id: session.source_slot_id ?? session.session_id,
+        mentor: session.mentor,
+        slot_date: toLocalIsoDate(session.scheduled_start_at),
+        slot_start_time: toLocalIsoTime(session.scheduled_start_at),
+        slot_end_time: toLocalIsoTime(session.scheduled_end_at),
+        status: "ACCEPTED" as BackendRequestStatus,
+        booked_at: session.created_at,
+      })) satisfies BackendUpcomingSession[];
+    },
     enabled: Boolean(currentUsername),
     refetchOnMount: "always",
     staleTime: 60_000,
@@ -462,6 +587,9 @@ export function useBookAvailabilitySlotMutation(currentUsername?: string) {
           ],
         }),
         queryClient.invalidateQueries({
+          queryKey: ["mentorship", "meeting-sessions", "me"],
+        }),
+        queryClient.invalidateQueries({
           queryKey: [
             "profiles",
             variables.mentorUsername,
@@ -502,6 +630,9 @@ export function useRespondToMentorshipRequestMutation() {
         }),
         queryClient.invalidateQueries({
           queryKey: ["mentorship", "sessions", "me", "upcoming"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "meeting-sessions", "me"],
         }),
       ]);
     },
@@ -717,6 +848,43 @@ export function mapMentorBookedSlotsToSessions(
         topic: "Mentorship Session",
         myRole: "Mentor" as "Mentor" | "Mentee",
         isSessionStarted: isStarted,
+      };
+    })
+    .sort(sortSessionsChronologically);
+}
+
+/**
+ * Build session cards from canonical meeting sessions endpoint.
+ */
+export function mapMeetingSessionsToDashboard(
+  sessions: BackendMeetingSession[],
+): DashboardSessionItem[] {
+  const now = new Date();
+
+  return sessions
+    .map((session) => {
+      const startAt = new Date(session.scheduled_start_at);
+      const endAt = new Date(session.scheduled_end_at);
+      const myRole: DashboardSessionItem["myRole"] =
+        session.my_role === "MENTOR" ? "Mentor" : "Mentee";
+      const peer =
+        session.my_role === "MENTOR" ? session.mentee : session.mentor;
+      const rawDate = toLocalIsoDate(session.scheduled_start_at);
+
+      return {
+        id: session.source_slot_id ?? session.session_id,
+        requestId: session.match_id,
+        matchId: session.match_id,
+        mentorUsername:
+          session.my_role === "MENTEE" ? session.mentor.username : undefined,
+        user: peer.display_name || peer.username,
+        date: SESSION_DATE_FORMATTER.format(startAt),
+        rawDate,
+        time: `${toDisplayTime(toLocalIsoTime(session.scheduled_start_at))} - ${toDisplayTime(toLocalIsoTime(session.scheduled_end_at))}`,
+        status: toDashboardSessionStatus(session.display_status),
+        topic: "Mentorship Session",
+        myRole,
+        isSessionStarted: now >= startAt && now <= endAt,
       };
     })
     .sort(sortSessionsChronologically);

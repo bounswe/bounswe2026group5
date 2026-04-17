@@ -44,6 +44,39 @@ export interface UpcomingSession { // for mentee
     booked_at: string
 }
 
+export type MeetingSessionRoleFilter = 'mentor' | 'mentee' | 'all'
+
+export type MeetingSessionStatusFilter =
+    | 'upcoming'
+    | 'past'
+    | 'scheduled'
+    | 'rescheduled'
+    | 'canceled'
+    | 'completed'
+
+export interface MeetingSession {
+    session_id: string
+    match_id: string
+    mentor: MatchUser
+    mentee: MatchUser
+    source_slot_id: string | null
+    scheduled_start_at: string
+    scheduled_end_at: string
+    status: 'SCHEDULED' | 'RESCHEDULED' | 'CANCELED' | 'COMPLETED'
+    display_status: 'SCHEDULED' | 'RESCHEDULED' | 'CANCELED' | 'COMPLETED'
+    my_role: 'MENTOR' | 'MENTEE' | 'UNKNOWN'
+    allowed_actions: string[]
+    canceled_by_role: 'MENTOR' | 'MENTEE' | null
+    cancel_reason: string
+    created_at: string
+    updated_at: string
+}
+
+interface MeetingSessionQueryParams {
+    role?: MeetingSessionRoleFilter
+    status?: MeetingSessionStatusFilter
+}
+
 // ---- Fetchers ----
 
 async function fetchMyMatches(): Promise<Match[]> {
@@ -95,13 +128,57 @@ async function respondToRequest(requestId: string, action: 'accept' | 'reject'):
     return res.json()
 }
 
-async function fetchUpcomingSessions(): Promise<UpcomingSession[]> {
+function withAuthHeaders(): HeadersInit {
     const token = localStorage.getItem('access_token')
-    const res = await fetch(`${API_BASE_URL}/mentorship/sessions/me/upcoming/`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+    return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+function pad2(value: number): string {
+    return String(value).padStart(2, '0')
+}
+
+function toLocalDate(value: string): string {
+    const date = new Date(value)
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+}
+
+function toLocalTime(value: string): string {
+    const date = new Date(value)
+    return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
+}
+
+async function fetchMeetingSessions(params: MeetingSessionQueryParams = {}): Promise<MeetingSession[]> {
+    const query = new URLSearchParams()
+    if (params.role && params.role !== 'all') {
+        query.set('role', params.role)
+    }
+    if (params.status) {
+        query.set('status', params.status)
+    }
+
+    const queryString = query.toString()
+    const suffix = queryString ? `?${queryString}` : ''
+    const url = `${API_BASE_URL}/mentorship/meeting-sessions/me/${suffix}`
+
+    const res = await fetch(url, {
+        headers: withAuthHeaders(),
     })
-    if (!res.ok) throw new Error('Failed to fetch upcoming sessions')
+    if (!res.ok) throw new Error('Failed to fetch meeting sessions')
     return res.json()
+}
+
+async function fetchUpcomingSessions(): Promise<UpcomingSession[]> {
+    const sessions = await fetchMeetingSessions({ role: 'mentee', status: 'upcoming' })
+
+    return sessions.map((session) => ({
+        slot_id: session.source_slot_id ?? session.session_id,
+        mentor: session.mentor,
+        slot_date: toLocalDate(session.scheduled_start_at),
+        slot_start_time: toLocalTime(session.scheduled_start_at),
+        slot_end_time: toLocalTime(session.scheduled_end_at),
+        status: session.display_status,
+        booked_at: session.created_at,
+    }))
 }
 
 
@@ -119,6 +196,20 @@ export const myRequestsQueryOptions = queryOptions({
     staleTime: 2 * 60 * 1000,
     gcTime: Infinity,
 })
+
+export const meetingSessionsQueryOptions = (params: MeetingSessionQueryParams = {}) =>
+    queryOptions({
+        queryKey: [
+            'mentorship',
+            'meeting-sessions',
+            'me',
+            params.role ?? 'all',
+            params.status ?? 'all',
+        ],
+        queryFn: () => fetchMeetingSessions(params),
+        staleTime: 30 * 1000,
+        gcTime: Infinity,
+    })
 
 export const upcomingSessionsQueryOptions = queryOptions({
     queryKey: ['mentorship', 'sessions', 'upcoming'],
@@ -147,6 +238,10 @@ export function useRespondToRequest() {
         mutationFn: ({ requestId, action }: { requestId: string; action: 'accept' | 'reject' }) =>
             respondToRequest(requestId, action),
     })
+}
+
+export function useMeetingSessions(params: MeetingSessionQueryParams = {}) {
+    return useQuery(meetingSessionsQueryOptions(params))
 }
 
 export function useUpcomingSessions() {

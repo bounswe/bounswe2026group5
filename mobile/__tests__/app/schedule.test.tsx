@@ -4,9 +4,7 @@ import React from "react";
 import { Alert } from "react-native";
 import { act } from "react-test-renderer";
 
-const mockMentorshipRequestsQuery = jest.fn();
-const mockMentorshipMatchesQuery = jest.fn();
-const mockMentorshipUpcomingSessionsQuery = jest.fn();
+const mockMeetingSessionsQuery = jest.fn();
 const mockCancelSessionMutation = jest.fn();
 const mockRescheduleSessionMutation = jest.fn();
 const mockSubmitFeedbackMutation = jest.fn();
@@ -41,11 +39,8 @@ jest.mock("@/lib/queries/mentorship", () => {
   );
   return {
     ...actual,
-    useMentorshipRequestsQuery: () => mockMentorshipRequestsQuery(),
-    useMentorshipMatchesQuery: () => mockMentorshipMatchesQuery(),
-    useMentorshipUpcomingSessionsQuery: () =>
-      mockMentorshipUpcomingSessionsQuery(),
-    useAvailabilitySlotsQuery: () => ({ data: [], isLoading: false }), // Added
+    useMentorshipMeetingSessionsQuery: () => mockMeetingSessionsQuery(),
+    useAvailabilitySlotsQuery: () => ({ data: [], isLoading: false }),
     useCancelSessionMutation: () => ({
       mutateAsync: mockCancelSessionMutation,
       isPending: false,
@@ -59,7 +54,6 @@ jest.mock("@/lib/queries/mentorship", () => {
       isPending: false,
     }),
     useRespondToMentorshipRequestMutation: () => ({
-      // <-- THIS WAS MISSING
       mutateAsync: jest.fn(),
       isPending: false,
     }),
@@ -84,22 +78,32 @@ describe("ScheduleScreen", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
-    mockMentorshipRequestsQuery.mockReturnValue({ data: [] });
-    mockMentorshipMatchesQuery.mockReturnValue({ data: [] });
-
-    mockMentorshipUpcomingSessionsQuery.mockReturnValue({
+    mockMeetingSessionsQuery.mockReturnValue({
       data: [
         {
-          slot_id: "slot-1",
+          session_id: "session-1",
+          match_id: "match-1",
+          source_slot_id: "slot-1",
           mentor: {
             id: "mentor-1",
             username: "mentor_ada",
             display_name: "Ada Lovelace",
           },
-          slot_date: today,
-          slot_start_time: "09:00:00",
-          slot_end_time: "10:00:00",
-          status: "ACCEPTED",
+          mentee: {
+            id: "mentee-1",
+            username: "student",
+            display_name: "Student",
+          },
+          scheduled_start_at: `${today}T09:00:00`,
+          scheduled_end_at: `${today}T10:00:00`,
+          status: "SCHEDULED",
+          display_status: "SCHEDULED",
+          my_role: "MENTEE",
+          allowed_actions: ["cancel", "reschedule"],
+          canceled_by_role: null,
+          cancel_reason: "",
+          created_at: `${today}T08:00:00`,
+          updated_at: `${today}T08:00:00`,
         },
       ],
     });
@@ -128,15 +132,32 @@ describe("ScheduleScreen", () => {
 
   it("handles the Leave Feedback transition from the modal", async () => {
     jest.setSystemTime(new Date(2026, 3, 17, 12, 0, 0));
-    mockMentorshipUpcomingSessionsQuery.mockReturnValue({
+    mockMeetingSessionsQuery.mockReturnValue({
       data: [
         {
-          slot_id: "slot-past",
-          mentor: { username: "mentor_ada", display_name: "Ada Lovelace" },
-          slot_date: today,
-          slot_start_time: "09:00:00",
-          slot_end_time: "10:00:00",
-          status: "ACCEPTED",
+          session_id: "session-past",
+          match_id: "match-past",
+          source_slot_id: "slot-past",
+          mentor: {
+            id: "mentor-1",
+            username: "mentor_ada",
+            display_name: "Ada Lovelace",
+          },
+          mentee: {
+            id: "mentee-1",
+            username: "student",
+            display_name: "Student",
+          },
+          scheduled_start_at: `${today}T09:00:00`,
+          scheduled_end_at: `${today}T10:00:00`,
+          status: "COMPLETED",
+          display_status: "COMPLETED",
+          my_role: "MENTEE",
+          allowed_actions: [],
+          canceled_by_role: null,
+          cancel_reason: "",
+          created_at: `${today}T08:00:00`,
+          updated_at: `${today}T08:00:00`,
         },
       ],
     });

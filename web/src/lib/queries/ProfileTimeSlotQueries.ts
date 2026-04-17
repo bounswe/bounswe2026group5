@@ -1,5 +1,5 @@
-import { profileQueryOptions } from "#/lib/queries/ProfileQueries.ts";
-import { queryOptions, useMutation, useQueries, useQuery } from "@tanstack/react-query";
+import { useMeetingSessions } from "#/lib/queries/MentorshipQueries.ts";
+import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -15,6 +15,7 @@ export interface AvailabilitySlot {
     bookedAt: string | null
     created_at: string
     updated_at: string
+    status?: 'SCHEDULED' | 'RESCHEDULED' | 'CANCELED' | 'COMPLETED'
 }
 
 export interface CreateSlotBody {
@@ -65,6 +66,20 @@ async function cancelBooking(username: string, slotId: string): Promise<void> {
     if (!res.ok) throw new Error('Failed to cancel booking')
 }
 
+function pad2(value: number): string {
+    return String(value).padStart(2, '0')
+}
+
+function toLocalDate(value: string): string {
+    const date = new Date(value)
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+}
+
+function toLocalTime(value: string): string {
+    const date = new Date(value)
+    return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
+}
+
 
 // ---- Hooks ----
 
@@ -93,45 +108,48 @@ export function useCancelBooking(username: string) {
     })
 }
 
-export function useMentorUpcomingSessions(username: string) {
-    const { data: allSlots = [], isLoading: slotsLoading } = useAvailabilitySlots(username)
-
-    console.log('allSlots:', allSlots)
-    console.log('username:', username)
-
-    const in7Days = new Date()
-    in7Days.setDate(in7Days.getDate() + 7)
-
-    const upcomingBookedSlots = allSlots
-        .filter(slot => {
-            if (!slot.is_booked || !slot.bookedBy) return false
-            const slotDateTime = new Date(`${slot.date}T${slot.startTime}`)
-            return slotDateTime >= new Date() && slotDateTime <= in7Days
-        })
-        .sort((a, b) => a.date.localeCompare(b.date))
-
-    console.log('upcomingBookedSlots:', upcomingBookedSlots)
-    const uniqueMenteeUsernames = [...new Set(
-        upcomingBookedSlots.map(s => s.bookedBy).filter(Boolean) as string[]
-    )]
-
-    const profileQueries = useQueries({
-        queries: uniqueMenteeUsernames.map(u => ({
-            ...profileQueryOptions(u),
-            enabled: !!u,
-        })),
+export function useMentorUpcomingSessions(_username: string) {
+    const { data: sessions = [], isLoading } = useMeetingSessions({
+        role: 'mentor',
+        status: 'upcoming',
     })
 
-    const profilesByUsername: Record<string, any> = Object.fromEntries(
-        profileQueries
-            .map((q, i) => [uniqueMenteeUsernames[i], q.data])
-            .filter(([, data]) => !!data)
+    const normalizedSessions: AvailabilitySlot[] = sessions.map((session) => ({
+        id: session.source_slot_id ?? session.session_id,
+        date: toLocalDate(session.scheduled_start_at),
+        startTime: toLocalTime(session.scheduled_start_at),
+        endTime: toLocalTime(session.scheduled_end_at),
+        is_booked: true,
+        bookedBy: session.mentee.username,
+        bookedAt: session.created_at,
+        created_at: session.created_at,
+        updated_at: session.updated_at,
+        status: session.display_status,
+    }))
+
+    const profilesByUsername: Record<string, {
+        username: string
+        full_name: string
+        display_name: string
+        picture_url: string
+        title: string
+    }> = Object.fromEntries(
+        sessions.map((session) => [
+            session.mentee.username,
+            {
+                username: session.mentee.username,
+                full_name: session.mentee.display_name,
+                display_name: session.mentee.display_name,
+                picture_url: session.mentee.picture_url,
+                title: session.mentee.title,
+            },
+        ]),
     )
 
     return {
-        sessions: upcomingBookedSlots,
+        sessions: normalizedSessions,
         profilesByUsername,
-        isLoading: slotsLoading || profileQueries.some(q => q.isLoading),
+        isLoading,
     }
 }
 
