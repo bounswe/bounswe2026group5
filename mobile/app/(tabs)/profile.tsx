@@ -30,16 +30,14 @@ import {
 } from "@/lib/queries/profile";
 
 const PROFILE_DEFAULTS = {
-  expertise: [] as string[],
-  eagerToLearn: [] as string[],
+  skills: [] as string[],
 };
 
 interface OwnProfileResponse {
   full_name: string;
   bio: string;
   picture_url: string;
-  expertises?: string[];
-  eager_to_learn?: string[];
+  skills?: string[];
 }
 
 export default function ProfileScreen() {
@@ -69,11 +67,8 @@ export default function ProfileScreen() {
   );
 
   const [menteesCount, setMenteesCount] = useState<number>(0);
-  const [expertiseData, setExpertiseData] = useState<string[]>(
-    PROFILE_DEFAULTS.expertise,
-  );
-  const [eagerToLearnData, setEagerToLearnData] = useState<string[]>(
-    PROFILE_DEFAULTS.eagerToLearn,
+  const [skillsData, setSkillsData] = useState<string[]>(
+    PROFILE_DEFAULTS.skills,
   );
 
   const [userData, setUserData] = useState<UserProfileData>({
@@ -92,10 +87,9 @@ export default function ProfileScreen() {
   const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
 
-  const hasExpertiseData = expertiseData.length > 0;
-  const hasEagerToLearnData = eagerToLearnData.length > 0;
-  const isMentorMode = appUsageMode === "MENTOR" || hasExpertiseData;
-  const isMenteeMode = appUsageMode === "MENTEE" || hasEagerToLearnData;
+  const hasSkillsData = skillsData.length > 0;
+  const isMentorMode = appUsageMode === "MENTOR" || hasSkillsData;
+  const isMenteeMode = appUsageMode === "MENTEE" || hasSkillsData;
 
   useEffect(() => {
     let mounted = true;
@@ -130,13 +124,7 @@ export default function ProfileScreen() {
           bio: payload.bio || "",
         }));
 
-        if (Array.isArray(payload.expertises)) {
-          setExpertiseData(payload.expertises);
-        }
-
-        if (Array.isArray(payload.eager_to_learn)) {
-          setEagerToLearnData(payload.eager_to_learn);
-        }
+        setSkillsData(payload.skills ?? []);
       })
       .catch(() => {
         if (!mounted) {
@@ -267,11 +255,7 @@ export default function ProfileScreen() {
     variant: "mentor" | "mentee",
     nextSkills: string[],
   ) => {
-    if (variant === "mentor") {
-      setExpertiseData(nextSkills);
-    } else {
-      setEagerToLearnData(nextSkills);
-    }
+    setSkillsData(nextSkills);
 
     if (!currentUsername) {
       return;
@@ -280,9 +264,7 @@ export default function ProfileScreen() {
     try {
       await updateProfileMutation.mutateAsync({
         username: currentUsername,
-        ...(variant === "mentor"
-          ? { expertises: nextSkills }
-          : { eager_to_learn: nextSkills }),
+        skills: nextSkills,
       });
     } catch (error) {
       Alert.alert(
@@ -346,44 +328,23 @@ export default function ProfileScreen() {
 
         <View className="px-4 mt-4">
           <View className="mb-6">
-            {isMentorMode && showExpertise && (
+            {(isMentorMode || isMenteeMode) && (showExpertise || showEagerToLearn) && (
               <SkillsCloud
-                title="Expertise"
-                skills={expertiseData}
-                variant="mentor"
+                title="Skills"
+                skills={skillsData}
+                variant={isMentorMode ? "mentor" : "mentee"}
                 onEdit={() =>
                   openEditModal(
-                    "Expertise",
-                    expertiseData,
-                    "mentor",
+                    "Skills",
+                    skillsData,
+                    isMentorMode ? "mentor" : "mentee",
                     (newSkills) => {
-                      void handleSaveSkills("mentor", newSkills);
+                      void handleSaveSkills(isMentorMode ? "mentor" : "mentee", newSkills);
                     },
                   )
                 }
                 onViewAll={() =>
-                  openSkillsModal("Expertise", expertiseData, "mentor")
-                }
-              />
-            )}
-
-            {isMenteeMode && showEagerToLearn && (
-              <SkillsCloud
-                title="Eager to Learn"
-                skills={eagerToLearnData}
-                variant="mentee"
-                onEdit={() =>
-                  openEditModal(
-                    "Eager to Learn",
-                    eagerToLearnData,
-                    "mentee",
-                    (newSkills) => {
-                      void handleSaveSkills("mentee", newSkills);
-                    },
-                  )
-                }
-                onViewAll={() =>
-                  openSkillsModal("Eager to Learn", eagerToLearnData, "mentee")
+                  openSkillsModal("Skills", skillsData, isMentorMode ? "mentor" : "mentee")
                 }
               />
             )}

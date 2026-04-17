@@ -39,8 +39,7 @@ interface PublicProfileResponse {
   title: string;
   show_initials_only: boolean;
   app_usage_mode?: "MENTOR" | "MENTEE" | "BOTH";
-  expertises?: string[];
-  eager_to_learn?: string[];
+  skills?: string[];
   rating: number;
   total_mentee_count: number;
   available_slots?: {
@@ -209,8 +208,7 @@ function renderBodyContent({
     submitButtonLabel = "Send Request";
   }
 
-  const expertise = profile.expertises ?? [];
-  const eagerToLearn = profile.eager_to_learn ?? [];
+  const userSkills = profile.skills ?? [];
 
   return (
     <ScrollView
@@ -227,24 +225,13 @@ function renderBodyContent({
       />
 
       <View className="px-4 mt-4">
-        {isViewedMentor && (
+        {userSkills.length > 0 && (
           <SkillsCloud
-            title="Expertise"
-            skills={expertise}
+            title="Skills"
+            skills={userSkills}
             variant="mentor"
             onViewAll={() =>
-              onOpenSkillsModal("Expertise", expertise, "mentor")
-            }
-          />
-        )}
-
-        {isViewedMentee && (
-          <SkillsCloud
-            title="Eager to Learn"
-            skills={eagerToLearn}
-            variant="mentee"
-            onViewAll={() =>
-              onOpenSkillsModal("Eager to Learn", eagerToLearn, "mentee")
+              onOpenSkillsModal("Skills", userSkills, "mentor")
             }
           />
         )}
@@ -443,16 +430,15 @@ export default function MentorProfileScreen() {
     return groupSlotsByWeekday(normalized);
   }, [availabilitySlotsQuery.data, profile?.available_slots]);
 
-  const expertise = profile?.expertises ?? [];
-  const eagerToLearn = profile?.eager_to_learn ?? [];
+  const userSkills = profile?.skills ?? [];
 
   const isViewedMentor = useMemo(() => {
     if (includesMentor(profile?.app_usage_mode)) {
       return true;
     }
 
-    return expertise.length > 0 || availability.length > 0;
-  }, [profile?.app_usage_mode, expertise.length, availability.length]);
+    return userSkills.length > 0 || availability.length > 0;
+  }, [profile?.app_usage_mode, userSkills.length, availability.length]);
 
   const isViewedMentee = useMemo(() => {
     if (includesMentee(profile?.app_usage_mode)) {

@@ -223,7 +223,7 @@ function BookingModal({ slot, mentorUsername, isFirstTime, onClose, onSuccess }:
 
 export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: AvailabilityCalendarProps) {
     const { data: slots = [] } = useAvailabilitySlots(username)
-    const { data: myData, isSuccess } = useQuery(meQueryOptions)
+    const { data: myData } = useQuery(meQueryOptions)
     const queryClient = useQueryClient()
     const NOW_HOUR = new Date().getHours()
     const [weekOffset, setWeekOffset] = useState(0)

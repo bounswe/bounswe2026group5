@@ -12,7 +12,7 @@ export interface PublicMentorProfile {
     title: string
     location: string | null
     show_initials_only: boolean
-    expertises: string[]
+    skills: string[]
     rating: number
     total_mentee_count: number
 }

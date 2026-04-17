@@ -33,6 +33,7 @@ type ScheduleSession = {
   requestId: string;
   slotId: string;
   matchId?: string;
+  sessionId?: string;
   mentorUsername?: string;
   rawDate: string;
   date: string;
@@ -60,7 +61,7 @@ export default function ScheduleScreen() {
   const [selectedSession, setSelectedSession] =
     useState<ScheduleSession | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
-  const [rescheduleMatchId, setRescheduleMatchId] = useState<string | null>(
+  const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
   const [rescheduleMentorUsername, setRescheduleMentorUsername] = useState("");
@@ -93,10 +94,10 @@ export default function ScheduleScreen() {
     rescheduleMentorUsername,
   );
 
-  const handleSubmitReschedule = (matchId: string, newSlotId: string): void => {
+  const handleSubmitReschedule = (sessionId: string, newSlotId: string): void => {
     rescheduleSessionMutation
       .mutateAsync({
-        matchId,
+        sessionId,
         newSlotId,
       })
       .then(() => {
@@ -228,7 +229,7 @@ export default function ScheduleScreen() {
         visible={showRescheduleSheet}
         onClose={() => {
           setShowRescheduleSheet(false);
-          setRescheduleMatchId(null);
+          setRescheduleSessionId(null);
           setRescheduleMentorUsername("");
           setRescheduleCurrentSlotId("");
         }}
@@ -236,8 +237,8 @@ export default function ScheduleScreen() {
         isLoading={mentorAvailabilityForReschedule.isLoading}
         currentSlotId={rescheduleCurrentSlotId}
         onSelectSlot={(newSlotId) => {
-          if (rescheduleMatchId) {
-            handleSubmitReschedule(rescheduleMatchId, newSlotId);
+          if (rescheduleSessionId) {
+            handleSubmitReschedule(rescheduleSessionId, newSlotId);
           }
         }}
       />
@@ -250,7 +251,7 @@ export default function ScheduleScreen() {
           cancelSessionMutation.isPending || rescheduleSessionMutation.isPending
         }
         onCancelSession={() => {
-          if (!selectedSession?.matchId) {
+          if (!selectedSession?.sessionId) {
             Alert.alert(
               "Cannot Cancel",
               "Could not resolve this session's match. Please refresh and try again.",
@@ -259,7 +260,7 @@ export default function ScheduleScreen() {
           }
 
           cancelSessionMutation
-            .mutateAsync(selectedSession.matchId)
+            .mutateAsync(selectedSession.sessionId)
             .then(() => {
               setSelectedSession(null);
               Alert.alert("Session Cancelled", "The session was cancelled.");
@@ -283,7 +284,7 @@ export default function ScheduleScreen() {
 
           const mentorUsername = selectedSession.mentorUsername;
 
-          if (!selectedSession.matchId || !mentorUsername) {
+          if (!selectedSession.sessionId || !mentorUsername) {
             Alert.alert(
               "Cannot Reschedule",
               "Could not resolve session details. Please refresh and try again.",
@@ -291,7 +292,7 @@ export default function ScheduleScreen() {
             return;
           }
 
-          setRescheduleMatchId(selectedSession.matchId);
+          setRescheduleSessionId(selectedSession.sessionId);
           setRescheduleMentorUsername(mentorUsername);
           setRescheduleCurrentSlotId(selectedSession.slotId);
           setShowRescheduleSheet(true);

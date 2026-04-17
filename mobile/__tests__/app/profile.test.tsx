@@ -70,8 +70,7 @@ describe("ProfileScreen Layout", () => {
       json: async () => ({
         full_name: "Ali Aydin",
         bio: "Profile bio",
-        expertises: ["React"],
-        eager_to_learn: ["Testing"],
+        skills: ["React", "Testing"],
       }),
     }) as unknown as typeof fetch;
 
@@ -81,8 +80,7 @@ describe("ProfileScreen Layout", () => {
         json: async () => ({
           full_name: "Ali Aydin",
           bio: "Profile bio",
-          expertises: ["React"],
-          eager_to_learn: ["Testing"],
+          skills: ["React", "Testing"],
         }),
       })
       .mockResolvedValueOnce({
@@ -97,8 +95,6 @@ describe("ProfileScreen Layout", () => {
     await waitFor(() => {
       expect(getByText("Profile")).toBeTruthy();
       expect(getByText("Ali Aydin")).toBeTruthy();
-      expect(getByText("Expertise")).toBeTruthy();
-      expect(getByText("Eager to Learn")).toBeTruthy();
     });
   });
 

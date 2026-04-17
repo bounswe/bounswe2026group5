@@ -25,6 +25,7 @@ export interface DashboardSessionItem {
   id: string;
   requestId: string;
   matchId?: string;
+  sessionId?: string;
   mentorUsername?: string;
   user: string;
   date: string;
@@ -94,7 +95,7 @@ interface SubmitFeedbackPayload {
 }
 
 interface RescheduleSessionPayload {
-  matchId: string;
+  sessionId: string;
   newSlotId: string;
 }
 
@@ -326,9 +327,9 @@ export function useCancelSessionMutation(currentUsername?: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (matchId: string) =>
+    mutationFn: (sessionId: string) =>
       apiPost<BackendMentorshipRequest>(
-        `/api/mentorship/sessions/${encodeURIComponent(matchId)}/cancel/`,
+        `/api/mentorship/sessions/${encodeURIComponent(sessionId)}/cancel/`,
       ),
     onSuccess: async () => {
       await Promise.all([
@@ -366,9 +367,9 @@ export function useRescheduleSessionMutation(currentUsername?: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ matchId, newSlotId }: RescheduleSessionPayload) =>
+    mutationFn: ({ sessionId, newSlotId }: RescheduleSessionPayload) =>
       apiPost<BackendMentorshipRequest, { new_slot_id: string }>(
-        `/api/mentorship/sessions/${encodeURIComponent(matchId)}/reschedule/`,
+        `/api/mentorship/sessions/${encodeURIComponent(sessionId)}/reschedule/`,
         { new_slot_id: newSlotId },
       ),
     onSuccess: async () => {
@@ -829,6 +830,7 @@ export function mapMeetingSessionsToDashboard(
         id: session.source_slot_id ?? session.session_id,
         requestId: session.match_id,
         matchId: session.match_id,
+        sessionId: session.session_id,
         mentorUsername:
           session.my_role === "MENTEE" ? session.mentor.username : undefined,
         user: peer.display_name || peer.username,

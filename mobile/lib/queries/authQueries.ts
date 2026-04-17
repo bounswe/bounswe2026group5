@@ -99,8 +99,7 @@ export async function updateProfileFn(params: {
   accessToken: string;
   display_name: string;
   bio?: string;
-  expertises?: string[];
-  eager_to_learn?: string[];
+  skills?: string[];
 }): Promise<unknown> {
   const { accessToken, ...payload } = params;
 

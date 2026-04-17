@@ -28,7 +28,7 @@ export interface MenteeProfile {
     bio: string
     hidden: boolean
     picture_url: string
-    eager_to_learn: string[] | null
+    skills: string[] | null
 }
 
 export interface MentorProfile {
@@ -38,7 +38,7 @@ export interface MentorProfile {
     hidden: boolean
     picture_url: string
     title: string
-    expertises: string[] | null
+    skills: string[] | null
     rating: number
     total_mentee_count: number
     available_slots: AvailabilitySlot[]
@@ -59,8 +59,7 @@ export interface UpdateProfileBody {
     location?: string
     is_visible?: boolean
     show_initials_only?: boolean
-    expertises?: string[]
-    eager_to_learn?: string[]
+    skills?: string[]
 }
 
 // ---- Fetchers ----

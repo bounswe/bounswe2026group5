@@ -540,7 +540,8 @@ class MeetingSessionPhaseTwoTests(MentorshipRequestAPIBaseTestCase):
         self.mentor_client.post(self._respond_url(request_obj.id), {"action": "accept"})
 
         match = Match.objects.get(request=request_obj)
-        cancel_url = f"/api/mentorship/sessions/{match.id}/cancel/"
+        session = MeetingSession.objects.get(match=match)
+        cancel_url = f"/api/mentorship/sessions/{session.id}/cancel/"
         response = self.mentee_client.post(cancel_url)
         self.assertEqual(response.status_code, 200)
 
@@ -554,7 +555,8 @@ class MeetingSessionPhaseTwoTests(MentorshipRequestAPIBaseTestCase):
         self.mentor_client.post(self._respond_url(request_obj.id), {"action": "accept"})
 
         match = Match.objects.get(request=request_obj)
-        reschedule_url = f"/api/mentorship/sessions/{match.id}/reschedule/"
+        session = MeetingSession.objects.get(match=match)
+        reschedule_url = f"/api/mentorship/sessions/{session.id}/reschedule/"
         response = self.mentee_client.post(
             reschedule_url,
             {"new_slot_id": str(self.second_slot.id)},

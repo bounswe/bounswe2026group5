@@ -11,7 +11,6 @@ from .views import (
     MyAvailabilitySlotDetailAPIView,
     MyAvailabilitySlotListCreateAPIView,
     PopularMentorsListAPIView,
-    ProfileByUsernameAPIView,
     ProfileMeAPIView,
     PublicMentorProfilesSearchListAPIView,
     RecentlyAddedMentorsListAPIView,
@@ -63,5 +62,4 @@ urlpatterns = [
         MentorPublicRatingAPIView.as_view(),
         name="mentor-public-rating",
     ),
-    path("<str:username>/", ProfileByUsernameAPIView.as_view(), name="profile-by-username"),
 ]

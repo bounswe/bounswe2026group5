@@ -151,8 +151,7 @@ function RouteComponent() {
                         {
                             display_name: `${answers.firstName} ${answers.lastName}`.trim(),
                             bio: answers.bio,
-                            expertises: answers.primaryUsage === 'mentor' ? skills : undefined,
-                            eager_to_learn: answers.primaryUsage === 'mentee' ? skills : undefined,
+                            skills: skills,
                         },
                         {
                             onSuccess: () => {

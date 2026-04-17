@@ -12,7 +12,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode
 from mentorship.models import MentorshipRequest
-from profiles.models import AvailabilitySlot, ExpertiseField, Profile, ProfileExpertise, Skill
+from profiles.models import AvailabilitySlot, Profile, Skill
 
 User: Any = get_user_model()
 
@@ -42,10 +42,7 @@ class ProfileModelsTests(TestCase):
             display_name="Mentee User",
         )
 
-        self.python_expertise, _ = ExpertiseField.objects.get_or_create(
-            name="Python/Django",
-            defaults={"description": "Backend development"},
-        )
+
 
     def test_profile_skills_array(self) -> None:
         """Profile can store skills as a list of strings."""
@@ -81,59 +78,7 @@ class ProfileModelsTests(TestCase):
         self.assertEqual(first_profile.username, "sam")
         self.assertEqual(second_profile.username, "sam_1")
 
-    def test_profile_expertise_unique_per_profile(self) -> None:
-        """Same expertise cannot be inserted twice for the same profile."""
-        ProfileExpertise.objects.create(
-            profile=self.mentor_profile,
-            expertise_field=self.python_expertise,
-            proficiency_level=4,
-        )
 
-        with self.assertRaises(IntegrityError):
-            with transaction.atomic():
-                ProfileExpertise.objects.create(
-                    profile=self.mentor_profile,
-                    expertise_field=self.python_expertise,
-                    proficiency_level=3,
-                )
-
-    def test_profile_expertise_proficiency_level_constraint(self) -> None:
-        """Proficiency level must be within the configured range."""
-        with self.assertRaises(IntegrityError):
-            with transaction.atomic():
-                ProfileExpertise.objects.create(
-                    profile=self.mentor_profile,
-                    expertise_field=self.python_expertise,
-                    proficiency_level=6,
-                )
-
-    def test_profile_expertise_update_rating(self) -> None:
-        """Rating helper updates average rating and count correctly."""
-        profile_expertise = ProfileExpertise.objects.create(
-            profile=self.mentor_profile,
-            expertise_field=self.python_expertise,
-            proficiency_level=5,
-        )
-
-        profile_expertise.update_rating(4)
-        profile_expertise.refresh_from_db()
-        self.assertEqual(profile_expertise.rating_count, 1)
-        self.assertEqual(float(profile_expertise.average_rating), 4)
-
-        profile_expertise.update_rating(2)
-        profile_expertise.refresh_from_db()
-        self.assertEqual(profile_expertise.rating_count, 2)
-        self.assertEqual(float(profile_expertise.average_rating), 3)
-
-    def test_profile_expertise_update_rating_rejects_out_of_range(self) -> None:
-        """Rating helper rejects ratings outside the 0 to 5 range."""
-        profile_expertise = ProfileExpertise.objects.create(
-            profile=self.mentor_profile,
-            expertise_field=self.python_expertise,
-        )
-
-        with self.assertRaises(ValueError):
-            profile_expertise.update_rating(5.5)
 
     def test_availability_slot_end_after_start_constraint(self) -> None:
         """Availability slot end time must be after start time."""

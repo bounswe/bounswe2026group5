@@ -63,8 +63,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                 bio,
                 title: isMentor ? title : undefined,
                 is_visible: !hidden,
-                expertises: isMentor ? skills : undefined,
-                eager_to_learn: !isMentor ? skills : undefined,
+                skills: skills,
             },
             {
                 onSuccess: () => {

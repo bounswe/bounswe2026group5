@@ -108,8 +108,8 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="display_name", read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
     picture_url = serializers.URLField(read_only=True)
-    eager_to_learn = serializers.ListField(
-        child=serializers.CharField(), source="skills", read_only=True
+    skills = serializers.ListField(
+        child=serializers.CharField(), read_only=True
     )
 
     class Meta:
@@ -120,7 +120,7 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
             "bio",
             "hidden",
             "picture_url",
-            "eager_to_learn",
+            "skills",
         )
         read_only_fields = fields
 
@@ -138,8 +138,8 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     title = serializers.CharField(read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
     picture_url = serializers.URLField(read_only=True)
-    expertises = serializers.ListField(
-        child=serializers.CharField(), source="skills", read_only=True
+    skills = serializers.ListField(
+        child=serializers.CharField(), read_only=True
     )
     rating = serializers.IntegerField(read_only=True)
     total_mentee_count = serializers.IntegerField(read_only=True)
@@ -154,7 +154,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
             "bio",
             "hidden",
             "picture_url",
-            "expertises",
+            "skills",
             "rating",
             "total_mentee_count",
             "available_slots",
@@ -205,15 +205,9 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
     """Partial update serializer for authenticated user's profile."""
 
     location = LocationField(required=False, allow_null=True)
-    eager_to_learn = serializers.ListField(
+    skills = serializers.ListField(
         child=serializers.CharField(),
         required=False,
-        write_only=True,
-    )
-    expertises = serializers.ListField(
-        child=serializers.CharField(),
-        required=False,
-        write_only=True,
     )
 
     class Meta:
@@ -226,8 +220,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
             "location",
             "is_visible",
             "show_initials_only",
-            "eager_to_learn",
-            "expertises",
+            "skills",
         )
 
     def validate(self, attrs: dict) -> dict:
@@ -237,32 +230,12 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
             return attrs
 
         user_mode = profile.user.app_usage_mode
-        has_eager_to_learn = "eager_to_learn" in attrs
-        has_expertises = "expertises" in attrs
-
-        if has_eager_to_learn and user_mode != AppUsageMode.MENTEE:
-            raise serializers.ValidationError(
-                {"eager_to_learn": "Only mentee profiles can update eager_to_learn."}
-            )
-
-        if has_expertises and user_mode != AppUsageMode.MENTOR:
-            raise serializers.ValidationError(
-                {"expertises": "Only mentor profiles can update expertises."}
-            )
+        has_skills = "skills" in attrs
 
         return attrs
 
     def update(self, instance: Profile, validated_data: dict) -> Profile:
-        """Apply partial updates and map role aliases to the shared skills field."""
-        eager_to_learn = validated_data.pop("eager_to_learn", None)
-        expertises = validated_data.pop("expertises", None)
-
-        if eager_to_learn is not None:
-            validated_data["skills"] = eager_to_learn
-
-        if expertises is not None:
-            validated_data["skills"] = expertises
-
+        """Apply partial updates."""
         return super().update(instance, validated_data)
 
 
@@ -352,8 +325,8 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     username = serializers.CharField(read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
-    expertises = serializers.ListField(
-        child=serializers.CharField(), source="skills", read_only=True
+    skills = serializers.ListField(
+        child=serializers.CharField(), read_only=True
     )
     picture_url = serializers.URLField(read_only=True)
     location = LocationField(read_only=True)
@@ -371,7 +344,7 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
             "title",
             "location",
             "show_initials_only",
-            "expertises",
+            "skills",
             "rating",
             "total_mentee_count",
         )

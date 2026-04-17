@@ -348,17 +348,18 @@ class CancelSessionAPIView(APIView):
         ),
         tags=["Mentorship"],
     )
-    def post(self, request: Request, match_id: str) -> Response:
+    def post(self, request: Request, session_id: str) -> Response:
         try:
             profile = Profile.objects.get(user=request.user)
         except Profile.DoesNotExist:
             return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            match = Match.objects.select_related("mentor", "mentee", "request__slot").get(
-                id=match_id, is_active=True
+            session = MeetingSession.objects.select_related("match__mentor", "match__mentee", "match__request__slot").get(
+                id=session_id, match__is_active=True
             )
-        except Match.DoesNotExist:
+            match = session.match
+        except MeetingSession.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
         if profile not in (match.mentor, match.mentee):
@@ -412,17 +413,18 @@ class RescheduleSessionAPIView(APIView):
         ),
         tags=["Mentorship"],
     )
-    def post(self, request: Request, match_id: str) -> Response:
+    def post(self, request: Request, session_id: str) -> Response:
         try:
             profile = Profile.objects.get(user=request.user)
         except Profile.DoesNotExist:
             return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            match = Match.objects.select_related("mentor", "mentee", "request__slot").get(
-                id=match_id, is_active=True
+            session = MeetingSession.objects.select_related("match__mentor", "match__mentee", "match__request__slot").get(
+                id=session_id, match__is_active=True
             )
-        except Match.DoesNotExist:
+            match = session.match
+        except MeetingSession.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
         if profile != match.mentee:

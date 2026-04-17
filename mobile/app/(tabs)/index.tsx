@@ -64,7 +64,7 @@ export default function DashboardScreen() {
   const [selectedSession, setSelectedSession] =
     useState<DashboardSessionItem | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
-  const [rescheduleMatchId, setRescheduleMatchId] = useState<string | null>(
+  const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
   const [rescheduleSessionMentorUsername, setRescheduleSessionMentorUsername] =
@@ -115,12 +115,12 @@ export default function DashboardScreen() {
   };
 
   const handleCancelSession = async () => {
-    if (!selectedSession?.matchId) {
+    if (!selectedSession?.sessionId) {
       return;
     }
 
     try {
-      await cancelSessionMutation.mutateAsync(selectedSession.matchId);
+      await cancelSessionMutation.mutateAsync(selectedSession.sessionId);
       setSelectedSession(null);
       Alert.alert("Session Cancelled", "The session was cancelled.");
     } catch (error) {
@@ -139,7 +139,7 @@ export default function DashboardScreen() {
       return;
     }
 
-    if (!selectedSession.matchId || !selectedMentorUsername) {
+    if (!selectedSession.sessionId || !selectedMentorUsername) {
       Alert.alert(
         "Cannot Reschedule",
         "Could not resolve session details. Please refresh and try again.",
@@ -147,7 +147,7 @@ export default function DashboardScreen() {
       return;
     }
 
-    setRescheduleMatchId(selectedSession.matchId);
+    setRescheduleSessionId(selectedSession.sessionId);
     setRescheduleSessionMentorUsername(selectedMentorUsername);
     setRescheduleCurrentSlotId(selectedSession.id);
     setShowRescheduleSheet(true);
@@ -278,7 +278,7 @@ export default function DashboardScreen() {
         visible={showRescheduleSheet}
         onClose={() => {
           setShowRescheduleSheet(false);
-          setRescheduleMatchId(null);
+          setRescheduleSessionId(null);
           setRescheduleSessionMentorUsername(null);
           setRescheduleCurrentSlotId("");
         }}
@@ -286,10 +286,10 @@ export default function DashboardScreen() {
         isLoading={mentorAvailabilityForReschedule.isLoading}
         currentSlotId={rescheduleCurrentSlotId}
         onSelectSlot={(newSlotId: string) => {
-          if (rescheduleMatchId) {
+          if (rescheduleSessionId) {
             rescheduleSessionMutation
               .mutateAsync({
-                matchId: rescheduleMatchId,
+                sessionId: rescheduleSessionId,
                 newSlotId,
               })
               .then(() => {

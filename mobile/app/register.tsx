@@ -126,9 +126,7 @@ export default function RegisterScreen() {
         accessToken: pendingUser.accessToken,
         display_name: params.displayName,
         bio: params.bio.trim() || undefined,
-        ...(role === "mentor"
-          ? { expertises: params.selectedSkills }
-          : { eager_to_learn: params.selectedSkills }),
+        skills: params.selectedSkills,
       });
     },
     onSuccess: () => {

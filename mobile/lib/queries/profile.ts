@@ -6,8 +6,7 @@ interface UpdateProfilePayload {
   username: string;
   display_name?: string;
   bio?: string;
-  expertises?: string[];
-  eager_to_learn?: string[];
+  skills?: string[];
 }
 
 interface ProfilePatchResponse {

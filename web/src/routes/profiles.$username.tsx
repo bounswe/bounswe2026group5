@@ -65,7 +65,7 @@ function PublicProfileRoute() {
             hidden: profile.hidden,
             picture_url: profile.picture_url,
             title: profile.title,
-            expertises: profile.expertises ?? [],
+            skills: profile.skills ?? [],
             rating: profile.rating,
             total_mentee_count: profile.total_mentee_count,
             available_slots: profile.available_slots ?? [],
@@ -77,7 +77,7 @@ function PublicProfileRoute() {
             bio: profile.bio,
             hidden: profile.hidden,
             picture_url: profile.picture_url,
-            expertises: profile.eager_to_learn ?? [],
+            skills: profile.skills ?? [],
             username: username
         }
 

@@ -54,7 +54,7 @@ export function MentorCard({ profile, onPress }: Readonly<MentorCardProps>) {
       </Text>
 
       <View className="flex-row flex-wrap gap-2">
-        {(profile.expertises || []).slice(0, 4).map((skill) => (
+        {(profile.skills || []).slice(0, 4).map((skill) => (
           <View
             key={skill}
             className="px-2 py-1 bg-surface-active dark:bg-surface-active-dark rounded-lg border border-divider dark:border-divider-dark"

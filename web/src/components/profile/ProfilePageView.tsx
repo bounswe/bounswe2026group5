@@ -13,7 +13,7 @@ interface BaseMappedProfile {
   bio: string
   hidden: boolean
   picture_url: string
-  expertises: string[]
+  skills: string[]
   username: string,
 }
 
@@ -114,7 +114,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
             bio: profile.bio ?? '',
             title: profile.isMentor ? profile.title : undefined,
             hidden: profile.hidden,
-            skills: profile.expertises,
+            skills: profile.skills,
           }}
           onClose={() => setEditOpen(false)}
       />
@@ -138,17 +138,12 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                   <CardContent>
                     {isHidden ? (
                         <HiddenField label="Learning interests" />
-                    ) : profile.expertises.length === 0 ? (
-                        <Muted>No learning interests listed yet.</Muted>
+                    ) : profile.skills.length === 0 ? (
+                        <p className="text-gray-500 italic">No skills listed</p>
                     ) : (
                         <div className="flex flex-wrap gap-2">
-                          {profile.expertises.map(skill => (
-                              <span
-                                  key={skill}
-                                  className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
-                              >
-    {skill}
-</span>
+                          {profile.skills.map(skill => (
+                              <Badge key={skill} variant="secondary">{skill}</Badge>
                           ))}
                         </div>
                     )}
@@ -181,17 +176,12 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                             <CardContent>
                                 {isHidden ? (
                                     <HiddenField label="Expertise" />
-                                ) : profile.expertises.length === 0 ? (
-                                    <Muted>No expertise listed yet.</Muted>
+                                ) : profile.skills.length === 0 ? (
+                                    <p className="text-gray-500 italic">No skills listed</p>
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
-                                        {profile.expertises.map(skill => (
-                                            <span
-                                                key={skill}
-                                                className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors"
-                                            >
-                                            {skill}
-                                        </span>
+                                        {profile.skills.map(skill => (
+                                            <Badge key={skill} variant="secondary">{skill}</Badge>
                                         ))}
                                     </div>
                                 )}

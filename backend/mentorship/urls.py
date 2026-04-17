@@ -63,12 +63,12 @@ urlpatterns = [
         name="mentorship-mentor-past-session-list",
     ),
     path(
-        "sessions/<uuid:match_id>/cancel/",
+        "sessions/<uuid:session_id>/cancel/",
         CancelSessionAPIView.as_view(),
         name="mentorship-session-cancel",
     ),
     path(
-        "sessions/<uuid:match_id>/reschedule/",
+        "sessions/<uuid:session_id>/reschedule/",
         RescheduleSessionAPIView.as_view(),
         name="mentorship-session-reschedule",
     ),
