@@ -333,9 +333,6 @@ export function useCancelSessionMutation(currentUsername?: string) {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ["mentorship", "sessions", "me", "upcoming"],
-        }),
-        queryClient.invalidateQueries({
           queryKey: ["mentorship", "meeting-sessions", "me"],
         }),
         queryClient.invalidateQueries({
@@ -376,9 +373,6 @@ export function useRescheduleSessionMutation(currentUsername?: string) {
       ),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ["mentorship", "sessions", "me", "upcoming"],
-        }),
         queryClient.invalidateQueries({
           queryKey: ["mentorship", "meeting-sessions", "me"],
         }),
@@ -431,9 +425,6 @@ export function useDeactivateMatchMutation(currentUsername?: string) {
           queryKey: ["mentorship", "requests", "me"],
         }),
         queryClient.invalidateQueries({
-          queryKey: ["mentorship", "sessions", "me", "upcoming"],
-        }),
-        queryClient.invalidateQueries({
           queryKey: ["mentorship", "meeting-sessions", "me"],
         }),
         queryClient.invalidateQueries({
@@ -483,40 +474,6 @@ export function useMentorshipMeetingSessionsQuery(
       currentUsername ?? "anonymous",
     ],
     queryFn: () => fetchMeetingSessions(params),
-    enabled: Boolean(currentUsername),
-    refetchOnMount: "always",
-    staleTime: 60_000,
-  });
-}
-
-/**
- * Fetch upcoming sessions for the authenticated mentee.
- */
-export function useMentorshipUpcomingSessionsQuery(currentUsername?: string) {
-  return useQuery({
-    queryKey: [
-      "mentorship",
-      "sessions",
-      "me",
-      "upcoming",
-      currentUsername ?? "anonymous",
-    ],
-    queryFn: async () => {
-      const sessions = await fetchMeetingSessions({
-        role: "mentee",
-        status: "upcoming",
-      });
-
-      return sessions.map((session) => ({
-        slot_id: session.source_slot_id ?? session.session_id,
-        mentor: session.mentor,
-        slot_date: toLocalIsoDate(session.scheduled_start_at),
-        slot_start_time: toLocalIsoTime(session.scheduled_start_at),
-        slot_end_time: toLocalIsoTime(session.scheduled_end_at),
-        status: "ACCEPTED" as BackendRequestStatus,
-        booked_at: session.created_at,
-      })) satisfies BackendUpcomingSession[];
-    },
     enabled: Boolean(currentUsername),
     refetchOnMount: "always",
     staleTime: 60_000,
@@ -627,9 +584,6 @@ export function useRespondToMentorshipRequestMutation() {
         }),
         queryClient.invalidateQueries({
           queryKey: ["mentorship", "matches", "me"],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["mentorship", "sessions", "me", "upcoming"],
         }),
         queryClient.invalidateQueries({
           queryKey: ["mentorship", "meeting-sessions", "me"],

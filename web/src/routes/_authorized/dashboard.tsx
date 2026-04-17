@@ -19,7 +19,7 @@ export const Route = createFileRoute('/_authorized/dashboard')({
 // UI HELPERS
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: Readonly<{ status: string }>) {
   let bg = 'bg-accent-muted text-ink border-line'
   let Icon = Clock
 
@@ -45,7 +45,7 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function UserAvatar({ name }: { name: string }) {
+function UserAvatar({ name }: Readonly<{ name: string }>) {
   const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2)
   const colors = [
     'bg-blue-100 text-blue-700', 
@@ -259,7 +259,7 @@ function MenteeDashboardView() {
                                         </span>
                       </div>
                       {req.cover_letter && (
-                          <div className="bg-black/[0.03] rounded-lg p-4 border border-line/50">
+                          <div className="bg-black/3 rounded-lg p-4 border border-line/50">
                             <Muted className="line-clamp-3 italic text-sm text-ink-soft leading-relaxed">
                               "{req.cover_letter}"
                             </Muted>
@@ -456,7 +456,7 @@ function MentorDashboardView() {
                                             </span>
                         </div>
                         {req.cover_letter && (
-                            <div className="bg-black/[0.03] p-4 rounded-lg border border-line/50">
+                            <div className="bg-black/3 p-4 rounded-lg border border-line/50">
                               <Body className="text-ink-soft text-sm leading-relaxed italic">
                                 "{req.cover_letter}"
                               </Body>

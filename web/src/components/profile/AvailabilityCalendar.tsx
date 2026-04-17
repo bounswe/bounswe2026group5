@@ -1,22 +1,22 @@
-import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Muted } from '@/components/Typography'
-import { ChevronLeft, ChevronRight, CalendarDays, Loader2, X } from 'lucide-react'
-import { createPortal } from 'react-dom'
+import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
+import { useMyMatches, useSendMentorshipRequest } from '#/lib/queries/MentorshipQueries.ts'
 import {
+    useAvailabilitySlots,
+    useBookSlot,
+    useCancelBooking,
     useCreateSlot,
     useDeleteSlot,
-    useCancelBooking,
-    useAvailabilitySlots
+    type AvailabilitySlot,
 } from '#/lib/queries/ProfileTimeSlotQueries.ts'
-import type { AvailabilitySlot } from '#/lib/queries/ProfileTimeSlotQueries.ts'
-import {useQuery, useQueryClient} from '@tanstack/react-query'
-import { useMyMatches, useSendMentorshipRequest } from '#/lib/queries/MentorshipQueries.ts'
-import { useBookSlot } from '#/lib/queries/ProfileTimeSlotQueries.ts'
-import { Textarea } from '@/components/ui/textarea'
+import { Muted } from '@/components/Typography'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import {meQueryOptions} from "#/lib/queries/AuthQueries.ts";
+import { Textarea } from '@/components/ui/textarea'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { CalendarDays, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react'
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -253,7 +253,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
     const invalidate = () => {
         queryClient.refetchQueries({ queryKey: ['availability-slots', username] })
         queryClient.invalidateQueries({ queryKey: ['profiles', username] })
-        queryClient.invalidateQueries({ queryKey: ['mentorship', 'sessions', 'upcoming'] })
+        queryClient.invalidateQueries({ queryKey: ['mentorship', 'meeting-sessions', 'me'] })
     }
 
     const handleCellClick = (dateStr: string, hour: number, existing: AvailabilitySlot | undefined) => {

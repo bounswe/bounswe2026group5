@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -119,19 +119,26 @@ const MOCK_MESSAGES: MessageCardProps[] = [
 const MENTEES_PREVIEW_COUNT = 2;
 const MENTORS_PREVIEW_COUNT = 2;
 
-// ---------------------------------------------------------------------------
-// Mentor View
-// ---------------------------------------------------------------------------
-
-function MentorConnections({
-  onOpenFeedback,
-}: {
+type ConnectionViewProps = Readonly<{
   onOpenFeedback: (
     matchId: string,
     name: string,
     myRole: "Mentor" | "Mentee",
   ) => void;
-}) {
+}>;
+
+function pushUserProfile(
+  router: ReturnType<typeof useRouter>,
+  username: string,
+): void {
+  router.push(`/user/${encodeURIComponent(username)}` as Href);
+}
+
+// ---------------------------------------------------------------------------
+// Mentor View
+// ---------------------------------------------------------------------------
+
+function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [selectedRequest, setSelectedRequest] =
@@ -292,7 +299,7 @@ function MentorConnections({
           }
           const target = managedMentee;
           setManagedMentee(null);
-          router.push(`/user/${encodeURIComponent(target.username)}`);
+          pushUserProfile(router, target.username);
         }}
         onRemoveConnection={() => {
           if (!managedMentee) {
@@ -434,9 +441,7 @@ function MentorConnections({
             name={mentee.name}
             subtitle={mentee.subtitle}
             avatarUrl={mentee.avatarUrl}
-            onPress={() =>
-              router.push(`/user/${encodeURIComponent(mentee.username)}`)
-            }
+            onPress={() => pushUserProfile(router, mentee.username)}
             onMessage={() => handleMessage(mentee.name)}
             onMore={() =>
               handleMenteeMore({
@@ -461,15 +466,7 @@ function MentorConnections({
 // Mentee View
 // ---------------------------------------------------------------------------
 
-function MenteeConnections({
-  onOpenFeedback,
-}: {
-  onOpenFeedback: (
-    matchId: string,
-    name: string,
-    myRole: "Mentor" | "Mentee",
-  ) => void;
-}) {
+function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [showAllMentors, setShowAllMentors] = useState(false);
@@ -602,7 +599,7 @@ function MenteeConnections({
           }
           const target = managedMentor;
           setManagedMentor(null);
-          router.push(`/user/${encodeURIComponent(target.username)}`);
+          pushUserProfile(router, target.username);
         }}
         onRemoveConnection={() => {
           if (!managedMentor) {
@@ -693,15 +690,13 @@ function MenteeConnections({
                   type={request.type}
                   isReschedule={request.isReschedule}
                   onPress={() => setSelectedRequest(request)}
-                  onShowProfile={() =>
-                    router.push(
-                      `/user/${encodeURIComponent(
-                        request.type === "incoming"
-                          ? request.menteeUsername
-                          : request.mentorUsername,
-                      )}`,
-                    )
-                  }
+                  onShowProfile={() => {
+                    const targetUsername =
+                      request.type === "incoming"
+                        ? request.menteeUsername
+                        : request.mentorUsername;
+                    pushUserProfile(router, targetUsername);
+                  }}
                 />
               </View>
             ))}
@@ -750,9 +745,7 @@ function MenteeConnections({
             name={mentor.name}
             subtitle={mentor.subtitle}
             avatarUrl={mentor.avatarUrl}
-            onPress={() =>
-              router.push(`/user/${encodeURIComponent(mentor.username)}`)
-            }
+            onPress={() => pushUserProfile(router, mentor.username)}
             onMessage={() => handleMessage(mentor.name)}
             onMore={() =>
               handleMore({

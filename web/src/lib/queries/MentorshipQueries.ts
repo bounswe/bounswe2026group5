@@ -34,16 +34,6 @@ export interface MentorshipRequest {
     responded_at: string | null
 }
 
-export interface UpcomingSession { // for mentee
-    slot_id: string
-    mentor: MatchUser
-    slot_date: string
-    slot_start_time: string
-    slot_end_time: string
-    status: string
-    booked_at: string
-}
-
 export type MeetingSessionRoleFilter = 'mentor' | 'mentee' | 'all'
 
 export type MeetingSessionStatusFilter =
@@ -133,20 +123,6 @@ function withAuthHeaders(): HeadersInit {
     return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-function pad2(value: number): string {
-    return String(value).padStart(2, '0')
-}
-
-function toLocalDate(value: string): string {
-    const date = new Date(value)
-    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
-}
-
-function toLocalTime(value: string): string {
-    const date = new Date(value)
-    return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
-}
-
 async function fetchMeetingSessions(params: MeetingSessionQueryParams = {}): Promise<MeetingSession[]> {
     const query = new URLSearchParams()
     if (params.role && params.role !== 'all') {
@@ -165,20 +141,6 @@ async function fetchMeetingSessions(params: MeetingSessionQueryParams = {}): Pro
     })
     if (!res.ok) throw new Error('Failed to fetch meeting sessions')
     return res.json()
-}
-
-async function fetchUpcomingSessions(): Promise<UpcomingSession[]> {
-    const sessions = await fetchMeetingSessions({ role: 'mentee', status: 'upcoming' })
-
-    return sessions.map((session) => ({
-        slot_id: session.source_slot_id ?? session.session_id,
-        mentor: session.mentor,
-        slot_date: toLocalDate(session.scheduled_start_at),
-        slot_start_time: toLocalTime(session.scheduled_start_at),
-        slot_end_time: toLocalTime(session.scheduled_end_at),
-        status: session.display_status,
-        booked_at: session.created_at,
-    }))
 }
 
 
@@ -211,13 +173,6 @@ export const meetingSessionsQueryOptions = (params: MeetingSessionQueryParams = 
         gcTime: Infinity,
     })
 
-export const upcomingSessionsQueryOptions = queryOptions({
-    queryKey: ['mentorship', 'sessions', 'upcoming'],
-    queryFn: fetchUpcomingSessions,
-    staleTime: 0,
-    gcTime: Infinity,
-})
-
 // ---- Hooks ----
 
 export function useMyMatches() {
@@ -242,8 +197,4 @@ export function useRespondToRequest() {
 
 export function useMeetingSessions(params: MeetingSessionQueryParams = {}) {
     return useQuery(meetingSessionsQueryOptions(params))
-}
-
-export function useUpcomingSessions() {
-    return useQuery(upcomingSessionsQueryOptions)
 }
