@@ -1,20 +1,7 @@
 import { SettingItem } from "@/components/settings/SettingItem";
-import { useAuthStore } from "@/lib/auth/store";
-<<<<<<< Updated upstream
-import { API_BASE_URL } from "@/constants/api";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-
-type UsageMode = "MENTOR" | "MENTEE" | "BOTH";
-
-function includesMentor(mode?: string): boolean {
-  return mode === "MENTOR" || mode === "BOTH";
-}
-
-function includesMentee(mode?: string): boolean {
-  return mode === "MENTEE" || mode === "BOTH";
-}
-=======
+import { useAuthStore } from "@/lib/auth/store";
 import { useProfileVisibilityStore } from "@/lib/profile/preferences";
 import { useLogoutMutation } from "@/lib/queries/auth";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,19 +9,19 @@ import { Stack, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
->>>>>>> Stashed changes
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const logoutMutation = useLogoutMutation();
   const authUser = useAuthStore((state) => state.user);
-<<<<<<< Updated upstream
-  const accessToken = useAuthStore((state) => state.accessToken);
-  const updateUser = useAuthStore((state) => state.updateUser);
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
-=======
+
+  const isMentor = authUser?.app_usage_mode === "MENTOR";
+  const isMentee = authUser?.app_usage_mode === "MENTEE";
+  const showMentorVisibilityControls = !authUser?.app_usage_mode || isMentor;
+  const showMenteeVisibilityControls = !authUser?.app_usage_mode || isMentee;
 
   const showExpertise = useProfileVisibilityStore(
     (state) => state.showExpertise,
@@ -60,7 +47,6 @@ export default function SettingsScreen() {
   const setShowOfferings = useProfileVisibilityStore(
     (state) => state.setShowOfferings,
   );
->>>>>>> Stashed changes
 
   let roleModeLabel = "Not Set";
   if (authUser?.app_usage_mode === "MENTOR") {
@@ -119,12 +105,10 @@ export default function SettingsScreen() {
 
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
-      {/* 1. FORCE HIDE DEFAULT HEADER */}
       <Stack.Screen
         options={{ headerShown: false, headerBackVisible: false }}
       />
 
-      {/* 2. ONLY ONE CUSTOM HEADER */}
       <View
         className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
         style={{ paddingTop: insets.top }}
@@ -148,15 +132,9 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 60 }}
       >
-<<<<<<< Updated upstream
-        {/* Section: Role Mode */}
-        <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-6 mb-2">
-          Role Mode
-=======
         {/* Section: Account Role */}
-        <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-4 mt-6 mb-2">
+        <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-6 mb-2">
           Account Role
->>>>>>> Stashed changes
         </Text>
         <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
           <SettingItem
@@ -165,6 +143,52 @@ export default function SettingsScreen() {
             value={roleModeLabel}
             onPress={() => Alert.alert("Role Policy", roleModeDescription)}
           />
+        </View>
+
+        {/* Section: Profile Visibility */}
+        <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-8 mb-2">
+          Profile Visibility
+        </Text>
+        <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
+          {showMentorVisibilityControls && (
+            <SettingItem
+              type="toggle"
+              icon="school-outline"
+              label="Show Expertise"
+              isToggled={showExpertise}
+              onToggle={setShowExpertise}
+            />
+          )}
+
+          {showMenteeVisibilityControls && (
+            <SettingItem
+              type="toggle"
+              icon="bulb-outline"
+              label="Show Eager to Learn"
+              isToggled={showEagerToLearn}
+              onToggle={setShowEagerToLearn}
+            />
+          )}
+
+          {showMentorVisibilityControls && (
+            <SettingItem
+              type="toggle"
+              icon="calendar-outline"
+              label="Show Availability"
+              isToggled={showAvailability}
+              onToggle={setShowAvailability}
+            />
+          )}
+
+          {showMentorVisibilityControls && (
+            <SettingItem
+              type="toggle"
+              icon="briefcase-outline"
+              label="Show Offerings"
+              isToggled={showOfferings}
+              onToggle={setShowOfferings}
+            />
+          )}
         </View>
 
         {/* Section: Notifications */}

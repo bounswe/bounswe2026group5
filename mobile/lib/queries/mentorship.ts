@@ -31,7 +31,7 @@ export interface DashboardSessionItem {
   status: "Upcoming" | "Pending" | "Completed";
   topic: string;
   myRole: "Mentor" | "Mentee";
-  isSessionStarted?: boolean; 
+  isSessionStarted?: boolean;
 }
 
 export interface AvailabilityDayItem {
@@ -174,7 +174,10 @@ function toProposedDate(value: BackendMentorshipRequest): string | undefined {
 /**
  * Helper to sort sessions: Active sessions first, then sorted by date.
  */
-function sortSessionsChronologically(a: DashboardSessionItem, b: DashboardSessionItem) {
+function sortSessionsChronologically(
+  a: DashboardSessionItem,
+  b: DashboardSessionItem,
+) {
   const weightA = a.status === "Completed" ? 1 : 0;
   const weightB = b.status === "Completed" ? 1 : 0;
   if (weightA !== weightB) {
@@ -531,7 +534,7 @@ export function useCreateAvailabilitySlotMutation(username: string) {
   return useMutation({
     mutationFn: (payload: CreateAvailabilitySlotPayload) =>
       apiPost<BackendAvailabilitySlot, CreateAvailabilitySlotPayload>(
-        `/api/profiles/${username}/availability-slots/`,
+        "/api/profiles/me/availability-slots/",
         payload,
       ),
     onSuccess: async () => {
@@ -552,7 +555,7 @@ export function useDeleteAvailabilitySlotMutation(username: string) {
     mutationFn: async (slotId: string) => {
       const accessToken = useAuthStore.getState().accessToken;
       const response = await fetch(
-        `${API_BASE_URL}/api/profiles/${username}/availability-slots/${slotId}/`,
+        `${API_BASE_URL}/api/profiles/me/availability-slots/${slotId}/`,
         {
           method: "DELETE",
           headers: {
@@ -683,12 +686,15 @@ export function mapMentorBookedSlotsToSessions(
     ]),
   );
 
-  const now = new Date(); 
+  const now = new Date();
 
   return slots
     .filter((slot) => slot.is_booked && Boolean(slot.bookedBy))
     .map((slot) => {
-      const sessionStart = parseLocalDateTime(slot.date, `${slot.startTime}:00`);
+      const sessionStart = parseLocalDateTime(
+        slot.date,
+        `${slot.startTime}:00`,
+      );
       const sessionEnd = parseLocalDateTime(slot.date, `${slot.endTime}:00`);
       const isCompleted = now > sessionEnd;
       const isStarted = now >= sessionStart;
@@ -722,22 +728,25 @@ export function mapMentorBookedSlotsToSessions(
 export function mapUpcomingSessionsToDashboard(
   sessions: BackendUpcomingSession[],
 ): DashboardSessionItem[] {
-  const now = new Date(); 
+  const now = new Date();
 
   return sessions
     .map((session) => {
-      const sessionStart = parseLocalDateTime(session.slot_date, session.slot_start_time);
+      const sessionStart = parseLocalDateTime(
+        session.slot_date,
+        session.slot_start_time,
+      );
       const sessionEnd = session.slot_end_time
         ? parseLocalDateTime(session.slot_date, session.slot_end_time)
         : sessionStart;
-        
+
       const isStarted = now >= sessionStart;
 
       let uiStatus: DashboardSessionItem["status"] = "Upcoming";
       if (session.status === "PENDING") {
         uiStatus = "Pending";
       } else if (now > sessionEnd) {
-        uiStatus = "Completed"; 
+        uiStatus = "Completed";
       }
 
       return {
@@ -750,7 +759,7 @@ export function mapUpcomingSessionsToDashboard(
         status: uiStatus,
         topic: "Mentorship Session",
         myRole: "Mentee" as "Mentor" | "Mentee",
-        isSessionStarted: isStarted, 
+        isSessionStarted: isStarted,
       };
     })
     .sort(sortSessionsChronologically);

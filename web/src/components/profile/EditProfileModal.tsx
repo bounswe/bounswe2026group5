@@ -1,16 +1,16 @@
-import { useState } from 'react'
-import { createPortal } from 'react-dom'
-import { X, Loader2 } from 'lucide-react'
+import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
+import { useProfile, useUpdateProfile } from '#/lib/queries/ProfileQueries.ts'
+import { SkillPicker } from '@/components/SkillPicker'
+import { Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Muted } from '@/components/Typography'
-import { SkillPicker } from '@/components/SkillPicker'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
-import { useUpdateProfile, useProfile } from '#/lib/queries/ProfileQueries.ts'
+import { Loader2, X } from 'lucide-react'
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ interface EditProfileModalProps {
 export function EditProfileModal({ mode, initialValues, onClose }: EditProfileModalProps) {
     const { data: me } = useQuery(meQueryOptions)
     const { data: profileData } = useProfile(me?.username ?? '')
-    const updateProfile = useUpdateProfile(me?.username ?? '')
+    const updateProfile = useUpdateProfile()
     const queryClient = useQueryClient()
 
     const [bio, setBio] = useState(initialValues.bio)

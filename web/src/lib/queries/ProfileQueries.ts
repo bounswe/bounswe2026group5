@@ -74,9 +74,9 @@ async function fetchProfile(username: string): Promise<ProfileResponse> {
     return res.json()
 }
 
-async function patchProfile(username: string, body: UpdateProfileBody): Promise<void> {
+async function patchProfile(body: UpdateProfileBody): Promise<void> {
     const token = localStorage.getItem('access_token')
-    const res = await fetch(`${API_BASE_URL}/profiles/${username}/`, {
+    const res = await fetch(`${API_BASE_URL}/profiles/me/`, {
         method: 'PATCH',
         headers: {
             'Content-Type': 'application/json',
@@ -116,8 +116,8 @@ export function useProfile(username: string) {
     return useQuery(profileQueryOptions(username))
 }
 
-export function useUpdateProfile(username: string) {
+export function useUpdateProfile() {
     return useMutation({
-        mutationFn: (body: UpdateProfileBody) => patchProfile(username, body),
+        mutationFn: (body: UpdateProfileBody) => patchProfile(body),
     })
 }

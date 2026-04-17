@@ -1,28 +1,28 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { router } from "expo-router";
 import { useState } from "react";
 import {
-  View,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  Pressable,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  View,
 } from "react-native";
-import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Colors } from "@/constants/theme";
 import { RegistrationProfileSetupSheet } from "@/components/profile/RegistrationProfileSetupSheet";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
 import {
-  registerFn,
-  updateUsageModeFn,
-  updateProfileFn,
   fetchSkillsFn,
+  registerFn,
+  updateProfileFn,
+  updateUsageModeFn,
   type AuthResponse,
 } from "@/lib/queries/authQueries";
 
@@ -90,8 +90,6 @@ export default function RegisterScreen() {
   const [submitError, setSubmitError] = useState("");
   const [profileSetupVisible, setProfileSetupVisible] = useState(false);
   const [pendingUser, setPendingUser] = useState<{
-    id: string;
-    username: string;
     accessToken: string;
   } | null>(null);
 
@@ -116,10 +114,8 @@ export default function RegisterScreen() {
       }
 
       await updateUsageModeFn({
-        userId: pendingUser.id,
         app_usage_mode: role.toUpperCase() as "MENTOR" | "MENTEE",
         accessToken: pendingUser.accessToken,
-        _username: pendingUser.username,
       });
 
       await useAuthStore.getState().updateUser({
@@ -127,7 +123,6 @@ export default function RegisterScreen() {
       });
 
       await updateProfileFn({
-        username: pendingUser.username,
         accessToken: pendingUser.accessToken,
         display_name: params.displayName,
         bio: params.bio.trim() || undefined,
@@ -154,8 +149,6 @@ export default function RegisterScreen() {
       });
 
       setPendingUser({
-        id: data.user.id,
-        username: data.user.username,
         accessToken: data.access_token,
       });
       setProfileSetupVisible(true);

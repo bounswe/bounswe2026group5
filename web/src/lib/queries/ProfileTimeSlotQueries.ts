@@ -1,5 +1,5 @@
-import {queryOptions, useMutation, useQueries, useQuery } from "@tanstack/react-query"
-import {profileQueryOptions} from "#/lib/queries/ProfileQueries.ts";
+import { profileQueryOptions } from "#/lib/queries/ProfileQueries.ts";
+import { queryOptions, useMutation, useQueries, useQuery } from "@tanstack/react-query";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -36,9 +36,9 @@ async function bookSlot(username: string, slotId: string, message?: string): Pro
     return res.json()
 }
 
-async function createSlot(username: string, body: CreateSlotBody): Promise<AvailabilitySlot> {
+async function createSlot(body: CreateSlotBody): Promise<AvailabilitySlot> {
     const token = localStorage.getItem('access_token')
-    const res = await fetch(`${API_BASE_URL}/profiles/${username}/availability-slots/`, {
+    const res = await fetch(`${API_BASE_URL}/profiles/me/availability-slots/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(body),
@@ -47,9 +47,9 @@ async function createSlot(username: string, body: CreateSlotBody): Promise<Avail
     return res.json()
 }
 
-async function deleteSlot(username: string, slotId: string): Promise<void> {
+async function deleteSlot(slotId: string): Promise<void> {
     const token = localStorage.getItem('access_token')
-    const res = await fetch(`${API_BASE_URL}/profiles/${username}/availability-slots/${slotId}/`, {
+    const res = await fetch(`${API_BASE_URL}/profiles/me/availability-slots/${slotId}/`, {
         method: 'DELETE',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -75,15 +75,15 @@ export function useBookSlot(username: string) {
     })
 }
 
-export function useCreateSlot(username: string) {
+export function useCreateSlot(_username: string) {
     return useMutation({
-        mutationFn: (body: CreateSlotBody) => createSlot(username, body),
+        mutationFn: (body: CreateSlotBody) => createSlot(body),
     })
 }
 
-export function useDeleteSlot(username: string) {
+export function useDeleteSlot(_username: string) {
     return useMutation({
-        mutationFn: (slotId: string) => deleteSlot(username, slotId),
+        mutationFn: (slotId: string) => deleteSlot(slotId),
     })
 }
 
