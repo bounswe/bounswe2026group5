@@ -31,15 +31,17 @@ export interface DashboardSessionItem {
   status: "Upcoming" | "Pending" | "Completed";
   topic: string;
   myRole: "Mentor" | "Mentee";
+  isSessionStarted?: boolean; 
 }
 
 export interface AvailabilityDayItem {
   day: string;
-  times: Array<{
+  times: {
     id: string;
     label: string;
     isBooked: boolean;
-  }>;
+    date?: string;
+  }[];
 }
 
 interface BackendProfileSummary {
@@ -74,7 +76,28 @@ interface BackendMatch {
   is_active: boolean;
 }
 
+interface BackendFeedback {
+  id: string;
+  match: string;
+  submitted_by: BackendProfileSummary;
+  rating: number;
+  text: string;
+  created_at: string;
+}
+
+interface SubmitFeedbackPayload {
+  matchId: string;
+  rating: number;
+  text?: string;
+}
+
+interface RescheduleSessionPayload {
+  matchId: string;
+  newSlotId: string;
+}
+
 export type MentorshipMatch = BackendMatch;
+export type MatchFeedback = BackendFeedback;
 
 interface BackendUpcomingSession {
   slot_id: string;
@@ -149,6 +172,24 @@ function toProposedDate(value: BackendMentorshipRequest): string | undefined {
 }
 
 /**
+ * Helper to sort sessions: Active sessions first, then sorted by date.
+ */
+function sortSessionsChronologically(a: DashboardSessionItem, b: DashboardSessionItem) {
+  const weightA = a.status === "Completed" ? 1 : 0;
+  const weightB = b.status === "Completed" ? 1 : 0;
+  if (weightA !== weightB) {
+    return weightA - weightB;
+  }
+
+  const aStartTime = a.time.split(" - ")[0] ?? "00:00";
+  const bStartTime = b.time.split(" - ")[0] ?? "00:00";
+  return (
+    parseLocalDateTime(a.rawDate, `${aStartTime}:00`).getTime() -
+    parseLocalDateTime(b.rawDate, `${bStartTime}:00`).getTime()
+  );
+}
+
+/**
  * Fetch all mentorship requests for the authenticated user.
  */
 export function useMentorshipRequestsQuery(currentUsername?: string) {
@@ -172,6 +213,165 @@ export function useMentorshipMatchesQuery(currentUsername?: string) {
     enabled: Boolean(currentUsername),
     refetchOnMount: "always",
     staleTime: 60_000,
+  });
+}
+
+/**
+ * List feedback entries for a match (mentor/mentee participants only).
+ */
+export function useMatchFeedbackQuery(matchId?: string) {
+  return useQuery({
+    queryKey: ["mentorship", "matches", matchId ?? "unknown", "feedback"],
+    queryFn: () =>
+      apiGet<BackendFeedback[]>(
+        `/api/mentorship/matches/${encodeURIComponent(matchId || "")}/feedback/`,
+      ),
+    enabled: Boolean(matchId),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Submit match feedback as mentor or mentee.
+ */
+export function useSubmitMatchFeedbackMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ matchId, rating, text }: SubmitFeedbackPayload) =>
+      apiPost<BackendFeedback, { rating: number; text?: string }>(
+        `/api/mentorship/matches/${encodeURIComponent(matchId)}/feedback/`,
+        {
+          rating,
+          ...(text ? { text } : {}),
+        },
+      ),
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "matches", variables.matchId, "feedback"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles"],
+        }),
+      ]);
+    },
+  });
+}
+
+/**
+ * Cancel a booked session for a match. Mentor and mentee are both permitted.
+ */
+export function useCancelSessionMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (matchId: string) =>
+      apiPost<BackendMentorshipRequest>(
+        `/api/mentorship/sessions/${encodeURIComponent(matchId)}/cancel/`,
+      ),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "sessions", "me", "upcoming"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "matches",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "requests",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles"],
+        }),
+      ]);
+    },
+  });
+}
+
+/**
+ * Reschedule a booked session to another mentor availability slot.
+ */
+export function useRescheduleSessionMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ matchId, newSlotId }: RescheduleSessionPayload) =>
+      apiPost<BackendMentorshipRequest, { new_slot_id: string }>(
+        `/api/mentorship/sessions/${encodeURIComponent(matchId)}/reschedule/`,
+        { new_slot_id: newSlotId },
+      ),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "sessions", "me", "upcoming"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "matches",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "requests",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles"],
+        }),
+      ]);
+    },
+  });
+}
+
+/**
+ * Deactivate a mentorship match (idempotent endpoint).
+ */
+export function useDeactivateMatchMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (matchId: string) =>
+      apiPost<BackendMatch>(
+        `/api/mentorship/matches/${encodeURIComponent(matchId)}/deactivate/`,
+      ),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "matches",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "requests", "me"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "sessions", "me", "upcoming"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles"],
+        }),
+      ]);
+    },
   });
 }
 
@@ -259,7 +459,11 @@ export function useBookAvailabilitySlotMutation(currentUsername?: string) {
           ],
         }),
         queryClient.invalidateQueries({
-          queryKey: ["profiles", variables.mentorUsername, "availability-slots"],
+          queryKey: [
+            "profiles",
+            variables.mentorUsername,
+            "availability-slots",
+          ],
         }),
       ]);
     },
@@ -466,35 +670,50 @@ export function mapMatchesToSessions(
 
 /**
  * Build mentor-side session cards from booked availability slots.
+ * Enriches with mentee display_name from matches data.
  */
 export function mapMentorBookedSlotsToSessions(
   slots: BackendAvailabilitySlot[],
+  matches?: BackendMatch[],
 ): DashboardSessionItem[] {
+  const menteeByUsername = new Map(
+    (matches ?? []).map((match) => [
+      match.mentee.username,
+      match.mentee.display_name || match.mentee.username,
+    ]),
+  );
+
+  const now = new Date(); 
+
   return slots
     .filter((slot) => slot.is_booked && Boolean(slot.bookedBy))
     .map((slot) => {
-      const sessionDate = parseLocalDateTime(slot.date, `${slot.startTime}:00`);
+      const sessionStart = parseLocalDateTime(slot.date, `${slot.startTime}:00`);
+      const sessionEnd = parseLocalDateTime(slot.date, `${slot.endTime}:00`);
+      const isCompleted = now > sessionEnd;
+      const isStarted = now >= sessionStart;
+
+      const menteeDisplay =
+        menteeByUsername.get(slot.bookedBy ?? "") || slot.bookedBy || "Mentee";
+
+      const status: DashboardSessionItem["status"] = isCompleted
+        ? "Completed"
+        : "Upcoming";
 
       return {
         id: slot.id,
         requestId: slot.id,
-        user: slot.bookedBy ?? "Mentee",
-        date: SESSION_DATE_FORMATTER.format(sessionDate),
+        user: menteeDisplay,
+        date: SESSION_DATE_FORMATTER.format(sessionStart),
         rawDate: slot.date,
         time: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
-        status: "Upcoming" as const,
+        status,
         topic: "Mentorship Session",
-        myRole: "Mentor" as const,
+        myRole: "Mentor" as "Mentor" | "Mentee",
+        isSessionStarted: isStarted,
       };
     })
-    .sort((a, b) => {
-      const aStartTime = a.time.split(" - ")[0] ?? "00:00";
-      const bStartTime = b.time.split(" - ")[0] ?? "00:00";
-      return (
-        parseLocalDateTime(a.rawDate, `${aStartTime}:00`).getTime() -
-        parseLocalDateTime(b.rawDate, `${bStartTime}:00`).getTime()
-      );
-    });
+    .sort(sortSessionsChronologically);
 }
 
 /**
@@ -503,35 +722,38 @@ export function mapMentorBookedSlotsToSessions(
 export function mapUpcomingSessionsToDashboard(
   sessions: BackendUpcomingSession[],
 ): DashboardSessionItem[] {
+  const now = new Date(); 
+
   return sessions
     .map((session) => {
-      const sessionDate = parseLocalDateTime(
-        session.slot_date,
-        session.slot_start_time,
-      );
-      const uiStatus: DashboardSessionItem["status"] =
-        session.status === "PENDING" ? "Pending" : "Upcoming";
+      const sessionStart = parseLocalDateTime(session.slot_date, session.slot_start_time);
+      const sessionEnd = session.slot_end_time
+        ? parseLocalDateTime(session.slot_date, session.slot_end_time)
+        : sessionStart;
+        
+      const isStarted = now >= sessionStart;
+
+      let uiStatus: DashboardSessionItem["status"] = "Upcoming";
+      if (session.status === "PENDING") {
+        uiStatus = "Pending";
+      } else if (now > sessionEnd) {
+        uiStatus = "Completed"; 
+      }
 
       return {
         id: session.slot_id,
         requestId: session.slot_id,
         user: session.mentor.display_name || session.mentor.username,
-        date: SESSION_DATE_FORMATTER.format(sessionDate),
+        date: SESSION_DATE_FORMATTER.format(sessionStart),
         rawDate: session.slot_date,
         time: `${toDisplayTime(session.slot_start_time)} - ${toDisplayTime(session.slot_end_time)}`,
         status: uiStatus,
         topic: "Mentorship Session",
-        myRole: "Mentee" as const,
+        myRole: "Mentee" as "Mentor" | "Mentee",
+        isSessionStarted: isStarted, 
       };
     })
-    .sort((a, b) => {
-      const aStartTime = a.time.split(" - ")[0] ?? "00:00";
-      const bStartTime = b.time.split(" - ")[0] ?? "00:00";
-      return (
-        parseLocalDateTime(a.rawDate, `${aStartTime}:00`).getTime() -
-        parseLocalDateTime(b.rawDate, `${bStartTime}:00`).getTime()
-      );
-    });
+    .sort(sortSessionsChronologically);
 }
 
 /**
@@ -544,11 +766,12 @@ export function mapAvailabilityToSchedule(
 ): AvailabilityDayItem[] {
   const dayMap = new Map<
     string,
-    Array<{
+    {
       id: string;
       label: string;
       isBooked: boolean;
-    }>
+      date?: string;
+    }[]
   >();
 
   slots.forEach((slot) => {
@@ -559,6 +782,7 @@ export function mapAvailabilityToSchedule(
       id: slot.id,
       label: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
       isBooked: slot.is_booked,
+      date: slot.date,
     });
 
     dayMap.set(day, daySlots);

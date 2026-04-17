@@ -1,38 +1,43 @@
-import React, { useState } from "react";
+import { useRouter } from "expo-router";
+import React, { useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
 
-import { useAuthStore } from "@/lib/auth/store";
-import {
-  mapRequestsToDashboard,
-  type DashboardRequestItem,
-  type MentorshipRequest,
-  useMentorshipMatchesQuery,
-  useMentorshipRequestsQuery,
-  useRespondToMentorshipRequestMutation,
-} from "@/lib/queries/mentorship";
+import { ConnectionActionsSheet } from "@/components/connections/ConnectionActionsSheet";
+import { DeclineConfirmModal } from "@/components/connections/DeclineConfirmModal";
+import { MenteeCard } from "@/components/connections/MenteeCard";
 import {
   MessageCard,
   MessageCardProps,
 } from "@/components/connections/MessageCard";
-import { MenteeCard } from "@/components/connections/MenteeCard";
 import {
   PendingRequestCard,
   PendingRequestCardProps,
 } from "@/components/connections/PendingRequestCard";
 import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
-import { DeclineConfirmModal } from "@/components/connections/DeclineConfirmModal";
-import { ConnectionActionsSheet } from "@/components/connections/ConnectionActionsSheet";
 import { RequestCard } from "@/components/dashboard/RequestCard";
 import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
+import { FeedbackBottomSheet } from "@/components/connections/FeedbackBottomSheet"; 
+
+import { useAuthStore } from "@/lib/auth/store";
+import {
+  mapRequestsToDashboard,
+  useDeactivateMatchMutation,
+  useMentorshipMatchesQuery,
+  useMentorshipRequestsQuery,
+  useRespondToMentorshipRequestMutation,
+  useSubmitMatchFeedbackMutation,
+  useMatchFeedbackQuery,
+  type DashboardRequestItem,
+  type MentorshipRequest,
+} from "@/lib/queries/mentorship";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -58,19 +63,30 @@ function mapRequestToCardProps(
   };
 }
 
-function showRemoveConnectionNotSupported(roleLabel: string): void {
-  // NOTE: Backend endpoint for removing an active mentor-mentee match is not available yet.
-  Alert.alert(
-    "Not Supported Yet",
-    `Removing ${roleLabel} connections is not available on the current API.`,
-  );
+async function deactivateConnection(params: {
+  matchIds: string[];
+  name: string;
+  mutateAsync: (matchId: string) => Promise<unknown>;
+}): Promise<void> {
+  try {
+    for (const matchId of params.matchIds) {
+      await params.mutateAsync(matchId);
+    }
+    Alert.alert("Connection Removed", `${params.name} has been removed.`);
+  } catch (error) {
+    Alert.alert(
+      "Remove Failed",
+      error instanceof Error
+        ? error.message
+        : "Could not remove this connection.",
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Mock data — messaging has no API yet
 // ---------------------------------------------------------------------------
 
-// NOTE: Replace with API-backed recent messages when messaging endpoint is available.
 const MOCK_MESSAGES: MessageCardProps[] = [
   {
     id: "msg-1",
@@ -96,15 +112,6 @@ const MOCK_MESSAGES: MessageCardProps[] = [
   },
 ];
 
-// NOTE: Replace with API-backed latest message when messaging endpoint is available.
-const MOCK_MENTEE_MESSAGE = {
-  name: "Elena Rodriguez",
-  preview:
-    '"I finished the wireframes we discussed — take a look when you have a moment!"',
-  timeAgo: "15m ago",
-  hasUnread: true,
-};
-
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -116,7 +123,11 @@ const MENTORS_PREVIEW_COUNT = 2;
 // Mentor View
 // ---------------------------------------------------------------------------
 
-function MentorConnections() {
+function MentorConnections({
+  onOpenFeedback,
+}: {
+  onOpenFeedback: (matchId: string, name: string, myRole: "Mentor" | "Mentee") => void;
+}) {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [selectedRequest, setSelectedRequest] =
@@ -126,11 +137,23 @@ function MentorConnections() {
   const [managedMentee, setManagedMentee] = useState<{
     name: string;
     username: string;
+    matchIds: string[];
   } | null>(null);
 
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const respondMutation = useRespondToMentorshipRequestMutation();
+  const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
+
+  // CHECK FEEDBACK FOR SELECTED MENTEE
+  const activeMatchId = managedMentee?.matchIds[0];
+  const matchFeedbackQuery = useMatchFeedbackQuery(activeMatchId);
+  const hasReviewed = useMemo(() => {
+    if (!matchFeedbackQuery.data || !currentUsername) return false;
+    return matchFeedbackQuery.data.some(
+      (feedback: any) => feedback.submitted_by.username === currentUsername
+    );
+  }, [matchFeedbackQuery.data, currentUsername]);
 
   const requests = requestsQuery.data ?? [];
   const matches = matchesQuery.data ?? [];
@@ -140,13 +163,41 @@ function MentorConnections() {
   const matchesError = matchesQuery.isError;
 
   const pendingRequests = requests.filter((r) => r.status === "PENDING");
-  const mentees = matches.map((m) => ({
-    id: m.id,
-    username: m.mentee.username,
-    name: m.mentee.display_name,
-    subtitle: m.mentee.title ?? "",
-    avatarUrl: m.mentee.picture_url || undefined,
-  }));
+  const mentees = Array.from(
+    matches
+      .reduce(
+        (acc, match) => {
+          const key = match.mentee.username;
+          const existing = acc.get(key);
+          if (existing) {
+            existing.matchIds.push(match.id);
+            return acc;
+          }
+
+          acc.set(key, {
+            id: key,
+            username: match.mentee.username,
+            name: match.mentee.display_name,
+            subtitle: match.mentee.title ?? "",
+            avatarUrl: match.mentee.picture_url || undefined,
+            matchIds: [match.id],
+          });
+          return acc;
+        },
+        new Map<
+          string,
+          {
+            id: string;
+            username: string;
+            name: string;
+            subtitle: string;
+            avatarUrl?: string;
+            matchIds: string[];
+          }
+        >(),
+      )
+      .values(),
+  );
 
   const handleMessage = (_name: string) => {
     // NOTE: Route to messaging thread when chat screen is implemented.
@@ -155,11 +206,13 @@ function MentorConnections() {
   const handleMenteeMore = ({
     name,
     username,
+    matchIds,
   }: {
     name: string;
     username: string;
+    matchIds: string[];
   }) => {
-    setManagedMentee({ name, username });
+    setManagedMentee({ name, username, matchIds });
   };
 
   const handleAccept = async (id: string) => {
@@ -221,12 +274,21 @@ function MentorConnections() {
         visible={managedMentee !== null}
         name={managedMentee?.name ?? ""}
         onClose={() => setManagedMentee(null)}
+        isCheckingReview={matchFeedbackQuery.isLoading}
+        hasReviewed={hasReviewed}
+        onLeaveReview={() => {
+          if (activeMatchId && managedMentee) {
+            onOpenFeedback(activeMatchId, managedMentee.name, "Mentor"); 
+            setManagedMentee(null);
+          }
+        }}
         onViewProfile={() => {
           if (!managedMentee) {
             return;
           }
+          const target = managedMentee;
           setManagedMentee(null);
-          router.push(`/user/${encodeURIComponent(managedMentee.username)}`);
+          router.push(`/user/${encodeURIComponent(target.username)}`);
         }}
         onRemoveConnection={() => {
           if (!managedMentee) {
@@ -236,13 +298,19 @@ function MentorConnections() {
           setManagedMentee(null);
           Alert.alert(
             `Remove ${target.name}?`,
-            "This will remove the connection once backend support is available.",
+            "This will end the active mentorship connection.",
             [
               { text: "Cancel", style: "cancel" },
               {
                 text: "Remove",
                 style: "destructive",
-                onPress: () => showRemoveConnectionNotSupported("mentee"),
+                onPress: () => {
+                  void deactivateConnection({
+                    matchIds: target.matchIds,
+                    name: target.name,
+                    mutateAsync: deactivateMatchMutation.mutateAsync,
+                  });
+                },
               },
             ],
           );
@@ -260,7 +328,6 @@ function MentorConnections() {
               Upcoming Messages
             </Text>
           </View>
-          {/* NOTE: Route to full messages list when messaging screen is implemented. */}
           <TouchableOpacity>
             <Text className="text-[13px] font-bold text-primary">View All</Text>
           </TouchableOpacity>
@@ -371,6 +438,7 @@ function MentorConnections() {
               handleMenteeMore({
                 name: mentee.name,
                 username: mentee.username,
+                matchIds: mentee.matchIds,
               })
             }
           />
@@ -389,7 +457,11 @@ function MentorConnections() {
 // Mentee View
 // ---------------------------------------------------------------------------
 
-function MenteeConnections() {
+function MenteeConnections({
+  onOpenFeedback,
+}: {
+  onOpenFeedback: (matchId: string, name: string, myRole: "Mentor" | "Mentee") => void;
+}) {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [showAllMentors, setShowAllMentors] = useState(false);
@@ -398,10 +470,23 @@ function MenteeConnections() {
   const [managedMentor, setManagedMentor] = useState<{
     name: string;
     username: string;
+    matchIds: string[];
   } | null>(null);
 
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
+  const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
+  
+  // CHECK FEEDBACK FOR SELECTED MENTOR
+  const activeMatchId = managedMentor?.matchIds[0];
+  const matchFeedbackQuery = useMatchFeedbackQuery(activeMatchId);
+  const hasReviewed = useMemo(() => {
+    if (!matchFeedbackQuery.data || !currentUsername) return false;
+    return matchFeedbackQuery.data.some(
+      (feedback: any) => feedback.submitted_by.username === currentUsername
+    );
+  }, [matchFeedbackQuery.data, currentUsername]);
+
   const requests = requestsQuery.data ?? [];
   const requestsLoading = requestsQuery.isLoading;
   const requestsError = requestsQuery.isError;
@@ -426,13 +511,41 @@ function MenteeConnections() {
       ),
   );
 
-  const mentors = matches.map((m) => ({
-    id: m.id,
-    username: m.mentor.username,
-    name: m.mentor.display_name,
-    subtitle: m.mentor.title ?? "",
-    avatarUrl: m.mentor.picture_url || undefined,
-  }));
+  const mentors = Array.from(
+    matches
+      .reduce(
+        (acc, match) => {
+          const key = match.mentor.username;
+          const existing = acc.get(key);
+          if (existing) {
+            existing.matchIds.push(match.id);
+            return acc;
+          }
+
+          acc.set(key, {
+            id: key,
+            username: match.mentor.username,
+            name: match.mentor.display_name,
+            subtitle: match.mentor.title ?? "",
+            avatarUrl: match.mentor.picture_url || undefined,
+            matchIds: [match.id],
+          });
+          return acc;
+        },
+        new Map<
+          string,
+          {
+            id: string;
+            username: string;
+            name: string;
+            subtitle: string;
+            avatarUrl?: string;
+            matchIds: string[];
+          }
+        >(),
+      )
+      .values(),
+  );
 
   const handleMessage = (_name: string) => {
     // NOTE: Route to messaging thread when chat screen is implemented.
@@ -441,11 +554,13 @@ function MenteeConnections() {
   const handleMore = ({
     name,
     username,
+    matchIds,
   }: {
     name: string;
     username: string;
+    matchIds: string[];
   }) => {
-    setManagedMentor({ name, username });
+    setManagedMentor({ name, username, matchIds });
   };
 
   const displayedMentors = showAllMentors
@@ -465,12 +580,21 @@ function MenteeConnections() {
         visible={managedMentor !== null}
         name={managedMentor?.name ?? ""}
         onClose={() => setManagedMentor(null)}
+        isCheckingReview={matchFeedbackQuery.isLoading}
+        hasReviewed={hasReviewed}
+        onLeaveReview={() => {
+          if (activeMatchId && managedMentor) {
+            onOpenFeedback(activeMatchId, managedMentor.name, "Mentee"); 
+            setManagedMentor(null);
+          }
+        }}
         onViewProfile={() => {
           if (!managedMentor) {
             return;
           }
+          const target = managedMentor;
           setManagedMentor(null);
-          router.push(`/user/${encodeURIComponent(managedMentor.username)}`);
+          router.push(`/user/${encodeURIComponent(target.username)}`);
         }}
         onRemoveConnection={() => {
           if (!managedMentor) {
@@ -480,13 +604,19 @@ function MenteeConnections() {
           setManagedMentor(null);
           Alert.alert(
             `Remove ${target.name}?`,
-            "This will remove the connection once backend support is available.",
+            "This will end the active mentorship connection.",
             [
               { text: "Cancel", style: "cancel" },
               {
                 text: "Remove",
                 style: "destructive",
-                onPress: () => showRemoveConnectionNotSupported("mentor"),
+                onPress: () => {
+                  void deactivateConnection({
+                    matchIds: target.matchIds,
+                    name: target.name,
+                    mutateAsync: deactivateMatchMutation.mutateAsync,
+                  });
+                },
               },
             ],
           );
@@ -504,7 +634,6 @@ function MenteeConnections() {
               Upcoming Messages
             </Text>
           </View>
-          {/* NOTE: Route to full messages list when messaging screen is implemented. */}
           <TouchableOpacity activeOpacity={0.85}>
             <Text className="text-[13px] font-bold text-primary">View All</Text>
           </TouchableOpacity>
@@ -618,7 +747,11 @@ function MenteeConnections() {
             }
             onMessage={() => handleMessage(mentor.name)}
             onMore={() =>
-              handleMore({ name: mentor.name, username: mentor.username })
+              handleMore({
+                name: mentor.name,
+                username: mentor.username,
+                matchIds: mentor.matchIds,
+              })
             }
           />
         ))}
@@ -640,17 +773,43 @@ export default function ConnectionsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
 
+  const submitFeedbackMutation = useSubmitMatchFeedbackMutation();
+  const [feedbackConnection, setFeedbackConnection] = useState<{
+    matchId: string;
+    userName: string;
+    role: "Mentor" | "Mentee";
+  } | null>(null);
+
+  const handleFeedbackSubmit = async (rating: number, text?: string) => {
+    if (!feedbackConnection?.matchId) return;
+    
+    try {
+      await submitFeedbackMutation.mutateAsync({
+        matchId: feedbackConnection.matchId,
+        rating,
+        text,
+      });
+      setFeedbackConnection(null);
+      Alert.alert("Review Submitted", "Thank you for your feedback!");
+    } catch (error) {
+      Alert.alert(
+        "Feedback Failed",
+        error instanceof Error ? error.message : "Could not submit feedback."
+      );
+    }
+  };
+
   const isMentor = user?.app_usage_mode !== "MENTEE";
 
   return (
-    <View className="flex-1 bg-surface">
+    <View className="flex-1 bg-surface dark:bg-surface-dark">
       {/* Fixed Header — paddingTop is dynamic (safe area inset) */}
       <View
-        className="bg-surface z-10 shadow-sm"
+        className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
         style={{ paddingTop: insets.top }}
       >
-        <View className="flex-row justify-between items-center px-5 pb-3 pt-2">
-          <Text className="text-2xl font-extrabold text-primary">
+        <View className="flex-row justify-between items-center px-4 pb-3 pt-2">
+          <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Connections
           </Text>
         </View>
@@ -666,8 +825,25 @@ export default function ConnectionsScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {isMentor ? <MentorConnections /> : <MenteeConnections />}
+        {isMentor ? (
+          <MentorConnections
+            onOpenFeedback={(matchId, name, role) => setFeedbackConnection({ matchId, userName: name, role })}
+          />
+        ) : (
+          <MenteeConnections
+            onOpenFeedback={(matchId, name, role) => setFeedbackConnection({ matchId, userName: name, role })}
+          />
+        )}
       </ScrollView>
+
+      <FeedbackBottomSheet
+        visible={!!feedbackConnection}
+        onClose={() => setFeedbackConnection(null)}
+        onSubmit={handleFeedbackSubmit}
+        otherUserName={feedbackConnection?.userName || ""}
+        yourRole={feedbackConnection?.role || "Mentee"}
+        isSubmitting={submitFeedbackMutation.isPending}
+      />
     </View>
   );
 }

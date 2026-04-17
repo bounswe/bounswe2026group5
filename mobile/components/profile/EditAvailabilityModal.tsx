@@ -80,6 +80,22 @@ function formatHourRange(hour: number): string {
   return `${start} - ${end}`;
 }
 
+function startOfDay(date: Date): Date {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function isPastDate(date: Date): boolean {
+  return startOfDay(date) < startOfDay(new Date());
+}
+
+function isPastHourSlot(date: Date, hour: number): boolean {
+  const end = new Date(date);
+  end.setHours(hour + 1, 0, 0, 0);
+  return end <= new Date();
+}
+
 export function EditAvailabilityModal({
   visible,
   onClose,
@@ -190,6 +206,14 @@ export function EditAvailabilityModal({
     const existing = slotsByDateHour[key];
 
     if (togglingKey === key || !username) {
+      return;
+    }
+
+    if (isPastHourSlot(selectedDate, hour)) {
+      Alert.alert(
+        "Past Slot",
+        "Past availability slots cannot be modified.",
+      );
       return;
     }
 
@@ -327,30 +351,40 @@ export function EditAvailabilityModal({
             {weekDays.map((day, index) => {
               const dateString = toDateString(day);
               const isSelected = index === selectedDayIndex;
+              const isPastDay = isPastDate(day);
+
+              let dayContainerClass = "bg-white border-gray-200";
+              if (isSelected) {
+                dayContainerClass = "bg-gray-900 border-gray-900";
+              } else if (isPastDay) {
+                dayContainerClass = "bg-gray-100 border-gray-200";
+              }
+
+              let weekdayClass = "text-gray-500";
+              if (isSelected) {
+                weekdayClass = "text-gray-300";
+              } else if (isPastDay) {
+                weekdayClass = "text-gray-400";
+              }
+
+              let dateLabelClass = "text-gray-900";
+              if (isSelected) {
+                dateLabelClass = "text-white";
+              } else if (isPastDay) {
+                dateLabelClass = "text-gray-400";
+              }
 
               return (
                 <TouchableOpacity
                   key={dateString}
                   onPress={() => setSelectedDayIndex(index)}
                   activeOpacity={1}
-                  className={`mr-2 px-4 py-3 rounded-xl border ${
-                    isSelected
-                      ? "bg-gray-900 border-gray-900"
-                      : "bg-white border-gray-200"
-                  }`}
+                  className={`mr-2 px-4 py-3 rounded-xl border ${dayContainerClass}`}
                 >
-                  <Text
-                    className={`text-xs font-medium ${
-                      isSelected ? "text-gray-300" : "text-gray-500"
-                    }`}
-                  >
+                  <Text className={`text-xs font-medium ${weekdayClass}`}>
                     {day.toLocaleDateString("en-GB", { weekday: "short" })}
                   </Text>
-                  <Text
-                    className={`text-sm font-bold mt-1 ${
-                      isSelected ? "text-white" : "text-gray-900"
-                    }`}
-                  >
+                  <Text className={`text-sm font-bold mt-1 ${dateLabelClass}`}>
                     {day.toLocaleDateString("en-GB", {
                       day: "2-digit",
                       month: "short",
@@ -387,11 +421,15 @@ export function EditAvailabilityModal({
               ).length;
               const isToggling = togglingKey === key;
               const isBooked = Boolean(slot?.is_booked);
+              const isPast = isPastHourSlot(selectedDate, hour);
               const isActive = Boolean(slot) && !isBooked;
               let impactLabel: string | null = null;
               let impactLabelClass = "text-amber-700";
 
-              if (acceptedRequestsCount > 0 || isBooked) {
+              if (isPast) {
+                impactLabel = "Past slot";
+                impactLabelClass = "text-gray-500";
+              } else if (acceptedRequestsCount > 0 || isBooked) {
                 impactLabel = "Planned session exists";
                 impactLabelClass = "text-red-600";
               } else if (pendingRequestsCount > 0) {
@@ -409,7 +447,13 @@ export function EditAvailabilityModal({
                 | "add-circle-outline" = "add-circle-outline";
               let statusIconColor = "#6b7280";
 
-              if (isBooked) {
+              if (isPast) {
+                containerClass = "bg-gray-100 border-gray-200";
+                labelClass = "text-gray-400";
+                stateLabel = "Past";
+                statusIconName = "lock-closed";
+                statusIconColor = "#9ca3af";
+              } else if (isBooked) {
                 containerClass = "bg-gray-100 border-gray-200";
                 labelClass = "text-gray-500";
                 stateLabel = "Booked";
@@ -427,8 +471,8 @@ export function EditAvailabilityModal({
                 <TouchableOpacity
                   key={key}
                   onPress={() => handleToggleSlot(hour)}
-                  disabled={isToggling || isPending}
-                  activeOpacity={isBooked ? 1 : 0.85}
+                  disabled={isToggling || isPending || isPast}
+                  activeOpacity={isBooked || isPast ? 1 : 0.85}
                   className={`rounded-xl border px-4 py-4 flex-row items-center justify-between ${containerClass}`}
                 >
                   <View>

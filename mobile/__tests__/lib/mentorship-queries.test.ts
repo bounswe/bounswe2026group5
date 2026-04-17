@@ -1,7 +1,7 @@
 import {
   mapAvailabilityToSchedule,
-  mapUpcomingSessionsToDashboard,
   mapRequestsToDashboard,
+  mapUpcomingSessionsToDashboard,
 } from "@/lib/queries/mentorship";
 
 type BackendRequestItem = Parameters<typeof mapRequestsToDashboard>[0][number];
@@ -11,6 +11,12 @@ type BackendAvailabilitySlot = Parameters<
 type BackendUpcomingSession = Parameters<
   typeof mapUpcomingSessionsToDashboard
 >[0][number];
+
+function addDays(value: Date, days: number): string {
+  const next = new Date(value);
+  next.setDate(next.getDate() + days);
+  return next.toISOString().slice(0, 10);
+}
 
 describe("mentorship query mappers", () => {
   it("maps pending requests into incoming and outgoing dashboard cards", () => {
@@ -142,18 +148,39 @@ describe("mentorship query mappers", () => {
       {
         day: "Monday",
         times: [
-          { id: "slot-1", label: "10:00 - 11:00", isBooked: false },
-          { id: "slot-2", label: "15:00 - 16:30", isBooked: false },
+          {
+            id: "slot-1",
+            label: "10:00 - 11:00",
+            isBooked: false,
+            date: "2026-04-06",
+          },
+          {
+            id: "slot-2",
+            label: "15:00 - 16:30",
+            isBooked: false,
+            date: "2026-04-06",
+          },
         ],
       },
       {
         day: "Tuesday",
-        times: [{ id: "slot-3", label: "09:00 - 10:00", isBooked: true }],
+        times: [
+          {
+            id: "slot-3",
+            label: "09:00 - 10:00",
+            isBooked: true,
+            date: "2026-04-07",
+          },
+        ],
       },
     ]);
   });
 
   it("maps upcoming sessions endpoint payload into dashboard sessions", () => {
+    const today = new Date();
+    const futureDate = addDays(today, 7);
+    const nextDate = addDays(today, 8);
+
     const sessions: BackendUpcomingSession[] = [
       {
         slot_id: "slot-1",
@@ -164,7 +191,7 @@ describe("mentorship query mappers", () => {
           picture_url: "",
           title: "Mentor",
         },
-        slot_date: "2026-04-10",
+        slot_date: futureDate,
         slot_start_time: "09:00:00",
         slot_end_time: "10:00:00",
         status: "ACCEPTED",
@@ -179,7 +206,7 @@ describe("mentorship query mappers", () => {
           picture_url: "",
           title: "Mentor",
         },
-        slot_date: "2026-04-11",
+        slot_date: nextDate,
         slot_start_time: "13:00:00",
         slot_end_time: "14:00:00",
         status: "PENDING",
@@ -193,7 +220,7 @@ describe("mentorship query mappers", () => {
     expect(mapped[0]).toMatchObject({
       id: "slot-1",
       user: "Ada Lovelace",
-      rawDate: "2026-04-10",
+      rawDate: futureDate,
       time: "09:00 - 10:00",
       status: "Upcoming",
       myRole: "Mentee",

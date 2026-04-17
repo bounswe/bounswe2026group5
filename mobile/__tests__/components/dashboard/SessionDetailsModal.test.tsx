@@ -16,11 +16,19 @@ describe("SessionDetailsModal Component", () => {
     topic: "System Design Interview Prep",
     myRole: "Mentee",
     location: "Campus Library, Room 4B",
+    isSessionStarted: false, 
   };
 
-  // Set up fake timers for the setTimeout in your Reschedule button
+  const completedSession = {
+    ...mockSession,
+    status: "Completed",
+    isSessionStarted: true,
+  };
+
+  // Set up fake timers for the setTimeout in your Reschedule/Feedback buttons
   beforeEach(() => {
     jest.useFakeTimers();
+    jest.clearAllMocks();
   });
 
   afterEach(() => {
@@ -37,13 +45,13 @@ describe("SessionDetailsModal Component", () => {
       />,
     );
 
-    // Verify core info rendered (removed the false "Session Details" header check)
+    // Verify core info rendered
     expect(getByText("System Design Interview Prep")).toBeTruthy();
-    expect(getByText('with Ahmet Yılmaz')).toBeTruthy();
+    expect(getByText("with Ahmet Yılmaz")).toBeTruthy();
     expect(getByText("14:00 - 15:00")).toBeTruthy();
     expect(getByText("Campus Library, Room 4B")).toBeTruthy();
 
-    // Verify our action buttons are present
+    // Verify our action buttons are present for Upcoming sessions
     expect(getByText("Reschedule")).toBeTruthy();
     expect(getByText("Cancel")).toBeTruthy();
   });
@@ -61,17 +69,41 @@ describe("SessionDetailsModal Component", () => {
       />,
     );
 
-    // Press the Reschedule button
     fireEvent.press(getByText("Reschedule"));
 
     // Verify onClose is called immediately
     expect(mockOnClose).toHaveBeenCalled();
 
-    // Fast-forward the 300ms setTimeout to trigger the BookingModal
+    // Fast-forward the 300ms setTimeout
     jest.runAllTimers();
 
     // Verify onReschedule was called after the delay
     expect(mockOnReschedule).toHaveBeenCalled();
+  });
+
+  it("shows Leave Feedback and hides Reschedule/Cancel for Completed sessions", () => {
+    const mockOnLeaveFeedback = jest.fn();
+    
+    const { getByText, queryByText } = render(
+      <SessionDetailsModal
+        visible={true}
+        session={completedSession as any}
+        onClose={jest.fn()}
+        onLeaveFeedback={mockOnLeaveFeedback}
+      />,
+    );
+
+    // Leave Feedback should be visible
+    expect(getByText("Leave Feedback")).toBeTruthy();
+    
+    // Reschedule and Cancel should NOT be visible
+    expect(queryByText("Reschedule")).toBeNull();
+    expect(queryByText("Cancel")).toBeNull();
+
+    // Pressing Leave Feedback
+    fireEvent.press(getByText("Leave Feedback"));
+    jest.runAllTimers(); // fast forward 300ms
+    expect(mockOnLeaveFeedback).toHaveBeenCalled();
   });
 
   it("does not render content when visible is false", () => {

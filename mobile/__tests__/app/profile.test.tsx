@@ -42,6 +42,12 @@ jest.mock("@/lib/auth/store", () => ({
 }));
 
 jest.mock("@/lib/queries/profile", () => ({
+  useProfileRatingQuery: () => ({
+    data: {
+      average_rating: "4.9",
+      review_count: 18,
+    },
+  }),
   useUpdateOwnProfileMutation: () => ({
     mutateAsync: jest.fn(),
     isPending: false,

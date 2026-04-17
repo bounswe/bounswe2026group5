@@ -23,7 +23,14 @@ interface BookingModalProps {
   offering: Offering | null;
   availability: AvailabilitySlot[];
   existingSession?: { date: string; time: string };
+  hasActiveMatch?: boolean;
   isFirstTime?: boolean;
+  onSubmit?: (payload: {
+    date: string;
+    rawDate: string;
+    time: string;
+    coverLetter?: string;
+  }) => Promise<void> | void;
 }
 
 const MAX_COVER_LETTER_LENGTH = 300;
@@ -56,7 +63,11 @@ function toDateOptions(availability: AvailabilitySlot[]): DateOption[] {
 
   return options.filter((candidate) =>
     availability.some(
-      (slot) => slot.day === candidate.dayOfWeek && slot.times.length > 0,
+      (slot) =>
+        slot.day === candidate.dayOfWeek &&
+        slot.times.some(
+          (entry) => typeof entry === "string" || !entry.isBooked,
+        ),
     ),
   );
 }
@@ -75,6 +86,10 @@ function expandHourlySlots(daySchedule?: AvailabilitySlot): string[] {
   const generatedSlots: string[] = [];
 
   daySchedule.times.forEach((entry) => {
+    if (typeof entry !== "string" && entry.isBooked) {
+      return;
+    }
+
     const block = toSlotLabel(entry);
     const [start, end] = block.split(" - ");
     const startHour = Number.parseInt(start.split(":")[0], 10);
@@ -113,7 +128,9 @@ export function BookingModal({
   offering,
   availability,
   existingSession,
+  hasActiveMatch,
   isFirstTime = true,
+  onSubmit,
 }: Readonly<BookingModalProps>) {
   const insets = useSafeAreaInsets();
 
@@ -159,6 +176,9 @@ export function BookingModal({
     return expandHourlySlots(daySchedule);
   }, [availability, selectedDateObj]);
 
+  const isFirstBooking =
+    typeof hasActiveMatch === "boolean" ? !hasActiveMatch : isFirstTime;
+
   if (!offering) {
     return null;
   }
@@ -175,7 +195,9 @@ export function BookingModal({
 
   const handleCloseWithWarning = () => {
     const hasUnsavedChanges =
-      selectedDateObj !== null || isCustomTime || coverLetter.length > 0;
+      selectedDateObj !== null ||
+      isCustomTime ||
+      (isFirstBooking && coverLetter.length > 0);
 
     if (!hasUnsavedChanges || isLoading) {
       onClose();
@@ -224,8 +246,8 @@ export function BookingModal({
     return null;
   };
 
-  const submit = () => {
-    if (isFirstTime && coverLetter.trim().length < 10) {
+  const submit = async () => {
+    if (isFirstBooking && coverLetter.trim().length < 10) {
       Alert.alert(
         "Cover Letter too short",
         "Please provide a bit more detail about what you want to discuss.",
@@ -240,11 +262,31 @@ export function BookingModal({
 
     setIsLoading(true);
 
+    if (onSubmit) {
+      try {
+        await onSubmit({
+          date: selectedDateObj.date,
+          rawDate: selectedDateObj.rawDate,
+          time: finalTime,
+          ...(isFirstBooking ? { coverLetter: coverLetter.trim() } : {}),
+        });
+        setIsLoading(false);
+        onClose();
+      } catch (error) {
+        setIsLoading(false);
+        Alert.alert(
+          "Booking Failed",
+          error instanceof Error ? error.message : "Please try again.",
+        );
+      }
+      return;
+    }
+
     setTimeout(() => {
       setIsLoading(false);
       Alert.alert(
-        isFirstTime ? "Request Sent!" : "Booking Confirmed!",
-        isFirstTime
+        isFirstBooking ? "Request Sent!" : "Booking Confirmed!",
+        isFirstBooking
           ? `Your request for ${offering.title} on ${selectedDateObj.date} at ${finalTime} has been sent.`
           : `Your booking for ${offering.title} on ${selectedDateObj.date} at ${finalTime} is confirmed.`,
         [{ text: "Great", onPress: onClose }],
@@ -252,7 +294,7 @@ export function BookingModal({
     }, 1500);
   };
 
-  const handlePrimaryAction = () => {
+  const handlePrimaryAction = async () => {
     const validationError = validateSelection();
     if (validationError) {
       Alert.alert("Missing Information", validationError);
@@ -273,8 +315,8 @@ export function BookingModal({
       }
     }
 
-    if (!isFirstTime) {
-      submit();
+    if (!isFirstBooking) {
+      await submit();
       return;
     }
 
@@ -283,11 +325,17 @@ export function BookingModal({
       return;
     }
 
-    submit();
+    await submit();
   };
 
-  const showCoverLetter = isFirstTime && step === 2;
-  const title = getHeaderTitle(isFirstTime, step);
+  const showCoverLetter = isFirstBooking && step === 2;
+  const title = getHeaderTitle(isFirstBooking, step);
+  let submitButtonText = "Confirm Booking";
+  if (isLoading) {
+    submitButtonText = isFirstBooking ? "Sending Request..." : "Confirming...";
+  } else if (isFirstBooking) {
+    submitButtonText = step === 1 ? "Continue" : "Send Request";
+  }
 
   return (
     <Modal
@@ -537,24 +585,16 @@ export function BookingModal({
         <View className="px-6 py-4 border-t border-gray-100">
           <TouchableOpacity
             activeOpacity={0.9}
-            onPress={handlePrimaryAction}
+            onPress={() => {
+              void handlePrimaryAction();
+            }}
             disabled={isLoading}
             className={`py-4 rounded-xl items-center shadow-sm flex-row justify-center ${isLoading ? "bg-indigo-400" : "bg-indigo-600"}`}
           >
             {isLoading ? (
               <ActivityIndicator color="white" className="mr-2" />
             ) : null}
-            <Text className="text-lg font-bold text-white">
-              {isLoading
-                ? isFirstTime
-                  ? "Sending Request..."
-                  : "Confirming..."
-                : isFirstTime
-                  ? step === 1
-                    ? "Continue"
-                    : "Send Request"
-                  : "Confirm Booking"}
-            </Text>
+            <Text className="text-lg font-bold text-white">{submitButtonText}</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -8,8 +10,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { useNavigation } from "@react-navigation/native";
 
 import { DiscoverFilterModal } from "@/components/discover/DiscoverFilterModal";
 import { DiscoverSearchBar } from "@/components/discover/DiscoverSearchBar";
@@ -18,15 +18,18 @@ import {
   DEMO_DISCOVER_PROFILES,
   DEMO_DISCOVER_SKILLS,
 } from "@/constants/discover-demo";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
+  fetchDiscoverPopularProfiles,
   fetchDiscoverProfiles,
+  fetchDiscoverRecentlyAddedProfiles,
   fetchDiscoverSkills,
 } from "@/lib/discover/client";
 import { type DiscoverMentorProfile } from "@/lib/discover/types";
-import { Colors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
 
 const PAGE_SIZE = 8;
+type DiscoverFeedMode = "popular" | "recent";
 
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
@@ -39,6 +42,7 @@ export default function DiscoverScreen() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [feedMode, setFeedMode] = useState<DiscoverFeedMode>("popular");
 
   const [profiles, setProfiles] = useState<DiscoverMentorProfile[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
@@ -60,7 +64,7 @@ export default function DiscoverScreen() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener("tabPress", () => {
+    const unsubscribe = (navigation as any).addListener("tabPress", () => {
       resetDiscoverFilters();
     });
 
@@ -111,27 +115,56 @@ export default function DiscoverScreen() {
     () => Array.from(selectedSkills),
     [selectedSkills],
   );
+  const hasSearchFilters =
+    debouncedQuery.length > 0 || selectedSkillList.length > 0;
 
   useEffect(() => {
     let mounted = true;
     setLoadingProfiles(true);
     setErrorText(null);
 
-    fetchDiscoverProfiles({
-      page,
-      pageSize: PAGE_SIZE,
-      query: debouncedQuery,
-      skills: selectedSkillList,
-    })
+    let request: Promise<{ count: number; results: DiscoverMentorProfile[] }>;
+    if (hasSearchFilters) {
+      request = fetchDiscoverProfiles({
+        page,
+        pageSize: PAGE_SIZE,
+        query: debouncedQuery,
+        skills: selectedSkillList,
+      }).then((payload) => ({
+        count: payload.count,
+        results: payload.results,
+      }));
+    } else if (feedMode === "popular") {
+      request = fetchDiscoverPopularProfiles(PAGE_SIZE * page).then(
+        (results) => ({
+          count: results.length,
+          results,
+        }),
+      );
+    } else {
+      request = fetchDiscoverRecentlyAddedProfiles(PAGE_SIZE * page).then(
+        (results) => ({
+          count: results.length,
+          results,
+        }),
+      );
+    }
+
+    request
       .then((payload) => {
         if (!mounted) {
           return;
         }
 
         setTotalCount(payload.count);
-        setProfiles((previous) =>
-          page === 1 ? payload.results : [...previous, ...payload.results],
-        );
+        if (hasSearchFilters) {
+          setProfiles((previous) =>
+            page === 1 ? payload.results : [...previous, ...payload.results],
+          );
+          return;
+        }
+
+        setProfiles(payload.results);
       })
       .catch((error) => {
         if (mounted) {
@@ -151,9 +184,11 @@ export default function DiscoverScreen() {
     return () => {
       mounted = false;
     };
-  }, [page, debouncedQuery, selectedSkillList]);
+  }, [page, debouncedQuery, selectedSkillList, hasSearchFilters, feedMode]);
 
-  const hasMore = profiles.length < totalCount;
+  const hasMore = hasSearchFilters
+    ? profiles.length < totalCount
+    : profiles.length >= PAGE_SIZE * page;
   const showDemoContent =
     profiles.length === 0 &&
     !loadingProfiles &&
@@ -279,6 +314,47 @@ export default function DiscoverScreen() {
                 </View>
               )}
             </TouchableOpacity>
+          </View>
+
+          <View className="flex-row gap-2 mt-3">
+            <TouchableOpacity
+              activeOpacity={0.85}
+              disabled={hasSearchFilters}
+              onPress={() => {
+                setPage(1);
+                setFeedMode("popular");
+              }}
+              className={`px-3 py-2 rounded-lg border ${feedMode === "popular" ? "bg-primary border-primary" : "bg-surface-card dark:bg-surface-card-dark border-divider dark:border-divider-dark"}`}
+            >
+              <Text
+                className={`text-xs font-semibold ${feedMode === "popular" ? "text-white" : "text-on-surface dark:text-on-surface-dark"}`}
+              >
+                Popular
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              disabled={hasSearchFilters}
+              onPress={() => {
+                setPage(1);
+                setFeedMode("recent");
+              }}
+              className={`px-3 py-2 rounded-lg border ${feedMode === "recent" ? "bg-primary border-primary" : "bg-surface-card dark:bg-surface-card-dark border-divider dark:border-divider-dark"}`}
+            >
+              <Text
+                className={`text-xs font-semibold ${feedMode === "recent" ? "text-white" : "text-on-surface dark:text-on-surface-dark"}`}
+              >
+                Recently Added
+              </Text>
+            </TouchableOpacity>
+
+            {hasSearchFilters && (
+              <View className="px-3 py-2 rounded-lg border bg-surface-active dark:bg-surface-active-dark border-divider dark:border-divider-dark">
+                <Text className="text-xs font-semibold text-on-surface-soft dark:text-on-surface-soft-dark">
+                  Search Mode
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </View>

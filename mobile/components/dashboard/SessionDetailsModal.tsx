@@ -1,21 +1,24 @@
 import React from "react";
 import {
-  View,
-  Text,
-  Modal,
-  TouchableOpacity,
-  Pressable,
-  Alert,
   ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 interface SessionDetailsModalProps {
   visible: boolean;
   onClose: () => void;
   onReschedule?: () => void;
   onCancelSession?: () => void;
+  onLeaveFeedback?: () => void;
   isCancelling?: boolean;
   session: {
+    id?: string;
     user: string;
     date: string;
     time: string;
@@ -24,6 +27,7 @@ interface SessionDetailsModalProps {
     myRole?: string;
     location?: string;
     meetingUrl?: string;
+    isSessionStarted?: boolean;
   } | null;
 }
 
@@ -32,6 +36,7 @@ export function SessionDetailsModal({
   onClose,
   onReschedule,
   onCancelSession,
+  onLeaveFeedback,
   isCancelling = false,
   session,
 }: Readonly<SessionDetailsModalProps>) {
@@ -44,22 +49,39 @@ export function SessionDetailsModal({
     statusTextClass = "text-amber-600";
   }
 
+  // 1. Primary Action: completed sessions show feedback CTA.
   let primaryAction: React.ReactNode = null;
-  if (session.location) {
+  if (session.status === "Completed") {
     primaryAction = (
       <TouchableOpacity
-        className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm"
+        className="bg-indigo-600 py-4 rounded-xl items-center mb-3 shadow-sm"
+        onPress={() => {
+          onClose();
+          if (onLeaveFeedback) {
+            setTimeout(() => onLeaveFeedback(), 300);
+          }
+        }}
+      >
+        <Text className="text-white font-bold text-lg">Leave Feedback</Text>
+      </TouchableOpacity>
+    );
+  } else if (session.location) {
+    primaryAction = (
+      <TouchableOpacity
+        className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm flex-row justify-center gap-2"
         onPress={() => console.log(`TODO: Open Maps for ${session.location}`)}
       >
+        <Ionicons name="location" size={20} color="white" />
         <Text className="text-white font-bold text-lg">Get Directions</Text>
       </TouchableOpacity>
     );
   } else if (session.meetingUrl) {
     primaryAction = (
       <TouchableOpacity
-        className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm"
+        className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm flex-row justify-center gap-2"
         onPress={() => console.log(`TODO: Open Link ${session.meetingUrl}`)}
       >
+        <Ionicons name="videocam" size={20} color="white" />
         <Text className="text-white font-bold text-lg">Join Video Call</Text>
       </TouchableOpacity>
     );
@@ -72,10 +94,7 @@ export function SessionDetailsModal({
       visible={visible}
       onRequestClose={onClose}
     >
-      <Pressable
-        className="flex-1 bg-black/40 justify-end"
-        onPress={onClose}
-      >
+      <Pressable className="flex-1 bg-black/40 justify-end" onPress={onClose}>
         <Pressable
           onPress={(e) => e.stopPropagation()}
           className="bg-white w-full rounded-t-3xl p-6 pb-12 shadow-2xl"
@@ -89,15 +108,6 @@ export function SessionDetailsModal({
             <Text className="text-2xl font-extrabold text-gray-900 flex-1 pr-2">
               {session.topic || "Mentorship Session"}
             </Text>
-            <View
-              className={`px-3 py-1 rounded-full ${session.myRole === "Mentor" ? "bg-indigo-100" : "bg-emerald-100"}`}
-            >
-              <Text
-                className={`text-xs font-bold uppercase tracking-wider ${session.myRole === "Mentor" ? "text-indigo-700" : "text-emerald-700"}`}
-              >
-                As {session.myRole}
-              </Text>
-            </View>
           </View>
 
           <Text className="text-lg text-gray-500 mb-6 font-medium">
@@ -108,14 +118,17 @@ export function SessionDetailsModal({
           <View className="bg-gray-50 rounded-xl p-4 border border-gray-100 mb-8">
             <View className="flex-row justify-between mb-3">
               <Text className="text-gray-500 font-medium">Date</Text>
-              <Text className="text-gray-900 font-semibold">{session.date}</Text>
+              <Text className="text-gray-900 font-semibold">
+                {session.date}
+              </Text>
             </View>
             <View className="flex-row justify-between mb-3">
               <Text className="text-gray-500 font-medium">Start Time</Text>
-              <Text className="text-gray-900 font-semibold">{session.time}</Text>
+              <Text className="text-gray-900 font-semibold">
+                {session.time}
+              </Text>
             </View>
 
-            {/* Display Location OR Platform in the details box */}
             <View className="flex-row justify-between mb-3">
               <Text className="text-gray-500 font-medium">
                 {session.location ? "Location" : "Platform"}
@@ -139,57 +152,61 @@ export function SessionDetailsModal({
           {/* Dynamic Primary Action Button */}
           {primaryAction}
 
-          {/* Secondary Actions */}
-          <View className="flex-row justify-between gap-3 mb-2 mt-2">
-            <TouchableOpacity
-              className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
-              onPress={() => {
-                onClose();
-                if (onReschedule) {
-                  setTimeout(() => onReschedule(), 300);
-                }
-              }}
-            >
-              <Text className="text-gray-700 font-bold text-base">Reschedule</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
-              disabled={isCancelling}
-              onPress={() => {
-                Alert.alert(
-                  "Cancel Session",
-                  "Are you sure you want to cancel this session?",
-                  [
-                    { text: "Keep Session", style: "cancel" },
-                    {
-                      text: "Cancel Session",
-                      style: "destructive",
-                      onPress: () => {
-                        if (onCancelSession) {
-                          onCancelSession();
-                          return;
-                        }
-
-                        Alert.alert(
-                          "TODO",
-                          "Session cancellation API is not available yet for this flow.",
-                        );
-                      },
-                    },
-                  ],
-                );
-              }}
-            >
-              {isCancelling ? (
-                <ActivityIndicator size="small" color="#dc2626" />
-              ) : (
-                <Text className="font-bold text-base text-red-600">
-                  Cancel
-                </Text>
+          {/* 2. Secondary Actions: Hidden completely if session has started or is completed */}
+          {!session.isSessionStarted && session.status !== "Completed" && (
+            <View className="flex-row justify-between gap-3 mb-2 mt-2">
+              
+              {/* RESCHEDULE BUTTON: Only for Mentees */}
+              {session.myRole === "Mentee" && (
+                <TouchableOpacity
+                  className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
+                  disabled={isCancelling}
+                  onPress={() => {
+                    if (onReschedule) {
+                      onClose();
+                      setTimeout(() => onReschedule(), 300);
+                    }
+                  }}
+                >
+                  <Text className="text-gray-700 font-bold text-base">
+                    Reschedule
+                  </Text>
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
-          </View>
+
+              {/* CANCEL BUTTON */}
+              <TouchableOpacity
+                className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
+                disabled={isCancelling}
+                onPress={() => {
+                  Alert.alert(
+                    "Cancel Session",
+                    "Are you sure you want to cancel this session?",
+                    [
+                      { text: "Keep Session", style: "cancel" },
+                      {
+                        text: "Cancel Session",
+                        style: "destructive",
+                        onPress: () => {
+                          if (onCancelSession) {
+                            onCancelSession();
+                          }
+                        },
+                      },
+                    ],
+                  );
+                }}
+              >
+                {isCancelling ? (
+                  <ActivityIndicator size="small" color="#dc2626" />
+                ) : (
+                  <Text className="font-bold text-base text-red-600">
+                    Cancel
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </Pressable>
       </Pressable>
     </Modal>

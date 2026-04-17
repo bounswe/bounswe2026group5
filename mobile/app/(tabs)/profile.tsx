@@ -1,34 +1,35 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Alert, View, ScrollView, Text, TouchableOpacity } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ProfileHeader } from "@/components/profile/ProfileHeader";
-import { SkillsCloud } from "@/components/profile/SkillsCloud";
-import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { AvailabilityPreview } from "@/components/profile/AvailabilityPreview";
-import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { EditAvailabilityModal } from "@/components/profile/EditAvailabilityModal";
 import {
   EditProfileModal,
   UserProfileData,
 } from "@/components/profile/EditProfileModal";
+import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
+import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { SkillsCloud } from "@/components/profile/SkillsCloud";
+import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 
 import { API_BASE_URL } from "@/constants/api";
+import { useAuthStore } from "@/lib/auth/store";
+import { useProfileVisibilityStore } from "@/lib/profile/preferences";
 import {
   mapAvailabilityToSchedule,
   useAvailabilitySlotsQuery,
   useMentorshipMatchesQuery,
   useMentorshipRequestsQuery,
 } from "@/lib/queries/mentorship";
-import { useAuthStore } from "@/lib/auth/store";
-import { useProfileVisibilityStore } from "@/lib/profile/preferences";
-import { useUpdateOwnProfileMutation } from "@/lib/queries/profile";
+import {
+  useProfileRatingQuery,
+  useUpdateOwnProfileMutation,
+} from "@/lib/queries/profile";
 
 const PROFILE_DEFAULTS = {
-  rating: 0,
-  reviewCount: 0,
   expertise: [] as string[],
   eagerToLearn: [] as string[],
 };
@@ -63,6 +64,7 @@ export default function ProfileScreen() {
     currentUsername || "",
   );
   const updateProfileMutation = useUpdateOwnProfileMutation();
+  const profileRatingQuery = useProfileRatingQuery(currentUsername);
 
   const showExpertise = useProfileVisibilityStore(
     (state) => state.showExpertise,
@@ -308,19 +310,27 @@ export default function ProfileScreen() {
     setSkillsModalConfig({ visible: true, title, skills, variant });
   };
 
+  const normalizedRating = Number.parseFloat(
+    profileRatingQuery.data?.average_rating ?? "0",
+  );
+  const rating = Number.isFinite(normalizedRating) ? normalizedRating : 0;
+  const reviewCount = profileRatingQuery.data?.review_count ?? 0;
+
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-surface dark:bg-surface-dark">
       <View
-        className="bg-white z-10 shadow-sm border-b border-gray-100"
+        className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
         style={{ paddingTop: insets.top }}
       >
         <View className="flex-row justify-between items-center px-4 pb-3 pt-2">
-          <Text className="text-xl font-extrabold text-gray-900">Profile</Text>
+          <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
+            Profile
+          </Text>
           <TouchableOpacity
             onPress={() => router.push("/settings" as any)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="settings-outline" size={24} color="#4b5563" />
+            <Ionicons name="settings-outline" size={24} color="#6b7280" />
           </TouchableOpacity>
         </View>
       </View>
@@ -337,8 +347,8 @@ export default function ProfileScreen() {
             ...(isMentorMode ? (["MENTOR"] as const) : []),
             ...(isMenteeMode ? (["MENTEE"] as const) : []),
           ]}
-          rating={PROFILE_DEFAULTS.rating}
-          reviewCount={PROFILE_DEFAULTS.reviewCount}
+          reviewCount={reviewCount}
+          rating={rating}
           totalSessions={0}
           menteesHelped={isMentorMode ? menteesCount : 0}
           onEdit={() => setEditProfileModalOpen(true)}
