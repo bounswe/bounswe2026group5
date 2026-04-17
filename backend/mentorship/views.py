@@ -1,11 +1,9 @@
 """Views for mentorship request and match API endpoints."""
 
-from decimal import Decimal
 from typing import Any, cast
 
-from django.conf import settings
-from django.db import IntegrityError, transaction
-from django.db.models import Avg, CharField, OuterRef, Q, Subquery, Value
+from django.db import IntegrityError
+from django.db.models import CharField, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -23,8 +21,6 @@ from profiles.services import (
     SlotAlreadyBookedError,
     SlotInPastError,
     SlotNotBookedError,
-    book_availability_slot,
-    cancel_availability_booking,
 )
 
 from .models import Feedback, Match, MeetingSession, MentorshipRequest
@@ -39,6 +35,17 @@ from .serializers import (
     RespondToRequestSerializer,
     UpcomingMenteeSessionSerializer,
     UpcomingMentorSessionSerializer,
+)
+from .services import (
+    MissingSelectedSlotError,
+    NoActiveBookingError,
+    SameSlotSelectionError,
+    cancel_match_session,
+    create_match_feedback,
+    create_mentorship_request,
+    deactivate_match,
+    reschedule_match_session,
+    respond_to_mentorship_request,
 )
 
 _NOT_FOUND = {"detail": "Not found."}
@@ -128,9 +135,15 @@ class CreateRequestAPIView(APIView):
             context={"request": request, "mentee_profile": mentee_profile},
         )
         serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict[str, Any], serializer.validated_data)
 
         try:
-            mentorship_request = serializer.save()
+            mentorship_request = create_mentorship_request(
+                mentee_profile=mentee_profile,
+                mentor_profile=cast(Profile, validated_data["mentor_username"]),
+                selected_slot=cast(AvailabilitySlot, validated_data["slot_id"]),
+                cover_letter=cast(str, validated_data.get("cover_letter", "")),
+            )
         except IntegrityError:
             return Response(_DUPLICATE_PENDING, status=status.HTTP_400_BAD_REQUEST)
 
@@ -186,33 +199,17 @@ class RespondToRequestAPIView(APIView):
         validated_data = cast(dict[str, Any], serializer.validated_data)
         action = validated_data.get("action")
 
-        new_status = (
-            MentorshipRequest.Status.ACCEPTED
-            if action == "accept"
-            else MentorshipRequest.Status.REJECTED
-        )
-
-        with transaction.atomic():
-            if new_status == MentorshipRequest.Status.ACCEPTED:
-                selected_slot = mentorship_request.slot
-                if selected_slot is None:
-                    return Response(_SLOT_BOOKING_FAILED, status=status.HTTP_400_BAD_REQUEST)
-
-                try:
-                    book_availability_slot(
-                        profile=mentorship_request.mentor,
-                        slot_id=selected_slot.id,
-                        actor=mentorship_request.mentee.user,
-                    )
-                except (SlotAlreadyBookedError, SlotInPastError):
-                    return Response(_SLOT_BOOKING_FAILED, status=status.HTTP_400_BAD_REQUEST)
-                except OwnSlotBookingError:
-                    return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
-                except AvailabilitySlot.DoesNotExist:
-                    return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
-
-            mentorship_request.status = new_status
-            mentorship_request.save()
+        try:
+            mentorship_request = respond_to_mentorship_request(
+                mentorship_request=mentorship_request,
+                action=action,
+            )
+        except (MissingSelectedSlotError, SlotAlreadyBookedError, SlotInPastError):
+            return Response(_SLOT_BOOKING_FAILED, status=status.HTTP_400_BAD_REQUEST)
+        except OwnSlotBookingError:
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+        except AvailabilitySlot.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
@@ -367,22 +364,17 @@ class CancelSessionAPIView(APIView):
         if profile not in (match.mentor, match.mentee):
             return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
 
-        mentorship_request = match.request
-        slot = mentorship_request.slot
-
-        if slot is None or not slot.is_booked:
+        try:
+            mentorship_request = cancel_match_session(
+                match=match,
+                actor=request.user,
+                actor_profile=profile,
+            )
+        except NoActiveBookingError:
             return Response(
                 {"detail": "This session has no active booking to cancel."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        try:
-            with transaction.atomic():
-                cancel_availability_booking(
-                    profile=match.mentor,
-                    slot_id=slot.id,
-                    actor=request.user,
-                )
         except SlotNotBookedError:
             return Response(
                 {"detail": "This session has no active booking to cancel."},
@@ -393,28 +385,6 @@ class CancelSessionAPIView(APIView):
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
-        meeting_session = MeetingSession.objects.filter(match=match).order_by("-created_at").first()
-        if meeting_session is not None:
-            canceled_by_role = (
-                MeetingSession.CanceledByRole.MENTOR
-                if profile == match.mentor
-                else MeetingSession.CanceledByRole.MENTEE
-            )
-            meeting_session.status = MeetingSession.Status.CANCELED
-            meeting_session.source_slot = None
-            meeting_session.canceled_by_role = canceled_by_role
-            meeting_session.cancel_reason = "Session canceled by participant."
-            meeting_session.save(
-                update_fields=[
-                    "status",
-                    "source_slot",
-                    "canceled_by_role",
-                    "cancel_reason",
-                    "updated_at",
-                ]
-            )
-
-        mentorship_request.refresh_from_db()
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
             status=status.HTTP_200_OK,
@@ -467,66 +437,17 @@ class RescheduleSessionAPIView(APIView):
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
-        mentorship_request = match.request
-        old_slot = mentorship_request.slot
-
-        if new_slot == old_slot:
+        try:
+            mentorship_request = reschedule_match_session(
+                match=match,
+                actor=request.user,
+                new_slot=new_slot,
+            )
+        except SameSlotSelectionError:
             return Response(
                 {"detail": "New slot is the same as the current slot."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        try:
-            with transaction.atomic():
-                if old_slot is not None and old_slot.is_booked:
-                    cancel_availability_booking(
-                        profile=match.mentor,
-                        slot_id=old_slot.id,
-                        actor=request.user,
-                    )
-
-                book_availability_slot(
-                    profile=match.mentor,
-                    slot_id=new_slot.id,
-                    actor=request.user,
-                )
-                mentorship_request.slot = new_slot
-                mentorship_request.save(update_fields=["slot"])
-
-                meeting_session = (
-                    MeetingSession.objects.select_for_update()
-                    .filter(match=match)
-                    .order_by("-created_at")
-                    .first()
-                )
-                if meeting_session is None:
-                    MeetingSession.objects.create(
-                        match=match,
-                        mentor=match.mentor,
-                        mentee=match.mentee,
-                        source_slot=new_slot,
-                        scheduled_start_at_utc=new_slot.start_at,
-                        scheduled_end_at_utc=new_slot.end_at,
-                        status=MeetingSession.Status.RESCHEDULED,
-                    )
-                else:
-                    meeting_session.source_slot = new_slot
-                    meeting_session.scheduled_start_at_utc = new_slot.start_at
-                    meeting_session.scheduled_end_at_utc = new_slot.end_at
-                    meeting_session.status = MeetingSession.Status.RESCHEDULED
-                    meeting_session.canceled_by_role = ""
-                    meeting_session.cancel_reason = ""
-                    meeting_session.save(
-                        update_fields=[
-                            "source_slot",
-                            "scheduled_start_at_utc",
-                            "scheduled_end_at_utc",
-                            "status",
-                            "canceled_by_role",
-                            "cancel_reason",
-                            "updated_at",
-                        ]
-                    )
         except SlotNotBookedError:
             return Response(
                 {"detail": "Current slot is no longer booked."},
@@ -549,7 +470,6 @@ class RescheduleSessionAPIView(APIView):
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
-        mentorship_request.refresh_from_db()
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
             status=status.HTTP_200_OK,
@@ -800,8 +720,7 @@ class DeactivateMatchAPIView(APIView):
         if profile not in (match.mentor, match.mentee):
             return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
 
-        Match.objects.filter(pk=match.pk).update(is_active=False)
-        match.is_active = False
+        match = deactivate_match(match=match)
 
         return Response(MatchSerializer(match).data, status=status.HTTP_200_OK)
 
@@ -880,42 +799,20 @@ class MatchFeedbackListCreateAPIView(APIView):
 
         serializer = FeedbackCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict[str, Any], serializer.validated_data)
 
         try:
-            feedback = Feedback.objects.create(
+            feedback = create_match_feedback(
                 match=match,
                 submitted_by=profile,
-                rating=serializer.validated_data["rating"],
-                text=serializer.validated_data.get("text", ""),
+                rating=cast(int, validated_data["rating"]),
+                text=cast(str, validated_data.get("text", "")),
             )
         except IntegrityError:
             return Response(
                 {"detail": "You have already submitted feedback for this match."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        # When the mentee submits, update the mentor's rating counter and
-        # recalculate the public average every RATING_UPDATE_THRESHOLD reviews.
-        if profile == match.mentee:
-            mentor = match.mentor
-            with transaction.atomic():
-                Profile.objects.filter(pk=mentor.pk).update(review_count=mentor.review_count + 1)
-                mentor.refresh_from_db(fields=["review_count"])
-
-                threshold = getattr(settings, "RATING_UPDATE_THRESHOLD", 5)
-                if mentor.review_count % threshold == 0:
-                    avg = (
-                        Feedback.objects.filter(match__mentor=mentor)
-                        .exclude(submitted_by=mentor)
-                        .aggregate(avg=Avg("rating"))["avg"]
-                    )
-                    Profile.objects.filter(pk=mentor.pk).update(
-                        average_rating=(
-                            Decimal(str(avg)).quantize(Decimal("0.01"))
-                            if avg is not None
-                            else Decimal("0.00")
-                        )
-                    )
 
         return Response(
             FeedbackSerializer(feedback).data,

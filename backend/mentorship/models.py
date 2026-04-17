@@ -98,56 +98,13 @@ class MentorshipRequest(models.Model):
         if self.initial_session_end_at is None:
             self.initial_session_end_at = self.slot.end_at
 
-    def _resolve_session_window(self) -> tuple[Any, Any]:
-        """Return session window from current slot or historical snapshot."""
-        if self.slot is not None:
-            return self.slot.start_at, self.slot.end_at
-        return self.initial_session_start_at, self.initial_session_end_at
-
-    def _create_match_and_initial_session(self, previous_status: str | None) -> None:
-        """Create a match and first canonical MeetingSession on accept transition."""
-        if self.status != self.Status.ACCEPTED or previous_status == self.Status.ACCEPTED:
-            return
-
-        match, _ = Match.objects.get_or_create(
-            request=self,
-            defaults={
-                "mentor": self.mentor,
-                "mentee": self.mentee,
-                "is_active": True,
-            },
-        )
-
-        if MeetingSession.objects.filter(match=match).exists():
-            return
-
-        session_start_at, session_end_at = self._resolve_session_window()
-        if session_start_at is None or session_end_at is None:
-            return
-
-        session_status = (
-            MeetingSession.Status.COMPLETED
-            if session_end_at <= timezone.now()
-            else MeetingSession.Status.SCHEDULED
-        )
-        MeetingSession.objects.create(
-            match=match,
-            mentor=self.mentor,
-            mentee=self.mentee,
-            source_slot=self.slot,
-            scheduled_start_at_utc=session_start_at,
-            scheduled_end_at_utc=session_end_at,
-            status=session_status,
-        )
-
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Persist request and create a match when request becomes accepted."""
+        """Persist request with request-local status metadata synchronization."""
         previous_status = self._get_previous_status()
         self._sync_responded_at(previous_status)
         self._sync_initial_session_snapshot()
 
         super().save(*args, **kwargs)
-        self._create_match_and_initial_session(previous_status)
 
 
 class Match(models.Model):
