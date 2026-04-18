@@ -306,6 +306,10 @@ export default function MentorProfileScreen() {
   const params = useLocalSearchParams<{ username?: string }>();
   const username = getUsernameParam(params.username);
 
+  const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const createRequestMutation = useCreateMentorshipRequestMutation();
   const mentorshipMatchesQuery = useMentorshipMatchesQuery(currentUsername);
   const bookSlotMutation = useBookAvailabilitySlotMutation(currentUsername);
@@ -315,9 +319,6 @@ export default function MentorProfileScreen() {
   );
   const ratingQuery = useProfileRatingQuery(username ?? "");
 
-  const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [requestFeedback, setRequestFeedback] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
@@ -385,7 +386,6 @@ export default function MentorProfileScreen() {
   }, [username]);
 
   const availability = useMemo(() => {
-  const availability = useMemo(() => {
     const sourceSlots = availabilitySlotsQuery.data ?? [];
 
     const normalized = sourceSlots
@@ -439,8 +439,8 @@ export default function MentorProfileScreen() {
       return true;
     }
 
-    return eagerToLearn.length > 0;
-  }, [profile?.app_usage_mode, eagerToLearn.length]);
+    return userSkills.length > 0;
+  }, [profile?.app_usage_mode, userSkills.length]);
 
   const roleBadges = useMemo(() => {
     const badges: ("MENTOR" | "MENTEE")[] = [];
@@ -466,7 +466,7 @@ export default function MentorProfileScreen() {
   }, [mentorshipMatchesQuery.data, username]);
 
   const canRequestMentorship =
-    appUsageMode === "MENTEE" || appUsageMode === "BOTH";
+    appUsageMode === "MENTEE";
 
   const handleSelectSlot = (payload: {
     day: string;

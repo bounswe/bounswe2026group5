@@ -75,9 +75,9 @@ export function useProfileRatingQuery(username?: string) {
 export function useUpdateOwnProfileMutation() {
   return useMutation({
     mutationFn: async (payload: UpdateProfilePayload) => {
-      const { username, ...body } = payload;
+      const { username: _username, ...body } = payload;
       return apiPatch<ProfilePatchResponse, Omit<UpdateProfilePayload, "username">>(
-        `/api/profiles/${encodeURIComponent(username)}/`,
+        `/api/profiles/me/`,
         body,
       );
     },
