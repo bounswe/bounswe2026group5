@@ -107,12 +107,6 @@ export function RequestDetailSheet({
                 Seeking mentorship
               </Text>
 
-              {/* "AS MENTEE" badge */}
-              <View className="bg-indigo-100 px-3 py-1.5 rounded-lg">
-                <Text className="text-[10px] font-black text-indigo-800 uppercase tracking-widest">
-                  As Mentee
-                </Text>
-              </View>
             </View>
 
             {/* Divider */}

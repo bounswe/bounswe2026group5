@@ -38,7 +38,7 @@ interface PublicProfileResponse {
   picture_url: string;
   title: string;
   show_initials_only: boolean;
-  app_usage_mode?: "MENTOR" | "MENTEE" | "BOTH";
+  app_usage_mode?: "MENTOR" | "MENTEE";
   skills?: string[];
   rating: number;
   total_mentee_count: number;
@@ -54,18 +54,14 @@ type SelectedSlot = {
   label: string;
 };
 
-function includesMentor(mode?: string): boolean {
-  return mode === "MENTOR" || mode === "BOTH";
-}
-
-function includesMentee(mode?: string): boolean {
-  return mode === "MENTEE" || mode === "BOTH";
-}
-
 function getUsernameParam(
   value: string | string[] | undefined,
 ): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function normalizeUsernameIdentifier(value?: string): string {
+  return (value ?? "").trim().toLowerCase().replace(/[-_.\s]+/g, "");
 }
 
 function groupSlotsByWeekday(
@@ -103,11 +99,10 @@ type BodyContentProps = {
   profile: PublicProfileResponse | null;
   liveRating?: number;
   liveReviewCount?: number;
+  menteesHelpedCount: number;
   requestFeedback: string | null;
   canRequestMentorship: boolean;
-  roleBadges: ("MENTOR" | "MENTEE")[];
   isViewedMentor: boolean;
-  isViewedMentee: boolean;
   availability: AvailabilitySlot[];
   selectedSlot: SelectedSlot | null;
   hasExistingMentorConnection: boolean;
@@ -133,11 +128,10 @@ function renderBodyContent({
   profile,
   liveRating,
   liveReviewCount,
+  menteesHelpedCount,
   requestFeedback,
   canRequestMentorship,
-  roleBadges,
   isViewedMentor,
-  isViewedMentee,
   availability,
   selectedSlot,
   hasExistingMentorConnection,
@@ -200,6 +194,7 @@ function renderBodyContent({
   }
 
   const userSkills = profile.skills ?? [];
+  const roleVariant = profile?.app_usage_mode === "MENTEE" ? "mentee" : "mentor";
 
   return (
     <ScrollView
@@ -209,9 +204,10 @@ function renderBodyContent({
       <ProfileHeader
         name={profile.full_name}
         bio={profile.bio}
-        roleBadges={roleBadges}
         rating={liveRating ?? profile.rating ?? 0}
-        reviewCount={liveReviewCount ?? profile.total_mentee_count ?? 0}
+        reviewCount={liveReviewCount ?? 0}
+        menteesHelped={isViewedMentor ? menteesHelpedCount : 0}
+        showMenteesHelped={isViewedMentor}
         imageUrl={profile.picture_url || undefined}
       />
 
@@ -220,9 +216,9 @@ function renderBodyContent({
           <SkillsCloud
             title="Skills"
             skills={userSkills}
-            variant="mentor"
+            variant={roleVariant}
             onViewAll={() =>
-              onOpenSkillsModal("Skills", userSkills, "mentor")
+              onOpenSkillsModal("Skills", userSkills, roleVariant)
             }
           />
         )}
@@ -315,7 +311,7 @@ export default function MentorProfileScreen() {
   const bookSlotMutation = useBookAvailabilitySlotMutation(currentUsername);
   const availabilitySlotsQuery = useAvailabilitySlotsQuery(
     username ?? "",
-    profile ? includesMentor(profile.app_usage_mode) : false,
+    profile?.app_usage_mode === "MENTOR",
   );
   const ratingQuery = useProfileRatingQuery(username ?? "");
 
@@ -424,37 +420,37 @@ export default function MentorProfileScreen() {
     return groupSlotsByWeekday(normalized);
   }, [availabilitySlotsQuery.data]);
 
-  const userSkills = profile?.skills ?? [];
-
   const isViewedMentor = useMemo(() => {
-    if (includesMentor(profile?.app_usage_mode)) {
-      return true;
+    return profile?.app_usage_mode === "MENTOR";
+  }, [profile?.app_usage_mode]);
+
+  const menteesHelpedCount = useMemo(() => {
+    if (!isViewedMentor) {
+      return 0;
     }
 
-    return userSkills.length > 0 || availability.length > 0;
-  }, [profile?.app_usage_mode, userSkills.length, availability.length]);
+    const normalizedViewedUsername = normalizeUsernameIdentifier(username);
+    const activeMenteesForViewedMentor = new Set(
+      (mentorshipMatchesQuery.data ?? [])
+        .filter(
+          (match) =>
+            match.is_active &&
+            normalizeUsernameIdentifier(match.mentor.username) ===
+              normalizedViewedUsername,
+        )
+        .map((match) => match.mentee.username),
+    );
 
-  const isViewedMentee = useMemo(() => {
-    if (includesMentee(profile?.app_usage_mode)) {
-      return true;
-    }
-
-    return userSkills.length > 0;
-  }, [profile?.app_usage_mode, userSkills.length]);
-
-  const roleBadges = useMemo(() => {
-    const badges: ("MENTOR" | "MENTEE")[] = [];
-
-    if (isViewedMentor) {
-      badges.push("MENTOR");
-    }
-
-    if (isViewedMentee) {
-      badges.push("MENTEE");
-    }
-
-    return badges;
-  }, [isViewedMentor, isViewedMentee]);
+    return Math.max(
+      profile?.total_mentee_count ?? 0,
+      activeMenteesForViewedMentor.size,
+    );
+  }, [
+    isViewedMentor,
+    mentorshipMatchesQuery.data,
+    profile?.total_mentee_count,
+    username,
+  ]);
 
   const hasExistingMentorConnection = useMemo(() => {
     return (
@@ -604,11 +600,10 @@ export default function MentorProfileScreen() {
       ? Number(ratingQuery.data.average_rating)
       : undefined,
     liveReviewCount: ratingQuery.data?.review_count,
+    menteesHelpedCount,
     requestFeedback,
     canRequestMentorship,
-    roleBadges,
     isViewedMentor,
-    isViewedMentee,
     availability,
     selectedSlot,
     hasExistingMentorConnection,

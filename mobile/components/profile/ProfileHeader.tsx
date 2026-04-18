@@ -7,11 +7,11 @@ const BIO_PREVIEW_LENGTH = 240;
 interface ProfileHeaderProps {
   name: string;
   bio: string;
-  roleBadges?: ("MENTOR" | "MENTEE")[];
   rating?: number;
   reviewCount?: number;
   totalSessions?: number;
   menteesHelped?: number;
+  showMenteesHelped?: boolean;
   imageUrl?: string;
   coverUrl?: string;
   onEdit?: () => void;
@@ -20,11 +20,11 @@ interface ProfileHeaderProps {
 export function ProfileHeader({
   name,
   bio,
-  roleBadges = [],
   rating,
   reviewCount = 0,
   totalSessions = 0,
   menteesHelped = 0,
+  showMenteesHelped = true,
   imageUrl,
   coverUrl,
   onEdit,
@@ -93,29 +93,11 @@ export function ProfileHeader({
         </View>
       </View>
 
-      {/* 3. Name + Role badges */}
+      {/* 3. Name */}
       <View className="px-4 mt-2 items-start">
-        <View className="flex-row items-center flex-wrap gap-2">
-          <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
-            {name}
-          </Text>
-
-          {roleBadges.includes("MENTOR") && (
-            <View className="px-3 py-1 rounded-full bg-surface-active dark:bg-surface-active-dark border border-divider dark:border-divider-dark">
-              <Text className="text-primary dark:text-primary-dim font-semibold text-xs uppercase tracking-wide">
-                Mentor
-              </Text>
-            </View>
-          )}
-
-          {roleBadges.includes("MENTEE") && (
-            <View className="px-3 py-1 rounded-full bg-surface-active dark:bg-surface-active-dark border border-divider dark:border-divider-dark">
-              <Text className="text-primary dark:text-primary-dim font-semibold text-xs uppercase tracking-wide">
-                Mentee
-              </Text>
-            </View>
-          )}
-        </View>
+        <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
+          {name}
+        </Text>
       </View>
 
       {/* 4. Bio */}
@@ -148,14 +130,16 @@ export function ProfileHeader({
             </Text>
           </View>
 
-          <View className="items-center flex-1 border-r border-divider dark:border-divider-dark">
-            <Text className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-0.5">
-              {menteesHelped}
-            </Text>
-            <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
-              Mentees
-            </Text>
-          </View>
+          {showMenteesHelped ? (
+            <View className="items-center flex-1 border-r border-divider dark:border-divider-dark">
+              <Text className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-0.5">
+                {menteesHelped}
+              </Text>
+              <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
+                Mentees
+              </Text>
+            </View>
+          ) : null}
 
           <View className="items-center flex-1">
             <Text className="text-xl font-extrabold text-on-surface dark:text-on-surface-dark mb-0.5">

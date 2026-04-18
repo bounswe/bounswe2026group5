@@ -1,5 +1,6 @@
 import {
   mapAvailabilityToSchedule,
+  mapMeetingSessionsToDashboard,
   mapRequestsToDashboard,
   mapUpcomingSessionsToDashboard,
 } from "@/lib/queries/mentorship";
@@ -10,6 +11,9 @@ type BackendAvailabilitySlot = Parameters<
 >[0][number];
 type BackendUpcomingSession = Parameters<
   typeof mapUpcomingSessionsToDashboard
+>[0][number];
+type BackendMeetingSession = Parameters<
+  typeof mapMeetingSessionsToDashboard
 >[0][number];
 
 function addDays(value: Date, days: number): string {
@@ -229,6 +233,80 @@ describe("mentorship query mappers", () => {
       id: "slot-2",
       user: "Grace Hopper",
       status: "Pending",
+    });
+  });
+
+  it("deduplicates active meeting sessions by match after reschedule", () => {
+    const sessions: BackendMeetingSession[] = [
+      {
+        session_id: "session-old",
+        match_id: "match-1",
+        mentor: {
+          id: "mentor-1",
+          username: "mentor_ada",
+          display_name: "Ada Lovelace",
+          picture_url: "",
+          title: "Mentor",
+        },
+        mentee: {
+          id: "mentee-1",
+          username: "me_user",
+          display_name: "Me User",
+          picture_url: "",
+          title: "Mentee",
+        },
+        source_slot_id: "slot-old",
+        scheduled_start_at: "2026-04-20T09:00:00Z",
+        scheduled_end_at: "2026-04-20T10:00:00Z",
+        status: "RESCHEDULED",
+        display_status: "RESCHEDULED",
+        my_role: "MENTEE",
+        allowed_actions: ["cancel"],
+        canceled_by_role: null,
+        cancel_reason: "",
+        created_at: "2026-04-10T08:00:00Z",
+        updated_at: "2026-04-10T09:00:00Z",
+      },
+      {
+        session_id: "session-new",
+        match_id: "match-1",
+        mentor: {
+          id: "mentor-1",
+          username: "mentor_ada",
+          display_name: "Ada Lovelace",
+          picture_url: "",
+          title: "Mentor",
+        },
+        mentee: {
+          id: "mentee-1",
+          username: "me_user",
+          display_name: "Me User",
+          picture_url: "",
+          title: "Mentee",
+        },
+        source_slot_id: "slot-new",
+        scheduled_start_at: "2026-04-21T11:00:00Z",
+        scheduled_end_at: "2026-04-21T12:00:00Z",
+        status: "SCHEDULED",
+        display_status: "SCHEDULED",
+        my_role: "MENTEE",
+        allowed_actions: ["cancel", "reschedule"],
+        canceled_by_role: null,
+        cancel_reason: "",
+        created_at: "2026-04-10T08:00:00Z",
+        updated_at: "2026-04-10T10:00:00Z",
+      },
+    ];
+
+    const mapped = mapMeetingSessionsToDashboard(sessions);
+
+    expect(mapped).toHaveLength(1);
+    expect(mapped[0]).toMatchObject({
+      id: "slot-new",
+      sessionId: "session-new",
+      requestId: "match-1",
+      user: "Ada Lovelace",
+      status: "Upcoming",
     });
   });
 });

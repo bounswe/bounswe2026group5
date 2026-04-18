@@ -816,8 +816,48 @@ export function mapMeetingSessionsToDashboard(
   sessions: BackendMeetingSession[],
 ): DashboardSessionItem[] {
   const now = new Date();
+  const latestActiveSessionByMatch = new Map<string, BackendMeetingSession>();
+  const nonActiveSessions: BackendMeetingSession[] = [];
 
-  return sessions
+  sessions.forEach((session) => {
+    const isActive =
+      session.display_status === "SCHEDULED" ||
+      session.display_status === "RESCHEDULED";
+
+    if (!isActive) {
+      nonActiveSessions.push(session);
+      return;
+    }
+
+    const current = latestActiveSessionByMatch.get(session.match_id);
+    if (!current) {
+      latestActiveSessionByMatch.set(session.match_id, session);
+      return;
+    }
+
+    const currentUpdatedAt = new Date(current.updated_at).getTime();
+    const nextUpdatedAt = new Date(session.updated_at).getTime();
+
+    if (nextUpdatedAt > currentUpdatedAt) {
+      latestActiveSessionByMatch.set(session.match_id, session);
+      return;
+    }
+
+    if (
+      nextUpdatedAt === currentUpdatedAt &&
+      new Date(session.scheduled_start_at).getTime() >
+        new Date(current.scheduled_start_at).getTime()
+    ) {
+      latestActiveSessionByMatch.set(session.match_id, session);
+    }
+  });
+
+  const normalizedSessions = [
+    ...latestActiveSessionByMatch.values(),
+    ...nonActiveSessions,
+  ];
+
+  return normalizedSessions
     .map((session) => {
       const startAt = new Date(session.scheduled_start_at);
       const endAt = new Date(session.scheduled_end_at);
