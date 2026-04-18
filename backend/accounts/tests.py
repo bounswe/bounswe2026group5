@@ -696,13 +696,18 @@ class RBACPermissionTests(TestCase):
 
     def test_profile_edit_requires_user_and_not_banned(self) -> None:
         # create profile for user
-        profile = Profile.objects.create(
+        Profile.objects.create(
             user=self.user,
             username="rbac_user",
             display_name="RBAC User",
         )
+        Profile.objects.create(
+            user=self.banned,
+            username="rbac_banned",
+            display_name="RBAC Banned",
+        )
 
-        url = f"/api/profiles/{profile.username}/"
+        url = "/api/profiles/me/"
         payload = {"title": "Updated Title"}
 
         # guest should be 401

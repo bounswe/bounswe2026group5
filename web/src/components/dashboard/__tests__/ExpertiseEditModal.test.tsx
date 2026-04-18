@@ -1,6 +1,6 @@
 // web/src/components/dashboard/__tests__/ExpertiseEditModal.test.tsx
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { ExpertiseEditModal } from '../ExpertiseEditModal'
 
 // Mock the icons
@@ -28,7 +28,7 @@ describe('ExpertiseEditModal', () => {
     fireEvent.click(triggerButton)
     
     // 3. Verify the modal content and mock data render correctly
-    expect(screen.getByRole('heading', { name: /Edit Expertise/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Edit Skills/i })).toBeInTheDocument()
     expect(screen.getByText('Test Driven Development')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Add/i })).toBeInTheDocument()
   })
