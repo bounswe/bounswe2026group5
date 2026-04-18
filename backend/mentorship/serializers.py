@@ -253,8 +253,8 @@ class MeetingSessionSerializer(serializers.ModelSerializer):
     mentor = ProfileSummarySerializer(read_only=True)
     mentee = ProfileSummarySerializer(read_only=True)
     source_slot_id = serializers.UUIDField(source="source_slot.id", read_only=True, allow_null=True)
-    scheduled_start_at = serializers.DateTimeField(source="scheduled_start_at_utc", read_only=True)
-    scheduled_end_at = serializers.DateTimeField(source="scheduled_end_at_utc", read_only=True)
+    scheduled_start_at = serializers.SerializerMethodField()
+    scheduled_end_at = serializers.SerializerMethodField()
     my_role = serializers.SerializerMethodField()
     display_status = serializers.SerializerMethodField()
     allowed_actions = serializers.SerializerMethodField()
@@ -279,6 +279,14 @@ class MeetingSessionSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
+
+    def get_scheduled_start_at(self, obj: MeetingSession) -> str:
+        """Return session start time in local timezone."""
+        return timezone.localtime(obj.scheduled_start_at_utc).isoformat()
+
+    def get_scheduled_end_at(self, obj: MeetingSession) -> str:
+        """Return session end time in local timezone."""
+        return timezone.localtime(obj.scheduled_end_at_utc).isoformat()
 
     def get_my_role(self, obj: MeetingSession) -> str:
         """Return the authenticated caller role for this session."""

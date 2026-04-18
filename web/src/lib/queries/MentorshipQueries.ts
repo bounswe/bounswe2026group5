@@ -143,6 +143,15 @@ async function fetchMeetingSessions(params: MeetingSessionQueryParams = {}): Pro
     return res.json()
 }
 
+async function cancelSession(sessionId: string): Promise<MentorshipRequest> {
+    const res = await fetch(`${API_BASE_URL}/mentorship/sessions/${sessionId}/cancel/`, {
+        method: 'POST',
+        headers: withAuthHeaders(),
+    })
+    if (!res.ok) throw new Error('Failed to cancel session')
+    return res.json()
+}
+
 
 // ---- Query Options ----
 
@@ -197,4 +206,10 @@ export function useRespondToRequest() {
 
 export function useMeetingSessions(params: MeetingSessionQueryParams = {}) {
     return useQuery(meetingSessionsQueryOptions(params))
+}
+
+export function useCancelSession() {
+    return useMutation({
+        mutationFn: cancelSession,
+    })
 }

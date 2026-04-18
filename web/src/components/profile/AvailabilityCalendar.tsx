@@ -85,12 +85,10 @@ function CancelModal({ slot, username, onClose, onSuccess }: CancelModalProps) {
     const cancelSession = useCancelSession()
 
     const handleCancel = () => {
-        if (slot.sessionId) {
-            cancelSession.mutate(slot.sessionId, { onSuccess })
-        } else {
-            console.error('No session ID found for this booked slot — cannot cancel via mentorship API.')
-        }
+        if (!slot.sessionId) return
+        cancelSession.mutate(slot.sessionId, { onSuccess })
     }
+
     return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
             <div className="absolute inset-0 bg-black/40" onClick={onClose} />

@@ -134,6 +134,40 @@ def ensure_match_and_initial_session(*, mentorship_request: MentorshipRequest) -
     return match
 
 
+def book_match_session(*, mentor_profile: Profile, slot_id: Any, actor: Any) -> AvailabilitySlot:
+    """Book a slot and ensure a MeetingSession exists if a mentorship match is active."""
+    with transaction.atomic():
+        slot = book_availability_slot(profile=mentor_profile, slot_id=slot_id, actor=actor)
+
+        # Resolve actor's profile to check for matches
+        try:
+            mentee_profile = Profile.objects.get(user=actor)
+            active_match = Match.objects.filter(
+                mentor=mentor_profile,
+                mentee=mentee_profile,
+                is_active=True
+            ).first()
+
+            if active_match:
+                # Direct booking within an active match bypasses the request flow
+                # but should still manifest as a MeetingSession for dashboard visibility.
+                MeetingSession.objects.get_or_create(
+                    match=active_match,
+                    source_slot=slot,
+                    defaults={
+                        "mentor": mentor_profile,
+                        "mentee": mentee_profile,
+                        "scheduled_start_at_utc": slot.start_at,
+                        "scheduled_end_at_utc": slot.end_at,
+                        "status": MeetingSession.Status.SCHEDULED,
+                    },
+                )
+        except Profile.DoesNotExist:
+            pass
+
+        return slot
+
+
 def _mark_latest_meeting_session_canceled(*, match: Match, canceled_by: Profile) -> None:
     """Mark the latest canonical session for the match as canceled."""
     meeting_session = MeetingSession.objects.filter(match=match).order_by("-created_at").first()
@@ -162,13 +196,14 @@ def _mark_latest_meeting_session_canceled(*, match: Match, canceled_by: Profile)
 
 def cancel_match_session(
     *,
-    match: Match,
+    session: MeetingSession,
     actor: Any,
     actor_profile: Profile,
 ) -> MentorshipRequest:
-    """Cancel the currently booked slot for a match and sync canonical session state."""
+    """Cancel the currently booked slot for a session and sync canonical session state."""
+    match = session.match
     mentorship_request = match.request
-    slot = mentorship_request.slot
+    slot = session.source_slot
 
     if slot is None or not slot.is_booked:
         raise NoActiveBookingError("This session has no active booking to cancel.")
@@ -321,6 +356,7 @@ __all__ = [
     "reschedule_match_session",
     "deactivate_match",
     "create_match_feedback",
+    "book_match_session",
     "BookingCancelNotAllowedError",
     "SlotNotBookedError",
     "SlotAlreadyBookedError",

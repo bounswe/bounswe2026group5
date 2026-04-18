@@ -57,15 +57,6 @@ async function deleteSlot(slotId: string): Promise<void> {
     if (!res.ok) throw new Error('Failed to delete slot')
 }
 
-async function cancelBooking(username: string, slotId: string): Promise<void> {
-    const token = localStorage.getItem('access_token')
-    const res = await fetch(`${API_BASE_URL}/profiles/${username}/availability-slots/${slotId}/cancel-booking/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    })
-    if (!res.ok) throw new Error('Failed to cancel booking')
-}
-
 // ---- Hooks ----
 
 export function useBookSlot(username: string) {
@@ -84,12 +75,6 @@ export function useCreateSlot(_username: string) {
 export function useDeleteSlot(_username: string) {
     return useMutation({
         mutationFn: (slotId: string) => deleteSlot(slotId),
-    })
-}
-
-export function useCancelBooking(username: string) {
-    return useMutation({
-        mutationFn: (slotId: string) => cancelBooking(username, slotId),
     })
 }
 

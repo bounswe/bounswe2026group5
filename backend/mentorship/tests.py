@@ -1408,3 +1408,62 @@ class MentorPastSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
             "booked_at",
         ):
             self.assertIn(field, item)
+
+
+class MentorshipServiceTests(TestCase):
+    """Integrity tests for cross-domain mentorship services."""
+
+    def setUp(self) -> None:
+        self.mentor_user = User.objects.create_user(
+            email="mentor.service@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentee_user = User.objects.create_user(
+            email="mentee.service@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            display_name="Service Mentor",
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user,
+            display_name="Service Mentee",
+        )
+
+    def test_book_match_session_creates_canonical_session(self) -> None:
+        """Directly booking a slot for an active match creates a MeetingSession."""
+        from mentorship.services import book_match_session
+
+        # 1. Establish an active match
+        request_obj = _create_accepted_request(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+        )
+        match = Match.objects.get(request=request_obj)
+        self.assertTrue(match.is_active)
+
+        # 2. Setup a new availability slot
+        new_slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=timezone.now() + timedelta(days=5),
+            end_at=timezone.now() + timedelta(days=5, hours=1),
+        )
+
+        # 3. Book the slot via the combined service
+        slot = book_match_session(
+            mentor_profile=self.mentor_profile,
+            slot_id=new_slot.id,
+            actor=self.mentee_user,
+        )
+
+        # 4. Assert sync
+        self.assertTrue(slot.is_booked)
+        self.assertEqual(slot.booked_by, self.mentee_user)
+
+        session = MeetingSession.objects.filter(match=match, source_slot=slot).first()
+        self.assertIsNotNone(session)
+        self.assertEqual(session.status, MeetingSession.Status.SCHEDULED)
+        self.assertEqual(session.scheduled_start_at_utc.isoformat(), slot.start_at.isoformat())
