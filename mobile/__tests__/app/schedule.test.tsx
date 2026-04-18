@@ -8,9 +8,36 @@ const mockMeetingSessionsQuery = jest.fn();
 const mockCancelSessionMutation = jest.fn();
 const mockRescheduleSessionMutation = jest.fn();
 const mockSubmitFeedbackMutation = jest.fn();
+const mockAvailabilitySlotsQuery = jest.fn();
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 jest.mock("react-native-calendars", () => ({ Calendar: "View" }));
+jest.mock("@/components/dashboard/RescheduleBottomSheet", () => ({
+  RescheduleBottomSheet: ({
+    visible,
+    onSelectSlot,
+  }: {
+    visible: boolean;
+    onSelectSlot: (slotId: string) => void;
+  }) => {
+    const { Text, TouchableOpacity, View } = jest.requireActual("react-native");
+    if (!visible) {
+      return null;
+    }
+
+    return (
+      <View>
+        <Text>Reschedule Session</Text>
+        <TouchableOpacity
+          onPress={() => onSelectSlot("slot-2")}
+          testID="reschedule-slot-option"
+        >
+          <Text>Select alternate slot</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  },
+}));
 
 jest.mock("@/components/dashboard/SessionCard", () => ({
   SessionCard: ({
@@ -40,7 +67,7 @@ jest.mock("@/lib/queries/mentorship", () => {
   return {
     ...actual,
     useMentorshipMeetingSessionsQuery: () => mockMeetingSessionsQuery(),
-    useAvailabilitySlotsQuery: () => ({ data: [], isLoading: false }),
+    useAvailabilitySlotsQuery: () => mockAvailabilitySlotsQuery(),
     useCancelSessionMutation: () => ({
       mutateAsync: mockCancelSessionMutation,
       isPending: false,
@@ -78,6 +105,19 @@ describe("ScheduleScreen", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockAvailabilitySlotsQuery.mockReturnValue({
+      data: [
+        {
+          id: "slot-2",
+          date: today,
+          startTime: "11:00:00",
+          endTime: "12:00:00",
+          is_booked: false,
+        },
+      ],
+      isLoading: false,
+    });
+    mockRescheduleSessionMutation.mockResolvedValue({});
     mockMeetingSessionsQuery.mockReturnValue({
       data: [
         {
@@ -172,5 +212,29 @@ describe("ScheduleScreen", () => {
 
     // Session details modal should close after selecting feedback.
     expect(queryByText("Leave Feedback")).toBeNull();
+  });
+
+  it("closes the reschedule sheet after a successful reschedule", async () => {
+    jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
+    const { getByTestId, findByText, queryByText } = render(<ScheduleScreen />);
+
+    fireEvent.press(getByTestId("session-card-Ada Lovelace"));
+    fireEvent.press(await findByText("Reschedule"));
+    act(() => {
+      jest.runAllTimers();
+    });
+
+    expect(queryByText("Reschedule Session")).toBeTruthy();
+
+    fireEvent.press(getByTestId("reschedule-slot-option"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockRescheduleSessionMutation).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      newSlotId: "slot-2",
+    });
+    expect(queryByText("Reschedule Session")).toBeNull();
   });
 });

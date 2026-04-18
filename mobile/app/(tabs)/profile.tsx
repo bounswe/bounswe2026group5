@@ -87,9 +87,9 @@ export default function ProfileScreen() {
   const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
 
-  const hasSkillsData = skillsData.length > 0;
-  const isMentorMode = appUsageMode === "MENTOR" || hasSkillsData;
-  const isMenteeMode = appUsageMode === "MENTEE" || hasSkillsData;
+  const isMentorMode = appUsageMode === "MENTOR";
+  const isMenteeMode = appUsageMode === "MENTEE";
+  const shouldShowSkills = isMentorMode ? showExpertise : showEagerToLearn;
 
   useEffect(() => {
     let mounted = true;
@@ -315,20 +315,17 @@ export default function ProfileScreen() {
         <ProfileHeader
           name={userData.name}
           bio={userData.bio}
-          roleBadges={[
-            ...(isMentorMode ? (["MENTOR"] as const) : []),
-            ...(isMenteeMode ? (["MENTEE"] as const) : []),
-          ]}
           reviewCount={reviewCount}
           rating={rating}
           totalSessions={0}
           menteesHelped={isMentorMode ? menteesCount : 0}
+          showMenteesHelped={isMentorMode}
           onEdit={() => setEditProfileModalOpen(true)}
         />
 
         <View className="px-4 mt-4">
           <View className="mb-6">
-            {(isMentorMode || isMenteeMode) && (showExpertise || showEagerToLearn) && (
+            {(isMentorMode || isMenteeMode) && shouldShowSkills && (
               <SkillsCloud
                 title="Skills"
                 skills={skillsData}

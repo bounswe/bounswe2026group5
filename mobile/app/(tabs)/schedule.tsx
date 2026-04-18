@@ -102,6 +102,10 @@ export default function ScheduleScreen() {
       })
       .then(() => {
         setSelectedSession(null);
+        setShowRescheduleSheet(false);
+        setRescheduleSessionId(null);
+        setRescheduleMentorUsername("");
+        setRescheduleCurrentSlotId("");
         Alert.alert("Session Rescheduled", "Your session was updated.");
       })
       .catch((error) => {

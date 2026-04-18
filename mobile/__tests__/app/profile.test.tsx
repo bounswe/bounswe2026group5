@@ -4,6 +4,10 @@ import React from "react";
 
 const mockMatchesQuery = jest.fn();
 const mockAvailabilityQuery = jest.fn();
+let mockAuthUser = {
+  username: "Ali Aydin",
+  app_usage_mode: "MENTOR",
+};
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
@@ -34,10 +38,7 @@ jest.mock("@/lib/queries/mentorship", () => {
 jest.mock("@/lib/auth/store", () => ({
   useAuthStore: (selector: (state: any) => unknown) =>
     selector({
-      user: {
-        username: "Ali Aydin",
-        app_usage_mode: "MENTOR",
-      },
+      user: mockAuthUser,
     }),
 }));
 
@@ -63,6 +64,10 @@ jest.mock("expo-router", () => ({
 
 describe("ProfileScreen Layout", () => {
   beforeEach(() => {
+    mockAuthUser = {
+      username: "Ali Aydin",
+      app_usage_mode: "MENTOR",
+    };
     mockAvailabilityQuery.mockReturnValue({ data: undefined });
     mockMatchesQuery.mockReturnValue({ data: [] });
     globalThis.fetch = jest.fn().mockResolvedValue({
@@ -129,6 +134,31 @@ describe("ProfileScreen Layout", () => {
     await waitFor(() => {
       expect(getByText("2")).toBeTruthy();
       expect(getByText("Mentees")).toBeTruthy();
+    });
+  });
+
+  it("renders mentor-only profile sections for mentor accounts", async () => {
+    const { getByText, queryByText } = render(<ProfileScreen />);
+
+    await waitFor(() => {
+      expect(getByText("Ali Aydin")).toBeTruthy();
+      expect(getByText("Availability")).toBeTruthy();
+      expect(getByText("Mentees")).toBeTruthy();
+    });
+  });
+
+  it("hides mentor-only profile sections for mentee accounts", async () => {
+    mockAuthUser = {
+      username: "Ece Yilmaz",
+      app_usage_mode: "MENTEE",
+    };
+
+    const { getByText, queryByText } = render(<ProfileScreen />);
+
+    await waitFor(() => {
+      expect(getByText("Ece Yilmaz")).toBeTruthy();
+      expect(queryByText("Availability")).toBeNull();
+      expect(queryByText("Mentees")).toBeNull();
     });
   });
 });
