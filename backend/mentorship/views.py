@@ -3,8 +3,7 @@
 from typing import Any, cast
 
 from django.db import IntegrityError
-from django.db.models import CharField, OuterRef, Q, Subquery, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -33,8 +32,6 @@ from .serializers import (
     MentorshipRequestSerializer,
     RescheduleSessionSerializer,
     RespondToRequestSerializer,
-    UpcomingMenteeSessionSerializer,
-    UpcomingMentorSessionSerializer,
 )
 from .services import (
     MissingSelectedSlotError,
@@ -197,7 +194,7 @@ class RespondToRequestAPIView(APIView):
         serializer = RespondToRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         validated_data = cast(dict[str, Any], serializer.validated_data)
-        action = validated_data.get("action")
+        action = cast(str, validated_data.get("action"))
 
         try:
             mentorship_request = respond_to_mentorship_request(
@@ -355,9 +352,9 @@ class CancelSessionAPIView(APIView):
             return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            session = MeetingSession.objects.select_related("match__mentor", "match__mentee", "match__request__slot").get(
-                id=session_id, match__is_active=True
-            )
+            session = MeetingSession.objects.select_related(
+                "match__mentor", "match__mentee", "match__request__slot"
+            ).get(id=session_id, match__is_active=True)
             match = session.match
         except MeetingSession.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
@@ -420,9 +417,9 @@ class RescheduleSessionAPIView(APIView):
             return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            session = MeetingSession.objects.select_related("match__mentor", "match__mentee", "match__request__slot").get(
-                id=session_id, match__is_active=True
-            )
+            session = MeetingSession.objects.select_related(
+                "match__mentor", "match__mentee", "match__request__slot"
+            ).get(id=session_id, match__is_active=True)
             match = session.match
         except MeetingSession.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
@@ -432,7 +429,8 @@ class RescheduleSessionAPIView(APIView):
 
         serializer = RescheduleSessionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        new_slot_id = serializer.validated_data["new_slot_id"]
+        validated_data = cast(dict[str, Any], serializer.validated_data)
+        new_slot_id = validated_data["new_slot_id"]
 
         try:
             new_slot = AvailabilitySlot.objects.get(id=new_slot_id, profile=match.mentor)

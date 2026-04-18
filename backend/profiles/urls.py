@@ -4,14 +4,13 @@ from django.urls import path
 
 from .views import (
     AvailabilitySlotBookAPIView,
-    AvailabilitySlotDetailAPIView,
     AvailabilitySlotListCreateAPIView,
     MentorPublicRatingAPIView,
     MyAvailabilitySlotDetailAPIView,
     MyAvailabilitySlotListCreateAPIView,
     PopularMentorsListAPIView,
-    ProfileMeAPIView,
     ProfileByUsernameAPIView,
+    ProfileMeAPIView,
     PublicMentorProfilesSearchListAPIView,
     RecentlyAddedMentorsListAPIView,
     SkillListAPIView,
@@ -41,11 +40,6 @@ urlpatterns = [
         "<str:username>/availability-slots/",
         AvailabilitySlotListCreateAPIView.as_view(),
         name="availability-slot-list-create",
-    ),
-    path(
-        "<str:username>/availability-slots/<uuid:slot_id>/",
-        AvailabilitySlotDetailAPIView.as_view(),
-        name="availability-slot-detail",
     ),
     path(
         "<str:username>/availability-slots/<uuid:slot_id>/book/",

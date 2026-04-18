@@ -1,6 +1,5 @@
 """Tests for mentorship domain models and API endpoints."""
 
-import unittest
 from datetime import timedelta
 from typing import Any
 
@@ -623,7 +622,6 @@ class MeetingSessionPhaseTwoTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(response.data, [])
 
 
-
 class FeedbackAPIBaseTestCase(MentorshipRequestAPIBaseTestCase):
     """Shared fixtures for feedback API tests: an active match between mentor and mentee."""
 
@@ -1018,7 +1016,6 @@ class RescheduleSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(response.data["detail"], "Not found.")
 
 
-
 class MentorshipServiceTests(TestCase):
     """Integrity tests for cross-domain mentorship services."""
 
@@ -1074,5 +1071,6 @@ class MentorshipServiceTests(TestCase):
 
         session = MeetingSession.objects.filter(match=match, source_slot=slot).first()
         self.assertIsNotNone(session)
+        assert session is not None
         self.assertEqual(session.status, MeetingSession.Status.SCHEDULED)
         self.assertEqual(session.scheduled_start_at_utc.isoformat(), slot.start_at.isoformat())

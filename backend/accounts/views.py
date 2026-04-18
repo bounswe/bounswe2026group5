@@ -1,5 +1,4 @@
 from typing import Any, cast
-from uuid import UUID
 
 from django.conf import settings
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -66,17 +65,6 @@ def _clear_auth_cookies(response: Response) -> None:
     """Clear auth cookies on logout or token invalidation."""
     response.delete_cookie(key=settings.AUTH_ACCESS_COOKIE_NAME)
     response.delete_cookie(key=settings.AUTH_REFRESH_COOKIE_NAME)
-
-
-DEPRECATED_ALIAS_SUNSET = "Wed, 31 Dec 2026 23:59:59 GMT"
-
-
-def _add_deprecation_headers(response: Response, successor_path: str) -> Response:
-    """Attach deprecation metadata headers to temporary compatibility aliases."""
-    response["Deprecation"] = "true"
-    response["Sunset"] = DEPRECATED_ALIAS_SUNSET
-    response["Link"] = f'<{successor_path}>; rel="successor-version"'
-    return response
 
 
 class RegisterAPIView(APIView):
@@ -242,34 +230,6 @@ class AuthMeAPIView(APIView):
         )
 
 
-class AuthUserByIdAPIView(AuthMeAPIView):
-    """Legacy alias for authenticated user metadata by user id."""
-
-    @extend_schema(
-        responses={
-            200: UserResponseSerializer,
-            401: OpenApiResponse(description="Authentication required."),
-            404: OpenApiResponse(description="User not found."),
-            403: OpenApiResponse(description="Account banned."),
-        },
-        description=(
-            "Deprecated alias. Get authenticated user details by own user id route. "
-            "Use `/api/auth/me/` instead."
-        ),
-        deprecated=True,
-        tags=["Auth"],
-    )
-    def get(self, request: Request, user_id: UUID) -> Response:
-        request_user_id = getattr(request.user, "id", None) or getattr(request.user, "pk", None)
-
-        if str(request_user_id) != str(user_id):
-            response = Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-            return _add_deprecation_headers(response, "/api/auth/me/")
-
-        response = super().get(request)
-        return _add_deprecation_headers(response, "/api/auth/me/")
-
-
 class UserAppUsageModeMeAPIView(APIView):
     """Set app usage mode from canonical self-scoped route."""
 
@@ -298,35 +258,6 @@ class UserAppUsageModeMeAPIView(APIView):
             UserResponseSerializer(cast(User, request.user)).data,
             status=status.HTTP_200_OK,
         )
-
-
-class UserAppUsageModeAPIView(UserAppUsageModeMeAPIView):
-    """Legacy alias for app usage mode update by user id."""
-
-    @extend_schema(
-        request=UserAppUsageModeUpdateSerializer,
-        responses={
-            200: UserResponseSerializer,
-            400: OpenApiResponse(description="Validation error."),
-            401: OpenApiResponse(description="Authentication required."),
-            404: OpenApiResponse(description="User not found."),
-        },
-        description=(
-            "Deprecated alias. Set app usage mode for the authenticated user. "
-            "Use `/api/auth/me/role/` instead."
-        ),
-        deprecated=True,
-        tags=["Auth"],
-    )
-    def patch(self, request: Request, user_id: UUID) -> Response:
-        request_user_id = getattr(request.user, "id", None) or getattr(request.user, "pk", None)
-
-        if str(request_user_id) != str(user_id):
-            response = Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-            return _add_deprecation_headers(response, "/api/auth/me/role/")
-
-        response = super().patch(request)
-        return _add_deprecation_headers(response, "/api/auth/me/role/")
 
 
 class AdminUsersListAPIView(APIView):

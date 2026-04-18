@@ -2,7 +2,6 @@
 
 from datetime import datetime
 
-from accounts.models import AppUsageMode
 from django.contrib.gis.geos import Point
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -111,9 +110,10 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
 
         # Inline import to avoid circular dependency
         from mentorship.models import MeetingSession
+
         session = MeetingSession.objects.filter(
             source_slot=obj,
-            status__in=[MeetingSession.Status.SCHEDULED, MeetingSession.Status.RESCHEDULED]
+            status__in=[MeetingSession.Status.SCHEDULED, MeetingSession.Status.RESCHEDULED],
         ).first()
         return str(session.id) if session else None
 
@@ -124,9 +124,7 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="display_name", read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
     picture_url = serializers.URLField(read_only=True)
-    skills = serializers.ListField(
-        child=serializers.CharField(), read_only=True
-    )
+    skills = serializers.ListField(child=serializers.CharField(), read_only=True)
 
     class Meta:
         model = Profile
@@ -154,9 +152,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     title = serializers.CharField(read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
     picture_url = serializers.URLField(read_only=True)
-    skills = serializers.ListField(
-        child=serializers.CharField(), read_only=True
-    )
+    skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     rating = serializers.IntegerField(read_only=True)
     total_mentee_count = serializers.IntegerField(read_only=True)
 
@@ -181,13 +177,12 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
         ret["hidden"] = not instance.is_visible
         return ret
 
+
 class ProfileResponseSerializer(serializers.ModelSerializer):
     """Fallback read serializer for profile data (when app_usage_mode is not set)."""
 
     location = LocationField(read_only=True)
-    skills = serializers.ListField(
-        child=serializers.CharField(), read_only=True
-    )
+    skills = serializers.ListField(child=serializers.CharField(), read_only=True)
 
     class Meta:
         model = Profile
@@ -231,14 +226,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs: dict) -> dict:
-        """Validate role-specific aliases for profile skills updates."""
-        profile = self.instance
-        if profile is None:
-            return attrs
-
-        user_mode = profile.user.app_usage_mode
-        has_skills = "skills" in attrs
-
+        """Validate profile update payload."""
         return attrs
 
     def update(self, instance: Profile, validated_data: dict) -> Profile:
@@ -332,9 +320,7 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     username = serializers.CharField(read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
-    skills = serializers.ListField(
-        child=serializers.CharField(), read_only=True
-    )
+    skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     picture_url = serializers.URLField(read_only=True)
     location = LocationField(read_only=True)
     show_initials_only = serializers.BooleanField(read_only=True)

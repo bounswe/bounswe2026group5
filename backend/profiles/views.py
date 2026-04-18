@@ -8,7 +8,7 @@ from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.permissions import AllowAny, BasePermission
+from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -28,20 +28,11 @@ from .serializers import (
     PublicMentorProfileSearchResultSerializer,
     SkillSerializer,
 )
-from .services import (
-    BookingCancelNotAllowedError,
-    OwnSlotBookingError,
-    SlotAlreadyBookedError,
-    SlotInPastError,
-    SlotNotBookedError,
-    book_availability_slot,
-    cancel_availability_booking,
-)
+from .services import OwnSlotBookingError, SlotAlreadyBookedError, SlotInPastError
 
 NOT_FOUND_DETAIL = {"detail": "Not found."}
 OVERLAP_DETAIL = {"detail": "Availability slot overlaps with an existing slot."}
 PERMISSION_DENIED_DETAIL = {"detail": "You do not have permission to perform this action."}
-
 
 
 class ProfileLookupMixin:
@@ -75,7 +66,7 @@ class ProfileLookupMixin:
         else:
             serializer = ProfileResponseSerializer(profile)
 
-        data = serializer.data
+        data = dict(serializer.data)
         data["app_usage_mode"] = app_usage_mode
         return data
 
@@ -94,18 +85,6 @@ class SkillListAPIView(APIView):
         """Return all skills ordered by name."""
         qs = Skill.objects.all()
         return Response(SkillSerializer(qs, many=True).data, status=status.HTTP_200_OK)
-
-
-class AvailabilitySlotLookupMixin(ProfileLookupMixin):
-    """Shared availability slot lookup helper."""
-
-    def _get_slot_or_404(self, profile: Profile, slot_id: str) -> AvailabilitySlot | None:
-        """Return slot when it belongs to provided profile; otherwise None."""
-        try:
-            return AvailabilitySlot.objects.get(id=slot_id, profile=profile)
-        except AvailabilitySlot.DoesNotExist:
-            return None
-
 
 
 class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
@@ -190,59 +169,18 @@ class ProfileMeAPIView(ProfileLookupMixin, APIView):
 
 
 class AvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
-    """Create and list mentor availability slots scoped by username."""
+    """List mentor availability slots scoped by username."""
 
     permission_classes = [IsUser]
-
-    @extend_schema(
-        request=AvailabilitySlotWriteSerializer,
-        responses={
-            201: AvailabilitySlotSerializer,
-            400: OpenApiResponse(description="Validation error."),
-            401: OpenApiResponse(description="Authentication required."),
-            403: OpenApiResponse(description="Permission denied."),
-        },
-        description=(
-            "Deprecated alias. Create a mentor availability slot using date/startTime/endTime. "
-            "Use `/api/profiles/me/availability-slots/` for owner mutations."
-        ),
-        deprecated=True,
-        tags=["Profiles"],
-    )
-    def post(self, request: Request, username: str) -> Response:
-        """Create an availability slot for mentor matching requested username."""
-        successor_path = "/api/profiles/me/availability-slots/"
-        profile = self._get_profile_or_404(username)
-        if profile is None:
-            response = Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-            return _add_deprecation_headers(response, successor_path)
-
-        if request.user != profile.user or not self._is_mentor_profile(profile):
-            response = Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
-            return _add_deprecation_headers(response, successor_path)
-
-        serializer = AvailabilitySlotWriteSerializer(
-            data=request.data,
-            context={"profile": profile},
-        )
-        serializer.is_valid(raise_exception=True)
-
-        try:
-            slot = serializer.save()
-        except IntegrityError:
-            response = Response(OVERLAP_DETAIL, status=status.HTTP_400_BAD_REQUEST)
-            return _add_deprecation_headers(response, successor_path)
-
-        response = Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_201_CREATED)
-        return _add_deprecation_headers(response, successor_path)
 
     @extend_schema(
         responses={
             200: AvailabilitySlotSerializer(many=True),
             401: OpenApiResponse(description="Authentication required."),
             403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Profile not found."),
         },
-        description="List upcoming availability slots for authenticated mentor.",
+        description="List upcoming availability slots for a mentor by username.",
         tags=["Profiles"],
     )
     def get(self, request: Request, username: str) -> Response:
@@ -335,32 +273,6 @@ class MyAvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
             AvailabilitySlotSerializer(upcoming_slots, many=True).data,
             status=status.HTTP_200_OK,
         )
-
-
-class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
-    """Retrieve, update, and delete mentor-owned availability slots."""
-
-    permission_classes = [IsUser]
-
-    @extend_schema(
-        responses={
-            200: AvailabilitySlotSerializer,
-            404: OpenApiResponse(description="Availability slot not found."),
-        },
-        description="Retrieve a mentor-owned availability slot by ID.",
-        tags=["Profiles"],
-    )
-    def get(self, request: Request, username: str, slot_id: str) -> Response:
-        """Retrieve one availability slot for mentor matching username."""
-        profile = self._get_profile_or_404(username)
-        if profile is None or not self._is_mentor_profile(profile):
-            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-
-        slot = self._get_slot_or_404(profile, slot_id)
-        if slot is None:
-            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-
-        return Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_200_OK)
 
 
 class MyAvailabilitySlotDetailAPIView(ProfileLookupMixin, APIView):
@@ -586,7 +498,6 @@ class AvailabilitySlotBookAPIView(ProfileLookupMixin, APIView):
             return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
 
         return Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_200_OK)
-
 
 
 class RecentlyAddedMentorsListAPIView(APIView):

@@ -1,6 +1,5 @@
 """Tests for profiles domain models."""
 
-import unittest
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -361,7 +360,7 @@ class ProfileByUsernameAPIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 401)
 
-    
+
 class SkillListAPIViewTests(TestCase):
     """Tests for GET /api/profiles/skills/ endpoint."""
 
@@ -517,7 +516,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
             "endTime": "11:00:00",
         }
 
-        response = self.api_client.post(self.collection_url, payload)
+        response = self.api_client.post(self.me_collection_url, payload)
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("date", response.json())
@@ -531,7 +530,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
             "endTime": "13:59:59",
         }
 
-        response = self.api_client.post(self.collection_url, payload)
+        response = self.api_client.post(self.me_collection_url, payload)
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("endTime", response.json())
@@ -562,6 +561,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
         response = self.api_client.get(self.collection_url)
 
         self.assertEqual(response.status_code, 200)
+
         payload = response.json()
         returned_ids = {slot["id"] for slot in payload}
         self.assertIn(str(future_slot.id), returned_ids)
@@ -698,24 +698,20 @@ class AvailabilitySlotAPIViewTests(TestCase):
         self.assertEqual(delete_response.status_code, 403)
 
     def test_other_authenticated_user_can_get_mentor_slots(self) -> None:
-        """Other authenticated users can read a mentor's availability slots."""
+        """Other authenticated users can read a mentor's availability slot list."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
         slot_start = timezone.now() + timedelta(days=1)
-        slot = AvailabilitySlot.objects.create(
+        AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
             start_at=slot_start,
             end_at=slot_start + timedelta(hours=1),
         )
 
         list_response = self.api_client.get(self.collection_url)
-        detail_response = self.api_client.get(
-            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-        )
 
         self.assertEqual(list_response.status_code, 200)
-        self.assertEqual(detail_response.status_code, 200)
 
-    
+
 class AvailabilitySlotBookingAPIViewTests(TestCase):
     """Integration tests for availability slot booking lifecycle endpoints."""
 
@@ -1076,7 +1072,7 @@ class MentorPublicRatingAPITests(TestCase):
             display_name="Rating Mentor",
             is_visible=True,
         )
-        self.api_client = APIClient()
+        self.api_client: Any = APIClient()
 
     def _url(self, username: str) -> str:
         return f"/api/profiles/{username}/rating/"
