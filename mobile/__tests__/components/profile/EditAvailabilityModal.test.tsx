@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 import React from "react";
 import { Alert } from "react-native";
 
@@ -80,16 +80,16 @@ describe("EditAvailabilityModal", () => {
       />,
     );
 
-    fireEvent.press(getByText("09:00 - 10:00"));
-
-    await waitFor(() => {
-      expect(createMutateAsync).toHaveBeenCalledWith({
-        date: monday,
-        startTime: "09:00:00",
-        endTime: "10:00:00",
-      });
-      expect(onChanged).toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.press(getByText("09:00 - 10:00"));
     });
+
+    expect(createMutateAsync).toHaveBeenCalledWith({
+      date: monday,
+      startTime: "09:00:00",
+      endTime: "10:00:00",
+    });
+    expect(onChanged).toHaveBeenCalled();
   });
 
   it("alerts when trying to deactivate a booked slot", () => {
