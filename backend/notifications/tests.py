@@ -1,7 +1,12 @@
+from typing import TYPE_CHECKING, Any, cast
+
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+
+if TYPE_CHECKING:
+    from rest_framework.response import Response
 
 from accounts.models import User
 from profiles.models import Profile
@@ -32,12 +37,14 @@ class NotificationModelTest(TestCase):
 class NotificationAPITest(APITestCase):
     """Test Notification API views."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.user = User.objects.create_user(email="test@example.com", password="password")
         self.profile = Profile.objects.create(user=self.user, display_name="Test User")
-        self.client.force_authenticate(user=self.user)
+        from rest_framework.test import APIClient
 
-    def test_list_unread_notifications(self):
+        cast(APIClient, self.client).force_authenticate(user=self.user)
+
+    def test_list_unread_notifications(self) -> None:
         """Test listing unread notifications."""
         Notification.objects.create(
             user=self.user,
@@ -53,14 +60,17 @@ class NotificationAPITest(APITestCase):
         )
 
         url = reverse("notification-list")
-        response = self.client.get(url)
+        response = cast("Response", self.client.get(url))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["message"], "Unread message")
+        data = cast(list[Any], response.data)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["message"], "Unread message")
 
-    def test_list_notifications_requires_auth(self):
+    def test_list_notifications_requires_auth(self) -> None:
         """Test unauthenticated access is rejected for notification list."""
-        self.client.force_authenticate(user=None)
+        from rest_framework.test import APIClient
+
+        cast(APIClient, self.client).force_authenticate(user=None)
 
         url = reverse("notification-list")
         response = self.client.get(url)

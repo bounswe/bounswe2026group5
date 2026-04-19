@@ -20,14 +20,15 @@ class NotificationListAPIView(APIView):
             200: NotificationSerializer(many=True),
             401: OpenApiResponse(description="Authentication required."),
         },
-        description="List all unread notifications for the authenticated user, ordered by most recent first.",
+        description="""List all unread notifications for the authenticated user,
+                       ordered by most recent first.""",
         tags=["Notifications"],
     )
     def get(self, request: Request) -> Response:
         """Return unread notifications for the current user."""
-        notifications = Notification.objects.filter(
-            user=request.user, is_read=False
-        ).order_by("-created_at")
+        notifications = Notification.objects.filter(user=request.user, is_read=False).order_by(
+            "-created_at"
+        )
 
         return Response(
             NotificationSerializer(notifications, many=True).data,
