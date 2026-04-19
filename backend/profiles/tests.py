@@ -5,13 +5,13 @@ from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode
-from mentorship.models import MentorshipRequest
+from mentorship.models import Feedback, Match, MentorshipRequest
 from profiles.models import AvailabilitySlot, Profile, Skill
 
 User: Any = get_user_model()
@@ -1118,6 +1118,129 @@ class MentorPublicRatingAPITests(TestCase):
         response = self.api_client.get(self._url(self.mentor_profile.username))
         self.assertEqual(response.json()["average_rating"], "4.20")
         self.assertEqual(response.json()["review_count"], 5)
+
+
+@override_settings(RATING_UPDATE_THRESHOLD=2)
+class ProfilePublicReviewsAPITests(TestCase):
+    """Tests for GET /api/profiles/{username}/reviews/."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+
+        self.mentor_user = User.objects.create_user(
+            email="mentor.reviews@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            display_name="Reviews Mentor",
+            is_visible=True,
+        )
+        self.url = f"/api/profiles/{self.mentor_profile.username}/reviews/"
+
+    def _create_mentee_feedback(self, idx: int, *, rating: int, text: str) -> Feedback:
+        mentee_user = User.objects.create_user(
+            email=f"mentee.review.{idx}@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        mentee_profile = Profile.objects.create(
+            user=mentee_user,
+            display_name=f"Mentee {idx}",
+        )
+        mentorship_request = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        match = Match.objects.create(
+            mentor=self.mentor_profile,
+            mentee=mentee_profile,
+            request=mentorship_request,
+        )
+        return Feedback.objects.create(
+            match=match,
+            submitted_by=mentee_profile,
+            rating=rating,
+            text=text,
+        )
+
+    def test_returns_404_for_missing_profile(self) -> None:
+        response = self.api_client.get("/api/profiles/missing-user/reviews/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_returns_404_for_invisible_profile(self) -> None:
+        self.mentor_profile.is_visible = False
+        self.mentor_profile.save(update_fields=["is_visible"])
+
+        response = self.api_client.get(self.url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_returns_only_public_text_review_fields(self) -> None:
+        self._create_mentee_feedback(1, rating=5, text="Excellent guidance")
+        self._create_mentee_feedback(2, rating=4, text="Clear explanations")
+        self.mentor_profile.review_count = 2
+        self.mentor_profile.save(update_fields=["review_count"])
+
+        response = self.api_client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual(len(payload["results"]), 2)
+        first_review = payload["results"][0]
+        self.assertEqual(set(first_review.keys()), {"rating", "text", "created_at"})
+        self.assertNotIn("submitted_by", first_review)
+        self.assertNotIn("match", first_review)
+
+    def test_empty_text_reviews_are_excluded(self) -> None:
+        self._create_mentee_feedback(1, rating=5, text="")
+        self._create_mentee_feedback(2, rating=4, text="Visible text")
+        self.mentor_profile.review_count = 2
+        self.mentor_profile.save(update_fields=["review_count"])
+
+        response = self.api_client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual([item["text"] for item in payload["results"]], ["Visible text"])
+
+    def test_threshold_gating_hides_incomplete_batch(self) -> None:
+        self._create_mentee_feedback(1, rating=5, text="Only one review")
+        self.mentor_profile.review_count = 1
+        self.mentor_profile.save(update_fields=["review_count"])
+
+        response = self.api_client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 0)
+        self.assertEqual(payload["results"], [])
+
+    def test_pagination_slices_results(self) -> None:
+        texts = ["Review A", "Review B", "Review C", "Review D"]
+        for idx, text in enumerate(texts, start=1):
+            self._create_mentee_feedback(idx, rating=5, text=text)
+        self.mentor_profile.review_count = 4
+        self.mentor_profile.save(update_fields=["review_count"])
+
+        response_page_1 = self.api_client.get(self.url, {"page": 1, "pageSize": 2})
+        response_page_2 = self.api_client.get(self.url, {"page": 2, "pageSize": 2})
+
+        self.assertEqual(response_page_1.status_code, 200)
+        self.assertEqual(response_page_2.status_code, 200)
+        payload_1 = response_page_1.json()
+        payload_2 = response_page_2.json()
+
+        self.assertEqual(payload_1["count"], 4)
+        self.assertEqual(payload_1["page"], 1)
+        self.assertEqual(payload_1["pageSize"], 2)
+        self.assertEqual(len(payload_1["results"]), 2)
+        self.assertEqual(payload_2["page"], 2)
+        self.assertEqual(len(payload_2["results"]), 2)
+
+        page_1_texts = {item["text"] for item in payload_1["results"]}
+        page_2_texts = {item["text"] for item in payload_2["results"]}
+        self.assertTrue(page_1_texts.isdisjoint(page_2_texts))
 
 
 class RecentlyAddedMentorsAPITests(TestCase):
