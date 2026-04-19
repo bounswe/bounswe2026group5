@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Match, MentorshipRequest
+from .models import Match, MeetingSession, MentorshipRequest
 
 
 @admin.register(MentorshipRequest)
@@ -33,3 +33,23 @@ class MatchAdmin(admin.ModelAdmin):
         "mentee__user__email",
     )
     ordering = ("-request__created_at",)
+
+
+@admin.register(MeetingSession)
+class MeetingSessionAdmin(admin.ModelAdmin):
+    list_display = (
+        "match",
+        "mentor",
+        "mentee",
+        "status",
+        "scheduled_start_at_utc",
+        "scheduled_end_at_utc",
+    )
+    list_filter = ("status",)
+    search_fields = (
+        "mentor__display_name",
+        "mentor__user__email",
+        "mentee__display_name",
+        "mentee__user__email",
+    )
+    ordering = ("-scheduled_start_at_utc",)

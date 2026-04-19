@@ -1,28 +1,28 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { router, Stack } from "expo-router";
 import { useState } from "react";
 import {
-  View,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  Pressable,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  View,
 } from "react-native";
-import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Colors } from "@/constants/theme";
 import { RegistrationProfileSetupSheet } from "@/components/profile/RegistrationProfileSetupSheet";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
 import {
-  registerFn,
-  updateUsageModeFn,
-  updateProfileFn,
   fetchSkillsFn,
+  registerFn,
+  updateProfileFn,
+  updateUsageModeFn,
   type AuthResponse,
 } from "@/lib/queries/authQueries";
 
@@ -76,6 +76,8 @@ export default function RegisterScreen() {
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme];
 
+  const setAuthenticated = useAuthStore((state) => state.setAuthenticated);
+
   const [role, setRole] = useState<"mentor" | "mentee">("mentor");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
@@ -90,12 +92,17 @@ export default function RegisterScreen() {
   const [submitError, setSubmitError] = useState("");
   const [profileSetupVisible, setProfileSetupVisible] = useState(false);
   const [pendingUser, setPendingUser] = useState<{
-    id: string;
-    username: string;
     accessToken: string;
+    refreshToken: string;
+    username: string;
+    user: AuthResponse["user"];
   } | null>(null);
 
-  const { data: skillsData, isLoading: isLoadingSkills } = useQuery({
+  const {
+    data: skillsData,
+    isLoading: isLoadingSkills,
+    refetch: refetchSkills,
+  } = useQuery({
     queryKey: ["skills"],
     queryFn: fetchSkillsFn,
     staleTime: 10 * 60 * 1000,
@@ -116,24 +123,25 @@ export default function RegisterScreen() {
       }
 
       await updateUsageModeFn({
-        userId: pendingUser.id,
         app_usage_mode: role.toUpperCase() as "MENTOR" | "MENTEE",
         accessToken: pendingUser.accessToken,
-        _username: pendingUser.username,
       });
 
-      await useAuthStore.getState().updateUser({
+      const finalizedUser = {
+        ...pendingUser.user,
         app_usage_mode: role.toUpperCase() as "MENTOR" | "MENTEE",
-      });
+      };
 
       await updateProfileFn({
-        username: pendingUser.username,
         accessToken: pendingUser.accessToken,
         display_name: params.displayName,
         bio: params.bio.trim() || undefined,
-        ...(role === "mentor"
-          ? { expertises: params.selectedSkills }
-          : { eager_to_learn: params.selectedSkills }),
+        skills: params.selectedSkills,
+      });
+
+      await setAuthenticated(finalizedUser, {
+        access_token: pendingUser.accessToken,
+        refresh_token: pendingUser.refreshToken,
       });
     },
     onSuccess: () => {
@@ -144,21 +152,20 @@ export default function RegisterScreen() {
     },
   });
 
-  const setAuthenticated = useAuthStore((state) => state.setAuthenticated);
   const register = useMutation({
     mutationFn: registerFn,
     onSuccess: async (data: AuthResponse) => {
-      await setAuthenticated(data.user as import("@/lib/auth/types").AuthUser, {
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-      });
-
       setPendingUser({
-        id: data.user.id,
-        username: data.user.username,
         accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        username: data.user.username,
+        user: data.user,
       });
       setProfileSetupVisible(true);
+
+      if (!skillsData?.length) {
+        void refetchSkills();
+      }
     },
     onError: (error: Error) => {
       setSubmitError(error.message);
@@ -215,6 +222,7 @@ export default function RegisterScreen() {
     <SafeAreaView
       className={`flex-1 ${isDark ? "bg-surface-dark" : "bg-surface"}`}
     >
+      <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : "height"}

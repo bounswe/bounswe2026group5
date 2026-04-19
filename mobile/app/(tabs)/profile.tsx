@@ -1,51 +1,43 @@
-import React, { useEffect, useState } from "react";
-import { Alert, View, ScrollView, Text, TouchableOpacity } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ProfileHeader } from "@/components/profile/ProfileHeader";
-import { SkillsCloud } from "@/components/profile/SkillsCloud";
-import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { AvailabilityPreview } from "@/components/profile/AvailabilityPreview";
-import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { EditAvailabilityModal } from "@/components/profile/EditAvailabilityModal";
 import {
   EditProfileModal,
   UserProfileData,
 } from "@/components/profile/EditProfileModal";
+import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
+import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { SkillsCloud } from "@/components/profile/SkillsCloud";
+import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 
 import { API_BASE_URL } from "@/constants/api";
+import { useAuthStore } from "@/lib/auth/store";
+import { useProfileVisibilityStore } from "@/lib/profile/preferences";
 import {
   mapAvailabilityToSchedule,
   useAvailabilitySlotsQuery,
   useMentorshipMatchesQuery,
+  useMentorshipRequestsQuery,
 } from "@/lib/queries/mentorship";
-import { useAuthStore } from "@/lib/auth/store";
-import { useProfileVisibilityStore } from "@/lib/profile/preferences";
-import { useUpdateOwnProfileMutation } from "@/lib/queries/profile";
+import {
+  useProfileRatingQuery,
+  useUpdateOwnProfileMutation,
+} from "@/lib/queries/profile";
 
 const PROFILE_DEFAULTS = {
-  rating: 0,
-  reviewCount: 0,
-  expertise: [] as string[],
-  eagerToLearn: [] as string[],
+  skills: [] as string[],
 };
 
 interface OwnProfileResponse {
   full_name: string;
   bio: string;
   picture_url: string;
-  expertises?: string[];
-  eager_to_learn?: string[];
-}
-
-function includesMentor(mode?: string): boolean {
-  return mode === "MENTOR" || mode === "BOTH";
-}
-
-function includesMentee(mode?: string): boolean {
-  return mode === "MENTEE" || mode === "BOTH";
+  skills?: string[];
 }
 
 export default function ProfileScreen() {
@@ -58,7 +50,11 @@ export default function ProfileScreen() {
   const mentorshipMatchesQuery = useMentorshipMatchesQuery(
     currentUsername || "",
   );
+  const mentorshipRequestsQuery = useMentorshipRequestsQuery(
+    currentUsername || "",
+  );
   const updateProfileMutation = useUpdateOwnProfileMutation();
+  const profileRatingQuery = useProfileRatingQuery(currentUsername);
 
   const showExpertise = useProfileVisibilityStore(
     (state) => state.showExpertise,
@@ -70,15 +66,9 @@ export default function ProfileScreen() {
     (state) => state.showAvailability,
   );
 
-  const [availabilityData, setAvailabilityData] = useState<
-    { day: string; times: string[] }[]
-  >([]);
   const [menteesCount, setMenteesCount] = useState<number>(0);
-  const [expertiseData, setExpertiseData] = useState<string[]>(
-    PROFILE_DEFAULTS.expertise,
-  );
-  const [eagerToLearnData, setEagerToLearnData] = useState<string[]>(
-    PROFILE_DEFAULTS.eagerToLearn,
+  const [skillsData, setSkillsData] = useState<string[]>(
+    PROFILE_DEFAULTS.skills,
   );
 
   const [userData, setUserData] = useState<UserProfileData>({
@@ -97,12 +87,9 @@ export default function ProfileScreen() {
   const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
 
-  const hasExpertiseData = expertiseData.length > 0;
-  const hasEagerToLearnData = eagerToLearnData.length > 0;
-  const isMentorMode =
-    includesMentor(appUsageMode) || (!appUsageMode && hasExpertiseData);
-  const isMenteeMode =
-    includesMentee(appUsageMode) || (!appUsageMode && hasEagerToLearnData);
+  const isMentorMode = appUsageMode === "MENTOR";
+  const isMenteeMode = appUsageMode === "MENTEE";
+  const shouldShowSkills = isMentorMode ? showExpertise : showEagerToLearn;
 
   useEffect(() => {
     let mounted = true;
@@ -137,13 +124,7 @@ export default function ProfileScreen() {
           bio: payload.bio || "",
         }));
 
-        if (Array.isArray(payload.expertises)) {
-          setExpertiseData(payload.expertises);
-        }
-
-        if (Array.isArray(payload.eager_to_learn)) {
-          setEagerToLearnData(payload.eager_to_learn);
-        }
+        setSkillsData(payload.skills ?? []);
       })
       .catch(() => {
         if (!mounted) {
@@ -192,11 +173,10 @@ export default function ProfileScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (availabilityQuery.data) {
-      setAvailabilityData(mapAvailabilityToSchedule(availabilityQuery.data));
-    }
-  }, [availabilityQuery.data]);
+  const availabilityData = useMemo(
+    () => mapAvailabilityToSchedule(availabilityQuery.data ?? []),
+    [availabilityQuery.data],
+  );
 
   useEffect(() => {
     if (mentorshipMatchesQuery.data) {
@@ -275,11 +255,7 @@ export default function ProfileScreen() {
     variant: "mentor" | "mentee",
     nextSkills: string[],
   ) => {
-    if (variant === "mentor") {
-      setExpertiseData(nextSkills);
-    } else {
-      setEagerToLearnData(nextSkills);
-    }
+    setSkillsData(nextSkills);
 
     if (!currentUsername) {
       return;
@@ -288,9 +264,7 @@ export default function ProfileScreen() {
     try {
       await updateProfileMutation.mutateAsync({
         username: currentUsername,
-        ...(variant === "mentor"
-          ? { expertises: nextSkills }
-          : { eager_to_learn: nextSkills }),
+        skills: nextSkills,
       });
     } catch (error) {
       Alert.alert(
@@ -308,19 +282,27 @@ export default function ProfileScreen() {
     setSkillsModalConfig({ visible: true, title, skills, variant });
   };
 
+  const normalizedRating = Number.parseFloat(
+    profileRatingQuery.data?.average_rating ?? "0",
+  );
+  const rating = Number.isFinite(normalizedRating) ? normalizedRating : 0;
+  const reviewCount = profileRatingQuery.data?.review_count ?? 0;
+
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-surface dark:bg-surface-dark">
       <View
-        className="bg-white z-10 shadow-sm border-b border-gray-100"
+        className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
         style={{ paddingTop: insets.top }}
       >
         <View className="flex-row justify-between items-center px-4 pb-3 pt-2">
-          <Text className="text-xl font-extrabold text-gray-900">Profile</Text>
+          <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
+            Profile
+          </Text>
           <TouchableOpacity
             onPress={() => router.push("/settings" as any)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="settings-outline" size={24} color="#4b5563" />
+            <Ionicons name="settings-outline" size={24} color="#6b7280" />
           </TouchableOpacity>
         </View>
       </View>
@@ -333,57 +315,33 @@ export default function ProfileScreen() {
         <ProfileHeader
           name={userData.name}
           bio={userData.bio}
-          roleBadges={[
-            ...(isMentorMode ? (["MENTOR"] as const) : []),
-            ...(isMenteeMode ? (["MENTEE"] as const) : []),
-          ]}
-          rating={PROFILE_DEFAULTS.rating}
-          reviewCount={PROFILE_DEFAULTS.reviewCount}
+          reviewCount={reviewCount}
+          rating={rating}
           totalSessions={0}
           menteesHelped={isMentorMode ? menteesCount : 0}
+          showMenteesHelped={isMentorMode}
           onEdit={() => setEditProfileModalOpen(true)}
         />
 
         <View className="px-4 mt-4">
           <View className="mb-6">
-            {isMentorMode && showExpertise && (
+            {(isMentorMode || isMenteeMode) && shouldShowSkills && (
               <SkillsCloud
-                title="Expertise"
-                skills={expertiseData}
-                variant="mentor"
+                title="Skills"
+                skills={skillsData}
+                variant={isMentorMode ? "mentor" : "mentee"}
                 onEdit={() =>
                   openEditModal(
-                    "Expertise",
-                    expertiseData,
-                    "mentor",
+                    "Skills",
+                    skillsData,
+                    isMentorMode ? "mentor" : "mentee",
                     (newSkills) => {
-                      void handleSaveSkills("mentor", newSkills);
+                      void handleSaveSkills(isMentorMode ? "mentor" : "mentee", newSkills);
                     },
                   )
                 }
                 onViewAll={() =>
-                  openSkillsModal("Expertise", expertiseData, "mentor")
-                }
-              />
-            )}
-
-            {isMenteeMode && showEagerToLearn && (
-              <SkillsCloud
-                title="Eager to Learn"
-                skills={eagerToLearnData}
-                variant="mentee"
-                onEdit={() =>
-                  openEditModal(
-                    "Eager to Learn",
-                    eagerToLearnData,
-                    "mentee",
-                    (newSkills) => {
-                      void handleSaveSkills("mentee", newSkills);
-                    },
-                  )
-                }
-                onViewAll={() =>
-                  openSkillsModal("Eager to Learn", eagerToLearnData, "mentee")
+                  openSkillsModal("Skills", skillsData, isMentorMode ? "mentor" : "mentee")
                 }
               />
             )}
@@ -420,8 +378,19 @@ export default function ProfileScreen() {
       />
       <EditAvailabilityModal
         visible={isAvailabilityModalOpen}
-        initialSchedule={availabilityData}
-        onSave={setAvailabilityData}
+        username={currentUsername || ""}
+        slots={availabilityQuery.data ?? []}
+        requests={(mentorshipRequestsQuery.data ?? [])
+          .filter((request) => request.mentor.username === currentUsername)
+          .map((request) => ({
+            id: request.id,
+            slotId: request.slot_id,
+            status: request.status,
+          }))}
+        onChanged={() => {
+          availabilityQuery.refetch();
+          mentorshipRequestsQuery.refetch();
+        }}
         onClose={() => setAvailabilityModalOpen(false)}
       />
       <EditProfileModal

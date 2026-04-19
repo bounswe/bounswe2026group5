@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { useLocation } from '@tanstack/react-router'
 import { Muted } from '@/components/Typography'
 import {NavLink} from '@/components/NavLink'
 

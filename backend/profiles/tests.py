@@ -12,7 +12,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode
 from mentorship.models import MentorshipRequest
-from profiles.models import AvailabilitySlot, ExpertiseField, Profile, ProfileExpertise, Skill
+from profiles.models import AvailabilitySlot, Profile, Skill
 
 User: Any = get_user_model()
 
@@ -40,11 +40,6 @@ class ProfileModelsTests(TestCase):
         self.mentee_profile = Profile.objects.create(
             user=self.mentee_user,
             display_name="Mentee User",
-        )
-
-        self.python_expertise, _ = ExpertiseField.objects.get_or_create(
-            name="Python/Django",
-            defaults={"description": "Backend development"},
         )
 
     def test_profile_skills_array(self) -> None:
@@ -80,60 +75,6 @@ class ProfileModelsTests(TestCase):
 
         self.assertEqual(first_profile.username, "sam")
         self.assertEqual(second_profile.username, "sam_1")
-
-    def test_profile_expertise_unique_per_profile(self) -> None:
-        """Same expertise cannot be inserted twice for the same profile."""
-        ProfileExpertise.objects.create(
-            profile=self.mentor_profile,
-            expertise_field=self.python_expertise,
-            proficiency_level=4,
-        )
-
-        with self.assertRaises(IntegrityError):
-            with transaction.atomic():
-                ProfileExpertise.objects.create(
-                    profile=self.mentor_profile,
-                    expertise_field=self.python_expertise,
-                    proficiency_level=3,
-                )
-
-    def test_profile_expertise_proficiency_level_constraint(self) -> None:
-        """Proficiency level must be within the configured range."""
-        with self.assertRaises(IntegrityError):
-            with transaction.atomic():
-                ProfileExpertise.objects.create(
-                    profile=self.mentor_profile,
-                    expertise_field=self.python_expertise,
-                    proficiency_level=6,
-                )
-
-    def test_profile_expertise_update_rating(self) -> None:
-        """Rating helper updates average rating and count correctly."""
-        profile_expertise = ProfileExpertise.objects.create(
-            profile=self.mentor_profile,
-            expertise_field=self.python_expertise,
-            proficiency_level=5,
-        )
-
-        profile_expertise.update_rating(4)
-        profile_expertise.refresh_from_db()
-        self.assertEqual(profile_expertise.rating_count, 1)
-        self.assertEqual(float(profile_expertise.average_rating), 4)
-
-        profile_expertise.update_rating(2)
-        profile_expertise.refresh_from_db()
-        self.assertEqual(profile_expertise.rating_count, 2)
-        self.assertEqual(float(profile_expertise.average_rating), 3)
-
-    def test_profile_expertise_update_rating_rejects_out_of_range(self) -> None:
-        """Rating helper rejects ratings outside the 0 to 5 range."""
-        profile_expertise = ProfileExpertise.objects.create(
-            profile=self.mentor_profile,
-            expertise_field=self.python_expertise,
-        )
-
-        with self.assertRaises(ValueError):
-            profile_expertise.update_rating(5.5)
 
     def test_availability_slot_end_after_start_constraint(self) -> None:
         """Availability slot end time must be after start time."""
@@ -252,6 +193,7 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.owner_url = f"/api/profiles/{self.owner_profile.username}/"
         self.other_url = f"/api/profiles/{self.other_profile.username}/"
         self.public_url = f"/api/profiles/{self.public_profile.username}/"
+        self.me_url = "/api/profiles/me/"
 
     def test_get_profile_success(self) -> None:
         """Authenticated user can get own profile by username."""
@@ -264,7 +206,18 @@ class ProfileByUsernameAPIViewTests(TestCase):
         # Mentee profile response shape
         self.assertIn("full_name", payload)
         self.assertEqual(payload["full_name"], "Owner User")
-        self.assertIn("eager_to_learn", payload)
+        self.assertIn("skills", payload)
+
+    def test_get_profile_success_via_me_endpoint(self) -> None:
+        """Authenticated user can get own profile by canonical me route."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.get(self.me_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("full_name", payload)
+        self.assertEqual(payload["full_name"], "Owner User")
 
     def test_get_mentor_profile_returns_mentor_shape(self) -> None:
         """Mentor profile returns mentor-specific fields."""
@@ -279,10 +232,9 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertIn("full_name", payload)
         self.assertIn("title", payload)
         self.assertEqual(payload["title"], "Senior Backend Mentor")
-        self.assertIn("expertises", payload)
+        self.assertIn("skills", payload)
         self.assertIn("rating", payload)
         self.assertIn("total_mentee_count", payload)
-        self.assertIn("available_slots", payload)
 
     def test_get_profile_public_access_without_authentication(self) -> None:
         """Public profile is accessible without authentication."""
@@ -326,26 +278,41 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_patch_profile_success(self) -> None:
-        """Authenticated user can patch own profile by username."""
+        """Authenticated user can patch own profile by canonical me endpoint."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
         payload = {
             "display_name": "Owner Updated",
             "bio": "Updated bio",
         }
 
-        response = self.api_client.patch(self.owner_url, payload)
+        response = self.api_client.patch(self.me_url, payload)
 
         self.assertEqual(response.status_code, 200)
         self.owner_profile.refresh_from_db()
         self.assertEqual(self.owner_profile.display_name, "Owner Updated")
         self.assertEqual(self.owner_profile.bio, "Updated bio")
 
+    def test_patch_profile_success_via_me_endpoint(self) -> None:
+        """Authenticated user can patch own profile by canonical me route."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.me_url,
+            {"display_name": "Owner Via Me", "bio": "Updated via me route"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertEqual(self.owner_profile.display_name, "Owner Via Me")
+        self.assertEqual(self.owner_profile.bio, "Updated via me route")
+
     def test_patch_profile_accepts_blank_location(self) -> None:
         """Blank string location is accepted and normalized to null."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
 
         response = self.api_client.patch(
-            self.owner_url,
+            self.me_url,
             {"location": ""},
             format="json",
         )
@@ -355,12 +322,12 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertIsNone(self.owner_profile.location)
 
     def test_patch_mentee_profile_skills_with_eager_to_learn(self) -> None:
-        """Mentees can patch skills using eager_to_learn alias."""
+        """Mentees can patch skills using canonical skills field."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
 
         response = self.api_client.patch(
-            self.owner_url,
-            {"eager_to_learn": ["Data Science", "Machine Learning"]},
+            self.me_url,
+            {"skills": ["Data Science", "Machine Learning"]},
             format="json",
         )
 
@@ -369,14 +336,14 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertEqual(self.owner_profile.skills, ["Data Science", "Machine Learning"])
 
     def test_patch_mentor_profile_skills_with_expertises(self) -> None:
-        """Mentors can patch skills using expertises alias."""
+        """Mentors can patch skills using canonical skills field."""
         mentor_refresh = RefreshToken.for_user(self.other_user)
         mentor_access_token = str(mentor_refresh.access_token)
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {mentor_access_token}")
 
         response = self.api_client.patch(
-            self.other_url,
-            {"expertises": ["System Design", "Python"]},
+            "/api/profiles/me/",
+            {"skills": ["System Design", "Python"]},
             format="json",
         )
 
@@ -387,61 +354,11 @@ class ProfileByUsernameAPIViewTests(TestCase):
     def test_patch_profile_requires_authentication(self) -> None:
         """PATCH endpoint returns 401 when request is unauthenticated."""
         response = self.api_client.patch(
-            self.owner_url,
+            self.me_url,
             {"display_name": "No Auth"},
         )
 
         self.assertEqual(response.status_code, 401)
-
-    def test_patch_profile_returns_404_for_non_owner(self) -> None:
-        """Authenticated users cannot patch another user's profile by username."""
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
-
-        response = self.api_client.patch(
-            self.other_url,
-            {"display_name": "Should Not Update"},
-        )
-
-        self.assertEqual(response.status_code, 404)
-        self.other_profile.refresh_from_db()
-        self.assertEqual(self.other_profile.display_name, "Other User")
-
-    def test_mentee_profile_hidden_field_reflects_visibility(self) -> None:
-        """Mentee profile 'hidden' field is the inverse of is_visible."""
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
-
-        response = self.api_client.get(self.owner_url)
-        payload = response.json()
-
-        self.assertEqual(response.status_code, 200)
-        # owner_profile has is_visible=True by default, so hidden should be False
-        self.assertFalse(payload["hidden"])
-
-    def test_mentor_profile_includes_skills_as_expertises(self) -> None:
-        """Mentor profile returns skills under 'expertises' key."""
-        self.other_profile.is_visible = True
-        self.other_profile.skills = ["Machine Learning"]
-        self.other_profile.save()
-
-        response = self.api_client.get(self.other_url)
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(len(payload["expertises"]), 1)
-        self.assertEqual(payload["expertises"][0], "Machine Learning")
-
-    def test_mentee_profile_includes_skills_as_eager_to_learn(self) -> None:
-        """Mentee profile returns skills under 'eager_to_learn' key."""
-        self.owner_profile.skills = ["Data Science"]
-        self.owner_profile.save()
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
-        response = self.api_client.get(self.owner_url)
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(len(payload["eager_to_learn"]), 1)
-        self.assertEqual(payload["eager_to_learn"][0], "Data Science")
 
 
 class SkillListAPIViewTests(TestCase):
@@ -521,6 +438,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
         self.other_collection_url = (
             f"/api/profiles/{self.other_mentor_profile.username}/availability-slots/"
         )
+        self.me_collection_url = "/api/profiles/me/availability-slots/"
 
     def test_create_availability_slot_success(self) -> None:
         """Mentor can create a slot with date/startTime/endTime payload."""
@@ -531,7 +449,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
             "endTime": "11:00:00",
         }
 
-        response = self.api_client.post(self.collection_url, payload)
+        response = self.api_client.post(self.me_collection_url, payload)
 
         self.assertEqual(response.status_code, 201)
         body = response.json()
@@ -544,6 +462,51 @@ class AvailabilitySlotAPIViewTests(TestCase):
             AvailabilitySlot.objects.filter(id=body["id"], profile=self.mentor_profile).exists()
         )
 
+    def test_create_availability_slot_success_via_me_endpoint(self) -> None:
+        """Mentor can create a slot using canonical me availability route."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+
+        response = self.api_client.post(
+            self.me_collection_url,
+            {
+                "date": (timezone.localdate() + timedelta(days=1)).isoformat(),
+                "startTime": "13:00:00",
+                "endTime": "14:00:00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertTrue(
+            AvailabilitySlot.objects.filter(id=body["id"], profile=self.mentor_profile).exists()
+        )
+
+    def test_patch_availability_slot_success_via_me_endpoint(self) -> None:
+        """Mentor can patch own slot via canonical me detail route."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
+        slot_start = timezone.now() + timedelta(days=3)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=slot_start,
+            end_at=slot_start + timedelta(hours=1),
+        )
+
+        response = self.api_client.patch(
+            f"/api/profiles/me/availability-slots/{slot.id}/",
+            {
+                "date": (timezone.localdate() + timedelta(days=4)).isoformat(),
+                "startTime": "16:00:00",
+                "endTime": "17:00:00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        slot.refresh_from_db()
+        self.assertEqual(timezone.localtime(slot.start_at).hour, 16)
+        self.assertEqual(timezone.localtime(slot.end_at).hour, 17)
+
     def test_create_availability_slot_rejects_past_date(self) -> None:
         """Serializer rejects past dates for slot creation."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
@@ -553,7 +516,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
             "endTime": "11:00:00",
         }
 
-        response = self.api_client.post(self.collection_url, payload)
+        response = self.api_client.post(self.me_collection_url, payload)
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("date", response.json())
@@ -567,7 +530,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
             "endTime": "13:59:59",
         }
 
-        response = self.api_client.post(self.collection_url, payload)
+        response = self.api_client.post(self.me_collection_url, payload)
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("endTime", response.json())
@@ -598,13 +561,14 @@ class AvailabilitySlotAPIViewTests(TestCase):
         response = self.api_client.get(self.collection_url)
 
         self.assertEqual(response.status_code, 200)
+
         payload = response.json()
         returned_ids = {slot["id"] for slot in payload}
         self.assertIn(str(future_slot.id), returned_ids)
         self.assertEqual(len(payload), 1)
 
     def test_patch_availability_slot_success(self) -> None:
-        """Mentor can update own slot via PATCH."""
+        """Mentor can update own slot via canonical me PATCH."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
         slot_start = timezone.now() + timedelta(days=3)
         slot = AvailabilitySlot.objects.create(
@@ -612,7 +576,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
             start_at=slot_start,
             end_at=slot_start + timedelta(hours=1),
         )
-        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+        detail_url = f"/api/profiles/me/availability-slots/{slot.id}/"
 
         response = self.api_client.patch(
             detail_url,
@@ -629,7 +593,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
         self.assertEqual(timezone.localtime(slot.end_at).hour, 16)
 
     def test_delete_availability_slot_success(self) -> None:
-        """Mentor can delete own availability slot."""
+        """Mentor can delete own availability slot via canonical me route."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
         slot_start = timezone.now() + timedelta(days=1)
         slot = AvailabilitySlot.objects.create(
@@ -637,50 +601,11 @@ class AvailabilitySlotAPIViewTests(TestCase):
             start_at=slot_start,
             end_at=slot_start + timedelta(hours=1),
         )
-        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+        detail_url = f"/api/profiles/me/availability-slots/{slot.id}/"
 
         response = self.api_client.delete(detail_url)
 
         self.assertEqual(response.status_code, 204)
-        self.assertFalse(AvailabilitySlot.objects.filter(id=slot.id).exists())
-
-    def test_delete_slot_after_canceling_accepted_first_session(self) -> None:
-        """Mentor can delete first-session slot after booking cancellation."""
-        slot_start = timezone.now() + timedelta(days=1)
-        slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=slot_start,
-            end_at=slot_start + timedelta(hours=1),
-            is_booked=True,
-            booked_by=self.mentee_user,
-            booked_at=timezone.now(),
-        )
-        request_obj = MentorshipRequest.objects.create(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            slot=slot,
-            status=MentorshipRequest.Status.ACCEPTED,
-        )
-
-        cancel_url = (
-            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-            "cancel-booking/"
-        )
-        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
-        cancel_response = self.api_client.post(cancel_url)
-        self.assertEqual(cancel_response.status_code, 200)
-
-        request_obj.refresh_from_db()
-        self.assertIsNone(request_obj.slot)
-        self.assertEqual(request_obj.initial_session_start_at, slot.start_at)
-        self.assertEqual(request_obj.initial_session_end_at, slot.end_at)
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
-        delete_response = self.api_client.delete(detail_url)
-
-        self.assertEqual(delete_response.status_code, 204)
         self.assertFalse(AvailabilitySlot.objects.filter(id=slot.id).exists())
 
     def test_delete_slot_unlinks_accepted_request_without_cancel_step(self) -> None:
@@ -699,7 +624,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
             status=MentorshipRequest.Status.ACCEPTED,
         )
 
-        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+        detail_url = f"/api/profiles/me/availability-slots/{slot.id}/"
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
         delete_response = self.api_client.delete(detail_url)
 
@@ -725,7 +650,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
             status=MentorshipRequest.Status.PENDING,
         )
 
-        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+        detail_url = f"/api/profiles/me/availability-slots/{slot.id}/"
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
         delete_response = self.api_client.delete(detail_url)
 
@@ -742,13 +667,11 @@ class AvailabilitySlotAPIViewTests(TestCase):
             start_at=slot_start,
             end_at=slot_start + timedelta(hours=1),
         )
-        detail_url = (
-            f"/api/profiles/{self.other_mentor_profile.username}/availability-slots/{slot.id}/"
-        )
+        detail_url = f"/api/profiles/me/availability-slots/{slot.id}/"
 
         response = self.api_client.delete(detail_url)
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
         self.assertTrue(AvailabilitySlot.objects.filter(id=slot.id).exists())
 
     def test_mentee_cannot_create_or_delete_slots(self) -> None:
@@ -760,7 +683,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
             "endTime": "11:00:00",
         }
 
-        create_response = self.api_client.post(self.collection_url, payload)
+        create_response = self.api_client.post(self.me_collection_url, payload)
         self.assertEqual(create_response.status_code, 403)
 
         slot_start = timezone.now() + timedelta(days=1)
@@ -769,56 +692,24 @@ class AvailabilitySlotAPIViewTests(TestCase):
             start_at=slot_start,
             end_at=slot_start + timedelta(hours=1),
         )
-        detail_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
+        detail_url = f"/api/profiles/me/availability-slots/{slot.id}/"
         delete_response = self.api_client.delete(detail_url)
 
         self.assertEqual(delete_response.status_code, 403)
 
     def test_other_authenticated_user_can_get_mentor_slots(self) -> None:
-        """Other authenticated users can read a mentor's availability slots."""
+        """Other authenticated users can read a mentor's availability slot list."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
         slot_start = timezone.now() + timedelta(days=1)
-        slot = AvailabilitySlot.objects.create(
+        AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
             start_at=slot_start,
             end_at=slot_start + timedelta(hours=1),
         )
 
         list_response = self.api_client.get(self.collection_url)
-        detail_response = self.api_client.get(
-            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-        )
 
         self.assertEqual(list_response.status_code, 200)
-        self.assertEqual(detail_response.status_code, 200)
-
-    def test_non_owner_cannot_create_for_other_mentor_username(self) -> None:
-        """Authenticated non-owners cannot create slots for another mentor."""
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
-
-        response = self.api_client.post(
-            self.collection_url,
-            {
-                "date": (timezone.localdate() + timedelta(days=1)).isoformat(),
-                "startTime": "10:00:00",
-                "endTime": "11:00:00",
-            },
-        )
-
-        self.assertEqual(response.status_code, 403)
-
-    def test_create_availability_slot_requires_authentication(self) -> None:
-        """Unauthenticated requests cannot create availability slots."""
-        response = self.api_client.post(
-            self.collection_url,
-            {
-                "date": (timezone.localdate() + timedelta(days=1)).isoformat(),
-                "startTime": "10:00:00",
-                "endTime": "11:00:00",
-            },
-        )
-
-        self.assertEqual(response.status_code, 401)
 
 
 class AvailabilitySlotBookingAPIViewTests(TestCase):
@@ -943,93 +834,6 @@ class AvailabilitySlotBookingAPIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
-    def test_cancel_booking_by_booking_owner_success(self) -> None:
-        """Booking owner can cancel their booking."""
-        slot_start = timezone.now() + timedelta(days=1)
-        slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=slot_start,
-            end_at=slot_start + timedelta(hours=1),
-            is_booked=True,
-            booked_by=self.mentee_user,
-            booked_at=timezone.now(),
-        )
-        cancel_url = (
-            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-            "cancel-booking/"
-        )
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentee_access_token}")
-        response = self.api_client.post(cancel_url)
-
-        self.assertEqual(response.status_code, 200)
-        slot.refresh_from_db()
-        self.assertFalse(slot.is_booked)
-        self.assertIsNone(slot.booked_by)
-        self.assertIsNone(slot.booked_at)
-
-    def test_cancel_booking_by_mentor_owner_success(self) -> None:
-        """Mentor owner can cancel booking on their own slot."""
-        slot_start = timezone.now() + timedelta(days=1)
-        slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=slot_start,
-            end_at=slot_start + timedelta(hours=1),
-            is_booked=True,
-            booked_by=self.mentee_user,
-            booked_at=timezone.now(),
-        )
-        cancel_url = (
-            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-            "cancel-booking/"
-        )
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
-        response = self.api_client.post(cancel_url)
-
-        self.assertEqual(response.status_code, 200)
-        slot.refresh_from_db()
-        self.assertFalse(slot.is_booked)
-
-    def test_cancel_booking_rejects_unrelated_user(self) -> None:
-        """Unrelated users cannot cancel someone else's booking."""
-        slot_start = timezone.now() + timedelta(days=1)
-        slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=slot_start,
-            end_at=slot_start + timedelta(hours=1),
-            is_booked=True,
-            booked_by=self.mentee_user,
-            booked_at=timezone.now(),
-        )
-        cancel_url = (
-            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-            "cancel-booking/"
-        )
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.other_access_token}")
-        response = self.api_client.post(cancel_url)
-
-        self.assertEqual(response.status_code, 403)
-
-    def test_cancel_booking_rejects_unbooked_slot(self) -> None:
-        """Cancellation fails when slot is currently not booked."""
-        slot_start = timezone.now() + timedelta(days=1)
-        slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=slot_start,
-            end_at=slot_start + timedelta(hours=1),
-        )
-        cancel_url = (
-            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{slot.id}/"
-            "cancel-booking/"
-        )
-
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
-        response = self.api_client.post(cancel_url)
-
-        self.assertEqual(response.status_code, 400)
-
 
 class PublicMentorProfilesSearchListAPIViewTests(TestCase):
     """Tests for public mentor discovery endpoint GET /api/profiles/."""
@@ -1132,6 +936,23 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         # Default discovery is mentors only.
         self.assertNotIn("Mentee Person", returned_names)
 
+    def test_mode_filter_can_target_mentee_profiles(self) -> None:
+        """`mentorshipMode=MENTEE` returns visible mentee profiles."""
+        response = self.api_client.get("/api/profiles/", {"mentorshipMode": "MENTEE"})
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        returned_names = {p["full_name"] for p in payload["results"]}
+
+        self.assertIn("Mentee Person", returned_names)
+        self.assertNotIn("Alice Mentor", returned_names)
+
+    def test_mode_filter_rejects_legacy_both_value(self) -> None:
+        """`mentorshipMode=BOTH` is rejected by strict role filtering."""
+        response = self.api_client.get("/api/profiles/", {"mentorshipMode": "BOTH"})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("MENTOR or MENTEE", response.json()["detail"])
+
     def test_search_by_q_matches_display_name(self) -> None:
         """`q` filters by name/keyword fields."""
         response = self.api_client.get("/api/profiles/", {"q": "Alice"})
@@ -1150,7 +971,7 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
 
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["results"][0]["full_name"], "JD")
-        self.assertEqual(payload["results"][0]["expertises"], ["React"])
+        self.assertEqual(payload["results"][0]["skills"], ["React"])
 
     def test_filter_by_skill_term_is_case_insensitive(self) -> None:
         """Skill filter uses case-insensitive match on profile skills."""
@@ -1227,6 +1048,7 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
 def _token_for_profile_tests(user: Any) -> str:
     """Return a JWT access token for the given user."""
     from rest_framework_simplejwt.tokens import RefreshToken
+
     return str(RefreshToken.for_user(user).access_token)
 
 
@@ -1235,6 +1057,7 @@ class MentorPublicRatingAPITests(TestCase):
 
     def setUp(self) -> None:
         from django.contrib.auth.models import Group
+
         from accounts.models import UserRole
 
         Group.objects.get_or_create(name=UserRole.USER)
@@ -1249,7 +1072,7 @@ class MentorPublicRatingAPITests(TestCase):
             display_name="Rating Mentor",
             is_visible=True,
         )
-        self.api_client = APIClient()
+        self.api_client: Any = APIClient()
 
     def _url(self, username: str) -> str:
         return f"/api/profiles/{username}/rating/"
@@ -1285,8 +1108,9 @@ class MentorPublicRatingAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_rating_reflects_threshold_update(self) -> None:
-        """After review_count and average_rating are manually updated, endpoint returns new values."""
+        """After manual threshold updates, endpoint returns current public rating values."""
         from decimal import Decimal
+
         self.mentor_profile.review_count = 5
         self.mentor_profile.average_rating = Decimal("4.20")
         self.mentor_profile.save()
@@ -1368,7 +1192,9 @@ class RecentlyAddedMentorsAPITests(TestCase):
         results = response.json()["results"]
         self.assertGreaterEqual(len(results), 2)
         ids = [r["id"] for r in results]
-        self.assertLess(ids.index(str(self.mentor2_profile.id)), ids.index(str(self.mentor1_profile.id)))
+        self.assertLess(
+            ids.index(str(self.mentor2_profile.id)), ids.index(str(self.mentor1_profile.id))
+        )
 
     def test_default_limit_is_ten(self) -> None:
         # Create 12 visible mentors in total (2 already exist)

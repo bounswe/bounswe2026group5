@@ -6,18 +6,27 @@ from typing import Any
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from django.test import override_settings
-
 from accounts.models import AppUsageMode
-from mentorship.models import Feedback, Match, MentorshipRequest
+from mentorship.models import Feedback, Match, MeetingSession, MentorshipRequest
+from mentorship.services import ensure_match_and_initial_session
 from profiles.models import AvailabilitySlot, Profile
 
 User: Any = get_user_model()
+
+
+def _create_accepted_request(**kwargs: Any) -> MentorshipRequest:
+    """Create an accepted request and explicitly materialize its match/session state."""
+    request_obj = MentorshipRequest.objects.create(
+        status=MentorshipRequest.Status.ACCEPTED,
+        **kwargs,
+    )
+    ensure_match_and_initial_session(mentorship_request=request_obj)
+    return request_obj
 
 
 class MentorshipRequestModelTests(TestCase):
@@ -96,8 +105,8 @@ class MentorshipRequestModelTests(TestCase):
 
         self.assertEqual(second_request.status, MentorshipRequest.Status.REJECTED)
 
-    def test_match_auto_created_on_accept(self) -> None:
-        """A match is automatically created when request status becomes ACCEPTED."""
+    def test_match_materialized_on_explicit_service_sync(self) -> None:
+        """Accepted requests produce a match when synchronized by service."""
         request_obj = MentorshipRequest.objects.create(
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
@@ -107,6 +116,7 @@ class MentorshipRequestModelTests(TestCase):
 
         request_obj.status = MentorshipRequest.Status.ACCEPTED
         request_obj.save()
+        ensure_match_and_initial_session(mentorship_request=request_obj)
 
         self.assertTrue(Match.objects.filter(request=request_obj).exists())
         match = Match.objects.get(request=request_obj)
@@ -114,16 +124,15 @@ class MentorshipRequestModelTests(TestCase):
         self.assertEqual(match.mentee, self.mentee_profile)
         self.assertTrue(match.is_active)
 
-    def test_match_not_duplicated_on_repeated_accept_saves(self) -> None:
-        """Repeated saves in ACCEPTED state do not create duplicate matches."""
-        request_obj = MentorshipRequest.objects.create(
+    def test_match_not_duplicated_on_repeated_service_sync(self) -> None:
+        """Repeated service synchronization does not create duplicate matches."""
+        request_obj = _create_accepted_request(
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
         )
 
-        request_obj.save()
-        request_obj.save()
+        ensure_match_and_initial_session(mentorship_request=request_obj)
+        ensure_match_and_initial_session(mentorship_request=request_obj)
 
         self.assertEqual(Match.objects.filter(request=request_obj).count(), 1)
 
@@ -182,6 +191,7 @@ class MentorshipRequestAPIBaseTestCase(TestCase):
     REQUESTS_URL = "/api/mentorship/requests/"
     REQUESTS_ME_URL = "/api/mentorship/requests/me/"
     MATCHES_ME_URL = "/api/mentorship/matches/me/"
+    MEETING_SESSIONS_ME_URL = "/api/mentorship/meeting-sessions/me/"
     UPCOMING_SESSIONS_ME_URL = "/api/mentorship/sessions/me/upcoming/"
     PAST_SESSIONS_ME_URL = "/api/mentorship/sessions/me/past/"
 
@@ -279,8 +289,8 @@ class MyRequestsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["mentor"]["username"], self.mentor_profile.username)
 
-    def test_user_sees_requests_as_both_parties(self) -> None:
-        """BOTH-mode user sees requests where they are mentor or mentee."""
+    def test_user_sees_requests_as_mentor_and_mentee_parties(self) -> None:
+        """Users see requests where they are involved as mentor or mentee."""
         MentorshipRequest.objects.create(
             mentor=self.other_profile,
             mentee=self.mentee_profile,
@@ -491,11 +501,92 @@ class MyMatchesListAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, [])
 
-    def test_accepted_request_appears_in_matches(self) -> None:
-        req = MentorshipRequest.objects.create(
+
+class MeetingSessionPhaseTwoTests(MentorshipRequestAPIBaseTestCase):
+    """Phase 2 tests for canonical MeetingSession creation and sync behavior."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        new_start = timezone.now() + timedelta(days=5)
+        self.second_slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=new_start,
+            end_at=new_start + timedelta(hours=1),
+        )
+
+    def _create_pending_request(self) -> MentorshipRequest:
+        return MentorshipRequest.objects.create(
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
+            slot=self.mentor_slot,
+        )
+
+    def test_accept_creates_meeting_session(self) -> None:
+        request_obj = self._create_pending_request()
+        respond_url = self._respond_url(request_obj.id)
+
+        response = self.mentor_client.post(respond_url, {"action": "accept"})
+        self.assertEqual(response.status_code, 200)
+
+        match = Match.objects.get(request=request_obj)
+        session = MeetingSession.objects.get(match=match)
+        self.assertEqual(session.status, MeetingSession.Status.SCHEDULED)
+        self.assertEqual(session.source_slot, self.mentor_slot)
+        self.assertEqual(session.scheduled_start_at_utc, self.mentor_slot.start_at)
+        self.assertEqual(session.scheduled_end_at_utc, self.mentor_slot.end_at)
+
+    def test_cancel_marks_meeting_session_canceled(self) -> None:
+        request_obj = self._create_pending_request()
+        self.mentor_client.post(self._respond_url(request_obj.id), {"action": "accept"})
+
+        match = Match.objects.get(request=request_obj)
+        session = MeetingSession.objects.get(match=match)
+        cancel_url = f"/api/mentorship/sessions/{session.id}/cancel/"
+        response = self.mentee_client.post(cancel_url)
+        self.assertEqual(response.status_code, 200)
+
+        session = MeetingSession.objects.get(match=match)
+        self.assertEqual(session.status, MeetingSession.Status.CANCELED)
+        self.assertIsNone(session.source_slot)
+        self.assertEqual(session.canceled_by_role, MeetingSession.CanceledByRole.MENTEE)
+
+    def test_reschedule_updates_meeting_session(self) -> None:
+        request_obj = self._create_pending_request()
+        self.mentor_client.post(self._respond_url(request_obj.id), {"action": "accept"})
+
+        match = Match.objects.get(request=request_obj)
+        session = MeetingSession.objects.get(match=match)
+        reschedule_url = f"/api/mentorship/sessions/{session.id}/reschedule/"
+        response = self.mentee_client.post(
+            reschedule_url,
+            {"new_slot_id": str(self.second_slot.id)},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        session = MeetingSession.objects.get(match=match)
+        self.assertEqual(session.status, MeetingSession.Status.RESCHEDULED)
+        self.assertEqual(session.source_slot, self.second_slot)
+        self.assertEqual(session.scheduled_start_at_utc, self.second_slot.start_at)
+        self.assertEqual(session.scheduled_end_at_utc, self.second_slot.end_at)
+
+    def test_meeting_sessions_me_endpoint_returns_canonical_payload(self) -> None:
+        request_obj = self._create_pending_request()
+        self.mentor_client.post(self._respond_url(request_obj.id), {"action": "accept"})
+
+        response = self.mentee_client.get(self.MEETING_SESSIONS_ME_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["my_role"], "MENTEE")
+        self.assertIn("allowed_actions", response.data[0])
+
+    def test_meeting_sessions_me_endpoint_rejects_invalid_status(self) -> None:
+        response = self.mentee_client.get(self.MEETING_SESSIONS_ME_URL, {"status": "invalid"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_accepted_request_appears_in_matches(self) -> None:
+        req = _create_accepted_request(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
         )
         response = self.mentee_client.get(self.MATCHES_ME_URL)
         self.assertEqual(response.status_code, 200)
@@ -503,20 +594,18 @@ class MyMatchesListAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(str(response.data[0]["request_id"]), str(req.id))
 
     def test_mentor_also_sees_match(self) -> None:
-        MentorshipRequest.objects.create(
+        _create_accepted_request(
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
         )
         response = self.mentor_client.get(self.MATCHES_ME_URL)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 1)
 
     def test_inactive_match_excluded(self) -> None:
-        req = MentorshipRequest.objects.create(
+        req = _create_accepted_request(
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
         )
         Match.objects.filter(request=req).update(is_active=False)
         response = self.mentee_client.get(self.MATCHES_ME_URL)
@@ -533,218 +622,15 @@ class MyMatchesListAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(response.data, [])
 
 
-class MyUpcomingSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
-    """Tests for GET /api/mentorship/sessions/me/upcoming/."""
-
-    def test_unauthenticated_returns_401(self) -> None:
-        response = self.anon_client.get(self.UPCOMING_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 401)
-
-    def test_returns_only_upcoming_sessions_for_current_mentee(self) -> None:
-        MentorshipRequest.objects.create(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
-        )
-
-        self.mentor_slot.mark_booked(self.mentee_user)
-
-        additional_start_at = timezone.now() + timedelta(days=5)
-        additional_slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=additional_start_at,
-            end_at=additional_start_at + timedelta(hours=1),
-        )
-        additional_slot.mark_booked(self.mentee_user)
-
-        response = self.mentee_client.get(self.UPCOMING_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 2)
-
-        returned_slot_ids = {str(item["slot_id"]) for item in response.data}
-        self.assertSetEqual(
-            returned_slot_ids,
-            {str(self.mentor_slot.id), str(additional_slot.id)},
-        )
-        returned_statuses = {item["status"] for item in response.data}
-        self.assertSetEqual(returned_statuses, {MentorshipRequest.Status.ACCEPTED})
-
-    def test_excludes_slots_without_active_match(self) -> None:
-        self.other_mentor_slot.mark_booked(self.mentee_user)
-
-        response = self.mentee_client.get(self.UPCOMING_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_excludes_slots_booked_by_different_user(self) -> None:
-        MentorshipRequest.objects.create(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
-        )
-        self.mentor_slot.mark_booked(self.other_user)
-
-        response = self.mentee_client.get(self.UPCOMING_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_excludes_past_slots(self) -> None:
-        MentorshipRequest.objects.create(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
-        )
-
-        past_start_at = timezone.now() - timedelta(days=2)
-        past_slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=past_start_at,
-            end_at=past_start_at + timedelta(hours=1),
-            is_booked=True,
-            booked_by=self.mentee_user,
-            booked_at=timezone.now(),
-        )
-
-        response = self.mentee_client.get(self.UPCOMING_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-        self.assertTrue(AvailabilitySlot.objects.filter(id=past_slot.id).exists())
-
-    def test_excludes_slots_for_inactive_match(self) -> None:
-        request_obj = MentorshipRequest.objects.create(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
-        )
-        Match.objects.filter(request=request_obj).update(is_active=False)
-        self.mentor_slot.mark_booked(self.mentee_user)
-
-        response = self.mentee_client.get(self.UPCOMING_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-
-class MyPastSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
-    """Tests for GET /api/mentorship/sessions/me/past/."""
-
-    def _create_past_slot(
-        self,
-        profile: Any,
-        booked_by: Any = None,
-        days_ago: int = 2,
-    ) -> AvailabilitySlot:
-        """Create a slot in the past, optionally marked as booked."""
-        past_start = timezone.now() - timedelta(days=days_ago)
-        kwargs: dict[str, Any] = {
-            "profile": profile,
-            "start_at": past_start,
-            "end_at": past_start + timedelta(hours=1),
-        }
-        if booked_by is not None:
-            kwargs["is_booked"] = True
-            kwargs["booked_by"] = booked_by
-            kwargs["booked_at"] = timezone.now() - timedelta(days=days_ago + 1)
-        return AvailabilitySlot.objects.create(**kwargs)
-
-    def test_unauthenticated_returns_401(self) -> None:
-        response = self.anon_client.get(self.PAST_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 401)
-
-    def test_no_past_sessions_returns_empty_list(self) -> None:
-        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_returns_past_booked_sessions_for_mentee(self) -> None:
-        MentorshipRequest.objects.create(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
-        )
-        past_slot = self._create_past_slot(self.mentor_profile, booked_by=self.mentee_user)
-
-        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(str(response.data[0]["slot_id"]), str(past_slot.id))
-
-    def test_excludes_upcoming_slots(self) -> None:
-        MentorshipRequest.objects.create(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
-        )
-        self.mentor_slot.mark_booked(self.mentee_user)
-
-        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_includes_sessions_from_inactive_match(self) -> None:
-        """Past sessions from ended mentorships should still appear."""
-        request_obj = MentorshipRequest.objects.create(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
-        )
-        Match.objects.filter(request=request_obj).update(is_active=False)
-        past_slot = self._create_past_slot(self.mentor_profile, booked_by=self.mentee_user)
-
-        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(str(response.data[0]["slot_id"]), str(past_slot.id))
-
-    def test_excludes_sessions_without_any_match(self) -> None:
-        """Past booked slots from mentors with no match with the caller are excluded."""
-        self._create_past_slot(self.mentor_profile, booked_by=self.mentee_user)
-
-        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_excludes_sessions_booked_by_different_user(self) -> None:
-        MentorshipRequest.objects.create(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
-        )
-        self._create_past_slot(self.mentor_profile, booked_by=self.other_user)
-
-        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_results_ordered_most_recent_first(self) -> None:
-        MentorshipRequest.objects.create(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
-        )
-        older_slot = self._create_past_slot(
-            self.mentor_profile, booked_by=self.mentee_user, days_ago=5
-        )
-        recent_slot = self._create_past_slot(
-            self.mentor_profile, booked_by=self.mentee_user, days_ago=1
-        )
-
-        response = self.mentee_client.get(self.PAST_SESSIONS_ME_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 2)
-        self.assertEqual(str(response.data[0]["slot_id"]), str(recent_slot.id))
-        self.assertEqual(str(response.data[1]["slot_id"]), str(older_slot.id))
-
-
 class FeedbackAPIBaseTestCase(MentorshipRequestAPIBaseTestCase):
     """Shared fixtures for feedback API tests: an active match between mentor and mentee."""
 
     def setUp(self) -> None:
         super().setUp()
-        # Create an accepted mentorship request → triggers Match creation.
-        self.mentorship_request = MentorshipRequest.objects.create(
+        # Create accepted request and explicitly materialize match/session state.
+        self.mentorship_request = _create_accepted_request(
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
         )
         self.match = Match.objects.get(request=self.mentorship_request)
         self.feedback_url = f"/api/mentorship/matches/{self.match.id}/feedback/"
@@ -786,6 +672,7 @@ class DeactivateMatchAPIViewTests(FeedbackAPIBaseTestCase):
 
     def test_nonexistent_match_returns_404(self) -> None:
         import uuid
+
         url = f"/api/mentorship/matches/{uuid.uuid4()}/deactivate/"
         response = self.mentor_client.post(url)
         self.assertEqual(response.status_code, 404)
@@ -817,12 +704,14 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
 
     def test_nonexistent_match_post_returns_404(self) -> None:
         import uuid
+
         url = f"/api/mentorship/matches/{uuid.uuid4()}/feedback/"
         response = self.mentee_client.post(url, {"rating": 4}, format="json")
         self.assertEqual(response.status_code, 404)
 
     def test_nonexistent_match_get_returns_404(self) -> None:
         import uuid
+
         url = f"/api/mentorship/matches/{uuid.uuid4()}/feedback/"
         response = self.mentee_client.get(url)
         self.assertEqual(response.status_code, 404)
@@ -903,10 +792,9 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
         second_mentee_profile = Profile.objects.create(
             user=second_mentee_user, display_name="Second Mentee"
         )
-        second_request = MentorshipRequest.objects.create(
+        second_request = _create_accepted_request(
             mentor=self.mentor_profile,
             mentee=second_mentee_profile,
-            status=MentorshipRequest.Status.ACCEPTED,
         )
         second_match = Match.objects.get(request=second_request)
         second_feedback_url = f"/api/mentorship/matches/{second_match.id}/feedback/"
@@ -926,157 +814,63 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
         self.assertEqual(self.mentor_profile.average_rating, Decimal("3.00"))
 
 
-class MentorUpcomingSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
-    """Tests for GET /api/mentorship/sessions/mentor/upcoming/."""
-
-    MENTOR_UPCOMING_SESSIONS_URL = "/api/mentorship/sessions/mentor/upcoming/"
-
-    def test_unauthenticated_returns_401(self) -> None:
-        response = self.anon_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
-        self.assertEqual(response.status_code, 401)
-
-    def test_mentee_only_user_returns_403(self) -> None:
-        response = self.mentee_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
-        self.assertEqual(response.status_code, 403)
-
-    def test_no_booked_slots_returns_empty_list(self) -> None:
-        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_returns_upcoming_booked_slots_for_mentor(self) -> None:
-        self.mentor_slot.mark_booked(self.mentee_user)
-
-        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(str(response.data[0]["slot_id"]), str(self.mentor_slot.id))
-
-    def test_response_includes_mentee_info(self) -> None:
-        self.mentor_slot.mark_booked(self.mentee_user)
-
-        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        mentee_data = response.data[0]["mentee"]
-        self.assertEqual(mentee_data["username"], self.mentee_profile.username)
-        self.assertEqual(mentee_data["display_name"], self.mentee_profile.display_name)
-
-    def test_excludes_unbooked_slots(self) -> None:
-        # mentor_slot is unbooked by default
-        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_excludes_past_booked_slots(self) -> None:
-        past_start = timezone.now() - timedelta(days=2)
-        AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=past_start,
-            end_at=past_start + timedelta(hours=1),
-            is_booked=True,
-            booked_by=self.mentee_user,
-            booked_at=timezone.now() - timedelta(days=3),
-        )
-
-        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_excludes_slots_owned_by_other_mentor(self) -> None:
-        self.other_mentor_slot.mark_booked(self.mentee_user)
-
-        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_results_ordered_by_start_time_ascending(self) -> None:
-        self.mentor_slot.mark_booked(self.mentee_user)
-
-        later_start = timezone.now() + timedelta(days=10)
-        later_slot = AvailabilitySlot.objects.create(
-            profile=self.mentor_profile,
-            start_at=later_start,
-            end_at=later_start + timedelta(hours=1),
-        )
-        later_slot.mark_booked(self.mentee_user)
-
-        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 2)
-        self.assertEqual(str(response.data[0]["slot_id"]), str(self.mentor_slot.id))
-        self.assertEqual(str(response.data[1]["slot_id"]), str(later_slot.id))
-
-    def test_response_contains_expected_fields(self) -> None:
-        self.mentor_slot.mark_booked(self.mentee_user)
-
-        response = self.mentor_client.get(self.MENTOR_UPCOMING_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        item = response.data[0]
-        for field in ("slot_id", "mentee", "slot_date", "slot_start_time", "slot_end_time", "booked_at"):
-            self.assertIn(field, item)
-
-
 class CancelSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
-    """Tests for POST /api/mentorship/sessions/<match_id>/cancel/"""
+    """Tests for POST /api/mentorship/sessions/<session_id>/cancel/"""
 
     def _setup_active_match_with_booking(self):
-        """Create an accepted request with a booked slot and return (match, request_obj)."""
-        request_obj = MentorshipRequest.objects.create(
+        """Create an accepted request with a booked slot and return (match, session)."""
+        request_obj = _create_accepted_request(
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
             slot=self.mentor_slot,
-            status=MentorshipRequest.Status.ACCEPTED,
         )
         self.mentor_slot.mark_booked(self.mentee_user)
         match = Match.objects.get(request=request_obj)
-        return match, request_obj
+        session = MeetingSession.objects.get(match=match)
+        return match, session
 
-    def _cancel_url(self, match_id) -> str:
-        return f"/api/mentorship/sessions/{match_id}/cancel/"
+    def _cancel_url(self, session_id) -> str:
+        return f"/api/mentorship/sessions/{session_id}/cancel/"
 
     def test_mentee_can_cancel(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
-        response = self.mentee_client.post(self._cancel_url(match.id))
+        match, session = self._setup_active_match_with_booking()
+        response = self.mentee_client.post(self._cancel_url(session.id))
         self.assertEqual(response.status_code, 200)
         self.mentor_slot.refresh_from_db()
         self.assertFalse(self.mentor_slot.is_booked)
 
     def test_mentor_can_cancel(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
-        response = self.mentor_client.post(self._cancel_url(match.id))
+        match, session = self._setup_active_match_with_booking()
+        response = self.mentor_client.post(self._cancel_url(session.id))
         self.assertEqual(response.status_code, 200)
         self.mentor_slot.refresh_from_db()
         self.assertFalse(self.mentor_slot.is_booked)
 
     def test_slot_reference_cleared_after_cancel(self) -> None:
-        match, request_obj = self._setup_active_match_with_booking()
-        self.mentee_client.post(self._cancel_url(match.id))
+        match, session = self._setup_active_match_with_booking()
+        request_obj = match.request
+        self.mentee_client.post(self._cancel_url(session.id))
         request_obj.refresh_from_db()
         self.assertIsNone(request_obj.slot)
 
     def test_unrelated_user_cannot_cancel(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
-        response = self.other_client.post(self._cancel_url(match.id))
+        match, session = self._setup_active_match_with_booking()
+        response = self.other_client.post(self._cancel_url(session.id))
         self.assertEqual(response.status_code, 403)
 
     def test_unauthenticated_returns_401(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
-        response = self.anon_client.post(self._cancel_url(match.id))
+        match, session = self._setup_active_match_with_booking()
+        response = self.anon_client.post(self._cancel_url(session.id))
         self.assertEqual(response.status_code, 401)
 
     def test_cancel_unbooked_slot_returns_400(self) -> None:
-        request_obj = MentorshipRequest.objects.create(
-            mentor=self.mentor_profile,
-            mentee=self.mentee_profile,
-            slot=self.mentor_slot,
-            status=MentorshipRequest.Status.ACCEPTED,
-        )
-        match = Match.objects.get(request=request_obj)
-        # Slot is not booked
-        response = self.mentee_client.post(self._cancel_url(match.id))
+        match, session = self._setup_active_match_with_booking()
+        # Free the slot manually
+        self.mentor_slot.mark_available()
+        response = self.mentee_client.post(self._cancel_url(session.id))
         self.assertEqual(response.status_code, 400)
 
-    def test_nonexistent_match_returns_404(self) -> None:
+    def test_nonexistent_session_returns_404(self) -> None:
         import uuid
 
         response = self.mentee_client.post(self._cancel_url(uuid.uuid4()))
@@ -1097,104 +891,104 @@ class RescheduleSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
         )
 
     def _setup_active_match_with_booking(self):
-        request_obj = MentorshipRequest.objects.create(
+        request_obj = _create_accepted_request(
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
             slot=self.mentor_slot,
-            status=MentorshipRequest.Status.ACCEPTED,
         )
         self.mentor_slot.mark_booked(self.mentee_user)
         match = Match.objects.get(request=request_obj)
-        return match, request_obj
+        session = MeetingSession.objects.get(match=match)
+        return match, request_obj, session
 
     def _reschedule_url(self, match_id) -> str:
         return f"/api/mentorship/sessions/{match_id}/reschedule/"
 
     def test_mentee_can_reschedule(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
+        _, _, session = self._setup_active_match_with_booking()
         response = self.mentee_client.post(
-            self._reschedule_url(match.id),
+            self._reschedule_url(session.id),
             {"new_slot_id": str(self.mentor_slot_2.id)},
         )
         self.assertEqual(response.status_code, 200)
 
     def test_old_slot_freed_after_reschedule(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
+        _, _, session = self._setup_active_match_with_booking()
         self.mentee_client.post(
-            self._reschedule_url(match.id),
+            self._reschedule_url(session.id),
             {"new_slot_id": str(self.mentor_slot_2.id)},
         )
         self.mentor_slot.refresh_from_db()
         self.assertFalse(self.mentor_slot.is_booked)
 
     def test_new_slot_booked_after_reschedule(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
+        _, _, session = self._setup_active_match_with_booking()
         self.mentee_client.post(
-            self._reschedule_url(match.id),
+            self._reschedule_url(session.id),
             {"new_slot_id": str(self.mentor_slot_2.id)},
         )
         self.mentor_slot_2.refresh_from_db()
         self.assertTrue(self.mentor_slot_2.is_booked)
 
     def test_request_slot_updated_after_reschedule(self) -> None:
-        match, request_obj = self._setup_active_match_with_booking()
+        _, request_obj, session = self._setup_active_match_with_booking()
         self.mentee_client.post(
-            self._reschedule_url(match.id),
+            self._reschedule_url(session.id),
             {"new_slot_id": str(self.mentor_slot_2.id)},
         )
         request_obj.refresh_from_db()
         self.assertEqual(request_obj.slot, self.mentor_slot_2)
 
     def test_mentor_cannot_reschedule(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
+        _, _, session = self._setup_active_match_with_booking()
         response = self.mentor_client.post(
-            self._reschedule_url(match.id),
+            self._reschedule_url(session.id),
             {"new_slot_id": str(self.mentor_slot_2.id)},
         )
         self.assertEqual(response.status_code, 403)
 
     def test_unauthenticated_returns_401(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
+        _, _, session = self._setup_active_match_with_booking()
         response = self.anon_client.post(
-            self._reschedule_url(match.id),
+            self._reschedule_url(session.id),
             {"new_slot_id": str(self.mentor_slot_2.id)},
         )
         self.assertEqual(response.status_code, 401)
 
     def test_same_slot_returns_400(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
+        _, _, session = self._setup_active_match_with_booking()
         response = self.mentee_client.post(
-            self._reschedule_url(match.id),
+            self._reschedule_url(session.id),
             {"new_slot_id": str(self.mentor_slot.id)},
         )
         self.assertEqual(response.status_code, 400)
 
     def test_slot_belonging_to_different_mentor_returns_404(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
+        _, _, session = self._setup_active_match_with_booking()
         # other_mentor_slot belongs to other_profile, not the match's mentor
         response = self.mentee_client.post(
-            self._reschedule_url(match.id),
+            self._reschedule_url(session.id),
             {"new_slot_id": str(self.other_mentor_slot.id)},
         )
         self.assertEqual(response.status_code, 404)
 
     def test_already_booked_slot_returns_400(self) -> None:
-        match, _ = self._setup_active_match_with_booking()
+        _, _, session = self._setup_active_match_with_booking()
         # Book the second slot with someone else
         self.mentor_slot_2.mark_booked(self.other_user)
         response = self.mentee_client.post(
-            self._reschedule_url(match.id),
+            self._reschedule_url(session.id),
             {"new_slot_id": str(self.mentor_slot_2.id)},
         )
         self.assertEqual(response.status_code, 400)
 
     def test_failed_reschedule_keeps_existing_booking(self) -> None:
         """Failed reschedule must keep the current slot booking and request slot unchanged."""
-        match, request_obj = self._setup_active_match_with_booking()
+        _, request_obj, session = self._setup_active_match_with_booking()
         self.mentor_slot_2.mark_booked(self.other_user)
 
         response = self.mentee_client.post(
-            self._reschedule_url(match.id),
+            self._reschedule_url(session.id),
             {"new_slot_id": str(self.mentor_slot_2.id)},
         )
 
@@ -1222,99 +1016,61 @@ class RescheduleSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(response.data["detail"], "Not found.")
 
 
-class MentorPastSessionsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
-    """Tests for GET /api/mentorship/sessions/mentor/past/."""
+class MentorshipServiceTests(TestCase):
+    """Integrity tests for cross-domain mentorship services."""
 
-    MENTOR_PAST_SESSIONS_URL = "/api/mentorship/sessions/mentor/past/"
-
-    def _create_past_slot(self, days_ago: int = 2, booked_by=None) -> AvailabilitySlot:
-        """Create a past availability slot on the mentor's profile."""
-        past_start = timezone.now() - timedelta(days=days_ago)
-        kwargs: dict = {
-            "profile": self.mentor_profile,
-            "start_at": past_start,
-            "end_at": past_start + timedelta(hours=1),
-        }
-        if booked_by is not None:
-            kwargs["is_booked"] = True
-            kwargs["booked_by"] = booked_by
-            kwargs["booked_at"] = timezone.now() - timedelta(days=days_ago + 1)
-        return AvailabilitySlot.objects.create(**kwargs)
-
-    def test_unauthenticated_returns_401(self) -> None:
-        response = self.anon_client.get(self.MENTOR_PAST_SESSIONS_URL)
-        self.assertEqual(response.status_code, 401)
-
-    def test_mentee_only_user_returns_403(self) -> None:
-        response = self.mentee_client.get(self.MENTOR_PAST_SESSIONS_URL)
-        self.assertEqual(response.status_code, 403)
-
-    def test_no_past_sessions_returns_empty_list(self) -> None:
-        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_returns_past_booked_slots_for_mentor(self) -> None:
-        past_slot = self._create_past_slot(booked_by=self.mentee_user)
-
-        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(str(response.data[0]["slot_id"]), str(past_slot.id))
-
-    def test_response_includes_mentee_info(self) -> None:
-        self._create_past_slot(booked_by=self.mentee_user)
-
-        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        mentee_data = response.data[0]["mentee"]
-        self.assertEqual(mentee_data["username"], self.mentee_profile.username)
-        self.assertEqual(mentee_data["display_name"], self.mentee_profile.display_name)
-
-    def test_excludes_unbooked_past_slots(self) -> None:
-        self._create_past_slot()  # not booked
-
-        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_excludes_upcoming_booked_slots(self) -> None:
-        self.mentor_slot.mark_booked(self.mentee_user)
-
-        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
-
-    def test_excludes_slots_owned_by_other_mentor(self) -> None:
-        past_start = timezone.now() - timedelta(days=2)
-        AvailabilitySlot.objects.create(
-            profile=self.other_profile,
-            start_at=past_start,
-            end_at=past_start + timedelta(hours=1),
-            is_booked=True,
-            booked_by=self.mentee_user,
-            booked_at=timezone.now() - timedelta(days=3),
+    def setUp(self) -> None:
+        self.mentor_user = User.objects.create_user(
+            email="mentor.service@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentee_user = User.objects.create_user(
+            email="mentee.service@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            display_name="Service Mentor",
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user,
+            display_name="Service Mentee",
         )
 
-        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [])
+    def test_book_match_session_creates_canonical_session(self) -> None:
+        """Directly booking a slot for an active match creates a MeetingSession."""
+        from mentorship.services import book_match_session
 
-    def test_results_ordered_most_recent_first(self) -> None:
-        older_slot = self._create_past_slot(days_ago=5, booked_by=self.mentee_user)
-        recent_slot = self._create_past_slot(days_ago=1, booked_by=self.mentee_user)
+        # 1. Establish an active match
+        request_obj = _create_accepted_request(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+        )
+        match = Match.objects.get(request=request_obj)
+        self.assertTrue(match.is_active)
 
-        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 2)
-        self.assertEqual(str(response.data[0]["slot_id"]), str(recent_slot.id))
-        self.assertEqual(str(response.data[1]["slot_id"]), str(older_slot.id))
+        # 2. Setup a new availability slot
+        new_slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=timezone.now() + timedelta(days=5),
+            end_at=timezone.now() + timedelta(days=5, hours=1),
+        )
 
-    def test_response_contains_expected_fields(self) -> None:
-        self._create_past_slot(booked_by=self.mentee_user)
+        # 3. Book the slot via the combined service
+        slot = book_match_session(
+            mentor_profile=self.mentor_profile,
+            slot_id=new_slot.id,
+            actor=self.mentee_user,
+        )
 
-        response = self.mentor_client.get(self.MENTOR_PAST_SESSIONS_URL)
-        self.assertEqual(response.status_code, 200)
-        item = response.data[0]
-        for field in ("slot_id", "mentee", "slot_date", "slot_start_time", "slot_end_time", "booked_at"):
-            self.assertIn(field, item)
+        # 4. Assert sync
+        self.assertTrue(slot.is_booked)
+        self.assertEqual(slot.booked_by, self.mentee_user)
+
+        session = MeetingSession.objects.filter(match=match, source_slot=slot).first()
+        self.assertIsNotNone(session)
+        assert session is not None
+        self.assertEqual(session.status, MeetingSession.Status.SCHEDULED)
+        self.assertEqual(session.scheduled_start_at_utc.isoformat(), slot.start_at.isoformat())

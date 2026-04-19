@@ -4,43 +4,43 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Brand primary — blue from the design system
+        // Brand primary aligned with web's dusty teal
         primary: {
-          DEFAULT: '#004ac6',
-          dim: '#4a80e8', // lighter variant used in dark mode
+          DEFAULT: "#4a7c6f",
+          dim: "#6db0a2", // lighter variant used in dark mode
         },
         // Page / screen backgrounds
         surface: {
-          DEFAULT: '#f7f9fb',
-          dark: '#0f1214',
-          input: '#e6e8ea',      // form field fill (light)
-          'input-dark': '#1e2530', // form field fill (dark)
-          card: '#ffffff',
-          'card-dark': '#141920',
+          DEFAULT: "#faf8f4",
+          dark: "#14120e",
+          input: "#f5f0e8", // form field fill (light)
+          "input-dark": "#1e1c16", // form field fill (dark)
+          card: "#ffffff",
+          "card-dark": "#1a1710",
         },
         // Text colors
-        'on-surface': {
-          DEFAULT: '#191c1e',     // primary text (light)
-          dark: '#e2e8f0',        // primary text (dark)
-          soft: '#434655',        // secondary text (light)
-          'soft-dark': '#94a3b8', // secondary text (dark)
-          muted: '#737686',       // placeholder / icon (light)
-          'muted-dark': '#4a5568', // placeholder / icon (dark)
+        "on-surface": {
+          DEFAULT: "#1c1c18", // primary text (light)
+          dark: "#f0ece4", // primary text (dark)
+          soft: "#6b6456", // secondary text (light)
+          "soft-dark": "#b8ad9a", // secondary text (dark)
+          muted: "#8a8172", // placeholder / icon (light)
+          "muted-dark": "#948a79", // placeholder / icon (dark)
         },
         // Active / selected state surface — used by pickers and list row highlights
-        'surface-active': {
-          DEFAULT: '#e8eeff', // primary-blue tint at ~8 % on white (light mode)
-          dark: '#1c253d',    // equivalent depth in dark mode
+        "surface-active": {
+          DEFAULT: "#e8f2f0", // muted teal tint on warm background (light mode)
+          dark: "#0f201e", // equivalent depth in dark mode
         },
         // Borders and dividers
         divider: {
-          DEFAULT: '#c3c6d7',
-          dark: '#2d3748',
+          DEFAULT: "#ddd6c9",
+          dark: "#353024",
         },
         // Error / destructive
         error: {
-          DEFAULT: '#ba1a1a',
-          container: '#ffdad6',
+          DEFAULT: "#ba1a1a",
+          container: "#ffdad6",
         },
       },
     },

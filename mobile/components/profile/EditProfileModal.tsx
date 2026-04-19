@@ -29,7 +29,7 @@ export function EditProfileModal({
   onClose,
   initialData,
   onSave,
-}: EditProfileModalProps) {
+}: Readonly<EditProfileModalProps>) {
   const insets = useSafeAreaInsets();
 
   const [name, setName] = useState("");
@@ -154,7 +154,7 @@ export function EditProfileModal({
                 <View className="flex-row justify-between items-end mb-2 ml-1 mr-1">
                   <Text className="text-sm font-bold text-gray-700">Bio</Text>
                   <Text className="text-xs text-gray-400 font-medium">
-                    {bio.length}/150
+                    {bio.length}/500
                   </Text>
                 </View>
                 <TextInput
@@ -162,7 +162,7 @@ export function EditProfileModal({
                   onChangeText={setBio}
                   placeholder="Tell mentees about yourself..."
                   multiline={true}
-                  maxLength={150}
+                  maxLength={500}
                   textAlignVertical="top"
                   className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-4 text-base text-gray-900 h-32"
                 />

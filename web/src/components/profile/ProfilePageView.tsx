@@ -4,16 +4,16 @@ import { Body, Heading, Muted } from '@/components/Typography'
 import { Star, Sparkles, Pencil, EyeOff } from 'lucide-react'
 import { EditProfileModal } from '#/components/profile/EditProfileModal.tsx'
 import { useState } from 'react'
-import type { AvailabilitySlot } from '#/lib/queries/ProfileQueries.ts'
 import { getInitials } from '#/lib/utils.ts'
-import {AvailabilityCalendar} from "#/components/profile/AvailabilityCalendar.tsx";
+import { AvailabilityCalendar } from "#/components/profile/AvailabilityCalendar.tsx";
+import { useAvailabilitySlots } from "#/lib/queries/ProfileTimeSlotQueries.ts";
 
 interface BaseMappedProfile {
   full_name: string
   bio: string
   hidden: boolean
   picture_url: string
-  expertises: string[]
+  skills: string[]
   username: string,
 }
 
@@ -22,7 +22,6 @@ interface MentorMappedProfile extends BaseMappedProfile {
   title: string
   rating: number
   total_mentee_count: number
-  available_slots: AvailabilitySlot[]
 }
 
 interface MenteeMappedProfile extends BaseMappedProfile {
@@ -49,6 +48,7 @@ function HiddenField({ label }: { label: string }) {
 export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: ProfilePageViewProps) {
   const [editOpen, setEditOpen] = useState(false)
   const isHidden = profile.hidden && !isOwner
+  const { data: slots = [] } = useAvailabilitySlots(profile.username, profile.isMentor)
 
   const avatarBlock = (
       <div className="flex flex-wrap items-center gap-5">
@@ -114,7 +114,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
             bio: profile.bio ?? '',
             title: profile.isMentor ? profile.title : undefined,
             hidden: profile.hidden,
-            skills: profile.expertises,
+            skills: profile.skills,
           }}
           onClose={() => setEditOpen(false)}
       />
@@ -138,17 +138,12 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                   <CardContent>
                     {isHidden ? (
                         <HiddenField label="Learning interests" />
-                    ) : profile.expertises.length === 0 ? (
-                        <Muted>No learning interests listed yet.</Muted>
+                    ) : profile.skills.length === 0 ? (
+                        <p className="text-gray-500 italic">No skills listed</p>
                     ) : (
                         <div className="flex flex-wrap gap-2">
-                          {profile.expertises.map(skill => (
-                              <span
-                                  key={skill}
-                                  className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
-                              >
-    {skill}
-</span>
+                          {profile.skills.map(skill => (
+                              <Badge key={skill} variant="secondary">{skill}</Badge>
                           ))}
                         </div>
                     )}
@@ -161,8 +156,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
         </main>
     )
   }
-
-  const openSlots = profile.available_slots.filter(s => !s.is_booked)
+  const openSlots = slots.filter(s => !s.is_booked)
 
     // MENTOR layout — restructure to put calendar full width below
     return (
@@ -181,17 +175,12 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                             <CardContent>
                                 {isHidden ? (
                                     <HiddenField label="Expertise" />
-                                ) : profile.expertises.length === 0 ? (
-                                    <Muted>No expertise listed yet.</Muted>
+                                ) : profile.skills.length === 0 ? (
+                                    <p className="text-gray-500 italic">No skills listed</p>
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
-                                        {profile.expertises.map(skill => (
-                                            <span
-                                                key={skill}
-                                                className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors"
-                                            >
-                                            {skill}
-                                        </span>
+                                        {profile.skills.map(skill => (
+                                            <Badge key={skill} variant="secondary">{skill}</Badge>
                                         ))}
                                     </div>
                                 )}

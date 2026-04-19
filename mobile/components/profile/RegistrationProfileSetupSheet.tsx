@@ -268,12 +268,12 @@ export function RegistrationProfileSetupSheet({
                   onChangeText={setBio}
                   multiline
                   textAlignVertical="top"
-                  maxLength={220}
+                  maxLength={500}
                   accessibilityLabel="Bio"
                 />
               </View>
               <Text className="text-xs ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
-                {bio.length}/220
+                {bio.length}/500
               </Text>
             </View>
 

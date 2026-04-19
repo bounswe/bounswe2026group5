@@ -43,7 +43,7 @@ export function ExpertiseEditModal() {
   }
 
   const handleSave = () => {
-    // FUTURE: Trigger TanStack Query mutation to update ProfileExpertise on the backend
+    // FUTURE: Trigger TanStack Query mutation to update profile skills on the backend
     console.log('Saving updated skills:', skills)
     setIsOpen(false)
   }
@@ -58,7 +58,7 @@ export function ExpertiseEditModal() {
       
       <DialogContent className="sm:max-w-[425px] island-shell border-line">
         <DialogHeader>
-          <DialogTitle>Edit Expertise</DialogTitle>
+          <DialogTitle>Edit Skills</DialogTitle>
           <DialogDescription>
             Add or remove skills from your profile to help mentees find you.
           </DialogDescription>

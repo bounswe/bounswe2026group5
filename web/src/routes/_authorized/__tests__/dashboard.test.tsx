@@ -42,7 +42,7 @@ const makeMentor = (n: number) => ({
   title: `Engineer ${n}`,
   location: null,
   show_initials_only: false,
-  expertises: n % 2 === 0 ? ['Python'] : ['Kubernetes'],
+  skills: n % 2 === 0 ? ['Python'] : ['Kubernetes'],
   rating: 4.5,
   total_mentee_count: n,
 })
@@ -65,13 +65,13 @@ vi.mock('@/lib/queries/DiscoverQueries.ts', async (importOriginal) => {
               (m) =>
                   m.full_name.toLowerCase().includes(q) ||
                   m.bio.toLowerCase().includes(q) ||
-                  m.expertises.some((e: string) => e.toLowerCase().includes(q)),
+                  m.skills.some((e: string) => e.toLowerCase().includes(q)),
           )
         }
 
         if (params.skills?.length) {
           results = results.filter((m) =>
-              m.expertises.some((e: string) => params.skills.includes(e)),
+              m.skills.some((e: string) => params.skills.includes(e)),
           )
         }
 

@@ -1,219 +1,510 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, Text, Modal, TouchableOpacity, ScrollView, Alert,
-  Switch, TextInput, KeyboardAvoidingView, Platform, Pressable 
-} from 'react-native';
-// 1. Import the hook from the modern, correct library!
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { AvailabilitySlot } from './AvailabilityPreview';
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+
+import {
+  useCreateAvailabilitySlotMutation,
+  useDeleteAvailabilitySlotMutation,
+  useRespondToMentorshipRequestMutation,
+} from "@/lib/queries/mentorship";
+
+interface BackendAvailabilitySlot {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  is_booked: boolean;
+}
 
 interface EditAvailabilityModalProps {
   visible: boolean;
   onClose: () => void;
-  initialSchedule: AvailabilitySlot[];
-  onSave: (newSchedule: AvailabilitySlot[]) => void;
+  username: string;
+  slots: BackendAvailabilitySlot[];
+  requests?: {
+    id: string;
+    slotId: string | null;
+    status: "PENDING" | "ACCEPTED" | "REJECTED";
+  }[];
+  onChanged?: () => void;
 }
 
-const WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const HOURS = Array.from({ length: 13 }, (_, index) => 9 + index);
 
-type DayState = {
-  enabled: boolean;
-  slots: { id: string; start: string; end: string }[];
-};
+function getMonday(date: Date): Date {
+  const result = new Date(date);
+  const day = result.getDay();
+  const diff = result.getDate() - day + (day === 0 ? -6 : 1);
+  result.setDate(diff);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
 
-export function EditAvailabilityModal({ visible, onClose, initialSchedule, onSave }: EditAvailabilityModalProps) {
-  const [scheduleState, setScheduleState] = useState<Record<string, DayState>>({});
-  
-  // 2. Initialize the hook to get the exact pixel height of the notch/status bar
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function toDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatWeekLabel(monday: Date): string {
+  const sunday = addDays(monday, 6);
+  return `${monday.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+  })} - ${sunday.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })}`;
+}
+
+function formatHourRange(hour: number): string {
+  const start = `${String(hour).padStart(2, "0")}:00`;
+  const end = `${String(hour + 1).padStart(2, "0")}:00`;
+  return `${start} - ${end}`;
+}
+
+function startOfDay(date: Date): Date {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function isPastDate(date: Date): boolean {
+  return startOfDay(date) < startOfDay(new Date());
+}
+
+function isPastHourSlot(date: Date, hour: number): boolean {
+  const end = new Date(date);
+  end.setHours(hour + 1, 0, 0, 0);
+  return end <= new Date();
+}
+
+export function EditAvailabilityModal({
+  visible,
+  onClose,
+  username,
+  slots,
+  requests = [],
+  onChanged,
+}: Readonly<EditAvailabilityModalProps>) {
   const insets = useSafeAreaInsets();
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const [togglingKey, setTogglingKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
-      const parsedState: Record<string, DayState> = {};
-      WEEK_DAYS.forEach(day => {
-        const existingDay = initialSchedule.find(s => s.day === day);
-        if (existingDay && existingDay.times.length > 0) {
-          parsedState[day] = {
-            enabled: true,
-            slots: existingDay.times.map((timeStr, index) => {
-              const [start, end] = timeStr.split(' - ');
-              return { id: `${day}-${index}`, start: start || '09:00', end: end || '17:00' };
-            })
-          };
-        } else {
-          parsedState[day] = { enabled: false, slots: [{ id: `${day}-default`, start: '09:00', end: '17:00' }] };
-        }
-      });
-      setScheduleState(parsedState);
+      setWeekOffset(0);
+      setSelectedDayIndex(0);
+      setTogglingKey(null);
     }
-  }, [visible, initialSchedule]);
+  }, [visible]);
 
-  const toggleDay = (day: string) => {
-    setScheduleState(prev => ({ ...prev, [day]: { ...prev[day], enabled: !prev[day].enabled } }));
-  };
+  const createSlotMutation = useCreateAvailabilitySlotMutation(username);
+  const deleteSlotMutation = useDeleteAvailabilitySlotMutation(username);
+  const respondToRequestMutation = useRespondToMentorshipRequestMutation();
 
-  const addSlot = (day: string) => {
-    setScheduleState(prev => ({
-      ...prev,
-      [day]: { ...prev[day], slots: [...prev[day].slots, { id: Date.now().toString(), start: '09:00', end: '17:00' }] }
-    }));
-  };
+  const monday = useMemo(
+    () => getMonday(addDays(new Date(), weekOffset * 7)),
+    [weekOffset],
+  );
 
-  const removeSlot = (day: string, slotId: string) => {
-    setScheduleState(prev => ({
-      ...prev,
-      [day]: { ...prev[day], slots: prev[day].slots.filter(slot => slot.id !== slotId) }
-    }));
-  };
+  const weekDays = useMemo(
+    () => Array.from({ length: 7 }, (_, index) => addDays(monday, index)),
+    [monday],
+  );
 
-  const updateTime = (day: string, slotId: string, field: 'start' | 'end', value: string) => {
-    setScheduleState(prev => ({
-      ...prev,
-      [day]: { ...prev[day], slots: prev[day].slots.map(slot => slot.id === slotId ? { ...slot, [field]: value } : slot) }
-    }));
-  };
+  const selectedDate = weekDays[selectedDayIndex] ?? weekDays[0];
+  const selectedDateString = toDateString(selectedDate);
 
-  const handleSave = () => {
-    const finalSchedule: AvailabilitySlot[] = [];
-    let hasFormatError = false;
-    let hasTimeOrderError = false;
+  const slotsByDateHour = useMemo(() => {
+    const byDateHour: Record<string, BackendAvailabilitySlot> = {};
+    slots.forEach((slot) => {
+      const hour = Number(slot.startTime.split(":")[0]);
+      byDateHour[`${slot.date}-${hour}`] = slot;
+    });
+    return byDateHour;
+  }, [slots]);
 
-    // 1. Regex to strictly match 24-hour time format
-    const isValidTime = (time: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(time);
+  const requestsBySlotId = useMemo(() => {
+    const grouped: Record<
+      string,
+      {
+        id: string;
+        status: "PENDING" | "ACCEPTED" | "REJECTED";
+      }[]
+    > = {};
 
-    // 2. Helper to convert "14:30" into 870 total minutes for easy comparison
-    const timeToMinutes = (time: string) => {
-      const [hours, minutes] = time.split(':').map(Number);
-      return (hours * 60) + minutes;
-    };
-
-    WEEK_DAYS.forEach(day => {
-      const dayData = scheduleState[day];
-      if (dayData && dayData.enabled && dayData.slots.length > 0) {
-        
-        dayData.slots.forEach(slot => {
-          if (!isValidTime(slot.start) || !isValidTime(slot.end)) {
-            hasFormatError = true;
-          } else if (timeToMinutes(slot.start) >= timeToMinutes(slot.end)) {
-            // 3. Check if start time is AFTER or EQUAL TO end time
-            hasTimeOrderError = true;
-          }
-        });
-
-        finalSchedule.push({ day, times: dayData.slots.map(slot => `${slot.start} - ${slot.end}`) });
+    requests.forEach((request) => {
+      if (!request.slotId) {
+        return;
       }
+
+      grouped[request.slotId] = grouped[request.slotId] ?? [];
+      grouped[request.slotId].push({
+        id: request.id,
+        status: request.status,
+      });
     });
 
-    // 4. Trigger the appropriate error alerts!
-    if (hasFormatError) {
-      Alert.alert("Invalid Format", "Please use the 24-hour format (e.g., 09:00, 14:30).", [{ text: "Got it" }]);
-      return; 
-    }
+    return grouped;
+  }, [requests]);
 
-    if (hasTimeOrderError) {
-      Alert.alert("Invalid Time Range", "The start time must be before the end time.", [{ text: "Got it" }]);
+  const isPending =
+    createSlotMutation.isPending ||
+    deleteSlotMutation.isPending ||
+    respondToRequestMutation.isPending;
+
+  const deactivateSlot = async (
+    key: string,
+    slotId: string,
+    pendingRequestIds: string[] = [],
+  ) => {
+    setTogglingKey(key);
+
+    try {
+      for (const requestId of pendingRequestIds) {
+        await respondToRequestMutation.mutateAsync({
+          requestId,
+          action: "reject",
+        });
+      }
+
+      await deleteSlotMutation.mutateAsync(slotId);
+      onChanged?.();
+    } catch (error) {
+      Alert.alert(
+        "Update Failed",
+        error instanceof Error
+          ? error.message
+          : "Could not update availability slot.",
+      );
+    } finally {
+      setTogglingKey(null);
+    }
+  };
+
+  const handleToggleSlot = async (hour: number) => {
+    const key = `${selectedDateString}-${hour}`;
+    const existing = slotsByDateHour[key];
+
+    if (togglingKey === key || !username) {
       return;
     }
 
-    onSave(finalSchedule);
-    onClose();
+    if (isPastHourSlot(selectedDate, hour)) {
+      Alert.alert(
+        "Past Slot",
+        "Past availability slots cannot be modified.",
+      );
+      return;
+    }
+
+    if (existing) {
+      const linkedRequests = requestsBySlotId[existing.id] ?? [];
+      const pendingRequests = linkedRequests.filter(
+        (request) => request.status === "PENDING",
+      );
+      const acceptedRequests = linkedRequests.filter(
+        (request) => request.status === "ACCEPTED",
+      );
+
+      if (existing.is_booked || acceptedRequests.length > 0) {
+        Alert.alert(
+          "Cannot Make Slot Unavailable",
+          `This slot has ${acceptedRequests.length} planned session(s). TODO: Cancelling accepted sessions from availability editing requires a backend endpoint that is not available yet.`,
+        );
+        return;
+      }
+
+      if (pendingRequests.length > 0) {
+        Alert.alert(
+          "Confirm Make Unavailable",
+          `This will decline ${pendingRequests.length} pending request(s) for this slot and then make it unavailable.`,
+          [
+            { text: "Keep Slot", style: "cancel" },
+            {
+              text: "Make Unavailable",
+              style: "destructive",
+              onPress: () => {
+                void deactivateSlot(
+                  key,
+                  existing.id,
+                  pendingRequests.map((request) => request.id),
+                );
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      await deactivateSlot(key, existing.id);
+      return;
+    }
+
+    setTogglingKey(key);
+
+    try {
+      await createSlotMutation.mutateAsync({
+        date: selectedDateString,
+        startTime: `${String(hour).padStart(2, "0")}:00:00`,
+        endTime: `${String(hour + 1).padStart(2, "0")}:00:00`,
+      });
+
+      onChanged?.();
+    } catch (error) {
+      Alert.alert(
+        "Update Failed",
+        error instanceof Error
+          ? error.message
+          : "Could not update availability slot.",
+      );
+    } finally {
+      setTogglingKey(null);
+    }
   };
 
   return (
-    <Modal animationType="slide" transparent={false} visible={visible} onRequestClose={onClose}>
-      {/* 3. Apply the padding dynamically instead of relying on SafeAreaView components */}
-      <View 
-        className="flex-1 bg-white" 
+    <Modal
+      animationType="slide"
+      transparent={false}
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <View
+        className="flex-1 bg-white"
         style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
       >
-        
-        <View className="flex-row justify-between items-center px-6 py-4 border-b border-gray-100 mb-2">
-          <TouchableOpacity onPress={onClose} className="p-2 -ml-2" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <View className="flex-row items-center justify-between px-6 py-4 border-b border-gray-100">
+          <TouchableOpacity
+            onPress={onClose}
+            className="p-2 -ml-2"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={1}
+          >
             <Ionicons name="close" size={24} color="#4b5563" />
           </TouchableOpacity>
-          <Text className="text-xl font-extrabold text-gray-900">Weekly Hours</Text>
-          <TouchableOpacity onPress={handleSave} className="bg-gray-900 px-5 py-2 rounded-full">
-            <Text className="text-white font-bold text-sm">Save</Text>
+          <Text className="text-xl font-extrabold text-gray-900">
+            Availability
+          </Text>
+          <TouchableOpacity
+            onPress={onClose}
+            className="px-3 py-1.5 rounded-full bg-gray-900"
+            activeOpacity={1}
+          >
+            <Text className="text-white text-xs font-bold">Done</Text>
           </TouchableOpacity>
         </View>
 
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          className="flex-1"
-        >
-          <ScrollView 
-            showsVerticalScrollIndicator={false} 
-            className="flex-1 px-6"
-            keyboardShouldPersistTaps="handled"
+        <View className="px-6 pt-4">
+          <View className="flex-row items-center justify-between">
+            <TouchableOpacity
+              className="w-8 h-8 rounded-full items-center justify-center bg-gray-100"
+              onPress={() => {
+                setWeekOffset((previous) => Math.max(previous - 1, -4));
+                setSelectedDayIndex(0);
+              }}
+              disabled={weekOffset <= -4}
+              activeOpacity={1}
+            >
+              <Ionicons name="chevron-back" size={18} color="#1f2937" />
+            </TouchableOpacity>
+            <Text className="text-xs text-gray-600 font-semibold">
+              {formatWeekLabel(monday)}
+            </Text>
+            <TouchableOpacity
+              className="w-8 h-8 rounded-full items-center justify-center bg-gray-100"
+              onPress={() => {
+                setWeekOffset((previous) => Math.min(previous + 1, 4));
+                setSelectedDayIndex(0);
+              }}
+              disabled={weekOffset >= 4}
+              activeOpacity={1}
+            >
+              <Ionicons name="chevron-forward" size={18} color="#1f2937" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="mt-4"
           >
-            <View className="gap-y-6 pb-12 mt-4">
-              {WEEK_DAYS.map(day => {
-                const isEnabled = scheduleState[day]?.enabled;
-                const slots = scheduleState[day]?.slots || [];
+            {weekDays.map((day, index) => {
+              const dateString = toDateString(day);
+              const isSelected = index === selectedDayIndex;
+              const isPastDay = isPastDate(day);
 
-                return (
-                  <View key={day} className="border-b border-gray-100 pb-6">
-                    <View className="flex-row items-center justify-between mb-4">
-                      <View className="flex-row items-center">
-                        <View style={{ transform: [{ scale: 0.85 }] }} className="mr-2">
-                          <Switch 
-                            value={isEnabled} 
-                            onValueChange={() => toggleDay(day)}
-                            trackColor={{ false: '#e5e7eb', true: '#4f46e5' }}
-                          />
-                        </View>
-                        <Text className={`text-base font-bold ${isEnabled ? 'text-gray-900' : 'text-gray-400'}`}>
-                          {day}
-                        </Text>
-                      </View>
-                      {!isEnabled && (
-                        <Text className="text-sm font-medium text-gray-400">Unavailable</Text>
-                      )}
-                    </View>
+              let dayContainerClass = "bg-white border-gray-200";
+              if (isSelected) {
+                dayContainerClass = "bg-gray-900 border-gray-900";
+              } else if (isPastDay) {
+                dayContainerClass = "bg-gray-100 border-gray-200";
+              }
 
-                    {isEnabled && (
-                      <View className="pl-14">
-                        {slots.map((slot) => (
-                          <View key={slot.id} className="flex-row items-center gap-2 mb-3">
-                            <TextInput 
-                              value={slot.start}
-                              onChangeText={(val) => updateTime(day, slot.id, 'start', val)}
-                              keyboardType="numbers-and-punctuation"
-                              className="bg-gray-50 border border-gray-200 py-3 px-2 rounded-lg flex-1 text-center text-gray-700 font-bold"
-                            />
-                            <Text className="text-gray-400 font-medium">-</Text>
-                            <TextInput 
-                              value={slot.end}
-                              onChangeText={(val) => updateTime(day, slot.id, 'end', val)}
-                              keyboardType="numbers-and-punctuation"
-                              className="bg-gray-50 border border-gray-200 py-3 px-2 rounded-lg flex-1 text-center text-gray-700 font-bold"
-                            />
-                            <TouchableOpacity onPress={() => removeSlot(day, slot.id)} className="p-3 bg-red-50 rounded-lg ml-1">
-                              <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                            </TouchableOpacity>
-                          </View>
-                        ))}
-                        
-                        {/* 4. The Pressable Fix: Static className, Dynamic style */}
-                        <Pressable 
-                          onPress={() => addSlot(day)} 
-                          className="flex-row items-center mt-1 py-2"
-                          style={({ pressed }) => ({ opacity: pressed ? 0.4 : 1 })}
-                        >
-                          <Ionicons name="add" size={18} color="#4f46e5" />
-                          <Text className="text-indigo-600 font-semibold ml-1">Add hours</Text>
-                        </Pressable>
-                        
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
+              let weekdayClass = "text-gray-500";
+              if (isSelected) {
+                weekdayClass = "text-gray-300";
+              } else if (isPastDay) {
+                weekdayClass = "text-gray-400";
+              }
+
+              let dateLabelClass = "text-gray-900";
+              if (isSelected) {
+                dateLabelClass = "text-white";
+              } else if (isPastDay) {
+                dateLabelClass = "text-gray-400";
+              }
+
+              return (
+                <TouchableOpacity
+                  key={dateString}
+                  onPress={() => setSelectedDayIndex(index)}
+                  activeOpacity={1}
+                  className={`mr-2 px-4 py-3 rounded-xl border ${dayContainerClass}`}
+                >
+                  <Text className={`text-xs font-medium ${weekdayClass}`}>
+                    {day.toLocaleDateString("en-GB", { weekday: "short" })}
+                  </Text>
+                  <Text className={`text-sm font-bold mt-1 ${dateLabelClass}`}>
+                    {day.toLocaleDateString("en-GB", {
+                      day: "2-digit",
+                      month: "short",
+                    })}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
-        </KeyboardAvoidingView>
 
+          <Text className="text-xs text-gray-500 mt-4">
+            Tap a 1-hour slot to activate/deactivate it. Active slots are saved
+            to the database instantly. Slots with pending requests or planned
+            sessions are highlighted below.
+          </Text>
+        </View>
+
+        <ScrollView
+          className="flex-1 px-6 mt-4"
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="pb-10 gap-y-3">
+            {HOURS.map((hour) => {
+              const key = `${selectedDateString}-${hour}`;
+              const slot = slotsByDateHour[key];
+              const linkedRequests = slot
+                ? (requestsBySlotId[slot.id] ?? [])
+                : [];
+              const pendingRequestsCount = linkedRequests.filter(
+                (request) => request.status === "PENDING",
+              ).length;
+              const acceptedRequestsCount = linkedRequests.filter(
+                (request) => request.status === "ACCEPTED",
+              ).length;
+              const isToggling = togglingKey === key;
+              const isBooked = Boolean(slot?.is_booked);
+              const isPast = isPastHourSlot(selectedDate, hour);
+              const isActive = Boolean(slot) && !isBooked;
+              let impactLabel: string | null = null;
+              let impactLabelClass = "text-amber-700";
+
+              if (isPast) {
+                impactLabel = "Past slot";
+                impactLabelClass = "text-gray-500";
+              } else if (acceptedRequestsCount > 0 || isBooked) {
+                impactLabel = "Planned session exists";
+                impactLabelClass = "text-red-600";
+              } else if (pendingRequestsCount > 0) {
+                impactLabel = `${pendingRequestsCount} pending request${
+                  pendingRequestsCount > 1 ? "s" : ""
+                } will be declined`;
+              }
+
+              let containerClass = "bg-white border-gray-200";
+              let labelClass = "text-gray-900";
+              let stateLabel = "Inactive";
+              let statusIconName:
+                | "lock-closed"
+                | "checkmark-circle"
+                | "add-circle-outline" = "add-circle-outline";
+              let statusIconColor = "#6b7280";
+
+              if (isPast) {
+                containerClass = "bg-gray-100 border-gray-200";
+                labelClass = "text-gray-400";
+                stateLabel = "Past";
+                statusIconName = "lock-closed";
+                statusIconColor = "#9ca3af";
+              } else if (isBooked) {
+                containerClass = "bg-gray-100 border-gray-200";
+                labelClass = "text-gray-500";
+                stateLabel = "Booked";
+                statusIconName = "lock-closed";
+                statusIconColor = "#9ca3af";
+              } else if (isActive) {
+                containerClass = "bg-emerald-50 border-emerald-400";
+                labelClass = "text-emerald-700";
+                stateLabel = "Active";
+                statusIconName = "checkmark-circle";
+                statusIconColor = "#059669";
+              }
+
+              return (
+                <TouchableOpacity
+                  key={key}
+                  onPress={() => handleToggleSlot(hour)}
+                  disabled={isToggling || isPending || isPast}
+                  activeOpacity={isBooked || isPast ? 1 : 0.85}
+                  className={`rounded-xl border px-4 py-4 flex-row items-center justify-between ${containerClass}`}
+                >
+                  <View>
+                    <Text className={`font-bold ${labelClass}`}>
+                      {formatHourRange(hour)}
+                    </Text>
+                    <Text className="text-xs text-gray-500 mt-1">
+                      {stateLabel}
+                    </Text>
+                    {impactLabel ? (
+                      <Text
+                        className={`text-xs mt-1 font-medium ${impactLabelClass}`}
+                      >
+                        {impactLabel}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  {isToggling ? (
+                    <ActivityIndicator size="small" color="#4b5563" />
+                  ) : (
+                    <Ionicons
+                      name={statusIconName}
+                      size={20}
+                      color={statusIconColor}
+                    />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
       </View>
     </Modal>
   );

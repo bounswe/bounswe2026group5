@@ -1,4 +1,5 @@
-import { apiGet, apiPatch, apiPost, ApiError } from "@/lib/api/client";
+import { ApiError, apiGet, apiPatch, apiPost } from "@/lib/api/client";
+import { API_BASE_URL } from "@/lib/api/config";
 
 const mockGetState = jest.fn();
 
@@ -9,16 +10,61 @@ jest.mock("@/lib/auth/store", () => ({
 }));
 
 describe("api client", () => {
-  const fetchMock = jest.fn();
+  const fetchMock: jest.Mock = jest.fn();
+  const mockFetchResponse = (value: unknown) =>
+    (
+      fetchMock as unknown as { mockResolvedValueOnce: (v: unknown) => void }
+    ).mockResolvedValueOnce(value);
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch = fetchMock as unknown as typeof fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
     mockGetState.mockReturnValue({ accessToken: "token-123" });
   });
 
+  it("sends GET request with auth header and returns parsed JSON", async () => {
+    mockFetchResponse({
+      ok: true,
+      json: async () => ({ value: 42 }),
+    });
+
+    const result = await apiGet<{ value: number }>("/api/test/");
+
+    expect(result).toEqual({ value: 42 });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE_URL}/api/test/`,
+      expect.objectContaining({
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          Authorization: "Bearer token-123",
+        },
+      }),
+    );
+  });
+
+  it("omits auth header when there is no access token", async () => {
+    mockGetState.mockReturnValue({ accessToken: null });
+    mockFetchResponse({
+      ok: true,
+      json: async () => ({ ok: true }),
+    });
+
+    await apiGet<{ ok: boolean }>("/api/no-auth/");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE_URL}/api/no-auth/`,
+      expect.objectContaining({
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      }),
+    );
+  });
+
   it("throws ApiError and prefers detail message", async () => {
-    fetchMock.mockResolvedValueOnce({
+    mockFetchResponse({
       ok: false,
       status: 400,
       json: async () => ({ detail: "Bad request" }),
@@ -30,7 +76,7 @@ describe("api client", () => {
   });
 
   it("extracts message from non_field_errors and generic field arrays", async () => {
-    fetchMock.mockResolvedValueOnce({
+    mockFetchResponse({
       ok: false,
       status: 422,
       json: async () => ({ non_field_errors: ["Top-level error"] }),
@@ -39,7 +85,7 @@ describe("api client", () => {
       new ApiError(422, "Top-level error"),
     );
 
-    fetchMock.mockResolvedValueOnce({
+    mockFetchResponse({
       ok: false,
       status: 422,
       json: async () => ({ title: ["Title required"] }),
@@ -50,7 +96,7 @@ describe("api client", () => {
   });
 
   it("falls back to string field or status message when parsing cannot find one", async () => {
-    fetchMock.mockResolvedValueOnce({
+    mockFetchResponse({
       ok: false,
       status: 403,
       json: async () => ({ reason: "Forbidden" }),
@@ -59,7 +105,7 @@ describe("api client", () => {
       new ApiError(403, "Forbidden"),
     );
 
-    fetchMock.mockResolvedValueOnce({
+    mockFetchResponse({
       ok: false,
       status: 500,
       json: async () => {
@@ -71,8 +117,45 @@ describe("api client", () => {
     );
   });
 
+  it("handles POST success and 204 responses", async () => {
+    mockFetchResponse({
+      ok: true,
+      status: 201,
+      json: async () => ({ id: "1" }),
+    });
+
+    const created = await apiPost<{ id: string }, { title: string }>(
+      "/api/items/",
+      {
+        title: "My Item",
+      },
+    );
+
+    expect(created).toEqual({ id: "1" });
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      `${API_BASE_URL}/api/items/`,
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: "Bearer token-123",
+        },
+        body: JSON.stringify({ title: "My Item" }),
+      }),
+    );
+
+    mockFetchResponse({
+      ok: true,
+      status: 204,
+      json: async () => ({}),
+    });
+    const noContent = await apiPost<void>("/api/items/1/archive/");
+    expect(noContent).toBeUndefined();
+  });
+
   it("supports PATCH and bubbles parsed API error", async () => {
-    fetchMock.mockResolvedValueOnce({
+    mockFetchResponse({
       ok: true,
       json: async () => ({ ok: true }),
     });
@@ -85,7 +168,7 @@ describe("api client", () => {
     );
     expect(patched).toEqual({ ok: true });
 
-    fetchMock.mockResolvedValueOnce({
+    mockFetchResponse({
       ok: false,
       status: 404,
       json: async () => ({ detail: "Not found" }),

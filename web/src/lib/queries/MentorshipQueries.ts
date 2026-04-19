@@ -34,14 +34,37 @@ export interface MentorshipRequest {
     responded_at: string | null
 }
 
-export interface UpcomingSession { // for mentee
-    slot_id: string
+export type MeetingSessionRoleFilter = 'mentor' | 'mentee' | 'all'
+
+export type MeetingSessionStatusFilter =
+    | 'upcoming'
+    | 'past'
+    | 'scheduled'
+    | 'rescheduled'
+    | 'canceled'
+    | 'completed'
+
+export interface MeetingSession {
+    session_id: string
+    match_id: string
     mentor: MatchUser
-    slot_date: string
-    slot_start_time: string
-    slot_end_time: string
-    status: string
-    booked_at: string
+    mentee: MatchUser
+    source_slot_id: string | null
+    scheduled_start_at: string
+    scheduled_end_at: string
+    status: 'SCHEDULED' | 'RESCHEDULED' | 'CANCELED' | 'COMPLETED'
+    display_status: 'SCHEDULED' | 'RESCHEDULED' | 'CANCELED' | 'COMPLETED'
+    my_role: 'MENTOR' | 'MENTEE' | 'UNKNOWN'
+    allowed_actions: string[]
+    canceled_by_role: 'MENTOR' | 'MENTEE' | null
+    cancel_reason: string
+    created_at: string
+    updated_at: string
+}
+
+interface MeetingSessionQueryParams {
+    role?: MeetingSessionRoleFilter
+    status?: MeetingSessionStatusFilter
 }
 
 // ---- Fetchers ----
@@ -95,12 +118,37 @@ async function respondToRequest(requestId: string, action: 'accept' | 'reject'):
     return res.json()
 }
 
-async function fetchUpcomingSessions(): Promise<UpcomingSession[]> {
+function withAuthHeaders(): HeadersInit {
     const token = localStorage.getItem('access_token')
-    const res = await fetch(`${API_BASE_URL}/mentorship/sessions/me/upcoming/`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+    return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+async function fetchMeetingSessions(params: MeetingSessionQueryParams = {}): Promise<MeetingSession[]> {
+    const query = new URLSearchParams()
+    if (params.role && params.role !== 'all') {
+        query.set('role', params.role)
+    }
+    if (params.status) {
+        query.set('status', params.status)
+    }
+
+    const queryString = query.toString()
+    const suffix = queryString ? `?${queryString}` : ''
+    const url = `${API_BASE_URL}/mentorship/meeting-sessions/me/${suffix}`
+
+    const res = await fetch(url, {
+        headers: withAuthHeaders(),
     })
-    if (!res.ok) throw new Error('Failed to fetch upcoming sessions')
+    if (!res.ok) throw new Error('Failed to fetch meeting sessions')
+    return res.json()
+}
+
+async function cancelSession(sessionId: string): Promise<MentorshipRequest> {
+    const res = await fetch(`${API_BASE_URL}/mentorship/sessions/${sessionId}/cancel/`, {
+        method: 'POST',
+        headers: withAuthHeaders(),
+    })
+    if (!res.ok) throw new Error('Failed to cancel session')
     return res.json()
 }
 
@@ -120,12 +168,19 @@ export const myRequestsQueryOptions = queryOptions({
     gcTime: Infinity,
 })
 
-export const upcomingSessionsQueryOptions = queryOptions({
-    queryKey: ['mentorship', 'sessions', 'upcoming'],
-    queryFn: fetchUpcomingSessions,
-    staleTime: 0,
-    gcTime: Infinity,
-})
+export const meetingSessionsQueryOptions = (params: MeetingSessionQueryParams = {}) =>
+    queryOptions({
+        queryKey: [
+            'mentorship',
+            'meeting-sessions',
+            'me',
+            params.role ?? 'all',
+            params.status ?? 'all',
+        ],
+        queryFn: () => fetchMeetingSessions(params),
+        staleTime: 30 * 1000,
+        gcTime: Infinity,
+    })
 
 // ---- Hooks ----
 
@@ -149,6 +204,12 @@ export function useRespondToRequest() {
     })
 }
 
-export function useUpcomingSessions() {
-    return useQuery(upcomingSessionsQueryOptions)
+export function useMeetingSessions(params: MeetingSessionQueryParams = {}) {
+    return useQuery(meetingSessionsQueryOptions(params))
+}
+
+export function useCancelSession() {
+    return useMutation({
+        mutationFn: cancelSession,
+    })
 }

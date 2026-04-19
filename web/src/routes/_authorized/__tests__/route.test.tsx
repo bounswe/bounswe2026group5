@@ -1,5 +1,5 @@
 // web/src/routes/_authorized/__tests__/route.test.tsx
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { setDemoAuthRole, getDemoAuthRole } from '@/lib/demoAuth';
 
 describe('Demo Auth State Utility', () => {

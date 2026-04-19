@@ -71,40 +71,40 @@ class MentorshipRequest(models.Model):
     def __str__(self) -> str:
         return f"{self.mentee.display_name} -> {self.mentor.display_name} ({self.status})"
 
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        """Persist request and create a match when request becomes accepted."""
+    def _get_previous_status(self) -> str | None:
+        """Return persisted status before current in-memory updates."""
+        if not self.pk:
+            return None
 
-        previous_status = None
-        if self.pk:
-            previous_status = (
-                MentorshipRequest.objects.filter(pk=self.pk)
-                .values_list("status", flat=True)
-                .first()
-            )
+        return MentorshipRequest.objects.filter(pk=self.pk).values_list("status", flat=True).first()
 
+    def _sync_responded_at(self, previous_status: str | None) -> None:
+        """Keep responded_at aligned with request status transitions."""
         if self.status in {self.Status.ACCEPTED, self.Status.REJECTED}:
             if previous_status != self.status and self.responded_at is None:
                 self.responded_at = timezone.now()
-        elif self.status == self.Status.PENDING:
+            return
+
+        if self.status == self.Status.PENDING:
             self.responded_at = None
 
-        if self.status == self.Status.ACCEPTED and self.slot is not None:
-            if self.initial_session_start_at is None:
-                self.initial_session_start_at = self.slot.start_at
-            if self.initial_session_end_at is None:
-                self.initial_session_end_at = self.slot.end_at
+    def _sync_initial_session_snapshot(self) -> None:
+        """Persist the first accepted slot window as an immutable snapshot."""
+        if self.status != self.Status.ACCEPTED or self.slot is None:
+            return
+
+        if self.initial_session_start_at is None:
+            self.initial_session_start_at = self.slot.start_at
+        if self.initial_session_end_at is None:
+            self.initial_session_end_at = self.slot.end_at
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Persist request with request-local status metadata synchronization."""
+        previous_status = self._get_previous_status()
+        self._sync_responded_at(previous_status)
+        self._sync_initial_session_snapshot()
 
         super().save(*args, **kwargs)
-
-        if self.status == self.Status.ACCEPTED and previous_status != self.Status.ACCEPTED:
-            Match.objects.get_or_create(
-                request=self,
-                defaults={
-                    "mentor": self.mentor,
-                    "mentee": self.mentee,
-                    "is_active": True,
-                },
-            )
 
 
 class Match(models.Model):
@@ -138,6 +138,89 @@ class Match(models.Model):
 
     def __str__(self) -> str:
         return f"{self.mentor.display_name} <> {self.mentee.display_name}"
+
+
+class MeetingSession(models.Model):
+    """Canonical mentorship session record for scheduling and lifecycle operations."""
+
+    class Status(models.TextChoices):
+        """Lifecycle statuses for a mentorship session."""
+
+        SCHEDULED = "SCHEDULED", "Scheduled"
+        RESCHEDULED = "RESCHEDULED", "Rescheduled"
+        CANCELED = "CANCELED", "Canceled"
+        COMPLETED = "COMPLETED", "Completed"
+
+    class CanceledByRole(models.TextChoices):
+        """Role of the participant who canceled the session."""
+
+        MENTOR = "MENTOR", "Mentor"
+        MENTEE = "MENTEE", "Mentee"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    match = models.ForeignKey(
+        Match,
+        on_delete=models.CASCADE,
+        related_name="meeting_sessions",
+    )
+    mentor = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name="mentor_meeting_sessions",
+    )
+    mentee = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name="mentee_meeting_sessions",
+    )
+    source_slot = models.ForeignKey(
+        AvailabilitySlot,
+        on_delete=models.SET_NULL,
+        related_name="meeting_sessions",
+        null=True,
+        blank=True,
+    )
+    scheduled_start_at_utc = models.DateTimeField()
+    scheduled_end_at_utc = models.DateTimeField()
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.SCHEDULED,
+    )
+    canceled_by_role = models.CharField(
+        max_length=16,
+        choices=CanceledByRole.choices,
+        blank=True,
+        default="",
+    )
+    cancel_reason = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "meeting_sessions"
+        ordering = ["-scheduled_start_at_utc", "-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(scheduled_end_at_utc__gt=models.F("scheduled_start_at_utc")),
+                name="meeting_session_end_after_start",
+            ),
+            models.CheckConstraint(
+                condition=~Q(mentor=F("mentee")),
+                name="meeting_session_mentor_not_mentee",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["mentor", "scheduled_start_at_utc"]),
+            models.Index(fields=["mentee", "scheduled_start_at_utc"]),
+            models.Index(fields=["status", "scheduled_start_at_utc"]),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.mentor.display_name} <> {self.mentee.display_name} "
+            f"({self.scheduled_start_at_utc.isoformat()})"
+        )
 
 
 class Feedback(models.Model):

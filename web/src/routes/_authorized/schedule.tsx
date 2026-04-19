@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { Heading, Body } from '@/components/Typography'
-import { Card } from '@/components/ui/card'
+import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
+import { useMeetingSessions } from '#/lib/queries/MentorshipQueries.ts'
+import { getInitials } from '#/lib/utils.ts'
+import { Body, Heading } from '@/components/Typography'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X, Globe, Loader2 } from 'lucide-react'
+import { Card } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -14,10 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useQuery } from '@tanstack/react-query'
-import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
-import { useUpcomingSessions } from '#/lib/queries/MentorshipQueries.ts'
-import { useMentorUpcomingSessions } from '#/lib/queries/ProfileTimeSlotQueries.ts'
-import { getInitials } from '#/lib/utils.ts'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Globe, Loader2, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
 
 export const Route = createFileRoute('/_authorized/schedule')({
   component: SchedulePage,
@@ -39,23 +38,35 @@ interface NormalizedSession {
   status: 'Upcoming' | 'Completed'
 }
 
+type ScheduleTableProps = Readonly<{
+  sessions: NormalizedSession[]
+  peerLabel: string
+}>
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function isPast(isoDate: string, endTime: string): boolean {
-  return new Date(`${isoDate}T${endTime}`) < new Date()
+function toUiStatus(status: string): 'Upcoming' | 'Completed' {
+  if (status === 'COMPLETED' || status === 'CANCELED') {
+    return 'Completed'
+  }
+  return 'Upcoming'
 }
 
 function toIso(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
+function toClockTime(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:00`
+}
+
 // ---------------------------------------------------------------------------
 // Table Component
 // ---------------------------------------------------------------------------
 
-function ScheduleTable({ sessions, peerLabel }: { sessions: NormalizedSession[], peerLabel: string }) {
+function ScheduleTable({ sessions, peerLabel }: ScheduleTableProps) {
   if (sessions.length === 0) {
     return (
         <div className="p-12 text-center flex flex-col items-center justify-center border-t border-line">
@@ -68,17 +79,17 @@ function ScheduleTable({ sessions, peerLabel }: { sessions: NormalizedSession[],
   return (
       <div className="overflow-x-auto border-t border-line">
         <Table>
-          <TableHeader className="bg-black/[0.02]">
+          <TableHeader className="bg-black/2">
             <TableRow className="border-line hover:bg-transparent">
-              <TableHead className="w-[150px] font-semibold text-ink pl-6 py-4">Date</TableHead>
-              <TableHead className="w-[150px] font-semibold text-ink py-4">Time</TableHead>
+              <TableHead className="w-37.5 font-semibold text-ink pl-6 py-4">Date</TableHead>
+              <TableHead className="w-37.5 font-semibold text-ink py-4">Time</TableHead>
               <TableHead className="font-semibold text-ink py-4">{peerLabel}</TableHead>
-              <TableHead className="w-[120px] font-semibold text-ink pr-6 py-4">Status</TableHead>
+              <TableHead className="w-30 font-semibold text-ink pr-6 py-4">Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sessions.map(session => (
-                <TableRow key={session.id} className="border-line hover:bg-black/[0.01]">
+                <TableRow key={session.id} className="border-line hover:bg-black/1">
                   <TableCell className="font-medium pl-6 py-4">
                     {new Date(`${session.isoDate}T00:00:00`).toLocaleDateString('en-GB', {
                       day: 'numeric', month: 'short', year: 'numeric'
@@ -142,41 +153,32 @@ export function SchedulePage() {
   const { data: me } = useQuery(meQueryOptions)
   const isMentor = me?.app_usage_mode === 'MENTOR'
 
-  const { data: menteeSessions = [], isLoading: menteeLoading } = useUpcomingSessions()
-  const { sessions: mentorSlots, profilesByUsername, isLoading: mentorLoading } = useMentorUpcomingSessions(me?.username ?? '')
+  const { data: sessions = [], isLoading: sessionsLoading } = useMeetingSessions({
+    role: isMentor ? 'mentor' : 'mentee',
+    status: 'upcoming',
+  })
 
-  const isLoading = isMentor ? mentorLoading : menteeLoading
+  const isLoading = sessionsLoading
 
   const rawSessions: NormalizedSession[] = useMemo(() => {
-    if (isMentor) {
-      return mentorSlots.map(slot => {
-        const profile = slot.bookedBy ? profilesByUsername[slot.bookedBy] : null
-        return {
-          id: slot.id,
-          isoDate: slot.date,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          peerName: profile?.full_name ?? slot.bookedBy ?? 'Unknown',
-          peerUsername: slot.bookedBy ?? '',
-          peerPicture: profile?.picture_url ?? null,
-          peerTitle: null,
-          status: isPast(slot.date, slot.endTime) ? 'Completed' : 'Upcoming',
-        }
-      })
-    } else {
-      return menteeSessions.map(session => ({
-        id: session.slot_id,
-        isoDate: session.slot_date,
-        startTime: session.slot_start_time,
-        endTime: session.slot_end_time,
-        peerName: session.mentor.display_name,
-        peerUsername: session.mentor.username,
-        peerPicture: session.mentor.picture_url,
-        peerTitle: session.mentor.title,
-        status: isPast(session.slot_date, session.slot_end_time) ? 'Completed' : 'Upcoming',
-      }))
-    }
-  }, [isMentor, mentorSlots, profilesByUsername, menteeSessions])
+    return sessions.map((session) => {
+      const startDate = new Date(session.scheduled_start_at)
+      const endDate = new Date(session.scheduled_end_at)
+      const counterpart = isMentor ? session.mentee : session.mentor
+
+      return {
+        id: session.session_id,
+        isoDate: toIso(startDate),
+        startTime: toClockTime(startDate),
+        endTime: toClockTime(endDate),
+        peerName: counterpart.display_name,
+        peerUsername: counterpart.username,
+        peerPicture: counterpart.picture_url,
+        peerTitle: counterpart.title,
+        status: toUiStatus(session.display_status),
+      }
+    })
+  }, [isMentor, sessions])
 
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -184,7 +186,7 @@ export function SchedulePage() {
   const formattedSelectedDate = useMemo(() => {
     if (!selectedDate) return ''
     const [year, month, day] = selectedDate.split('-')
-    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+    return new Date(Number.parseInt(year, 10), Number.parseInt(month, 10) - 1, Number.parseInt(day, 10))
         .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
   }, [selectedDate])
 
@@ -233,7 +235,7 @@ export function SchedulePage() {
             <Card className="island-shell overflow-hidden border-line flex flex-col">
 
               {/* Calendar */}
-              <div className="p-6 bg-black/[0.01]">
+              <div className="p-6 bg-black/1">
                 <div className="flex items-center justify-between mb-6">
                   <Heading as="h3" className="text-xl">
                     {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
@@ -259,7 +261,7 @@ export function SchedulePage() {
                       Completed
                     </div>
                   </div>
-                  <div className="text-xs text-ink-soft flex items-center gap-1.5 bg-black/[0.03] px-2 py-1 rounded-md">
+                  <div className="text-xs text-ink-soft flex items-center gap-1.5 bg-black/3 px-2 py-1 rounded-md">
                     <Globe className="w-3.5 h-3.5" /> All times in your local timezone
                   </div>
                 </div>
@@ -271,7 +273,7 @@ export function SchedulePage() {
                       </div>
                   ))}
 
-                  {calendarDays.map((date, i) => {
+                  {calendarDays.map((date) => {
                     const iso = toIso(date)
                     const isCurrentMonth = date.getMonth() === currentMonth.getMonth()
                     const dayEvents = rawSessions.filter(s => s.isoDate === iso)
@@ -281,18 +283,24 @@ export function SchedulePage() {
                         date.getMonth() === today.getMonth() &&
                         date.getFullYear() === today.getFullYear()
 
+                    let dayLabelClass = 'text-ink'
+                    if (isSelected) {
+                      dayLabelClass = 'bg-accent text-white'
+                    } else if (isToday) {
+                      dayLabelClass = 'bg-ink text-white shadow-md'
+                    }
+
                     return (
-                        <div
-                            key={i}
+                        <button
+                            key={iso}
+                            type="button"
                             onClick={() => setSelectedDate(isSelected ? null : iso)}
-                            className={`bg-white min-h-[80px] sm:min-h-[100px] p-2 cursor-pointer transition-colors hover:bg-accent/5 ${
-                                !isCurrentMonth ? 'opacity-40 bg-black/[0.02]' : ''
+                            className={`bg-white min-h-20 sm:min-h-25 p-2 text-left transition-colors hover:bg-accent/5 ${
+                                isCurrentMonth ? '' : 'opacity-40 bg-black/2'
                             } ${isSelected ? 'ring-2 ring-inset ring-accent bg-accent/5' : ''}`}
+                            aria-pressed={isSelected}
                         >
-                          <div className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full mb-1 ${
-                              isSelected ? 'bg-accent text-white' :
-                                  isToday ? 'bg-ink text-white shadow-md' : 'text-ink'
-                          }`}>
+                          <div className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full mb-1 ${dayLabelClass}`}>
                             {date.getDate()}
                           </div>
                           <div className="flex flex-col gap-1">
@@ -300,7 +308,7 @@ export function SchedulePage() {
                                 <div
                                     key={event.id}
                                     className={`text-[10px] leading-tight px-1.5 py-1 rounded font-medium truncate ${
-                                        isPast(event.isoDate, event.endTime)
+                                  event.status === 'Completed'
                                             ? 'bg-gray-100 text-gray-600'
                                             : 'bg-green-100 text-green-800'
                                     }`}
@@ -309,7 +317,7 @@ export function SchedulePage() {
                                 </div>
                             ))}
                           </div>
-                        </div>
+                        </button>
                     )
                   })}
                 </div>

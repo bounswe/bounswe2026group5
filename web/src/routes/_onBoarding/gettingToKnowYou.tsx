@@ -1,13 +1,13 @@
+import { SkillPicker } from "#/components/SkillPicker.tsx"
+import { Heading, Muted, Subheading } from "#/components/Typography.tsx"
+import { Button } from "#/components/ui/button.tsx"
+import { Input } from "#/components/ui/input.tsx"
+import { Textarea } from "#/components/ui/textarea.tsx"
+import { meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/AuthQueries.ts"
+import { useOwnProfile, useUpdateProfile } from "#/lib/queries/ProfileQueries.ts"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
-import { Heading, Subheading, Muted } from "#/components/Typography.tsx"
-import { Input } from "#/components/ui/input.tsx"
-import { Button } from "#/components/ui/button.tsx"
-import { Textarea } from "#/components/ui/textarea.tsx"
-import { SkillPicker } from "#/components/SkillPicker.tsx"
-import {useQuery, useQueryClient} from "@tanstack/react-query"
-import { meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/AuthQueries.ts"
-import { useUpdateProfile } from "#/lib/queries/ProfileQueries.ts"
 
 export const Route = createFileRoute('/_onBoarding/gettingToKnowYou')({
     loader: ({ context }) => context.queryClient.ensureQueryData(meQueryOptions),
@@ -112,6 +112,7 @@ function getQuestions(primaryUsage: UserAnswers['primaryUsage']): Question[] {
 function RouteComponent() {
     const router = useRouter()
     const { data: me } = useQuery(meQueryOptions)
+    const { data: profileData } = useOwnProfile()
     const queryClient = useQueryClient();
 
     const [activeIndex, setActiveIndex] = useState(0)
@@ -129,13 +130,13 @@ function RouteComponent() {
     const current = questions[activeIndex]
 
     const updateUsageMode = useUpdateAppUsageMode()
-    const updateProfile = useUpdateProfile(me?.username ?? '')
+    const updateProfile = useUpdateProfile()
 
     const isSubmitting = updateUsageMode.isPending || updateProfile.isPending
     const submitError = updateUsageMode.error?.message || updateProfile.error?.message
 
     const handleFinish = () => {
-        if (!me?.id || !me?.username) return
+        if (!me?.username) return
 
         const skills = answers.primaryUsage === 'mentor'
             ? answers.teachSkills
@@ -143,7 +144,6 @@ function RouteComponent() {
 
         updateUsageMode.mutate(
             {
-                userId: me.id,
                 app_usage_mode: answers.primaryUsage.toUpperCase() as 'MENTEE' | 'MENTOR',
             },
             {
@@ -152,8 +152,7 @@ function RouteComponent() {
                         {
                             display_name: `${answers.firstName} ${answers.lastName}`.trim(),
                             bio: answers.bio,
-                            expertises: answers.primaryUsage === 'mentor' ? skills : undefined,
-                            eager_to_learn: answers.primaryUsage === 'mentee' ? skills : undefined,
+                            skills: skills,
                         },
                         {
                             onSuccess: () => {
@@ -258,6 +257,7 @@ function RouteComponent() {
                     {current.type === 'skills' && current.skillsKey && (
                         <SkillPicker
                             selected={answers[current.skillsKey]}
+                            available={profileData?.available_catalog_skills ?? []}
                             onChange={skills => setAnswers(prev => ({ ...prev, [current.skillsKey!]: skills }))}
                             mode={answers.primaryUsage === 'mentor' ? 'mentor' : 'mentee'}
                         />
