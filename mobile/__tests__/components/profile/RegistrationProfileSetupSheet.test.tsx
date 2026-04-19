@@ -6,7 +6,7 @@ import { RegistrationProfileSetupSheet } from "@/components/profile/Registration
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
 describe("RegistrationProfileSetupSheet", () => {
-  it("shows generated username as read-only onboarding context", () => {
+  it("shows username preview as read-only onboarding context", () => {
     const { getByText } = render(
       <RegistrationProfileSetupSheet
         visible={true}
@@ -25,7 +25,7 @@ describe("RegistrationProfileSetupSheet", () => {
     expect(getByText("@new_user")).toBeTruthy();
     expect(
       getByText(
-        "Your username is generated during registration. It is shown here for reference and cannot be edited in the current backend flow.",
+        "This is the username preview for your account. The backend still assigns the final username during registration, so it may change slightly if that handle is already taken, and it cannot be edited in the current flow.",
       ),
     ).toBeTruthy();
   });

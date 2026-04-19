@@ -236,10 +236,6 @@ export function RegistrationProfileSetupSheet({
               <Text className="mt-2 text-lg font-semibold text-on-surface dark:text-on-surface-dark">
                 {formatUsername(username)}
               </Text>
-              <Text className="mt-1 text-sm leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
-                Your username is generated during registration. It is shown here
-                for reference and cannot be edited in the current backend flow.
-              </Text>
             </View>
 
             <View className="gap-1.5">
