@@ -307,25 +307,12 @@ function MentorConnections({ onOpenFeedback, onError }: ConnectionViewProps) {
           }
           const target = managedMentee;
           setManagedMentee(null);
-          Alert.alert(
-            `Remove ${target.name}?`,
-            "This will end the active mentorship connection.",
-            [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Remove",
-                style: "destructive",
-                onPress: () => {
-                  void deactivateConnection({
-                    matchIds: target.matchIds,
-                    name: target.name,
-                    mutateAsync: deactivateMatchMutation.mutateAsync,
-                    onError,
-                  });
-                },
-              },
-            ],
-          );
+          void deactivateConnection({
+            matchIds: target.matchIds,
+            name: target.name,
+            mutateAsync: deactivateMatchMutation.mutateAsync,
+            onError,
+          });
         }}
       />
 
@@ -604,25 +591,12 @@ function MenteeConnections({ onOpenFeedback, onError }: ConnectionViewProps) {
           }
           const target = managedMentor;
           setManagedMentor(null);
-          Alert.alert(
-            `Remove ${target.name}?`,
-            "This will end the active mentorship connection.",
-            [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Remove",
-                style: "destructive",
-                onPress: () => {
-                  void deactivateConnection({
-                    matchIds: target.matchIds,
-                    name: target.name,
-                    mutateAsync: deactivateMatchMutation.mutateAsync,
-                    onError,
-                  });
-                },
-              },
-            ],
-          );
+          void deactivateConnection({
+            matchIds: target.matchIds,
+            name: target.name,
+            mutateAsync: deactivateMatchMutation.mutateAsync,
+            onError,
+          });
         }}
       />
 
@@ -849,7 +823,6 @@ export default function ConnectionsScreen() {
         onClose={() => setFeedbackConnection(null)}
         onSubmit={handleFeedbackSubmit}
         otherUserName={feedbackConnection?.userName || ""}
-        yourRole={feedbackConnection?.role || "Mentee"}
         isSubmitting={submitFeedbackMutation.isPending}
       />
     </View>

@@ -1,4 +1,5 @@
 import { SettingItem } from "@/components/settings/SettingItem";
+import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -66,48 +67,19 @@ export default function SettingsScreen() {
     notifUpdates: false,
   });
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
 
   const togglePref = (key: keyof typeof prefs) => {
     setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleLogout = () => {
-    Alert.alert("Log Out", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setActionError(null);
-            await logoutMutation.mutateAsync();
-            router.replace("/login");
-          } catch (error) {
-            console.error("Logout failed:", error);
-            setActionError(
-              error instanceof Error
-                ? error.message
-                : "Failed to log out. Please try again.",
-            );
-          }
-        },
-      },
-    ]);
+    setShowLogoutConfirmation(true);
   };
 
   const handleAccountDeletion = () => {
-    Alert.alert(
-      "Delete Account",
-      "Are you sure you want to permanently delete your account? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => console.log("Account deleted"),
-        },
-      ],
-    );
+    setShowDeleteConfirmation(true);
   };
 
   return (
@@ -265,6 +237,47 @@ export default function SettingsScreen() {
           Version 1.0.0 (MVP)
         </Text>
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={showLogoutConfirmation}
+        title="Log out?"
+        message="You will need to sign in again to access your dashboard."
+        confirmLabel="Log Out"
+        cancelLabel="Stay Logged In"
+        variant="destructive"
+        isConfirming={logoutMutation.isPending}
+        onCancel={() => setShowLogoutConfirmation(false)}
+        onConfirm={async () => {
+          try {
+            setActionError(null);
+            await logoutMutation.mutateAsync();
+            setShowLogoutConfirmation(false);
+            router.replace("/login");
+          } catch (error) {
+            console.error("Logout failed:", error);
+            setShowLogoutConfirmation(false);
+            setActionError(
+              error instanceof Error
+                ? error.message
+                : "Failed to log out. Please try again.",
+            );
+          }
+        }}
+      />
+
+      <ConfirmationSheet
+        visible={showDeleteConfirmation}
+        title="Delete account?"
+        message="This action cannot be undone. Your account deletion flow is not implemented yet."
+        confirmLabel="Delete"
+        cancelLabel="Keep Account"
+        variant="destructive"
+        onCancel={() => setShowDeleteConfirmation(false)}
+        onConfirm={() => {
+          setShowDeleteConfirmation(false);
+          Alert.alert("Not Available", "Account deletion is not implemented yet.");
+        }}
+      />
     </View>
   );
 }

@@ -1,13 +1,14 @@
 import React from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+
+import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 
 interface SessionDetailsModalProps {
   visible: boolean;
@@ -37,6 +38,9 @@ export function SessionDetailsModal({
   isCancelling = false,
   session,
 }: Readonly<SessionDetailsModalProps>) {
+  const [showCancelConfirmation, setShowCancelConfirmation] =
+    React.useState(false);
+
   if (!session) return null;
 
   let statusTextClass = "text-gray-600";
@@ -143,24 +147,7 @@ export function SessionDetailsModal({
               <TouchableOpacity
                 className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
                 disabled={isCancelling}
-                onPress={() => {
-                  Alert.alert(
-                    "Cancel Session",
-                    "Are you sure you want to cancel this session?",
-                    [
-                      { text: "Keep Session", style: "cancel" },
-                      {
-                        text: "Cancel Session",
-                        style: "destructive",
-                        onPress: () => {
-                          if (onCancelSession) {
-                            onCancelSession();
-                          }
-                        },
-                      },
-                    ],
-                  );
-                }}
+                onPress={() => setShowCancelConfirmation(true)}
               >
                 {isCancelling ? (
                   <ActivityIndicator size="small" color="#dc2626" />
@@ -174,6 +161,21 @@ export function SessionDetailsModal({
           )}
         </Pressable>
       </Pressable>
+
+      <ConfirmationSheet
+        visible={showCancelConfirmation}
+        title="Cancel session?"
+        message="This will cancel the scheduled mentorship session for both participants."
+        confirmLabel="Cancel Session"
+        cancelLabel="Keep Session"
+        variant="destructive"
+        isConfirming={isCancelling}
+        onCancel={() => setShowCancelConfirmation(false)}
+        onConfirm={() => {
+          setShowCancelConfirmation(false);
+          onCancelSession?.();
+        }}
+      />
     </Modal>
   );
 }

@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Offering } from "./MentorshipOfferings";
 import type { AvailabilitySlot } from "./AvailabilityPreview";
@@ -143,6 +144,7 @@ export function BookingModal({
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showDiscardConfirmation, setShowDiscardConfirmation] = useState(false);
   const [isCustomTime, setIsCustomTime] = useState(false);
   const [customStartTime, setCustomStartTime] = useState(DEFAULT_START_TIME);
   const [customEndTime, setCustomEndTime] = useState(DEFAULT_END_TIME);
@@ -207,14 +209,7 @@ export function BookingModal({
       return;
     }
 
-    Alert.alert(
-      "Discard Request?",
-      "You have unsaved changes. Are you sure you want to discard this and go back?",
-      [
-        { text: "Keep Editing", style: "cancel" },
-        { text: "Discard", style: "destructive", onPress: onClose },
-      ],
-    );
+    setShowDiscardConfirmation(true);
   };
 
   const getProposedTime = (): string | null => {
@@ -608,6 +603,20 @@ export function BookingModal({
           </TouchableOpacity>
         </View>
       </View>
+
+      <ConfirmationSheet
+        visible={showDiscardConfirmation}
+        title="Discard request?"
+        message="You have unsaved changes. If you leave now, your current selection and message will be lost."
+        confirmLabel="Discard"
+        cancelLabel="Keep Editing"
+        variant="destructive"
+        onCancel={() => setShowDiscardConfirmation(false)}
+        onConfirm={() => {
+          setShowDiscardConfirmation(false);
+          onClose();
+        }}
+      />
     </Modal>
   );
 }
