@@ -322,11 +322,6 @@ export default function ScheduleScreen() {
           setRescheduleCurrentSlotId(selectedSession.slotId);
           setShowRescheduleSheet(true);
         }}
-        onLeaveFeedback={() => {
-          // Navigate to feedback screen or show feedback modal
-          setSelectedSession(null);
-          setActionError("Feedback submission feature coming soon.");
-        }}
       />
     </SafeAreaView>
   );

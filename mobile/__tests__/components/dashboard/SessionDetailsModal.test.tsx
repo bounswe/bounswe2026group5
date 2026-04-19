@@ -24,7 +24,7 @@ describe("SessionDetailsModal Component", () => {
     isSessionStarted: true,
   };
 
-  // Set up fake timers for the setTimeout in your Reschedule/Feedback buttons
+  // Set up fake timers for the setTimeout in the Reschedule button
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
@@ -82,29 +82,17 @@ describe("SessionDetailsModal Component", () => {
     expect(mockOnReschedule).toHaveBeenCalled();
   });
 
-  it("shows Leave Feedback and hides Reschedule/Cancel for Completed sessions", () => {
-    const mockOnLeaveFeedback = jest.fn();
-    
-    const { getByText, queryByText } = render(
+  it("hides action buttons for completed sessions", () => {
+    const { queryByText } = render(
       <SessionDetailsModal
         visible={true}
         session={completedSession as any}
         onClose={jest.fn()}
-        onLeaveFeedback={mockOnLeaveFeedback}
       />,
     );
 
-    // Leave Feedback should be visible
-    expect(getByText("Leave Feedback")).toBeTruthy();
-    
-    // Reschedule and Cancel should NOT be visible
     expect(queryByText("Reschedule")).toBeNull();
     expect(queryByText("Cancel")).toBeNull();
-
-    // Pressing Leave Feedback
-    fireEvent.press(getByText("Leave Feedback"));
-    jest.runAllTimers(); // fast forward 300ms
-    expect(mockOnLeaveFeedback).toHaveBeenCalled();
   });
 
   it("does not render content when visible is false", () => {

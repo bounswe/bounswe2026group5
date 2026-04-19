@@ -15,7 +15,6 @@ interface SessionDetailsModalProps {
   onClose: () => void;
   onReschedule?: () => void;
   onCancelSession?: () => void;
-  onLeaveFeedback?: () => void;
   isCancelling?: boolean;
   session: {
     id?: string;
@@ -34,7 +33,6 @@ export function SessionDetailsModal({
   onClose,
   onReschedule,
   onCancelSession,
-  onLeaveFeedback,
   isCancelling = false,
   session,
 }: Readonly<SessionDetailsModalProps>) {
@@ -48,24 +46,6 @@ export function SessionDetailsModal({
     statusTextClass = "text-green-600";
   } else if (session.status === "Pending") {
     statusTextClass = "text-amber-600";
-  }
-
-  // 1. Primary Action: completed sessions show feedback CTA.
-  let primaryAction: React.ReactNode = null;
-  if (session.status === "Completed") {
-    primaryAction = (
-      <TouchableOpacity
-        className="bg-indigo-600 py-4 rounded-xl items-center mb-3 shadow-sm"
-        onPress={() => {
-          onClose();
-          if (onLeaveFeedback) {
-            setTimeout(() => onLeaveFeedback(), 300);
-          }
-        }}
-      >
-        <Text className="text-white font-bold text-lg">Leave Feedback</Text>
-      </TouchableOpacity>
-    );
   }
 
   return (
@@ -118,13 +98,9 @@ export function SessionDetailsModal({
             </View>
           </View>
 
-          {/* Dynamic Primary Action Button */}
-          {primaryAction}
-
-          {/* 2. Secondary Actions: Hidden completely if session has started or is completed */}
+          {/* Secondary actions are hidden once a session starts or completes. */}
           {!session.isSessionStarted && session.status !== "Completed" && (
             <View className="flex-row justify-between gap-3 mb-2 mt-2">
-              
               {/* RESCHEDULE BUTTON: Only for Mentees */}
               {session.myRole === "Mentee" && (
                 <TouchableOpacity
