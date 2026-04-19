@@ -770,6 +770,24 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
         response = self.mentee_client.delete(self.feedback_url)
         self.assertEqual(response.status_code, 404)
 
+    def test_delete_mentor_feedback_does_not_change_review_count(self) -> None:
+        self.mentor_client.post(self.feedback_url, {"rating": 4, "text": "Mentor note"}, format="json")
+        self.mentor_profile.refresh_from_db()
+        self.assertEqual(self.mentor_profile.review_count, 0)
+
+        delete_response = self.mentor_client.delete(self.feedback_url)
+        self.assertEqual(delete_response.status_code, 204)
+        self.mentor_profile.refresh_from_db()
+        self.assertEqual(self.mentor_profile.review_count, 0)
+
+    def test_delete_feedback_twice_returns_404_second_time(self) -> None:
+        self.mentee_client.post(self.feedback_url, {"rating": 5, "text": "Delete twice"}, format="json")
+        first_delete = self.mentee_client.delete(self.feedback_url)
+        second_delete = self.mentee_client.delete(self.feedback_url)
+
+        self.assertEqual(first_delete.status_code, 204)
+        self.assertEqual(second_delete.status_code, 404)
+
     def test_rating_below_1_returns_400(self) -> None:
         response = self.mentee_client.post(self.feedback_url, {"rating": 0}, format="json")
         self.assertEqual(response.status_code, 400)

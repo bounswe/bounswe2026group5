@@ -1166,6 +1166,31 @@ class ProfilePublicReviewsAPITests(TestCase):
             text=text,
         )
 
+    def _create_mentee_client_and_feedback_url(self, idx: int) -> tuple[APIClient, str]:
+        mentee_user = User.objects.create_user(
+            email=f"mentee.reviews.api.{idx}@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        mentee_profile = Profile.objects.create(
+            user=mentee_user,
+            display_name=f"API Mentee {idx}",
+        )
+        mentorship_request = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        match = Match.objects.create(
+            mentor=self.mentor_profile,
+            mentee=mentee_profile,
+            request=mentorship_request,
+        )
+        api_client = APIClient()
+        token = str(RefreshToken.for_user(mentee_user).access_token)
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        return api_client, f"/api/mentorship/matches/{match.id}/feedback/"
+
     def test_returns_404_for_missing_profile(self) -> None:
         response = self.api_client.get("/api/profiles/missing-user/reviews/")
         self.assertEqual(response.status_code, 404)
@@ -1241,6 +1266,61 @@ class ProfilePublicReviewsAPITests(TestCase):
         page_1_texts = {item["text"] for item in payload_1["results"]}
         page_2_texts = {item["text"] for item in payload_2["results"]}
         self.assertTrue(page_1_texts.isdisjoint(page_2_texts))
+
+    def test_invalid_pagination_params_return_400(self) -> None:
+        response = self.api_client.get(self.url, {"page": "abc", "pageSize": "x"})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("must be integers", response.json()["detail"])
+
+    def test_visible_feedback_deletion_keeps_public_reviews_visible(self) -> None:
+        first_client, first_feedback_url = self._create_mentee_client_and_feedback_url(1)
+        second_client, second_feedback_url = self._create_mentee_client_and_feedback_url(2)
+
+        create_first = first_client.post(
+            first_feedback_url,
+            {"rating": 5, "text": "First visible"},
+            format="json",
+        )
+        create_second = second_client.post(
+            second_feedback_url,
+            {"rating": 4, "text": "Second visible"},
+            format="json",
+        )
+        self.assertEqual(create_first.status_code, 201)
+        self.assertEqual(create_second.status_code, 201)
+
+        before_delete = self.api_client.get(self.url)
+        self.assertEqual(before_delete.status_code, 200)
+        self.assertEqual(before_delete.json()["count"], 2)
+
+        delete_first = first_client.delete(first_feedback_url)
+        self.assertEqual(delete_first.status_code, 204)
+
+        after_delete = self.api_client.get(self.url)
+        self.assertEqual(after_delete.status_code, 200)
+        self.assertEqual(after_delete.json()["count"], 1)
+        self.assertEqual(after_delete.json()["results"][0]["text"], "Second visible")
+
+    def test_hidden_feedback_deletion_does_not_make_batch_visible(self) -> None:
+        first_client, first_feedback_url = self._create_mentee_client_and_feedback_url(3)
+        create_first = first_client.post(
+            first_feedback_url,
+            {"rating": 5, "text": "Hidden candidate"},
+            format="json",
+        )
+        self.assertEqual(create_first.status_code, 201)
+
+        before_delete = self.api_client.get(self.url)
+        self.assertEqual(before_delete.status_code, 200)
+        self.assertEqual(before_delete.json()["count"], 0)
+
+        delete_first = first_client.delete(first_feedback_url)
+        self.assertEqual(delete_first.status_code, 204)
+
+        after_delete = self.api_client.get(self.url)
+        self.assertEqual(after_delete.status_code, 200)
+        self.assertEqual(after_delete.json()["count"], 0)
+        self.assertEqual(after_delete.json()["results"], [])
 
 
 class RecentlyAddedMentorsAPITests(TestCase):
