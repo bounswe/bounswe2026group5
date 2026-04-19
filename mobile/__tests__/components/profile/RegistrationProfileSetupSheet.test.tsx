@@ -7,7 +7,7 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
 describe("RegistrationProfileSetupSheet", () => {
   it("shows username preview as read-only onboarding context", () => {
-    const { getByText } = render(
+    const { getByText, queryByLabelText } = render(
       <RegistrationProfileSetupSheet
         visible={true}
         role="mentor"
@@ -23,10 +23,7 @@ describe("RegistrationProfileSetupSheet", () => {
 
     expect(getByText("Username")).toBeTruthy();
     expect(getByText("@new_user")).toBeTruthy();
-    expect(
-      getByText(
-        "This is the username preview for your account. The backend still assigns the final username during registration, so it may change slightly if that handle is already taken, and it cannot be edited in the current flow.",
-      ),
-    ).toBeTruthy();
+    expect(getByText("Display Name")).toBeTruthy();
+    expect(queryByLabelText("Username")).toBeNull();
   });
 });
