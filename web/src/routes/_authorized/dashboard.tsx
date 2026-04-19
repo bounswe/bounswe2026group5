@@ -1,16 +1,14 @@
 // web/src/routes/_authorized/dashboard.tsx
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
+import { useMeetingSessions, useMyRequests, useRespondToRequest } from "#/lib/queries/MentorshipQueries.ts"
+import { getInitials } from "#/lib/utils.ts"
+import { Body, Heading, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
-import { Heading, Body, Muted } from '@/components/Typography'
-import {CalendarDays, Clock, CheckCircle2, XCircle, ArrowRight, Loader2} from 'lucide-react'
-import {meQueryOptions} from "#/lib/queries/AuthQueries.ts";
-import {useQuery, useQueryClient} from "@tanstack/react-query";
-import {useMyRequests, useRespondToRequest, useUpcomingSessions} from "#/lib/queries/MentorshipQueries.ts";
-import {useState} from "react";
-import { Check, X as XIcon } from 'lucide-react'
-import {getInitials} from "#/lib/utils.ts";
-import {useMentorUpcomingSessions} from "#/lib/queries/ProfileTimeSlotQueries.ts";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Loader2, XCircle, X as XIcon } from 'lucide-react'
+import { useState } from "react"
 
 
 export const Route = createFileRoute('/_authorized/dashboard')({
@@ -21,19 +19,22 @@ export const Route = createFileRoute('/_authorized/dashboard')({
 // UI HELPERS
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: Readonly<{ status: string }>) {
   let bg = 'bg-accent-muted text-ink border-line'
   let Icon = Clock
 
   if (status === 'PENDING') {
     bg = 'bg-yellow-50 text-yellow-700 border-yellow-200'
     Icon = Clock
-  } else if (status === 'ACCEPTED' || status === 'SCHEDULED') {
+  } else if (status === 'ACCEPTED' || status === 'SCHEDULED' || status === 'RESCHEDULED') {
     bg = 'bg-green-50 text-green-700 border-green-200'
     Icon = CheckCircle2
-  } else if (status === 'REJECTED' || status === 'CANCELLED') {
+  } else if (status === 'REJECTED' || status === 'CANCELLED' || status === 'CANCELED') {
     bg = 'bg-red-50 text-red-700 border-red-200'
     Icon = XCircle
+  } else if (status === 'COMPLETED') {
+    bg = 'bg-gray-100 text-gray-600 border-gray-200'
+    Icon = CheckCircle2
   }
 
   return (
@@ -44,7 +45,7 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function UserAvatar({ name }: { name: string }) {
+function UserAvatar({ name }: Readonly<{ name: string }>) {
   const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2)
   const colors = [
     'bg-blue-100 text-blue-700', 
@@ -97,7 +98,10 @@ export function DashboardHome() {
 
 function MenteeDashboardView() {
   const { data: me } = useQuery(meQueryOptions)
-  const { data: upcomingSessions = [], isLoading: sessionsLoading } = useUpcomingSessions()
+  const { data: upcomingSessions = [], isLoading: sessionsLoading } = useMeetingSessions({
+    role: 'mentee',
+    status: 'upcoming',
+  })
   const { data: allRequests = [], isLoading: requestsLoading } = useMyRequests()
 
   // Only show PENDING requests where I am the mentee
@@ -131,14 +135,14 @@ function MenteeDashboardView() {
                   </Card>
               )}
               {displaySessions.map(session => (
-                  <Card key={session.slot_id} className="island-shell border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
+                  <Card key={session.session_id} className="island-shell border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
                     <div className="bg-accent h-1.5 w-full" />
                     <CardHeader className="pb-3">
                       <div className="flex justify-between items-start gap-4">
                         <CardTitle className="text-lg leading-tight">
                           Session with {session.mentor.display_name}
                         </CardTitle>
-                        <StatusBadge status={session.status} />
+                        <StatusBadge status={session.display_status} />
                       </div>
                     </CardHeader>
                     <CardContent className="flex items-center justify-between gap-4">
@@ -161,11 +165,9 @@ function MenteeDashboardView() {
                           )}
                           <Muted className="text-sm flex items-center gap-1.5 mt-0.5">
                             <Clock className="w-3.5 h-3.5" />
-                            {new Date(`${session.slot_date}T00:00:00`).toLocaleDateString('en-GB', {
-                              weekday: 'short', day: 'numeric', month: 'short'
-                            })}
+                            {formatSessionDate(session.scheduled_start_at)}
                             {' · '}
-                            {session.slot_start_time.slice(0, 5)} – {session.slot_end_time.slice(0, 5)}
+                            {formatSessionTime(session.scheduled_start_at)} – {formatSessionTime(session.scheduled_end_at)}
                           </Muted>
                         </div>
                       </div>
@@ -257,7 +259,7 @@ function MenteeDashboardView() {
                                         </span>
                       </div>
                       {req.cover_letter && (
-                          <div className="bg-black/[0.03] rounded-lg p-4 border border-line/50">
+                          <div className="bg-black/3 rounded-lg p-4 border border-line/50">
                             <Muted className="line-clamp-3 italic text-sm text-ink-soft leading-relaxed">
                               "{req.cover_letter}"
                             </Muted>
@@ -284,12 +286,10 @@ function MentorDashboardView() {
   const { data: me } = useQuery(meQueryOptions)
   const { data: allRequests = [], isLoading: requestsLoading } = useMyRequests()
   const respondToRequest = useRespondToRequest()
-
-  const {
-    sessions: upcomingSessions,
-    profilesByUsername,
-    isLoading: sessionsLoading,
-  } = useMentorUpcomingSessions(me?.username ?? '')
+  const { data: upcomingSessions = [], isLoading: sessionsLoading } = useMeetingSessions({
+    role: 'mentor',
+    status: 'upcoming',
+  })
 
   const pendingRequests = allRequests.filter(
       req => req.status === 'PENDING' && req.mentor.username === me?.username
@@ -308,10 +308,7 @@ function MentorDashboardView() {
             }))
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'requests'] })
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'matches'] })
-            if (me?.username) {
-              queryClient.invalidateQueries({ queryKey: ['profiles', me.username] })
-              queryClient.invalidateQueries({ queryKey: ['availability-slots', me.username] })
-            }
+            queryClient.invalidateQueries({ queryKey: ['mentorship', 'meeting-sessions', 'me'] })
           },
         }
     )
@@ -342,14 +339,11 @@ function MentorDashboardView() {
                   </Card>
               )}
 
-              {upcomingSessions.slice(0, 3).map(slot => {
-                const menteeProfile = slot.bookedBy
-                    ? profilesByUsername[slot.bookedBy]
-                    : null
-                const displayName = menteeProfile?.full_name ?? slot.bookedBy ?? 'Unknown'
+              {upcomingSessions.slice(0, 3).map(session => {
+                const displayName = session.mentee.display_name
 
                 return (
-                    <Card key={slot.id} className="island-shell border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
+                    <Card key={session.session_id} className="island-shell border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
                       <div className="bg-accent h-1.5 w-full" />
                       <CardHeader className="pb-3">
                         <CardTitle className="text-lg leading-tight">
@@ -358,9 +352,9 @@ function MentorDashboardView() {
                       </CardHeader>
                       <CardContent className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
-                          {menteeProfile?.picture_url ? (
+                          {session.mentee.picture_url ? (
                               <img
-                                  src={menteeProfile.picture_url}
+                                  src={session.mentee.picture_url}
                                   alt={displayName}
                                   className="h-11 w-11 rounded-full object-cover border border-white/50 shadow-sm"
                               />
@@ -373,18 +367,16 @@ function MentorDashboardView() {
                             <Body className="font-medium">{displayName}</Body>
                             <Muted className="text-sm flex items-center gap-1.5 mt-0.5">
                               <Clock className="w-3.5 h-3.5" />
-                              {new Date(`${slot.date}T00:00:00`).toLocaleDateString('en-GB', {
-                                weekday: 'short', day: 'numeric', month: 'short'
-                              })}
+                              {formatSessionDate(session.scheduled_start_at)}
                               {' · '}
-                              {slot.startTime.slice(0, 5)} – {slot.endTime.slice(0, 5)}
+                              {formatSessionTime(session.scheduled_start_at)} – {formatSessionTime(session.scheduled_end_at)}
                             </Muted>
                           </div>
                         </div>
-                        {slot.bookedBy && (
+                        {session.mentee.username && (
                             <Link
                                 to="/profiles/$username"
-                                params={{ username: slot.bookedBy }}
+                                params={{ username: session.mentee.username }}
                                 className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
                             >
                               View profile
@@ -464,7 +456,7 @@ function MentorDashboardView() {
                                             </span>
                         </div>
                         {req.cover_letter && (
-                            <div className="bg-black/[0.03] p-4 rounded-lg border border-line/50">
+                            <div className="bg-black/3 p-4 rounded-lg border border-line/50">
                               <Body className="text-ink-soft text-sm leading-relaxed italic">
                                 "{req.cover_letter}"
                               </Body>
@@ -513,4 +505,20 @@ function MentorDashboardView() {
         </div>
       </div>
   )
+}
+
+function formatSessionDate(value: string): string {
+  return new Date(value).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
+function formatSessionTime(value: string): string {
+  return new Date(value).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }

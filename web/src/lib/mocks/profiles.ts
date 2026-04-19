@@ -2,7 +2,7 @@
  * Mock profile domain data used by profile routes until backend endpoints are available.
  */
 
-export type MentorshipMode = 'MENTOR' | 'MENTEE' | 'BOTH'
+export type MentorshipMode = 'MENTOR' | 'MENTEE'
 
 export interface MockProfileExpertise {
   id: string
@@ -46,7 +46,7 @@ const MOCK_PROFILES: MockProfileDetails[] = [
     locationText: 'Bogazici University, North Campus',
     isVisible: true,
     showInitialsOnly: false,
-    mentorshipMode: 'BOTH',
+    mentorshipMode: 'MENTOR',
     expertise: [
       {
         id: 'exp-react',

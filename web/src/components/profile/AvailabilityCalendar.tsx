@@ -1,22 +1,25 @@
-import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Muted } from '@/components/Typography'
-import { ChevronLeft, ChevronRight, CalendarDays, Loader2, X } from 'lucide-react'
-import { createPortal } from 'react-dom'
+import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import {
+    useMyMatches,
+    useSendMentorshipRequest,
+    useCancelSession
+} from '#/lib/queries/MentorshipQueries.ts'
+import {
+    useAvailabilitySlots,
+    useBookSlot,
     useCreateSlot,
     useDeleteSlot,
-    useCancelBooking,
-    useAvailabilitySlots
+    type AvailabilitySlot,
 } from '#/lib/queries/ProfileTimeSlotQueries.ts'
-import type { AvailabilitySlot } from '#/lib/queries/ProfileTimeSlotQueries.ts'
-import {useQuery, useQueryClient} from '@tanstack/react-query'
-import { useMyMatches, useSendMentorshipRequest } from '#/lib/queries/MentorshipQueries.ts'
-import { useBookSlot } from '#/lib/queries/ProfileTimeSlotQueries.ts'
-import { Textarea } from '@/components/ui/textarea'
+import { Muted } from '@/components/Typography'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import {meQueryOptions} from "#/lib/queries/AuthQueries.ts";
+import { Textarea } from '@/components/ui/textarea'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { CalendarDays, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react'
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -79,7 +82,12 @@ interface CancelModalProps {
 }
 
 function CancelModal({ slot, username, onClose, onSuccess }: CancelModalProps) {
-    const cancelBooking = useCancelBooking(username)
+    const cancelSession = useCancelSession()
+
+    const handleCancel = () => {
+        if (!slot.sessionId) return
+        cancelSession.mutate(slot.sessionId, { onSuccess })
+    }
 
     return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
@@ -93,22 +101,22 @@ function CancelModal({ slot, username, onClose, onSuccess }: CancelModalProps) {
                 </div>
                 <div className="px-6 py-5">
                     <Muted className="text-sm">
-                        This slot is already booked. Cancelling will remove the booking and make the slot available again.
+                        This slot is already booked. Cancelling will remove the mentorship session and make the slot available again.
                     </Muted>
-                    {cancelBooking.isError && (
-                        <p className="text-xs text-destructive mt-3">{cancelBooking.error.message}</p>
+                    {cancelSession.isError && (
+                        <p className="text-xs text-destructive mt-3">{cancelSession.error.message}</p>
                     )}
                 </div>
                 <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line">
-                    <Button variant="outline" onClick={onClose} disabled={cancelBooking.isPending}>
+                     <Button variant="outline" onClick={onClose} disabled={cancelSession.isPending}>
                         Keep booking
                     </Button>
                     <Button
                         className="bg-red-500 hover:bg-red-600 text-white min-w-[90px]"
-                        onClick={() => cancelBooking.mutate(slot.id, { onSuccess })}
-                        disabled={cancelBooking.isPending}
+                        onClick={handleCancel}
+                        disabled={cancelSession.isPending || !slot.sessionId}
                     >
-                        {cancelBooking.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Cancel booking'}
+                        {cancelSession.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Cancel booking'}
                     </Button>
                 </div>
             </div>
@@ -223,7 +231,7 @@ function BookingModal({ slot, mentorUsername, isFirstTime, onClose, onSuccess }:
 
 export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: AvailabilityCalendarProps) {
     const { data: slots = [] } = useAvailabilitySlots(username)
-    const { data: myData, isSuccess } = useQuery(meQueryOptions)
+    const { data: myData } = useQuery(meQueryOptions)
     const queryClient = useQueryClient()
     const NOW_HOUR = new Date().getHours()
     const [weekOffset, setWeekOffset] = useState(0)
@@ -253,7 +261,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
     const invalidate = () => {
         queryClient.refetchQueries({ queryKey: ['availability-slots', username] })
         queryClient.invalidateQueries({ queryKey: ['profiles', username] })
-        queryClient.invalidateQueries({ queryKey: ['mentorship', 'sessions', 'upcoming'] })
+        queryClient.invalidateQueries({ queryKey: ['mentorship', 'meeting-sessions', 'me'] })
     }
 
     const handleCellClick = (dateStr: string, hour: number, existing: AvailabilitySlot | undefined) => {

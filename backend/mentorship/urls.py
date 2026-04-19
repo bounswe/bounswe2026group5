@@ -7,12 +7,9 @@ from .views import (
     CreateRequestAPIView,
     DeactivateMatchAPIView,
     MatchFeedbackListCreateAPIView,
-    MentorPastSessionsListAPIView,
-    MentorUpcomingSessionsListAPIView,
     MyMatchesListAPIView,
-    MyPastSessionsListAPIView,
+    MyMeetingSessionsListAPIView,
     MyRequestsListAPIView,
-    MyUpcomingSessionsListAPIView,
     RescheduleSessionAPIView,
     RespondToRequestAPIView,
 )
@@ -27,6 +24,11 @@ urlpatterns = [
     ),
     path("matches/me/", MyMatchesListAPIView.as_view(), name="mentorship-match-list"),
     path(
+        "meeting-sessions/me/",
+        MyMeetingSessionsListAPIView.as_view(),
+        name="mentorship-meeting-session-list",
+    ),
+    path(
         "matches/<uuid:match_id>/deactivate/",
         DeactivateMatchAPIView.as_view(),
         name="mentorship-match-deactivate",
@@ -36,33 +38,14 @@ urlpatterns = [
         MatchFeedbackListCreateAPIView.as_view(),
         name="mentorship-match-feedback",
     ),
+
     path(
-        "sessions/me/upcoming/",
-        MyUpcomingSessionsListAPIView.as_view(),
-        name="mentorship-upcoming-session-list",
-    ),
-    path(
-        "sessions/me/past/",
-        MyPastSessionsListAPIView.as_view(),
-        name="mentorship-past-session-list",
-    ),
-    path(
-        "sessions/mentor/upcoming/",
-        MentorUpcomingSessionsListAPIView.as_view(),
-        name="mentorship-mentor-upcoming-session-list",
-    ),
-    path(
-        "sessions/mentor/past/",
-        MentorPastSessionsListAPIView.as_view(),
-        name="mentorship-mentor-past-session-list",
-    ),
-    path(
-        "sessions/<uuid:match_id>/cancel/",
+        "sessions/<uuid:session_id>/cancel/",
         CancelSessionAPIView.as_view(),
         name="mentorship-session-cancel",
     ),
     path(
-        "sessions/<uuid:match_id>/reschedule/",
+        "sessions/<uuid:session_id>/reschedule/",
         RescheduleSessionAPIView.as_view(),
         name="mentorship-session-reschedule",
     ),

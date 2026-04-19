@@ -1,5 +1,12 @@
-import React from 'react';
-import { View, Text, Modal, TouchableOpacity, Pressable, ScrollView } from 'react-native';
+import React from "react";
+import {
+  View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  Pressable,
+  ScrollView,
+} from "react-native";
 
 interface RequestDetailsModalProps {
   visible: boolean;
@@ -12,7 +19,7 @@ interface RequestDetailsModalProps {
     id?: string;
     user: string;
     topic: string;
-    type: 'incoming' | 'outgoing';
+    type: "incoming" | "outgoing";
     message?: string; // The cover letter
     proposedDate?: string;
   } | null;
@@ -29,84 +36,92 @@ export function RequestDetailsModal({
 }: Readonly<RequestDetailsModalProps>) {
   if (!request) return null;
 
-  const isIncoming = request.type === 'incoming';
+  const isIncoming = request.type === "incoming";
 
   return (
-    <Modal animationType="fade" transparent={true} visible={visible} onRequestClose={onClose}>
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={visible}
+      onRequestClose={onClose}
+    >
       <Pressable className="flex-1 bg-black/40 justify-end" onPress={onClose}>
-        <Pressable 
-          onPress={(e) => e.stopPropagation()} 
-          className="bg-white w-full rounded-t-3xl p-6 pb-12 shadow-2xl max-h-[80%]"
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          className="bg-surface-card dark:bg-surface-card-dark w-full rounded-t-3xl p-6 pb-12 shadow-2xl max-h-[80%]"
         >
-          
           <View className="items-center mb-6">
             <View className="w-12 h-1.5 bg-gray-300 rounded-full" />
           </View>
 
           {/* Header */}
           <View className="mb-6">
-            <Text className="text-2xl font-extrabold text-gray-900 mb-1">Mentorship Request</Text>
-            <Text className="text-base text-gray-500 font-medium">
+            <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark mb-1">
+              Mentorship Request
+            </Text>
+            <Text className="text-base text-on-surface-soft dark:text-on-surface-soft-dark font-medium">
               {isIncoming ? `From ${request.user}` : `Sent to ${request.user}`}
             </Text>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} className="mb-6">
-            {/* Topic & Date */}
-            <View className="bg-gray-50 rounded-xl p-4 border border-gray-100 mb-4">
-              <View className="flex-row justify-between mb-3">
-                <Text className="text-gray-500 font-medium">Topic</Text>
-                <Text className="text-gray-900 font-semibold">{request.topic}</Text>
-              </View>
+            {/* Request Timing */}
+            <View className="bg-surface-active dark:bg-surface-active-dark rounded-xl p-4 border border-divider dark:border-divider-dark mb-4">
               <View className="flex-row justify-between">
-                <Text className="text-gray-500 font-medium">Proposed Time</Text>
-                <Text className="text-gray-900 font-semibold">{request.proposedDate || 'TBD'}</Text>
+                <Text className="text-on-surface-soft dark:text-on-surface-soft-dark font-medium">
+                  Proposed Time
+                </Text>
+                <Text className="text-on-surface dark:text-on-surface-dark font-semibold">
+                  {request.proposedDate || "TBD"}
+                </Text>
               </View>
             </View>
 
             {/* The Cover Letter Message */}
-            <Text className="text-sm font-bold text-gray-900 mb-2">Message</Text>
-            <View className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-              <Text className="text-gray-700 leading-6">
-                {request.message || "I would love to book a session with you to discuss this topic!"}
+            <Text className="text-sm font-bold text-on-surface dark:text-on-surface-dark mb-2">
+              Message
+            </Text>
+            <View className="bg-primary/10 p-4 rounded-xl border border-primary/20">
+              <Text className="text-on-surface-soft dark:text-on-surface-soft-dark leading-6">
+                {request.message ||
+                  "I would love to book a session with you to discuss this topic!"}
               </Text>
             </View>
           </ScrollView>
 
           {/* Actions */}
           {isIncoming ? (
-            <View className="flex-row justify-between gap-3 pt-2 border-t border-gray-100">
-              <TouchableOpacity 
-                className="flex-1 bg-white py-4 rounded-xl items-center border border-gray-300"
+            <View className="flex-row justify-between gap-3 pt-2 border-t border-divider dark:border-divider-dark">
+              <TouchableOpacity
+                className="flex-1 bg-surface-card dark:bg-surface-card-dark py-4 rounded-xl items-center border border-divider dark:border-divider-dark"
                 onPress={onReject}
                 disabled={isSubmitting}
               >
-                <Text className="text-gray-700 font-bold text-base">
-                  {isSubmitting ? 'Submitting...' : 'Decline'}
+                <Text className="text-on-surface font-bold text-base">
+                  {isSubmitting ? "Submitting..." : "Decline"}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                className="flex-1 bg-blue-600 py-4 rounded-xl items-center"
+              <TouchableOpacity
+                className="flex-1 bg-primary py-4 rounded-xl items-center"
                 onPress={onAccept}
                 disabled={isSubmitting}
               >
                 <Text className="text-white font-bold text-base">
-                  {isSubmitting ? 'Submitting...' : 'Accept Request'}
+                  {isSubmitting ? "Submitting..." : "Accept Request"}
                 </Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity 
+            <TouchableOpacity
               className="bg-red-50 py-4 rounded-xl items-center mt-2 border border-red-100"
               onPress={onCancelOutgoing}
               disabled={isSubmitting}
             >
               <Text className="text-red-600 font-bold text-base">
-                {isSubmitting ? 'Submitting...' : 'Cancel Request'}
+                {isSubmitting ? "Submitting..." : "Cancel Request"}
               </Text>
             </TouchableOpacity>
           )}
-
         </Pressable>
       </Pressable>
     </Modal>

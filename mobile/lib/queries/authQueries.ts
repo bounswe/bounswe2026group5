@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../api/config';
+import { API_BASE_URL } from "../api/config";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -8,7 +8,7 @@ export interface User {
   username: string;
   role: string;
   auth_provider: string;
-  app_usage_mode: 'MENTOR' | 'MENTEE' | null;
+  app_usage_mode: "MENTOR" | "MENTEE" | null;
   is_active: boolean;
   created_at: string;
 }
@@ -26,7 +26,10 @@ export interface Skill {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function extractErrorMessage(res: Response, fallback: string): Promise<string> {
+async function extractErrorMessage(
+  res: Response,
+  fallback: string,
+): Promise<string> {
   try {
     const body = await res.json();
     return (
@@ -52,13 +55,13 @@ export async function registerFn(credentials: {
   confirm_password: string;
 }): Promise<AuthResponse> {
   const res = await fetch(`${API_BASE_URL}/api/auth/register/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(credentials),
   });
 
   if (!res.ok) {
-    const message = await extractErrorMessage(res, 'Registration failed.');
+    const message = await extractErrorMessage(res, "Registration failed.");
     throw new Error(message);
   }
 
@@ -67,28 +70,25 @@ export async function registerFn(credentials: {
 
 export async function fetchSkillsFn(): Promise<Skill[]> {
   const res = await fetch(`${API_BASE_URL}/api/profiles/skills/`);
-  if (!res.ok) throw new Error('Failed to fetch skills.');
+  if (!res.ok) throw new Error("Failed to fetch skills.");
   return res.json() as Promise<Skill[]>;
 }
 
 export async function updateUsageModeFn(params: {
-  userId: string;
-  app_usage_mode: 'MENTOR' | 'MENTEE';
+  app_usage_mode: "MENTOR" | "MENTEE";
   accessToken: string;
-  /** Pass-through field: username for the subsequent profile PATCH in onSuccess. */
-  _username: string;
 }): Promise<User> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/${params.userId}/app-usage-mode/`, {
-    method: 'PATCH',
+  const res = await fetch(`${API_BASE_URL}/api/auth/me/role/`, {
+    method: "PATCH",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${params.accessToken}`,
     },
     body: JSON.stringify({ app_usage_mode: params.app_usage_mode }),
   });
 
   if (!res.ok) {
-    const message = await extractErrorMessage(res, 'Failed to set usage mode.');
+    const message = await extractErrorMessage(res, "Failed to set usage mode.");
     throw new Error(message);
   }
 
@@ -96,26 +96,24 @@ export async function updateUsageModeFn(params: {
 }
 
 export async function updateProfileFn(params: {
-  username: string;
   accessToken: string;
   display_name: string;
   bio?: string;
-  expertises?: string[];
-  eager_to_learn?: string[];
+  skills?: string[];
 }): Promise<unknown> {
-  const { username, accessToken, ...payload } = params;
+  const { accessToken, ...payload } = params;
 
-  const res = await fetch(`${API_BASE_URL}/api/profiles/${username}/`, {
-    method: 'PATCH',
+  const res = await fetch(`${API_BASE_URL}/api/profiles/me/`, {
+    method: "PATCH",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
-    const message = await extractErrorMessage(res, 'Failed to update profile.');
+    const message = await extractErrorMessage(res, "Failed to update profile.");
     throw new Error(message);
   }
 

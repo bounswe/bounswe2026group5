@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import Profile
 
-from .models import AuthProvider, User, UserRole
+from .models import AppUsageMode, AuthProvider, User, UserRole
 
 
 class UserModelTests(TestCase):
@@ -451,8 +451,8 @@ class LogoutAPIViewTests(TestCase):
         self.assertTrue(BlacklistedToken.objects.filter(token__token=self.refresh_token).exists())
 
 
-class TokenRefreshAndAuthUserByIdAPIViewTests(TestCase):
-    """Tests for token refresh and authenticated user id auth endpoint."""
+class TokenRefreshAPIViewTests(TestCase):
+    """Tests for token refresh endpoint."""
 
     def setUp(self) -> None:
         self.api_client: Any = APIClient()
@@ -482,34 +482,83 @@ class TokenRefreshAndAuthUserByIdAPIViewTests(TestCase):
         self.assertIn(settings.AUTH_ACCESS_COOKIE_NAME, response.cookies)
         self.assertIn(settings.AUTH_REFRESH_COOKIE_NAME, response.cookies)
 
-    def test_auth_user_endpoint_with_bearer_token(self) -> None:
-        """Test authenticated user details endpoint with bearer authentication."""
+    def test_auth_me_endpoint_with_bearer_token(self) -> None:
+        """Canonical self endpoint returns authenticated user metadata."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
 
-        response = self.api_client.get(f"/api/auth/{self.user.id}/")
-
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data["email"], self.user.email)
-        self.assertEqual(data["role"], self.user.role)
-        self.assertEqual(data["username"], self.profile.username)
-
-    def test_auth_user_endpoint_with_cookie_token(self) -> None:
-        """Test authenticated user details endpoint with cookie authentication."""
-        self.api_client.cookies[settings.AUTH_ACCESS_COOKIE_NAME] = self.access_token
-
-        response = self.api_client.get(f"/api/auth/{self.user.id}/")
+        response = self.api_client.get("/api/auth/me/")
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["email"], self.user.email)
         self.assertEqual(data["username"], self.profile.username)
 
-    def test_auth_user_endpoint_with_other_id_returns_not_found(self) -> None:
-        """Test that authenticated users cannot access another user id route."""
+
+class UserAppUsageModeMeAPIViewTests(TestCase):
+    """Tests for PATCH /api/auth/me/role/."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+        self.user = User.objects.create_user(
+            email="modeuser@example.com",
+            password="SecurePass123",
+            is_active=True,
+        )
+        refresh = RefreshToken.for_user(self.user)
+        self.access_token = str(refresh.access_token)
+        self.url = "/api/auth/me/role/"
+
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
 
-        response = self.api_client.get(f"/api/auth/{uuid.uuid4()}/")
+    def test_can_set_mode_when_unset(self) -> None:
+        """Users can assign their mode when it is not set yet."""
+        response = self.api_client.patch(
+            self.url,
+            {"app_usage_mode": AppUsageMode.MENTEE},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db(from_queryset=None)
+        self.assertEqual(self.user.app_usage_mode, AppUsageMode.MENTEE)
+
+    def test_cannot_switch_mode_after_assignment(self) -> None:
+        """Users cannot change role once a mode is already assigned."""
+        self.user.app_usage_mode = AppUsageMode.MENTEE
+        self.user.save(update_fields=["app_usage_mode"])
+
+        response = self.api_client.patch(
+            self.url,
+            {"app_usage_mode": AppUsageMode.MENTOR},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("immutable", str(response.json()).lower())
+
+        self.user.refresh_from_db(from_queryset=None)
+        self.assertEqual(self.user.app_usage_mode, AppUsageMode.MENTEE)
+
+    def test_same_mode_update_is_allowed(self) -> None:
+        """Re-submitting the same assigned mode remains a no-op success."""
+        self.user.app_usage_mode = AppUsageMode.MENTOR
+        self.user.save(update_fields=["app_usage_mode"])
+
+        response = self.api_client.patch(
+            self.url,
+            {"app_usage_mode": AppUsageMode.MENTOR},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_other_user_id_returns_not_found(self) -> None:
+        """Caller cannot set another user's mode via a different route id."""
+        response = self.api_client.patch(
+            f"/api/auth/{uuid.uuid4()}/app-usage-mode/",
+            {"app_usage_mode": AppUsageMode.MENTEE},
+            format="json",
+        )
 
         self.assertEqual(response.status_code, 404)
 
@@ -597,13 +646,18 @@ class RBACPermissionTests(TestCase):
 
     def test_profile_edit_requires_user_and_not_banned(self) -> None:
         # create profile for user
-        profile = Profile.objects.create(
+        Profile.objects.create(
             user=self.user,
             username="rbac_user",
             display_name="RBAC User",
         )
+        Profile.objects.create(
+            user=self.banned,
+            username="rbac_banned",
+            display_name="RBAC Banned",
+        )
 
-        url = f"/api/profiles/{profile.username}/"
+        url = "/api/profiles/me/"
         payload = {"title": "Updated Title"}
 
         # guest should be 401

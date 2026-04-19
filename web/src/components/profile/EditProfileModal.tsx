@@ -1,16 +1,16 @@
-import { useState } from 'react'
-import { createPortal } from 'react-dom'
-import { X, Loader2 } from 'lucide-react'
+import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
+import { useOwnProfile, useUpdateProfile } from '#/lib/queries/ProfileQueries.ts'
+import { SkillPicker } from '@/components/SkillPicker'
+import { Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Muted } from '@/components/Typography'
-import { SkillPicker } from '@/components/SkillPicker'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
-import { useUpdateProfile, useProfile } from '#/lib/queries/ProfileQueries.ts'
+import { Loader2, X } from 'lucide-react'
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -33,8 +33,8 @@ interface EditProfileModalProps {
 
 export function EditProfileModal({ mode, initialValues, onClose }: EditProfileModalProps) {
     const { data: me } = useQuery(meQueryOptions)
-    const { data: profileData } = useProfile(me?.username ?? '')
-    const updateProfile = useUpdateProfile(me?.username ?? '')
+    const { data: profileData } = useOwnProfile()
+    const updateProfile = useUpdateProfile()
     const queryClient = useQueryClient()
 
     const [bio, setBio] = useState(initialValues.bio)
@@ -63,8 +63,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                 bio,
                 title: isMentor ? title : undefined,
                 is_visible: !hidden,
-                expertises: isMentor ? skills : undefined,
-                eager_to_learn: !isMentor ? skills : undefined,
+                skills: skills,
             },
             {
                 onSuccess: () => {
@@ -146,6 +145,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                         <Muted className="text-xs block">{skillsHint}</Muted>
                         <SkillPicker
                             selected={skills}
+                            available={profileData?.available_catalog_skills ?? []}
                             onChange={setSkills}
                             mode={isMentor ? 'mentor' : 'mentee'}
                         />
