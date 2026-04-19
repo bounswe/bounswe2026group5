@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 
 interface SessionDetailsModalProps {
   visible: boolean;
@@ -25,8 +24,6 @@ interface SessionDetailsModalProps {
     status: string;
     topic?: string;
     myRole?: string;
-    location?: string;
-    meetingUrl?: string;
     isSessionStarted?: boolean;
   } | null;
 }
@@ -63,26 +60,6 @@ export function SessionDetailsModal({
         }}
       >
         <Text className="text-white font-bold text-lg">Leave Feedback</Text>
-      </TouchableOpacity>
-    );
-  } else if (session.location) {
-    primaryAction = (
-      <TouchableOpacity
-        className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm flex-row justify-center gap-2"
-        onPress={() => console.log(`TODO: Open Maps for ${session.location}`)}
-      >
-        <Ionicons name="location" size={20} color="white" />
-        <Text className="text-white font-bold text-lg">Get Directions</Text>
-      </TouchableOpacity>
-    );
-  } else if (session.meetingUrl) {
-    primaryAction = (
-      <TouchableOpacity
-        className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm flex-row justify-center gap-2"
-        onPress={() => console.log(`TODO: Open Link ${session.meetingUrl}`)}
-      >
-        <Ionicons name="videocam" size={20} color="white" />
-        <Text className="text-white font-bold text-lg">Join Video Call</Text>
       </TouchableOpacity>
     );
   }
@@ -126,18 +103,6 @@ export function SessionDetailsModal({
               <Text className="text-gray-500 font-medium">Start Time</Text>
               <Text className="text-gray-900 font-semibold">
                 {session.time}
-              </Text>
-            </View>
-
-            <View className="flex-row justify-between mb-3">
-              <Text className="text-gray-500 font-medium">
-                {session.location ? "Location" : "Platform"}
-              </Text>
-              <Text
-                className="text-gray-900 font-semibold text-right flex-1 ml-4"
-                numberOfLines={1}
-              >
-                {session.location || "Video Call"}
               </Text>
             </View>
 

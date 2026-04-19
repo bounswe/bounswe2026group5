@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { RegistrationProfileSetupSheet } from "@/components/profile/RegistrationProfileSetupSheet";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
@@ -505,11 +506,7 @@ export default function RegisterScreen() {
 
             {/* CTA + Log In link */}
             <View className="gap-5 pt-4">
-              {submitError ? (
-                <Text className="text-xs text-red-500 text-center">
-                  {submitError}
-                </Text>
-              ) : null}
+              {submitError ? <ErrorBanner message={submitError} /> : null}
               <TouchableOpacity
                 className="w-full h-16 rounded-xl items-center justify-center flex-row gap-3 bg-primary dark:bg-primary-dim"
                 activeOpacity={0.88}

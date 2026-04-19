@@ -42,8 +42,6 @@ type ScheduleSession = {
   status: "Pending" | "Upcoming" | "Completed";
   topic: string;
   myRole: string;
-  location?: string;
-  meetingUrl?: string;
 };
 
 const formatFriendlyDate = (dateString: string) => {

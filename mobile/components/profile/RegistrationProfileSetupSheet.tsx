@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Colors } from "@/constants/theme";
 
 type Role = "mentor" | "mentee";
@@ -45,6 +46,14 @@ function buildDisplayNameSuggestion(username: string): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function formatUsername(username: string): string {
+  if (!username) {
+    return "Assigned during registration";
+  }
+
+  return username.startsWith("@") ? username : `@${username}`;
 }
 
 export function RegistrationProfileSetupSheet({
@@ -214,14 +223,25 @@ export function RegistrationProfileSetupSheet({
           keyboardShouldPersistTaps="handled"
         >
           {submitError ? (
-            <View className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
-              <Text className="text-sm font-medium text-red-600 dark:text-red-300">
-                {submitError}
-              </Text>
+            <View className="mb-4">
+              <ErrorBanner message={submitError} />
             </View>
           ) : null}
 
           <View className="gap-5">
+            <View className="rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 py-4">
+              <Text className="text-xs font-bold tracking-widest uppercase text-on-surface-soft dark:text-on-surface-soft-dark">
+                Username
+              </Text>
+              <Text className="mt-2 text-lg font-semibold text-on-surface dark:text-on-surface-dark">
+                {formatUsername(username)}
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
+                Your username is generated during registration. It is shown here
+                for reference and cannot be edited in the current backend flow.
+              </Text>
+            </View>
+
             <View className="gap-1.5">
               <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
                 Display Name

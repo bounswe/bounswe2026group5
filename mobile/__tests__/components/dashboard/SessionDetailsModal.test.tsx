@@ -15,8 +15,7 @@ describe("SessionDetailsModal Component", () => {
     status: "Upcoming",
     topic: "System Design Interview Prep",
     myRole: "Mentee",
-    location: "Campus Library, Room 4B",
-    isSessionStarted: false, 
+    isSessionStarted: false,
   };
 
   const completedSession = {
@@ -36,7 +35,7 @@ describe("SessionDetailsModal Component", () => {
   });
 
   it("renders the session details correctly when visible", () => {
-    const { getByText } = render(
+    const { getByText, queryByText } = render(
       <SessionDetailsModal
         visible={true}
         session={mockSession as any}
@@ -49,11 +48,13 @@ describe("SessionDetailsModal Component", () => {
     expect(getByText("System Design Interview Prep")).toBeTruthy();
     expect(getByText("with Ahmet Yılmaz")).toBeTruthy();
     expect(getByText("14:00 - 15:00")).toBeTruthy();
-    expect(getByText("Campus Library, Room 4B")).toBeTruthy();
-
     // Verify our action buttons are present for Upcoming sessions
     expect(getByText("Reschedule")).toBeTruthy();
     expect(getByText("Cancel")).toBeTruthy();
+    expect(queryByText("Platform")).toBeNull();
+    expect(queryByText("Location")).toBeNull();
+    expect(queryByText("Join Video Call")).toBeNull();
+    expect(queryByText("Get Directions")).toBeNull();
   });
 
   it("triggers onClose and onReschedule when the Reschedule button is pressed", () => {
