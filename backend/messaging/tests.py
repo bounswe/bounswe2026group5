@@ -85,8 +85,10 @@ class MessagingAPIBaseTestCase(TestCase):
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
             slot=slot,
-            status=MentorshipRequest.Status.ACCEPTED,
+            status=MentorshipRequest.Status.PENDING,
         )
+        request_obj.status = MentorshipRequest.Status.ACCEPTED
+        request_obj.save()
         self.match = Match.objects.get(request=request_obj)
         self.conversation = Conversation.objects.get(match=self.match)
 
@@ -100,8 +102,10 @@ class MessagingAPIBaseTestCase(TestCase):
             mentor=self.mentor_profile,
             mentee=self.other_profile,
             slot=other_slot,
-            status=MentorshipRequest.Status.ACCEPTED,
+            status=MentorshipRequest.Status.PENDING,
         )
+        other_request.status = MentorshipRequest.Status.ACCEPTED
+        other_request.save()
         self.other_match = Match.objects.get(request=other_request)
         self.other_conversation = Conversation.objects.get(match=self.other_match)
 
@@ -382,8 +386,10 @@ class MessagingModelTests(TestCase):
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
             slot=slot,
-            status=MentorshipRequest.Status.ACCEPTED,
+            status=MentorshipRequest.Status.PENDING,
         )
+        request_obj.status = MentorshipRequest.Status.ACCEPTED
+        request_obj.save()
         self.match = Match.objects.get(request=request_obj)
 
     def test_conversation_created_from_match(self) -> None:
