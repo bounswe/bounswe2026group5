@@ -11,6 +11,8 @@ import {
   View,
 } from "react-native";
 
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+
 interface FeedbackBottomSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -179,10 +181,8 @@ export function FeedbackBottomSheet({
 
             {/* Error Message */}
             {error ? (
-              <View className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-xl p-3 mb-6">
-                <Text className="text-red-600 dark:text-red-200 text-sm font-medium">
-                  {error}
-                </Text>
+              <View className="mb-6">
+                <ErrorBanner message={error} />
               </View>
             ) : null}
           </ScrollView>

@@ -7,6 +7,7 @@
 import { RescheduleBottomSheet } from "@/components/dashboard/RescheduleBottomSheet";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -59,6 +60,7 @@ export default function ScheduleScreen() {
   const [selectedSession, setSelectedSession] =
     useState<ScheduleSession | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
@@ -87,6 +89,9 @@ export default function ScheduleScreen() {
       ),
     [meetingSessionsQuery.data],
   );
+  const queryError = meetingSessionsQuery.isError
+    ? "Failed to load upcoming sessions."
+    : null;
 
   const mentorAvailabilityForReschedule = useAvailabilitySlotsQuery(
     rescheduleMentorUsername,
@@ -99,6 +104,7 @@ export default function ScheduleScreen() {
         newSlotId,
       })
       .then(() => {
+        setActionError(null);
         setSelectedSession(null);
         setShowRescheduleSheet(false);
         setRescheduleSessionId(null);
@@ -107,8 +113,7 @@ export default function ScheduleScreen() {
         Alert.alert("Session Rescheduled", "Your session was updated.");
       })
       .catch((error) => {
-        Alert.alert(
-          "Reschedule Failed",
+        setActionError(
           error instanceof Error
             ? error.message
             : "Could not reschedule this session.",
@@ -175,6 +180,18 @@ export default function ScheduleScreen() {
       </View>
 
       <ScrollView className="flex-1 pt-4" showsVerticalScrollIndicator={false}>
+        {queryError ? (
+          <View className="px-4 mb-4">
+            <ErrorBanner message={queryError} />
+          </View>
+        ) : null}
+
+        {actionError ? (
+          <View className="px-4 mb-4">
+            <ErrorBanner message={actionError} />
+          </View>
+        ) : null}
+
         <View className="mx-4 mb-6 shadow-sm rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-2">
           <Calendar
             current={TODAY}
@@ -254,8 +271,7 @@ export default function ScheduleScreen() {
         }
         onCancelSession={() => {
           if (!selectedSession?.sessionId) {
-            Alert.alert(
-              "Cannot Cancel",
+            setActionError(
               "Could not resolve this session's match. Please refresh and try again.",
             );
             return;
@@ -264,12 +280,12 @@ export default function ScheduleScreen() {
           cancelSessionMutation
             .mutateAsync(selectedSession.sessionId)
             .then(() => {
+              setActionError(null);
               setSelectedSession(null);
               Alert.alert("Session Cancelled", "The session was cancelled.");
             })
             .catch((error) => {
-              Alert.alert(
-                "Cancellation Failed",
+              setActionError(
                 error instanceof Error
                   ? error.message
                   : "Could not cancel this session.",
@@ -280,15 +296,14 @@ export default function ScheduleScreen() {
           if (!selectedSession) return;
 
           if (selectedSession.myRole !== "Mentee") {
-            Alert.alert("Not Allowed", "Only mentees can reschedule sessions.");
+            setActionError("Only mentees can reschedule sessions.");
             return;
           }
 
           const mentorUsername = selectedSession.mentorUsername;
 
           if (!selectedSession.sessionId || !mentorUsername) {
-            Alert.alert(
-              "Cannot Reschedule",
+            setActionError(
               "Could not resolve session details. Please refresh and try again.",
             );
             return;

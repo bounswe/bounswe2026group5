@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import {
   useCreateAvailabilitySlotMutation,
   useDeleteAvailabilitySlotMutation,
@@ -108,12 +109,14 @@ export function EditAvailabilityModal({
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
       setWeekOffset(0);
       setSelectedDayIndex(0);
       setTogglingKey(null);
+      setActionError(null);
     }
   }, [visible]);
 
@@ -180,6 +183,7 @@ export function EditAvailabilityModal({
     setTogglingKey(key);
 
     try {
+      setActionError(null);
       for (const requestId of pendingRequestIds) {
         await respondToRequestMutation.mutateAsync({
           requestId,
@@ -190,8 +194,7 @@ export function EditAvailabilityModal({
       await deleteSlotMutation.mutateAsync(slotId);
       onChanged?.();
     } catch (error) {
-      Alert.alert(
-        "Update Failed",
+      setActionError(
         error instanceof Error
           ? error.message
           : "Could not update availability slot.",
@@ -263,6 +266,7 @@ export function EditAvailabilityModal({
     setTogglingKey(key);
 
     try {
+      setActionError(null);
       await createSlotMutation.mutateAsync({
         date: selectedDateString,
         startTime: `${String(hour).padStart(2, "0")}:00:00`,
@@ -271,8 +275,7 @@ export function EditAvailabilityModal({
 
       onChanged?.();
     } catch (error) {
-      Alert.alert(
-        "Update Failed",
+      setActionError(
         error instanceof Error
           ? error.message
           : "Could not update availability slot.",
@@ -315,6 +318,12 @@ export function EditAvailabilityModal({
         </View>
 
         <View className="px-6 pt-4">
+          {actionError ? (
+            <View className="mb-4">
+              <ErrorBanner message={actionError} />
+            </View>
+          ) : null}
+
           <View className="flex-row items-center justify-between">
             <TouchableOpacity
               className="w-8 h-8 rounded-full items-center justify-center bg-gray-100"

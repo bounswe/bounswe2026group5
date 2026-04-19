@@ -25,6 +25,7 @@ import {
 import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
 import { RequestCard } from "@/components/dashboard/RequestCard";
 import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -67,6 +68,7 @@ async function deactivateConnection(params: {
   matchIds: string[];
   name: string;
   mutateAsync: (matchId: string) => Promise<unknown>;
+  onError?: (message: string) => void;
 }): Promise<void> {
   try {
     for (const matchId of params.matchIds) {
@@ -74,8 +76,7 @@ async function deactivateConnection(params: {
     }
     Alert.alert("Connection Removed", `${params.name} has been removed.`);
   } catch (error) {
-    Alert.alert(
-      "Remove Failed",
+    params.onError?.(
       error instanceof Error
         ? error.message
         : "Could not remove this connection.",
@@ -125,6 +126,7 @@ type ConnectionViewProps = Readonly<{
     name: string,
     myRole: "Mentor" | "Mentee",
   ) => void;
+  onError: (message: string) => void;
 }>;
 
 function pushUserProfile(
@@ -138,7 +140,7 @@ function pushUserProfile(
 // Mentor View
 // ---------------------------------------------------------------------------
 
-function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
+function MentorConnections({ onOpenFeedback, onError }: ConnectionViewProps) {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [selectedRequest, setSelectedRequest] =
@@ -230,8 +232,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
     try {
       await respondMutation.mutateAsync({ requestId: id, action: "accept" });
     } catch (error) {
-      Alert.alert(
-        "Action Failed",
+      onError(
         error instanceof Error
           ? error.message
           : "Something went wrong. Please try again.",
@@ -247,8 +248,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
           action: "reject",
         });
       } catch (error) {
-        Alert.alert(
-          "Action Failed",
+        onError(
           error instanceof Error
             ? error.message
             : "Something went wrong. Please try again.",
@@ -320,6 +320,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
                     matchIds: target.matchIds,
                     name: target.name,
                     mutateAsync: deactivateMatchMutation.mutateAsync,
+                    onError,
                   });
                 },
               },
@@ -372,9 +373,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
 
         {requestsLoading && <ActivityIndicator className="mt-4" />}
         {requestsError && (
-          <Text className="text-[13px] text-error text-center mt-2">
-            Failed to load requests.
-          </Text>
+          <ErrorBanner message="Failed to load requests." />
         )}
         {pendingRequests.length > 0 && (
           <ScrollView
@@ -430,9 +429,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
 
         {matchesLoading && <ActivityIndicator className="mt-4" />}
         {matchesError && (
-          <Text className="text-[13px] text-error text-center mt-2">
-            Failed to load mentees.
-          </Text>
+          <ErrorBanner message="Failed to load mentees." />
         )}
         {displayedMentees.map((mentee) => (
           <MenteeCard
@@ -466,7 +463,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
 // Mentee View
 // ---------------------------------------------------------------------------
 
-function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
+function MenteeConnections({ onOpenFeedback, onError }: ConnectionViewProps) {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [showAllMentors, setShowAllMentors] = useState(false);
@@ -620,6 +617,7 @@ function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
                     matchIds: target.matchIds,
                     name: target.name,
                     mutateAsync: deactivateMatchMutation.mutateAsync,
+                    onError,
                   });
                 },
               },
@@ -672,9 +670,7 @@ function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
 
         {requestsLoading && <ActivityIndicator className="mt-4" />}
         {requestsError && (
-          <Text className="text-[13px] text-error text-center mt-2">
-            Failed to load requests.
-          </Text>
+          <ErrorBanner message="Failed to load requests." />
         )}
         {pendingRequests.length > 0 && (
           <ScrollView
@@ -734,9 +730,7 @@ function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
 
         {matchesLoading && <ActivityIndicator className="mt-4" />}
         {matchesError && (
-          <Text className="text-[13px] text-error text-center mt-2">
-            Failed to load mentors.
-          </Text>
+          <ErrorBanner message="Failed to load mentors." />
         )}
         {displayedMentors.map((mentor) => (
           <MenteeCard
@@ -780,11 +774,13 @@ export default function ConnectionsScreen() {
     userName: string;
     role: "Mentor" | "Mentee";
   } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const handleFeedbackSubmit = async (rating: number, text?: string) => {
     if (!feedbackConnection?.matchId) return;
 
     try {
+      setActionError(null);
       await submitFeedbackMutation.mutateAsync({
         matchId: feedbackConnection.matchId,
         rating,
@@ -793,8 +789,7 @@ export default function ConnectionsScreen() {
       setFeedbackConnection(null);
       Alert.alert("Review Submitted", "Thank you for your feedback!");
     } catch (error) {
-      Alert.alert(
-        "Feedback Failed",
+      setActionError(
         error instanceof Error ? error.message : "Could not submit feedback.",
       );
     }
@@ -826,14 +821,22 @@ export default function ConnectionsScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        {actionError ? (
+          <View className="mb-4">
+            <ErrorBanner message={actionError} />
+          </View>
+        ) : null}
+
         {isMentor ? (
           <MentorConnections
+            onError={setActionError}
             onOpenFeedback={(matchId, name, role) =>
               setFeedbackConnection({ matchId, userName: name, role })
             }
           />
         ) : (
           <MenteeConnections
+            onError={setActionError}
             onOpenFeedback={(matchId, name, role) =>
               setFeedbackConnection({ matchId, userName: name, role })
             }

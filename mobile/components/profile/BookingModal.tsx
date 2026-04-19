@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Offering } from "./MentorshipOfferings";
 import type { AvailabilitySlot } from "./AvailabilityPreview";
 
@@ -141,6 +142,7 @@ export function BookingModal({
   );
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCustomTime, setIsCustomTime] = useState(false);
   const [customStartTime, setCustomStartTime] = useState(DEFAULT_START_TIME);
   const [customEndTime, setCustomEndTime] = useState(DEFAULT_END_TIME);
@@ -154,6 +156,7 @@ export function BookingModal({
     setSelectedDateObj(null);
     setSelectedSlot(null);
     setCoverLetter("");
+    setErrorMessage(null);
     setIsCustomTime(false);
     setCustomStartTime(DEFAULT_START_TIME);
     setCustomEndTime(DEFAULT_END_TIME);
@@ -248,8 +251,7 @@ export function BookingModal({
 
   const submit = async () => {
     if (isFirstBooking && coverLetter.trim().length < 10) {
-      Alert.alert(
-        "Cover Letter too short",
+      setErrorMessage(
         "Please provide a bit more detail about what you want to discuss.",
       );
       return;
@@ -264,6 +266,7 @@ export function BookingModal({
 
     if (onSubmit) {
       try {
+        setErrorMessage(null);
         await onSubmit({
           date: selectedDateObj.date,
           rawDate: selectedDateObj.rawDate,
@@ -274,8 +277,7 @@ export function BookingModal({
         onClose();
       } catch (error) {
         setIsLoading(false);
-        Alert.alert(
-          "Booking Failed",
+        setErrorMessage(
           error instanceof Error ? error.message : "Please try again.",
         );
       }
@@ -297,7 +299,7 @@ export function BookingModal({
   const handlePrimaryAction = async () => {
     const validationError = validateSelection();
     if (validationError) {
-      Alert.alert("Missing Information", validationError);
+      setErrorMessage(validationError);
       return;
     }
 
@@ -307,8 +309,7 @@ export function BookingModal({
         selectedDateObj.rawDate === existingSession.date &&
         finalTime === existingSession.time
       ) {
-        Alert.alert(
-          "No Change Detected",
+        setErrorMessage(
           "You selected the exact same date and time as your current session. Please select a new slot to reschedule.",
         );
         return;
@@ -382,6 +383,12 @@ export function BookingModal({
             className="flex-1 px-6"
             keyboardShouldPersistTaps="handled"
           >
+            {errorMessage ? (
+              <View className="mt-4">
+                <ErrorBanner message={errorMessage} />
+              </View>
+            ) : null}
+
             <View className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 mb-8 mt-4">
               <View className="flex-row items-center mb-3">
                 <View className="w-10 h-10 bg-white rounded-full items-center justify-center shadow-sm mr-3">
@@ -430,6 +437,7 @@ export function BookingModal({
                           onPress={() => {
                             setSelectedDateObj(dateObj);
                             setSelectedSlot(null);
+                            setErrorMessage(null);
                           }}
                           className={
                             isSelected
@@ -475,6 +483,7 @@ export function BookingModal({
                               onPress={() => {
                                 setSelectedSlot(slot);
                                 setIsCustomTime(false);
+                                setErrorMessage(null);
                               }}
                               className={
                                 isSelected
@@ -506,6 +515,7 @@ export function BookingModal({
                       onPress={() => {
                         setIsCustomTime(true);
                         setSelectedSlot(null);
+                        setErrorMessage(null);
                       }}
                       className={
                         isCustomTime

@@ -1,4 +1,5 @@
 import { SettingItem } from "@/components/settings/SettingItem";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
@@ -64,6 +65,7 @@ export default function SettingsScreen() {
     notifReminders: true,
     notifUpdates: false,
   });
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const togglePref = (key: keyof typeof prefs) => {
     setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -77,11 +79,16 @@ export default function SettingsScreen() {
         style: "destructive",
         onPress: async () => {
           try {
+            setActionError(null);
             await logoutMutation.mutateAsync();
             router.replace("/login");
           } catch (error) {
             console.error("Logout failed:", error);
-            Alert.alert("Error", "Failed to log out. Please try again.");
+            setActionError(
+              error instanceof Error
+                ? error.message
+                : "Failed to log out. Please try again.",
+            );
           }
         },
       },
@@ -132,6 +139,12 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 60 }}
       >
+        {actionError ? (
+          <View className="px-4 pt-4">
+            <ErrorBanner message={actionError} />
+          </View>
+        ) : null}
+
         {/* Section: Account Role */}
         <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-6 mb-2">
           Account Role

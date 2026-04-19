@@ -21,6 +21,7 @@ import {
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { API_BASE_URL } from "@/constants/api";
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -101,6 +102,7 @@ type BodyContentProps = {
   liveReviewCount?: number;
   menteesHelpedCount: number;
   requestFeedback: string | null;
+  requestFeedbackVariant?: "error" | "warning" | "info" | "success";
   canRequestMentorship: boolean;
   isViewedMentor: boolean;
   availability: AvailabilitySlot[];
@@ -130,6 +132,7 @@ function renderBodyContent({
   liveReviewCount,
   menteesHelpedCount,
   requestFeedback,
+  requestFeedbackVariant = "info",
   canRequestMentorship,
   isViewedMentor,
   availability,
@@ -154,12 +157,7 @@ function renderBodyContent({
   if (error) {
     return (
       <View className="flex-1 items-center justify-center px-4">
-        <View className="bg-white border border-gray-200 rounded-2xl p-5 w-full">
-          <Text className="text-gray-900 font-bold text-base mb-2">
-            Unable to open profile
-          </Text>
-          <Text className="text-gray-500">{error}</Text>
-        </View>
+        <ErrorBanner title="Unable to open profile" message={error} />
       </View>
     );
   }
@@ -232,7 +230,12 @@ function renderBodyContent({
         )}
 
         {!!requestFeedback && (
-          <Text className="text-sm text-gray-600 mb-4">{requestFeedback}</Text>
+          <View className="mb-4">
+            <ErrorBanner
+              message={requestFeedback}
+              variant={requestFeedbackVariant}
+            />
+          </View>
         )}
 
         {isViewedMentor && (
@@ -316,6 +319,9 @@ export default function MentorProfileScreen() {
   const ratingQuery = useProfileRatingQuery(username ?? "");
 
   const [requestFeedback, setRequestFeedback] = useState<string | null>(null);
+  const [requestFeedbackVariant, setRequestFeedbackVariant] = useState<
+    "error" | "warning" | "info" | "success"
+  >("info");
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
   const [skillsModalConfig, setSkillsModalConfig] = useState<{
@@ -470,11 +476,13 @@ export default function MentorProfileScreen() {
     slotId?: string;
   }) => {
     if (!canRequestMentorship) {
+      setRequestFeedbackVariant("warning");
       setRequestFeedback("Enable mentee mode in Settings to send requests.");
       return;
     }
 
     if (!payload.slotId) {
+      setRequestFeedbackVariant("error");
       setRequestFeedback(
         "Selected slot could not be resolved. Please refresh and try again.",
       );
@@ -497,6 +505,7 @@ export default function MentorProfileScreen() {
     }
 
     setRequestFeedback(null);
+    setRequestFeedbackVariant("info");
     try {
       await createRequestMutation.mutateAsync({
         mentor_username: username,
@@ -510,6 +519,7 @@ export default function MentorProfileScreen() {
 
       setProfile((prev) => prev);
 
+      setRequestFeedbackVariant("success");
       setRequestFeedback("Request sent successfully.");
       Alert.alert(
         "Request Sent",
@@ -519,6 +529,7 @@ export default function MentorProfileScreen() {
       setCoverLetter("");
       availabilitySlotsQuery.refetch();
     } catch (mutationError) {
+      setRequestFeedbackVariant("error");
       setRequestFeedback(
         mutationError instanceof Error
           ? mutationError.message
@@ -533,6 +544,7 @@ export default function MentorProfileScreen() {
     }
 
     setRequestFeedback(null);
+    setRequestFeedbackVariant("info");
     try {
       await bookSlotMutation.mutateAsync({
         mentorUsername: username,
@@ -542,6 +554,7 @@ export default function MentorProfileScreen() {
       setProfile((prev) => prev);
 
       setSelectedSlot(null);
+      setRequestFeedbackVariant("success");
       setRequestFeedback("Session booked successfully.");
       Alert.alert(
         "Session Booked",
@@ -549,6 +562,7 @@ export default function MentorProfileScreen() {
       );
       availabilitySlotsQuery.refetch();
     } catch (mutationError) {
+      setRequestFeedbackVariant("error");
       setRequestFeedback(
         mutationError instanceof Error
           ? mutationError.message
@@ -580,6 +594,7 @@ export default function MentorProfileScreen() {
     }
 
     if (coverLetter.trim().length < 10) {
+      setRequestFeedbackVariant("warning");
       setRequestFeedback(
         "Please provide at least 10 characters about what you want to discuss.",
       );
@@ -602,6 +617,7 @@ export default function MentorProfileScreen() {
     liveReviewCount: ratingQuery.data?.review_count,
     menteesHelpedCount,
     requestFeedback,
+    requestFeedbackVariant,
     canRequestMentorship,
     isViewedMentor,
     availability,
