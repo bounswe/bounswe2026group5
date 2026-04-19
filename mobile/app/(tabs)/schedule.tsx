@@ -8,6 +8,7 @@ import { RescheduleBottomSheet } from "@/components/dashboard/RescheduleBottomSh
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { SuccessCard } from "@/components/ui/SuccessCard";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -20,7 +21,7 @@ import {
   useRescheduleSessionMutation,
 } from "@/lib/queries/mentorship";
 import React, { useMemo, useState } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { Calendar, DateData } from "react-native-calendars";
 import {
   SafeAreaView,
@@ -61,6 +62,7 @@ export default function ScheduleScreen() {
     useState<ScheduleSession | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
@@ -105,12 +107,12 @@ export default function ScheduleScreen() {
       })
       .then(() => {
         setActionError(null);
+        setSuccessMessage("Your session was updated.");
         setSelectedSession(null);
         setShowRescheduleSheet(false);
         setRescheduleSessionId(null);
         setRescheduleMentorUsername("");
         setRescheduleCurrentSlotId("");
-        Alert.alert("Session Rescheduled", "Your session was updated.");
       })
       .catch((error) => {
         setActionError(
@@ -183,6 +185,12 @@ export default function ScheduleScreen() {
         {queryError ? (
           <View className="px-4 mb-4">
             <ErrorBanner message={queryError} />
+          </View>
+        ) : null}
+
+        {successMessage ? (
+          <View className="px-4 mb-4">
+            <SuccessCard message={successMessage} />
           </View>
         ) : null}
 
@@ -281,8 +289,8 @@ export default function ScheduleScreen() {
             .mutateAsync(selectedSession.sessionId)
             .then(() => {
               setActionError(null);
+              setSuccessMessage("The session was cancelled.");
               setSelectedSession(null);
-              Alert.alert("Session Cancelled", "The session was cancelled.");
             })
             .catch((error) => {
               setActionError(
@@ -317,10 +325,7 @@ export default function ScheduleScreen() {
         onLeaveFeedback={() => {
           // Navigate to feedback screen or show feedback modal
           setSelectedSession(null);
-          Alert.alert(
-            "Leave Feedback",
-            "Feedback submission feature coming soon.",
-          );
+          setActionError("Feedback submission feature coming soon.");
         }}
       />
     </SafeAreaView>

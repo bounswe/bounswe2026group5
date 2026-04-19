@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Import the components for the dashboard
@@ -11,6 +11,7 @@ import { RescheduleBottomSheet } from "@/components/dashboard/RescheduleBottomSh
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { SuccessCard } from "@/components/ui/SuccessCard";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -70,6 +71,7 @@ export default function DashboardScreen() {
     useState<DashboardSessionItem | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
@@ -91,6 +93,7 @@ export default function DashboardScreen() {
 
     try {
       setActionError(null);
+      setSuccessMessage(null);
       await respondMutation.mutateAsync({
         requestId: selectedRequest.requestId,
         action,
@@ -98,6 +101,11 @@ export default function DashboardScreen() {
       setSelectedRequest(null);
       requestsQuery.refetch();
       meetingSessionsQuery.refetch();
+      setSuccessMessage(
+        action === "accept"
+          ? "Request accepted successfully."
+          : "Request rejected successfully.",
+      );
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -127,9 +135,10 @@ export default function DashboardScreen() {
 
     try {
       setActionError(null);
+      setSuccessMessage(null);
       await cancelSessionMutation.mutateAsync(selectedSession.sessionId);
       setSelectedSession(null);
-      Alert.alert("Session Cancelled", "The session was cancelled.");
+      setSuccessMessage("The session was cancelled.");
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -155,6 +164,7 @@ export default function DashboardScreen() {
     setRescheduleSessionId(selectedSession.sessionId);
     setRescheduleSessionMentorUsername(selectedMentorUsername);
     setRescheduleCurrentSlotId(selectedSession.id);
+    setSuccessMessage(null);
     setShowRescheduleSheet(true);
   };
 
@@ -186,6 +196,12 @@ export default function DashboardScreen() {
         {queryError ? (
           <View className="mb-4">
             <ErrorBanner message={queryError} />
+          </View>
+        ) : null}
+
+        {successMessage ? (
+          <View className="mb-4">
+            <SuccessCard message={successMessage} />
           </View>
         ) : null}
 
@@ -274,8 +290,7 @@ export default function DashboardScreen() {
         onAccept={() => handleRespond("accept")}
         onReject={() => handleRespond("reject")}
         onCancelOutgoing={() => {
-          Alert.alert(
-            "Not Supported Yet",
+          setActionError(
             "Outgoing request cancellation is not available on the current API.",
           );
         }}
@@ -311,9 +326,9 @@ export default function DashboardScreen() {
               })
               .then(() => {
                 setActionError(null);
+                setSuccessMessage("Your session was updated.");
                 setSelectedSession(null);
                 setShowRescheduleSheet(false);
-                Alert.alert("Session Rescheduled", "Your session was updated.");
               })
               .catch((error) => {
                 setActionError(

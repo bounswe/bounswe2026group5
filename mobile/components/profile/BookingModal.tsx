@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { SuccessCard } from "@/components/ui/SuccessCard";
 import { Offering } from "./MentorshipOfferings";
 import type { AvailabilitySlot } from "./AvailabilityPreview";
 
@@ -144,6 +144,7 @@ export function BookingModal({
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showDiscardConfirmation, setShowDiscardConfirmation] = useState(false);
   const [isCustomTime, setIsCustomTime] = useState(false);
   const [customStartTime, setCustomStartTime] = useState(DEFAULT_START_TIME);
@@ -159,6 +160,7 @@ export function BookingModal({
     setSelectedSlot(null);
     setCoverLetter("");
     setErrorMessage(null);
+    setSuccessMessage(null);
     setIsCustomTime(false);
     setCustomStartTime(DEFAULT_START_TIME);
     setCustomEndTime(DEFAULT_END_TIME);
@@ -262,6 +264,7 @@ export function BookingModal({
     if (onSubmit) {
       try {
         setErrorMessage(null);
+        setSuccessMessage(null);
         await onSubmit({
           date: selectedDateObj.date,
           rawDate: selectedDateObj.rawDate,
@@ -281,12 +284,10 @@ export function BookingModal({
 
     setTimeout(() => {
       setIsLoading(false);
-      Alert.alert(
-        isFirstBooking ? "Request Sent!" : "Booking Confirmed!",
+      setSuccessMessage(
         isFirstBooking
           ? `Your request for ${offering.title} on ${selectedDateObj.date} at ${finalTime} has been sent.`
           : `Your booking for ${offering.title} on ${selectedDateObj.date} at ${finalTime} is confirmed.`,
-        [{ text: "Great", onPress: onClose }],
       );
     }, 1500);
   };
@@ -381,6 +382,12 @@ export function BookingModal({
             {errorMessage ? (
               <View className="mt-4">
                 <ErrorBanner message={errorMessage} />
+              </View>
+            ) : null}
+
+            {successMessage ? (
+              <View className="mt-4">
+                <SuccessCard message={successMessage} />
               </View>
             ) : null}
 

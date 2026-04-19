@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -21,6 +20,7 @@ import {
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
+import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { API_BASE_URL } from "@/constants/api";
 import { useAuthStore } from "@/lib/auth/store";
@@ -324,6 +324,7 @@ export default function MentorProfileScreen() {
   >("info");
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
+  const [showBookingConfirmation, setShowBookingConfirmation] = useState(false);
   const [skillsModalConfig, setSkillsModalConfig] = useState<{
     visible: boolean;
     title: string;
@@ -521,10 +522,6 @@ export default function MentorProfileScreen() {
 
       setRequestFeedbackVariant("success");
       setRequestFeedback("Request sent successfully.");
-      Alert.alert(
-        "Request Sent",
-        "Your mentorship request was sent successfully.",
-      );
       setSelectedSlot(null);
       setCoverLetter("");
       availabilitySlotsQuery.refetch();
@@ -556,10 +553,6 @@ export default function MentorProfileScreen() {
       setSelectedSlot(null);
       setRequestFeedbackVariant("success");
       setRequestFeedback("Session booked successfully.");
-      Alert.alert(
-        "Session Booked",
-        "Your session has been booked successfully.",
-      );
       availabilitySlotsQuery.refetch();
     } catch (mutationError) {
       setRequestFeedbackVariant("error");
@@ -577,19 +570,7 @@ export default function MentorProfileScreen() {
     }
 
     if (hasExistingMentorConnection) {
-      Alert.alert(
-        "Confirm Session Booking",
-        `Book this session on ${selectedSlot.day} at ${selectedSlot.label}?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Confirm",
-            onPress: () => {
-              void handleBookConnectedSession(selectedSlot);
-            },
-          },
-        ],
-      );
+      setShowBookingConfirmation(true);
       return;
     }
 
@@ -674,6 +655,26 @@ export default function MentorProfileScreen() {
         onClose={() =>
           setSkillsModalConfig((prev) => ({ ...prev, visible: false }))
         }
+      />
+
+      <ConfirmationSheet
+        visible={showBookingConfirmation}
+        title="Book this session?"
+        message={
+          selectedSlot
+            ? `Book this session on ${selectedSlot.day} at ${selectedSlot.label}?`
+            : "Confirm this booking?"
+        }
+        confirmLabel="Confirm"
+        cancelLabel="Cancel"
+        onCancel={() => setShowBookingConfirmation(false)}
+        onConfirm={() => {
+          const slot = selectedSlot;
+          setShowBookingConfirmation(false);
+          if (slot) {
+            void handleBookConnectedSession(slot);
+          }
+        }}
       />
     </View>
   );

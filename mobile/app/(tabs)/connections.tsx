@@ -2,7 +2,6 @@ import { useRouter, type Href } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -26,6 +25,7 @@ import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet"
 import { RequestCard } from "@/components/dashboard/RequestCard";
 import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { SuccessCard } from "@/components/ui/SuccessCard";
 
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -69,12 +69,13 @@ async function deactivateConnection(params: {
   name: string;
   mutateAsync: (matchId: string) => Promise<unknown>;
   onError?: (message: string) => void;
+  onSuccess?: (message: string) => void;
 }): Promise<void> {
   try {
     for (const matchId of params.matchIds) {
       await params.mutateAsync(matchId);
     }
-    Alert.alert("Connection Removed", `${params.name} has been removed.`);
+    params.onSuccess?.(`${params.name} has been removed.`);
   } catch (error) {
     params.onError?.(
       error instanceof Error
@@ -127,6 +128,7 @@ type ConnectionViewProps = Readonly<{
     myRole: "Mentor" | "Mentee",
   ) => void;
   onError: (message: string) => void;
+  onSuccess: (message: string) => void;
 }>;
 
 function pushUserProfile(
@@ -140,7 +142,11 @@ function pushUserProfile(
 // Mentor View
 // ---------------------------------------------------------------------------
 
-function MentorConnections({ onOpenFeedback, onError }: ConnectionViewProps) {
+function MentorConnections({
+  onOpenFeedback,
+  onError,
+  onSuccess,
+}: ConnectionViewProps) {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [selectedRequest, setSelectedRequest] =
@@ -312,6 +318,7 @@ function MentorConnections({ onOpenFeedback, onError }: ConnectionViewProps) {
             name: target.name,
             mutateAsync: deactivateMatchMutation.mutateAsync,
             onError,
+            onSuccess,
           });
         }}
       />
@@ -450,7 +457,11 @@ function MentorConnections({ onOpenFeedback, onError }: ConnectionViewProps) {
 // Mentee View
 // ---------------------------------------------------------------------------
 
-function MenteeConnections({ onOpenFeedback, onError }: ConnectionViewProps) {
+function MenteeConnections({
+  onOpenFeedback,
+  onError,
+  onSuccess,
+}: ConnectionViewProps) {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [showAllMentors, setShowAllMentors] = useState(false);
@@ -596,6 +607,7 @@ function MenteeConnections({ onOpenFeedback, onError }: ConnectionViewProps) {
             name: target.name,
             mutateAsync: deactivateMatchMutation.mutateAsync,
             onError,
+            onSuccess,
           });
         }}
       />
@@ -749,19 +761,21 @@ export default function ConnectionsScreen() {
     role: "Mentor" | "Mentee";
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleFeedbackSubmit = async (rating: number, text?: string) => {
     if (!feedbackConnection?.matchId) return;
 
     try {
       setActionError(null);
+      setSuccessMessage(null);
       await submitFeedbackMutation.mutateAsync({
         matchId: feedbackConnection.matchId,
         rating,
         text,
       });
       setFeedbackConnection(null);
-      Alert.alert("Review Submitted", "Thank you for your feedback!");
+      setSuccessMessage("Thank you for your feedback!");
     } catch (error) {
       setActionError(
         error instanceof Error ? error.message : "Could not submit feedback.",
@@ -801,9 +815,16 @@ export default function ConnectionsScreen() {
           </View>
         ) : null}
 
+        {successMessage ? (
+          <View className="mb-4">
+            <SuccessCard message={successMessage} />
+          </View>
+        ) : null}
+
         {isMentor ? (
           <MentorConnections
             onError={setActionError}
+            onSuccess={setSuccessMessage}
             onOpenFeedback={(matchId, name, role) =>
               setFeedbackConnection({ matchId, userName: name, role })
             }
@@ -811,6 +832,7 @@ export default function ConnectionsScreen() {
         ) : (
           <MenteeConnections
             onError={setActionError}
+            onSuccess={setSuccessMessage}
             onOpenFeedback={(matchId, name, role) =>
               setFeedbackConnection({ matchId, userName: name, role })
             }

@@ -1,6 +1,7 @@
 import { SettingItem } from "@/components/settings/SettingItem";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { SuccessCard } from "@/components/ui/SuccessCard";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
@@ -9,7 +10,7 @@ import { useLogoutMutation } from "@/lib/queries/auth";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function SettingsScreen() {
@@ -67,6 +68,8 @@ export default function SettingsScreen() {
     notifUpdates: false,
   });
   const [actionError, setActionError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
 
@@ -117,6 +120,18 @@ export default function SettingsScreen() {
           </View>
         ) : null}
 
+        {infoMessage ? (
+          <View className="px-4 pt-4">
+            <ErrorBanner message={infoMessage} variant="info" />
+          </View>
+        ) : null}
+
+        {successMessage ? (
+          <View className="px-4 pt-4">
+            <SuccessCard message={successMessage} />
+          </View>
+        ) : null}
+
         {/* Section: Account Role */}
         <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-6 mb-2">
           Account Role
@@ -126,7 +141,7 @@ export default function SettingsScreen() {
             icon="person-circle-outline"
             label="Role"
             value={roleModeLabel}
-            onPress={() => Alert.alert("Role Policy", roleModeDescription)}
+            onPress={() => setInfoMessage(roleModeDescription)}
           />
         </View>
 
@@ -250,6 +265,7 @@ export default function SettingsScreen() {
         onConfirm={async () => {
           try {
             setActionError(null);
+            setSuccessMessage(null);
             await logoutMutation.mutateAsync();
             setShowLogoutConfirmation(false);
             router.replace("/login");
@@ -275,7 +291,7 @@ export default function SettingsScreen() {
         onCancel={() => setShowDeleteConfirmation(false)}
         onConfirm={() => {
           setShowDeleteConfirmation(false);
-          Alert.alert("Not Available", "Account deletion is not implemented yet.");
+          setInfoMessage("Account deletion is not implemented yet.");
         }}
       />
     </View>
