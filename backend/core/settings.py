@@ -77,12 +77,17 @@ INSTALLED_APPS = [
     "accounts",
     "profiles",
     "mentorship",
+    "messaging",
 ]
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": ("accounts.authentication.CookieOrHeaderJWTAuthentication",),
 }
+
+# Messaging settings
+MAX_MESSAGE_ATTACHMENT_SIZE_MB = 20
+MAX_MESSAGE_ATTACHMENT_SIZE_BYTES = MAX_MESSAGE_ATTACHMENT_SIZE_MB * 1024 * 1024
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1440),
