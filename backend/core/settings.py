@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     "accounts",
     "profiles",
     "mentorship",
+    "notifications",
     "messaging",
 ]
 
