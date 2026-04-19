@@ -5,7 +5,7 @@ from rest_framework import serializers
 
 from mentorship.serializers import ProfileSummarySerializer
 
-from .models import Conversation, Message, MessageReport
+from .models import Conversation, Message
 
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -107,5 +107,4 @@ class MessageCreateSerializer(serializers.Serializer):
 class MessageReportSerializer(serializers.Serializer):
     """Serializer for reporting problematic messages."""
 
-    reason = serializers.CharField(max_length=512)
     reason = serializers.CharField(max_length=512)

@@ -24,7 +24,7 @@ class Conversation(models.Model):
         db_table = "message_conversations"
 
     def __str__(self) -> str:
-        return f"Conversation for match {self.match_id}"
+        return f"Conversation for match {getattr(self, 'match_id')}"
 
 
 class Message(models.Model):
@@ -54,7 +54,7 @@ class Message(models.Model):
         ordering = ["created_at"]
 
     def __str__(self) -> str:
-        return f"Message {self.id} from {self.sender_id}"
+        return f"Message {self.id} from {getattr(self, 'sender_id')}"
 
 
 class MessageReport(models.Model):
@@ -85,4 +85,6 @@ class MessageReport(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Report for message {self.message_id} by {self.reported_by_id}"
+        return (
+            f"Report for message {getattr(self, 'message_id')} by {getattr(self, 'reported_by_id')}"
+        )

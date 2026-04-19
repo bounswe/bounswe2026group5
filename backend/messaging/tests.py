@@ -1,5 +1,6 @@
 """Tests for messaging domain models and API endpoints."""
 
+import uuid
 from datetime import timedelta
 from typing import Any
 
@@ -87,7 +88,7 @@ class MessagingAPIBaseTestCase(TestCase):
             status=MentorshipRequest.Status.ACCEPTED,
         )
         self.match = Match.objects.get(request=request_obj)
-        self.conversation = Conversation.objects.create(match=self.match)
+        self.conversation = Conversation.objects.get(match=self.match)
 
         # Create another match for other user
         other_slot = AvailabilitySlot.objects.create(
@@ -102,7 +103,7 @@ class MessagingAPIBaseTestCase(TestCase):
             status=MentorshipRequest.Status.ACCEPTED,
         )
         self.other_match = Match.objects.get(request=other_request)
-        self.other_conversation = Conversation.objects.create(match=self.other_match)
+        self.other_conversation = Conversation.objects.get(match=self.other_match)
 
         self.mentor_client: Any = APIClient()
         self.mentee_client: Any = APIClient()
@@ -115,10 +116,10 @@ class MessagingAPIBaseTestCase(TestCase):
         self.other_client.credentials(HTTP_AUTHORIZATION=f"Bearer {_token_for(self.other_user)}")
         self.admin_client.credentials(HTTP_AUTHORIZATION=f"Bearer {_token_for(self.admin_user)}")
 
-    def _conversation_detail_url(self, conversation_id: str) -> str:
+    def _conversation_detail_url(self, conversation_id: uuid.UUID | str) -> str:
         return f"/api/messages/conversations/{conversation_id}/"
 
-    def _message_report_url(self, message_id: str) -> str:
+    def _message_report_url(self, message_id: uuid.UUID | str) -> str:
         return f"/api/messages/messages/{message_id}/report/"
 
 
@@ -334,7 +335,8 @@ class MessageReportAPIViewTests(MessagingAPIBaseTestCase):
         )
 
     def test_admin_can_report_message(self) -> None:
-        # Even though admin can't read messages normally, they can report if they somehow access the message
+        # Even though admin can't read messages normally,
+        # they can report if they somehow access the message
         # But in practice, admins shouldn't access message IDs without proper channels
         url = self._message_report_url(self.message.id)
         response = self.admin_client.post(url, {"reason": "Admin review"})
@@ -385,11 +387,11 @@ class MessagingModelTests(TestCase):
         self.match = Match.objects.get(request=request_obj)
 
     def test_conversation_created_from_match(self) -> None:
-        conversation = Conversation.objects.create(match=self.match)
+        conversation = Conversation.objects.get(match=self.match)
         self.assertEqual(conversation.match, self.match)
 
     def test_message_creation(self) -> None:
-        conversation = Conversation.objects.create(match=self.match)
+        conversation = Conversation.objects.get(match=self.match)
         message = Message.objects.create(
             conversation=conversation,
             sender=self.mentor_profile,
@@ -400,7 +402,7 @@ class MessagingModelTests(TestCase):
         self.assertEqual(message.body, "Test message")
 
     def test_message_report_creation(self) -> None:
-        conversation = Conversation.objects.create(match=self.match)
+        conversation = Conversation.objects.get(match=self.match)
         message = Message.objects.create(
             conversation=conversation,
             sender=self.mentor_profile,
@@ -416,7 +418,7 @@ class MessagingModelTests(TestCase):
         self.assertEqual(report.reason, "Inappropriate")
 
     def test_unique_message_report_per_reporter(self) -> None:
-        conversation = Conversation.objects.create(match=self.match)
+        conversation = Conversation.objects.get(match=self.match)
         message = Message.objects.create(
             conversation=conversation,
             sender=self.mentor_profile,

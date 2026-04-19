@@ -7,7 +7,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsAdmin, IsRegularUser
+from accounts.permissions import IsRegularUser
 from profiles.models import Profile
 
 from .models import Conversation, Message, MessageReport
@@ -17,6 +17,9 @@ from .serializers import (
     MessageReportSerializer,
     MessageSerializer,
 )
+
+PROFILE_NOT_FOUND_MSG = "Profile not found."
+ACCESS_DENIED_MSG = "Access denied."
 
 
 class ConversationListAPIView(APIView):
@@ -61,7 +64,10 @@ class ConversationDetailAPIView(APIView):
             403: OpenApiResponse(description="Access denied."),
             404: OpenApiResponse(description="Conversation not found."),
         },
-        description="List messages in a private conversation. Supports pagination via `page` and `pageSize` query params.",
+        description=(
+            "List messages in a private conversation."
+            "Supports pagination via `page` and `pageSize` query params."
+        ),
         tags=["Messages"],
     )
     def get(self, request: Request, conversation_id: str) -> Response:
@@ -69,7 +75,7 @@ class ConversationDetailAPIView(APIView):
         try:
             profile = Profile.objects.get(user=request.user)
         except Profile.DoesNotExist:
-            return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": PROFILE_NOT_FOUND_MSG}, status=status.HTTP_404_NOT_FOUND)
 
         try:
             conversation = Conversation.objects.select_related(
@@ -80,7 +86,7 @@ class ConversationDetailAPIView(APIView):
 
         # Check if user is a participant
         if conversation.match.mentor != profile and conversation.match.mentee != profile:
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": ACCESS_DENIED_MSG}, status=status.HTTP_403_FORBIDDEN)
 
         messages_qs = Message.objects.filter(conversation=conversation).select_related("sender")
 
@@ -110,16 +116,18 @@ class ConversationDetailAPIView(APIView):
         try:
             profile = Profile.objects.get(user=request.user)
         except Profile.DoesNotExist:
-            return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": PROFILE_NOT_FOUND_MSG}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            conversation = Conversation.objects.select_related("match__mentor", "match__mentee").get(id=conversation_id)
+            conversation = Conversation.objects.select_related(
+                "match__mentor", "match__mentee"
+            ).get(id=conversation_id)
         except Conversation.DoesNotExist:
             return Response({"detail": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Check if user is a participant
         if conversation.match.mentor != profile and conversation.match.mentee != profile:
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": ACCESS_DENIED_MSG}, status=status.HTTP_403_FORBIDDEN)
 
         if not conversation.match.is_active:
             return Response({"error": "Cannot send messages to deactivated matches."}, status=403)
@@ -128,11 +136,14 @@ class ConversationDetailAPIView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        # Help type-checker
+        validated_data = getattr(serializer, "validated_data", {})
+
         message = Message.objects.create(
             conversation=conversation,
             sender=profile,
-            body=serializer.validated_data.get("body", ""),
-            attachment=serializer.validated_data.get("attachment"),
+            body=validated_data.get("body", ""),
+            attachment=validated_data.get("attachment"),
         )
 
         response_serializer = MessageSerializer(message, context={"request": request})
@@ -159,7 +170,9 @@ class MessageReportAPIView(APIView):
     def post(self, request: Request, message_id: str) -> Response:
         """Create a report for the message."""
         if not request.user.is_authenticated:
-            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED
+            )
 
         try:
             message = Message.objects.select_related(
@@ -176,20 +189,23 @@ class MessageReportAPIView(APIView):
         try:
             profile = Profile.objects.get(user=request.user)
         except Profile.DoesNotExist:
-            return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": PROFILE_NOT_FOUND_MSG}, status=status.HTTP_404_NOT_FOUND)
 
-        is_admin = request.user.role == "ADMIN"
+        is_admin = getattr(request.user, "role", None) == "ADMIN"
         if (
             not is_admin
             and message.conversation.match.mentor != profile
             and message.conversation.match.mentee != profile
         ):
-            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": ACCESS_DENIED_MSG}, status=status.HTTP_403_FORBIDDEN)
+
+        # Help type-checker
+        validated_data = getattr(serializer, "validated_data", {})
 
         MessageReport.objects.create(
             message=message,
             reported_by=profile,
-            reason=serializer.validated_data["reason"],
+            reason=validated_data.get("reason", ""),
         )
 
         return Response({"detail": "Report created."}, status=status.HTTP_201_CREATED)
