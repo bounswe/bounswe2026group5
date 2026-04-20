@@ -73,3 +73,35 @@ export const allSkillsQueryOptions = queryOptions({
     queryFn: fetchAllSkills,
     staleTime: Infinity,
 })
+
+export async function fetchPopularMentors(limit = 6): Promise<PublicMentorProfile[]> {
+    const url = new URL(`${API_BASE_URL}/profiles/popular/`, window.location.origin)
+    url.searchParams.set('limit', String(limit))
+    const res = await fetch(url.toString())
+    if (!res.ok) throw new Error('Failed to fetch popular mentors')
+    const data = await res.json()
+    return data.results
+}
+
+export async function fetchRecentlyAddedMentors(limit = 6): Promise<PublicMentorProfile[]> {
+    const url = new URL(`${API_BASE_URL}/profiles/recently-added/`, window.location.origin)
+    url.searchParams.set('limit', String(limit))
+    const res = await fetch(url.toString())
+    if (!res.ok) throw new Error('Failed to fetch recently added mentors')
+    const data = await res.json()
+    return data.results
+}
+
+export const popularMentorsQueryOptions = (limit = 6) =>
+    queryOptions({
+        queryKey: ['mentors', 'popular', limit],
+        queryFn: () => fetchPopularMentors(limit),
+        staleTime: 1000 * 60 * 5,
+    })
+
+export const recentlyAddedMentorsQueryOptions = (limit = 6) =>
+    queryOptions({
+        queryKey: ['mentors', 'recently-added', limit],
+        queryFn: () => fetchRecentlyAddedMentors(limit),
+        staleTime: 1000 * 60 * 5,
+    })
