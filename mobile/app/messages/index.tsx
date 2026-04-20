@@ -202,7 +202,14 @@ export default function MessagesScreen() {
   return (
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       {/* Header */}
-      <View className="flex-row justify-between items-center px-5 pt-4 pb-2">
+      <View className="flex-row items-center px-2 pt-4 pb-2">
+        <TouchableOpacity
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+          className="w-10 h-10 items-center justify-center rounded-full mr-1"
+        >
+          <Ionicons name="arrow-back" size={22} color="#1c1c18" />
+        </TouchableOpacity>
         <Text className="text-[28px] font-extrabold text-on-surface">
           Messages
         </Text>
