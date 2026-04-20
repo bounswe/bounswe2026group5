@@ -266,7 +266,7 @@ export default function MessagesScreen() {
               conversation={item}
               myUsername={currentUsername}
               onPress={() =>
-                router.push(`/messages/${item.id}` as `${string}`)
+                router.push(`/messages/${item.id}` as never)
               }
             />
           )}
