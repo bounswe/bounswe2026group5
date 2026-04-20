@@ -1,6 +1,7 @@
 import NotificationsScreen from "@/app/notifications";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
+import { ApiError } from "@/lib/api/client";
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -88,5 +89,53 @@ describe("NotificationsScreen", () => {
     const { getByText } = render(<NotificationsScreen />);
 
     expect(getByText("You're all caught up")).toBeTruthy();
+  });
+
+  it("shows a loading state while notifications are being fetched", () => {
+    mockNotificationsQuery.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      refetch: mockRefetch,
+    });
+
+    const { getByText } = render(<NotificationsScreen />);
+
+    expect(getByText("Loading notifications...")).toBeTruthy();
+  });
+
+  it("shows a polished retry state for server errors", () => {
+    mockNotificationsQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new ApiError(500, "Request failed with status 500"),
+      refetch: mockRefetch,
+    });
+
+    const { getByText } = render(<NotificationsScreen />);
+
+    expect(getByText("Could not load notifications.")).toBeTruthy();
+    expect(
+      getByText(
+        "Notifications are temporarily unavailable. Please try again in a moment.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("retries loading notifications when pressing Try Again", () => {
+    mockNotificationsQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error("boom"),
+      refetch: mockRefetch,
+    });
+
+    const { getByText } = render(<NotificationsScreen />);
+
+    fireEvent.press(getByText("Try Again"));
+
+    expect(mockRefetch).toHaveBeenCalled();
   });
 });

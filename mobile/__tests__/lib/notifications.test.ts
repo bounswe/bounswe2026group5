@@ -67,6 +67,27 @@ describe("notifications query helpers", () => {
     ).toBe("/(tabs)/schedule");
   });
 
+  it("maps the new backend mentorship request type to a clear title", () => {
+    expect(
+      getNotificationTitle({
+        id: "notif-3",
+        type: "new_mentorship_request",
+        message: "You received a mentorship request.",
+        is_read: false,
+        created_at: "2026-04-20T11:45:00Z",
+      }),
+    ).toBe("New request");
+  });
+
+  it("routes feedback notifications to the profile tab", () => {
+    expect(
+      getNotificationTargetPath({
+        type: "new_feedback_available",
+        resource_type: "profile",
+      }),
+    ).toBe("/(tabs)/profile");
+  });
+
   it("uses extra metadata target path when provided", () => {
     expect(
       getNotificationTargetPath({

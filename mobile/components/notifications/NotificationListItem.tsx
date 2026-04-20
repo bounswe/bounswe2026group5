@@ -85,12 +85,6 @@ export function NotificationListItem({
             {notification.message}
           </Text>
 
-          {notification.actorName && (
-            <Text className="mt-2 text-xs font-semibold text-on-surface-soft dark:text-on-surface-soft-dark">
-              From {notification.actorName}
-            </Text>
-          )}
-
           {notification.targetPath && (
             <Text className="mt-2 text-xs font-semibold text-primary dark:text-primary-dim">
               View details
