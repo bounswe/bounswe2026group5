@@ -92,4 +92,25 @@ describe("NotificationListItem", () => {
     expect(getByText("star-outline")).toBeTruthy();
     expect(getByText("View details")).toBeTruthy();
   });
+
+  it("renders read notifications in historical mode without hiding them", () => {
+    const { getByText } = render(
+      <NotificationListItem
+        notification={{
+          id: "notif-5",
+          type: "new_message",
+          title: "New message",
+          message: "This notification was already read.",
+          isRead: true,
+          createdAt: "2026-04-21T07:00:00Z",
+          targetPath: "/(tabs)/connections",
+        }}
+        onPress={jest.fn()}
+      />,
+    );
+
+    expect(getByText("New message")).toBeTruthy();
+    expect(getByText("This notification was already read.")).toBeTruthy();
+    expect(getByText("View details")).toBeTruthy();
+  });
 });

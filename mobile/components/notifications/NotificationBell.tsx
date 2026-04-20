@@ -21,7 +21,9 @@ export function NotificationBell() {
   const theme = Colors[colorScheme];
   const currentUsername = useAuthStore((state) => state.user?.username);
   const notificationsQuery = useNotificationsQuery(currentUsername);
-  const unreadCount = notificationsQuery.data?.length ?? 0;
+  const unreadCount =
+    notificationsQuery.data?.filter((notification) => !notification.isRead)
+      .length ?? 0;
 
   return (
     <TouchableOpacity

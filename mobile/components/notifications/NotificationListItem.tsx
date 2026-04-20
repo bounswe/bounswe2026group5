@@ -53,19 +53,34 @@ export function NotificationListItem({
 }: NotificationListItemProps) {
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
+  const containerClassName = notification.isRead
+    ? "mb-3 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 py-4 opacity-70"
+    : "mb-3 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 py-4";
+  const iconContainerClassName = notification.isRead
+    ? "mt-0.5 h-11 w-11 rounded-full bg-input-background dark:bg-input-background-dark items-center justify-center"
+    : "mt-0.5 h-11 w-11 rounded-full bg-surface-active dark:bg-surface-active-dark items-center justify-center";
+  const titleClassName = notification.isRead
+    ? "flex-1 text-base font-semibold text-on-surface-soft dark:text-on-surface-soft-dark"
+    : "flex-1 text-base font-bold text-on-surface dark:text-on-surface-dark";
+  const bodyClassName = notification.isRead
+    ? "mt-1 text-sm leading-5 text-on-surface-muted dark:text-on-surface-muted-dark"
+    : "mt-1 text-sm leading-5 text-on-surface-soft dark:text-on-surface-soft-dark";
+  const actionClassName = notification.isRead
+    ? "mt-2 text-xs font-semibold text-on-surface-muted dark:text-on-surface-muted-dark"
+    : "mt-2 text-xs font-semibold text-primary dark:text-primary-dim";
 
   return (
     <TouchableOpacity
       activeOpacity={0.85}
-      className="mb-3 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 py-4"
+      className={containerClassName}
       disabled={disabled}
       onPress={onPress}
       testID={`notification-item-${notification.id}`}
     >
       <View className="flex-row items-start">
-        <View className="mt-0.5 h-11 w-11 rounded-full bg-surface-active dark:bg-surface-active-dark items-center justify-center">
+        <View className={iconContainerClassName}>
           <Ionicons
-            color={theme.primary}
+            color={notification.isRead ? theme.textMuted : theme.primary}
             name={iconNameForType(notification.type)}
             size={20}
           />
@@ -73,7 +88,7 @@ export function NotificationListItem({
 
         <View className="ml-3 flex-1">
           <View className="flex-row items-start justify-between gap-3">
-            <Text className="flex-1 text-base font-bold text-on-surface dark:text-on-surface-dark">
+            <Text className={titleClassName}>
               {notification.title}
             </Text>
             <Text className="text-xs font-semibold text-on-surface-soft dark:text-on-surface-soft-dark">
@@ -81,12 +96,12 @@ export function NotificationListItem({
             </Text>
           </View>
 
-          <Text className="mt-1 text-sm leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
+          <Text className={bodyClassName}>
             {notification.message}
           </Text>
 
           {notification.targetPath && (
-            <Text className="mt-2 text-xs font-semibold text-primary dark:text-primary-dim">
+            <Text className={actionClassName}>
               View details
             </Text>
           )}
