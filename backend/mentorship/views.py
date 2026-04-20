@@ -1,5 +1,6 @@
 """Views for mentorship request and match API endpoints."""
 
+import logging
 from typing import Any, cast
 
 from django.db import IntegrityError
@@ -54,12 +55,25 @@ _MENTEE_REQUIRED = {"detail": "You need a MENTEE profile to send mentorship requ
 _MENTOR_REQUIRED = {"detail": "You need a MENTOR profile to access this resource."}
 _NO_PROFILE = {"detail": "Profile not found."}
 _SLOT_BOOKING_FAILED = {"detail": "Selected slot could not be booked while accepting this request."}
+_NO_ACTIVE_BOOKING = {"detail": "This session has no active booking to cancel."}
 _INVALID_MEETING_SESSION_STATUS = {
     "detail": (
         "Invalid status. Use one of: upcoming, past, scheduled, rescheduled, canceled, completed."
     )
 }
 _INVALID_MEETING_SESSION_ROLE = {"detail": "Invalid role. Use one of: mentor, mentee, all."}
+
+logger = logging.getLogger(__name__)
+
+
+def _create_notification_best_effort(**kwargs: Any) -> None:
+    """Persist notifications without breaking the primary request flow on failure."""
+    try:
+        Notification.objects.create(**kwargs)
+    except IntegrityError as exc:
+        logger.warning("Notification persistence skipped due to integrity error: %s", exc)
+    except Exception:
+        logger.exception("Notification persistence failed for mentorship flow.")
 
 
 class MyRequestsListAPIView(APIView):
@@ -209,11 +223,11 @@ class RespondToRequestAPIView(APIView):
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
-        if new_status == MentorshipRequest.Status.ACCEPTED:
-            Notification.objects.create(
+        if mentorship_request.status == MentorshipRequest.Status.ACCEPTED:
+            _create_notification_best_effort(
                 user=mentorship_request.mentee.user,
-                type='new_match',
-                message='Your mentorship request has been accepted.',
+                type="new_match",
+                message="Your mentorship request has been accepted.",
             )
 
         return Response(
@@ -376,29 +390,19 @@ class CancelSessionAPIView(APIView):
                 actor=request.user,
                 actor_profile=profile,
             )
-        except NoActiveBookingError:
-            return Response(
-                {"detail": "This session has no active booking to cancel."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except SlotNotBookedError:
-            return Response(
-                {"detail": "This session has no active booking to cancel."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        except (NoActiveBookingError, SlotNotBookedError):
+            return Response(_NO_ACTIVE_BOOKING, status=status.HTTP_400_BAD_REQUEST)
         except BookingCancelNotAllowedError:
             return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
-        mentorship_request.refresh_from_db()
-
         # Notify the other participant
         other_user = match.mentor.user if request.user == match.mentee.user else match.mentee.user
-        Notification.objects.create(
+        _create_notification_best_effort(
             user=other_user,
-            type='session_canceled',
-            message='The session has been canceled.',
+            type="session_canceled",
+            message="The session has been canceled.",
         )
 
         return Response(
@@ -488,13 +492,11 @@ class RescheduleSessionAPIView(APIView):
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
-        mentorship_request.refresh_from_db()
-
         # Notify the mentor
-        Notification.objects.create(
+        _create_notification_best_effort(
             user=match.mentor.user,
-            type='session_rescheduled',
-            message='The session has been rescheduled.',
+            type="session_rescheduled",
+            message="The session has been rescheduled.",
         )
 
         return Response(
