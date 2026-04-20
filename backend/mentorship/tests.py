@@ -1078,27 +1078,31 @@ class MentorshipServiceTests(TestCase):
 
     def test_create_mentorship_request_creates_notification(self) -> None:
         from mentorship.services import create_mentorship_request
-        
+
         slot = AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
             start_at=timezone.now() + timedelta(days=5),
             end_at=timezone.now() + timedelta(days=5, hours=1),
         )
-        
+
         create_mentorship_request(
             mentee_profile=self.mentee_profile,
             mentor_profile=self.mentor_profile,
             selected_slot=slot,
         )
-        
+
         notification = Notification.objects.filter(
             user=self.mentor_user, type=NotificationType.NEW_MENTORSHIP_REQUEST
         ).first()
         self.assertIsNotNone(notification)
+        assert notification is not None
+        self.assertEqual(notification.title, "New Mentorship Request")
+        self.assertEqual(notification.actor, self.mentee_profile)
+        self.assertEqual(notification.resource_type, "mentorship_request")
 
     def test_respond_to_mentorship_request_accept_creates_notification(self) -> None:
         from mentorship.services import respond_to_mentorship_request
-        
+
         slot = AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
             start_at=timezone.now() + timedelta(days=5),
@@ -1109,17 +1113,21 @@ class MentorshipServiceTests(TestCase):
             mentee=self.mentee_profile,
             slot=slot,
         )
-        
+
         respond_to_mentorship_request(mentorship_request=req, action="accept")
-        
+
         notification = Notification.objects.filter(
             user=self.mentee_user, type=NotificationType.NEW_MATCH
         ).first()
         self.assertIsNotNone(notification)
+        assert notification is not None
+        self.assertEqual(notification.title, "Request Accepted")
+        self.assertEqual(notification.actor, self.mentor_profile)
+        self.assertEqual(notification.resource_type, "match")
 
     def test_respond_to_mentorship_request_reject_creates_notification(self) -> None:
         from mentorship.services import respond_to_mentorship_request
-        
+
         slot = AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
             start_at=timezone.now() + timedelta(days=5),
@@ -1130,17 +1138,21 @@ class MentorshipServiceTests(TestCase):
             mentee=self.mentee_profile,
             slot=slot,
         )
-        
+
         respond_to_mentorship_request(mentorship_request=req, action="reject")
-        
+
         notification = Notification.objects.filter(
             user=self.mentee_user, type=NotificationType.MENTORSHIP_REQUEST_REJECTED
         ).first()
         self.assertIsNotNone(notification)
+        assert notification is not None
+        self.assertEqual(notification.title, "Request Rejected")
+        self.assertEqual(notification.actor, self.mentor_profile)
+        self.assertEqual(notification.resource_type, "mentorship_request")
 
     def test_cancel_match_session_creates_notification(self) -> None:
         from mentorship.services import cancel_match_session, respond_to_mentorship_request
-        
+
         slot = AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
             start_at=timezone.now() + timedelta(days=5),
@@ -1152,21 +1164,32 @@ class MentorshipServiceTests(TestCase):
             slot=slot,
         )
         respond_to_mentorship_request(mentorship_request=req, action="accept")
-        
+
         match = Match.objects.get(request=req)
         session = MeetingSession.objects.filter(match=match).first()
         assert session is not None
-        
-        cancel_match_session(session=session, actor=self.mentee_user, actor_profile=self.mentee_profile)
-        
-        notification = Notification.objects.filter(
-            user=self.mentor_user, type=NotificationType.SESSION_CANCELED
-        ).first()
-        self.assertIsNotNone(notification)
+
+        cancel_match_session(
+            session=session,
+            actor=self.mentee_user,
+            actor_profile=self.mentee_profile,
+        )
+
+        notifications = Notification.objects.filter(type=NotificationType.SESSION_CANCELED)
+        self.assertEqual(notifications.count(), 2)
+
+        mentor_notification = notifications.filter(user=self.mentor_user).first()
+        mentee_notification = notifications.filter(user=self.mentee_user).first()
+        self.assertIsNotNone(mentor_notification)
+        self.assertIsNotNone(mentee_notification)
+        assert mentor_notification is not None
+        self.assertEqual(mentor_notification.title, "Session Canceled")
+        self.assertEqual(mentor_notification.actor, self.mentee_profile)
+        self.assertEqual(mentor_notification.resource_type, "meeting_session")
 
     def test_reschedule_match_session_creates_notification(self) -> None:
         from mentorship.services import reschedule_match_session, respond_to_mentorship_request
-        
+
         slot = AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
             start_at=timezone.now() + timedelta(days=5),
@@ -1178,54 +1201,66 @@ class MentorshipServiceTests(TestCase):
             slot=slot,
         )
         respond_to_mentorship_request(mentorship_request=req, action="accept")
-        
+
         match = Match.objects.get(request=req)
         new_slot = AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
             start_at=timezone.now() + timedelta(days=6),
             end_at=timezone.now() + timedelta(days=6, hours=1),
         )
-        
+
         reschedule_match_session(match=match, actor=self.mentee_user, new_slot=new_slot)
-        
-        notification = Notification.objects.filter(
-            user=self.mentor_user, type=NotificationType.SESSION_RESCHEDULED
-        ).first()
-        self.assertIsNotNone(notification)
+
+        notifications = Notification.objects.filter(type=NotificationType.SESSION_RESCHEDULED)
+        self.assertEqual(notifications.count(), 2)
+
+        mentor_notification = notifications.filter(user=self.mentor_user).first()
+        mentee_notification = notifications.filter(user=self.mentee_user).first()
+        self.assertIsNotNone(mentor_notification)
+        self.assertIsNotNone(mentee_notification)
+        assert mentor_notification is not None
+        self.assertEqual(mentor_notification.title, "Session Rescheduled")
+        self.assertEqual(mentor_notification.actor, self.mentee_profile)
+        self.assertEqual(mentor_notification.resource_type, "meeting_session")
 
     def test_deactivate_match_creates_notification(self) -> None:
         from mentorship.services import deactivate_match
-        
-        req = _create_accepted_request(mentor=self.mentor_profile, mentee=self.mentee_profile)
-        match = Match.objects.get(request=req)
-        
-        deactivate_match(match=match, actor_profile=self.mentee_profile)
-        
-        notification = Notification.objects.filter(
-            user=self.mentor_user, type=NotificationType.MATCH_DEACTIVATED
-        ).first()
-        self.assertIsNotNone(notification)
-        self.assertEqual(notification.title, "Match Deactivated")
 
-    def test_feedback_batch_creates_notification(self) -> None:
-        from mentorship.services import create_match_feedback
-        from django.test import override_settings
-        
         req = _create_accepted_request(mentor=self.mentor_profile, mentee=self.mentee_profile)
         match = Match.objects.get(request=req)
-        
-        with override_settings(RATING_UPDATE_THRESHOLD=1):
-            create_match_feedback(
-                match=match,
-                submitted_by=self.mentee_profile,
-                rating=5,
-                text="Great!",
-            )
-            
+
+        deactivate_match(match=match, actor_profile=self.mentee_profile)
+
+        notifications = Notification.objects.filter(type=NotificationType.MATCH_DEACTIVATED)
+        self.assertEqual(notifications.count(), 2)
+
+        mentor_notification = notifications.filter(user=self.mentor_user).first()
+        mentee_notification = notifications.filter(user=self.mentee_user).first()
+        self.assertIsNotNone(mentor_notification)
+        self.assertIsNotNone(mentee_notification)
+        assert mentor_notification is not None
+        self.assertEqual(mentor_notification.title, "Match Deactivated")
+        self.assertEqual(mentor_notification.actor, self.mentee_profile)
+        self.assertEqual(mentor_notification.resource_type, "match")
+
+    def test_feedback_creation_creates_notification(self) -> None:
+        from mentorship.services import create_match_feedback
+
+        req = _create_accepted_request(mentor=self.mentor_profile, mentee=self.mentee_profile)
+        match = Match.objects.get(request=req)
+
+        create_match_feedback(
+            match=match,
+            submitted_by=self.mentee_profile,
+            rating=5,
+            text="Great!",
+        )
+
         notification = Notification.objects.filter(
             user=self.mentor_user, type=NotificationType.NEW_FEEDBACK_AVAILABLE
         ).first()
         self.assertIsNotNone(notification)
+        assert notification is not None
         self.assertEqual(notification.title, "New Feedback Available")
+        self.assertEqual(notification.actor, self.mentee_profile)
         self.assertEqual(notification.resource_type, "profile")
-

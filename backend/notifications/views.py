@@ -31,6 +31,8 @@ ordered by most recent first.
 * `session_canceled`: A session was canceled.
 * `session_rescheduled`: A session was rescheduled.
 * `match_deactivated`: A mentorship match was deactivated.
+* `new_message`: User received a private message.
+* `new_feedback_available`: User received new feedback.
 """,
         tags=["Notifications"],
     )
