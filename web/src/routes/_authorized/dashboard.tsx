@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Loader2, XCircle, X as XIcon } from 'lucide-react'
 import { useState } from "react"
+import {toast} from "sonner";
 
 
 export const Route = createFileRoute('/_authorized/dashboard')({
@@ -306,9 +307,23 @@ function MentorDashboardView() {
               ...prev,
               [requestId]: action === 'accept' ? 'ACCEPTED' : 'REJECTED',
             }))
+            if (action === 'accept') {
+              toast.success('Request accepted', {
+                description: 'The mentee has been notified and the session is confirmed.',
+              })
+            } else {
+              toast.warning('Request declined', {
+                description: 'The mentee has been notified.',
+              })
+            }
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'requests'] })
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'matches'] })
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'meeting-sessions', 'me'] })
+          },
+          onError: (err) => {
+            toast.error('Failed to respond', {
+              description: err.message,
+            })
           },
         }
     )

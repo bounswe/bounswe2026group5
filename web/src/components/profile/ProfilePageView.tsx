@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { getInitials } from '#/lib/utils.ts'
 import { AvailabilityCalendar } from "#/components/profile/AvailabilityCalendar.tsx";
 import { useAvailabilitySlots } from "#/lib/queries/ProfileTimeSlotQueries.ts";
+import {Toaster} from "#/components/ui/sonner.tsx";
 
 interface BaseMappedProfile {
   full_name: string
