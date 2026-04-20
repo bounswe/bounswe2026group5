@@ -11,6 +11,9 @@ const mockSubmitFeedbackMutation = jest.fn();
 const mockAvailabilitySlotsQuery = jest.fn();
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+jest.mock("@/components/notifications/NotificationBell", () => ({
+  NotificationBell: () => null,
+}));
 jest.mock("react-native-calendars", () => ({ Calendar: "View" }));
 jest.mock("@/components/dashboard/RescheduleBottomSheet", () => ({
   RescheduleBottomSheet: ({
