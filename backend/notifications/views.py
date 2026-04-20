@@ -21,7 +21,17 @@ class NotificationListAPIView(APIView):
             401: OpenApiResponse(description="Authentication required."),
         },
         description="""List all unread notifications for the authenticated user,
-                       ordered by most recent first.""",
+ordered by most recent first.
+
+**Notification Types:**
+* `new_mentorship_request`: User received a mentorship request.
+* `mentorship_request_rejected`: Mentorship request sent by user was rejected.
+* `new_match`: Mentorship request sent by user was accepted (new match created).
+* `slot_booked`: A mentee booked an availability slot.
+* `session_canceled`: A session was canceled.
+* `session_rescheduled`: A session was rescheduled.
+* `match_deactivated`: A mentorship match was deactivated.
+""",
         tags=["Notifications"],
     )
     def get(self, request: Request) -> Response:

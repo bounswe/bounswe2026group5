@@ -13,7 +13,6 @@ from rest_framework.views import APIView
 
 from accounts.models import AppUsageMode
 from accounts.permissions import IsUser
-from notifications.models import Notification
 from profiles.models import AvailabilitySlot, Profile
 from profiles.services import (
     BookingCancelNotAllowedError,
@@ -209,13 +208,6 @@ class RespondToRequestAPIView(APIView):
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
-        if new_status == MentorshipRequest.Status.ACCEPTED:
-            Notification.objects.create(
-                user=mentorship_request.mentee.user,
-                type='new_match',
-                message='Your mentorship request has been accepted.',
-            )
-
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
             status=status.HTTP_200_OK,
@@ -393,13 +385,7 @@ class CancelSessionAPIView(APIView):
 
         mentorship_request.refresh_from_db()
 
-        # Notify the other participant
-        other_user = match.mentor.user if request.user == match.mentee.user else match.mentee.user
-        Notification.objects.create(
-            user=other_user,
-            type='session_canceled',
-            message='The session has been canceled.',
-        )
+
 
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
@@ -490,12 +476,7 @@ class RescheduleSessionAPIView(APIView):
 
         mentorship_request.refresh_from_db()
 
-        # Notify the mentor
-        Notification.objects.create(
-            user=match.mentor.user,
-            type='session_rescheduled',
-            message='The session has been rescheduled.',
-        )
+
 
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
@@ -538,7 +519,7 @@ class DeactivateMatchAPIView(APIView):
         if profile not in (match.mentor, match.mentee):
             return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
 
-        match = deactivate_match(match=match)
+        match = deactivate_match(match=match, actor_profile=profile)
 
         return Response(MatchSerializer(match).data, status=status.HTTP_200_OK)
 

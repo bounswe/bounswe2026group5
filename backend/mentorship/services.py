@@ -8,6 +8,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Avg, F
 from django.utils import timezone
 
+from notifications.models import Notification, NotificationType
 from profiles.models import AvailabilitySlot, Profile
 from profiles.services import (
     BookingCancelNotAllowedError,
@@ -46,12 +47,21 @@ def create_mentorship_request(
     cover_letter: str = "",
 ) -> MentorshipRequest:
     """Create and persist a mentorship request for the given profiles and slot."""
-    return MentorshipRequest.objects.create(
+    mentorship_request = MentorshipRequest.objects.create(
         mentor=mentor_profile,
         mentee=mentee_profile,
         slot=selected_slot,
         cover_letter=cover_letter,
     )
+    
+    # Notify the mentor about the new request
+    Notification.objects.create(
+        user=mentor_profile.user,
+        type=NotificationType.NEW_MENTORSHIP_REQUEST,
+        message=f'{mentee_profile.display_name} has sent you a mentorship request.',
+    )
+    
+    return mentorship_request
 
 
 def respond_to_mentorship_request(
@@ -83,6 +93,20 @@ def respond_to_mentorship_request(
 
         if new_status == MentorshipRequest.Status.ACCEPTED:
             ensure_match_and_initial_session(mentorship_request=mentorship_request)
+            
+            # Notify the mentee about the acceptance
+            Notification.objects.create(
+                user=mentorship_request.mentee.user,
+                type=NotificationType.NEW_MATCH,
+                message='Your mentorship request has been accepted.',
+            )
+        elif new_status == MentorshipRequest.Status.REJECTED:
+            # Notify the mentee about the rejection
+            Notification.objects.create(
+                user=mentorship_request.mentee.user,
+                type=NotificationType.MENTORSHIP_REQUEST_REJECTED,
+                message='Your mentorship request has been denied.',
+            )
 
     return mentorship_request
 
@@ -162,6 +186,13 @@ def book_match_session(*, mentor_profile: Profile, slot_id: Any, actor: Any) -> 
                         "status": MeetingSession.Status.SCHEDULED,
                     },
                 )
+                
+                # Notify the mentor about the booking
+                Notification.objects.create(
+                    user=mentor_profile.user,
+                    type=NotificationType.SLOT_BOOKED,
+                    message=f'{mentee_profile.display_name} has booked a slot on {slot.start_at.strftime("%B %d, %Y at %I:%M %p")} - {slot.end_at.strftime("%I:%M %p")}.',
+                )
         except Profile.DoesNotExist:
             pass
 
@@ -215,6 +246,14 @@ def cancel_match_session(
             actor=actor,
         )
         _mark_latest_meeting_session_canceled(match=match, canceled_by=actor_profile)
+
+        # Notify the other participant
+        other_user = match.mentor.user if actor == match.mentee.user else match.mentee.user
+        Notification.objects.create(
+            user=other_user,
+            type=NotificationType.SESSION_CANCELED,
+            message='The session has been canceled.',
+        )
 
     mentorship_request.refresh_from_db()
     return mentorship_request
@@ -289,15 +328,32 @@ def reschedule_match_session(
         mentorship_request.save(update_fields=["slot"])
 
         _upsert_rescheduled_meeting_session(match=match, new_slot=new_slot)
+        
+        # Notify the mentor
+        Notification.objects.create(
+            user=match.mentor.user,
+            type=NotificationType.SESSION_RESCHEDULED,
+            message='The session has been rescheduled.',
+        )
 
     mentorship_request.refresh_from_db()
     return mentorship_request
 
 
-def deactivate_match(*, match: Match) -> Match:
+def deactivate_match(*, match: Match, actor_profile: Profile) -> Match:
     """Set a match as inactive and return the updated in-memory instance."""
-    Match.objects.filter(pk=match.pk).update(is_active=False)
-    match.is_active = False
+    with transaction.atomic():
+        Match.objects.filter(pk=match.pk).update(is_active=False)
+        match.is_active = False
+        
+        # Notify the other participant about the deactivation
+        other_user = match.mentor.user if actor_profile == match.mentee else match.mentee.user
+        Notification.objects.create(
+            user=other_user,
+            type=NotificationType.MATCH_DEACTIVATED,
+            message='Your mentorship match has been deactivated.',
+        )
+
     return match
 
 
