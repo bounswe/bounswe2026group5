@@ -33,6 +33,20 @@ class NotificationModelTest(TestCase):
         self.assertFalse(notification.is_read)
         self.assertIsNotNone(notification.created_at)
 
+    def test_notification_string_representation_uses_type_and_message_prefix(self) -> None:
+        """Test __str__ contains type and truncated message prefix."""
+        long_message = "A" * 60
+        notification = Notification.objects.create(
+            user=self.user,
+            type="reminder",
+            message=long_message,
+        )
+
+        text = str(notification)
+        self.assertIsInstance(text, str)
+        self.assertIn("reminder", text)
+        self.assertIn(long_message[:50], text)
+
 
 class NotificationAPITest(APITestCase):
     """Test Notification API views."""
@@ -76,7 +90,64 @@ class NotificationAPITest(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_mark_notification_read(self):
+    def test_list_unread_notifications_empty(self) -> None:
+        """Test unread list returns empty array when user has no unread notifications."""
+        url = reverse("notification-list")
+        response = cast("Response", self.client.get(url))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = cast(list[Any], response.data)
+        self.assertEqual(data, [])
+
+    def test_list_unread_notifications_excludes_other_users(self) -> None:
+        """Test unread list includes only notifications owned by authenticated user."""
+        other_user = User.objects.create_user(email="other-list@example.com", password="password")
+        Notification.objects.create(
+            user=other_user,
+            type="test",
+            message="Other user unread",
+            is_read=False,
+        )
+        Notification.objects.create(
+            user=self.user,
+            type="test",
+            message="My unread",
+            is_read=False,
+        )
+
+        url = reverse("notification-list")
+        response = cast("Response", self.client.get(url))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = cast(list[Any], response.data)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["message"], "My unread")
+
+    def test_list_unread_notifications_ordered_most_recent_first(self) -> None:
+        """Test unread notifications are ordered by created_at descending."""
+        older = Notification.objects.create(
+            user=self.user,
+            type="test",
+            message="Older unread",
+            is_read=False,
+        )
+        newer = Notification.objects.create(
+            user=self.user,
+            type="test",
+            message="Newer unread",
+            is_read=False,
+        )
+
+        url = reverse("notification-list")
+        response = cast("Response", self.client.get(url))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = cast(list[Any], response.data)
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]["id"], str(newer.id))
+        self.assertEqual(data[1]["id"], str(older.id))
+
+    def test_mark_notification_read(self) -> None:
         """Test marking a notification as read."""
         notification = Notification.objects.create(
             user=self.user,
@@ -92,7 +163,7 @@ class NotificationAPITest(APITestCase):
         notification.refresh_from_db()
         self.assertTrue(notification.is_read)
 
-    def test_mark_notification_read_not_owner(self):
+    def test_mark_notification_read_not_owner(self) -> None:
         """Test marking a notification as read by non-owner."""
         other_user = User.objects.create_user(email="other@example.com", password="password")
         notification = Notification.objects.create(
@@ -105,3 +176,36 @@ class NotificationAPITest(APITestCase):
         url = reverse("notification-mark-read", kwargs={"notification_id": notification.id})
         response = self.client.put(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_mark_notification_read_is_idempotent_for_already_read(self) -> None:
+        """Test marking an already-read notification still succeeds."""
+        notification = Notification.objects.create(
+            user=self.user,
+            type="test",
+            message="Already read",
+            is_read=True,
+        )
+
+        url = reverse("notification-mark-read", kwargs={"notification_id": notification.id})
+        response = self.client.put(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        notification.refresh_from_db()
+        self.assertTrue(notification.is_read)
+
+    def test_mark_notification_read_requires_auth(self) -> None:
+        """Test unauthenticated access is rejected for mark-as-read endpoint."""
+        from rest_framework.test import APIClient
+
+        cast(APIClient, self.client).force_authenticate(user=None)
+        notification = Notification.objects.create(
+            user=self.user,
+            type="test",
+            message="Needs auth",
+            is_read=False,
+        )
+
+        url = reverse("notification-mark-read", kwargs={"notification_id": notification.id})
+        response = self.client.put(url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
