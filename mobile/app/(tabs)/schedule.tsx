@@ -7,6 +7,7 @@
 import { RescheduleBottomSheet } from "@/components/dashboard/RescheduleBottomSheet";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -173,6 +174,7 @@ export default function ScheduleScreen() {
           <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Schedule
           </Text>
+          <NotificationBell />
         </View>
       </View>
 

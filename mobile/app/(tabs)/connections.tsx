@@ -25,6 +25,7 @@ import {
 import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
 import { RequestCard } from "@/components/dashboard/RequestCard";
 import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -813,6 +814,7 @@ export default function ConnectionsScreen() {
           <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Connections
           </Text>
+          <NotificationBell />
         </View>
       </View>
 

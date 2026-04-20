@@ -10,6 +10,7 @@ import {
   EditProfileModal,
   UserProfileData,
 } from "@/components/profile/EditProfileModal";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
@@ -298,12 +299,15 @@ export default function ProfileScreen() {
           <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Profile
           </Text>
-          <TouchableOpacity
-            onPress={() => router.push("/settings" as any)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="settings-outline" size={24} color="#6b7280" />
-          </TouchableOpacity>
+          <View className="flex-row items-center gap-4">
+            <NotificationBell />
+            <TouchableOpacity
+              onPress={() => router.push("/settings" as any)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="settings-outline" size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
