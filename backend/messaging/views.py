@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsRegularUser
+from notifications.models import Notification, NotificationType
 from profiles.models import Profile
 
 from .models import Conversation, Message, MessageReport
@@ -144,6 +145,18 @@ class ConversationDetailAPIView(APIView):
             sender=profile,
             body=validated_data.get("body", ""),
             attachment=validated_data.get("attachment"),
+        )
+        
+        # Notify the other participant
+        other_profile = conversation.match.mentor if profile == conversation.match.mentee else conversation.match.mentee
+        Notification.objects.create(
+            user=other_profile.user,
+            type=NotificationType.NEW_MESSAGE,
+            title="New Message",
+            actor=profile,
+            resource_type="conversation",
+            resource_id=conversation.id,
+            message=f"You have received a new message from {profile.display_name}.",
         )
 
         response_serializer = MessageSerializer(message, context={"request": request})
