@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Any, cast
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -46,8 +46,8 @@ class NotificationAPITest(APITestCase):
 
         cast(APIClient, self.client).force_authenticate(user=self.user)
 
-    def test_list_unread_notifications(self) -> None:
-        """Test listing unread notifications."""
+    def test_list_notifications_includes_read_history(self) -> None:
+        """Recent notification list includes unread and read history."""
         Notification.objects.create(
             user=self.user,
             type="test",
@@ -65,8 +65,11 @@ class NotificationAPITest(APITestCase):
         response = cast("Response", self.client.get(url))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = cast(list[Any], response.data)
-        self.assertEqual(len(data), 1)
+        self.assertEqual(len(data), 2)
         self.assertEqual(data[0]["message"], "Unread message")
+        self.assertEqual(data[0]["is_read"], False)
+        self.assertEqual(data[1]["message"], "Read message")
+        self.assertEqual(data[1]["is_read"], True)
 
     def test_list_notifications_requires_auth(self) -> None:
         """Test unauthenticated access is rejected for notification list."""
@@ -109,7 +112,7 @@ class NotificationAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_list_unread_notifications_includes_structured_fields(self) -> None:
-        """Unread notification list includes actor/resource metadata for client routing."""
+        """Notification list includes actor/resource metadata for client routing."""
         Notification.objects.create(
             user=self.user,
             type="new_message",
@@ -141,3 +144,34 @@ class NotificationAPITest(APITestCase):
             data[0]["extra_metadata"],
             {"conversation_preview": "Hey there"},
         )
+
+    @override_settings(NOTIFICATIONS_HISTORY_LIMIT=2)
+    def test_list_notifications_respects_history_limit(self) -> None:
+        """Notification list is capped to the configured history size."""
+        Notification.objects.create(
+            user=self.user,
+            type="test",
+            message="Oldest unread",
+            is_read=False,
+        )
+        Notification.objects.create(
+            user=self.user,
+            type="test",
+            message="Newest unread",
+            is_read=False,
+        )
+        Notification.objects.create(
+            user=self.user,
+            type="test",
+            message="Newest read",
+            is_read=True,
+        )
+
+        url = reverse("notification-list")
+        response = cast("Response", self.client.get(url))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        data = cast(list[Any], response.data)
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]["message"], "Newest unread")
+        self.assertEqual(data[1]["message"], "Oldest unread")
