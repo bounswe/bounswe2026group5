@@ -209,11 +209,11 @@ class RespondToRequestAPIView(APIView):
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
-        if new_status == MentorshipRequest.Status.ACCEPTED:
+        if mentorship_request.status == MentorshipRequest.Status.ACCEPTED:
             Notification.objects.create(
                 user=mentorship_request.mentee.user,
-                type='new_match',
-                message='Your mentorship request has been accepted.',
+                type="new_match",
+                message="Your mentorship request has been accepted.",
             )
 
         return Response(
@@ -397,8 +397,8 @@ class CancelSessionAPIView(APIView):
         other_user = match.mentor.user if request.user == match.mentee.user else match.mentee.user
         Notification.objects.create(
             user=other_user,
-            type='session_canceled',
-            message='The session has been canceled.',
+            type="session_canceled",
+            message="The session has been canceled.",
         )
 
         return Response(
@@ -493,8 +493,8 @@ class RescheduleSessionAPIView(APIView):
         # Notify the mentor
         Notification.objects.create(
             user=match.mentor.user,
-            type='session_rescheduled',
-            message='The session has been rescheduled.',
+            type="session_rescheduled",
+            message="The session has been rescheduled.",
         )
 
         return Response(
