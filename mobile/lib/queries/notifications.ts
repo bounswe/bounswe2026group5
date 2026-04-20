@@ -170,8 +170,10 @@ export function useNotificationsQuery(username?: string) {
     queryKey: notificationsQueryKey(username),
     queryFn: fetchNotifications,
     enabled: Boolean(username),
-    staleTime: 30_000,
+    staleTime: 10_000,
     refetchOnMount: "always",
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
   });
 }
 

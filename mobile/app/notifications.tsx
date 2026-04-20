@@ -28,6 +28,10 @@ export default function NotificationsScreen() {
   const currentUsername = useAuthStore((state) => state.user?.username);
   const notificationsQuery = useNotificationsQuery(currentUsername);
   const markReadMutation = useMarkNotificationReadMutation(currentUsername);
+  const errorMessage =
+    notificationsQuery.error instanceof Error
+      ? notificationsQuery.error.message
+      : "Could not load notifications.";
 
   const handleOpenNotification = async (
     notificationId: string,
@@ -49,7 +53,10 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-surface dark:bg-surface-dark">
+    <SafeAreaView
+      className="flex-1 bg-surface dark:bg-surface-dark"
+      edges={["left", "right", "bottom"]}
+    >
       <View
         className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
         style={{ paddingTop: insets.top }}
@@ -92,6 +99,9 @@ export default function NotificationsScreen() {
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-base font-semibold text-error text-center">
             Could not load notifications.
+          </Text>
+          <Text className="mt-2 text-center text-sm leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
+            {errorMessage}
           </Text>
           <TouchableOpacity
             className="mt-4 rounded-xl bg-primary px-4 py-3"
