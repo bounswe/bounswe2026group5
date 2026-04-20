@@ -1,0 +1,100 @@
+name: API Docs Wiki Sync
+
+"on":
+  push:
+    branches: [main, dev]
+    paths:
+      - "backend/**/views.py"
+      - "backend/**/urls.py"
+      - "scripts/gen_api_wiki.py"
+      - ".github/workflows/api-docs-wiki.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: api-docs-wiki-sync
+  cancel-in-progress: true
+
+jobs:
+  generate-and-sync:
+    name: Generate API Docs and Sync Wiki
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:15-3.4-alpine
+        env:
+          POSTGRES_DB: mentorship_docs
+          POSTGRES_USER: docsuser
+          POSTGRES_PASSWORD: docs-${{ github.run_id }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U docsuser -d mentorship_docs"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      SECRET_KEY: ci-docs-${{ github.run_id }}-${{ github.run_attempt }}
+      DEBUG: "False"
+      DATABASE_URL: postgres://docsuser:docs-${{ github.run_id }}@localhost:5432/mentorship_docs
+
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install GIS system dependencies
+        run: sudo apt-get update && sudo apt-get install -y gdal-bin libgdal-dev
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+        working-directory: backend
+
+      - name: Install Widdershins
+        run: npm install -g widdershins
+
+      - name: Generate schema and API wiki markdown
+        run: python scripts/gen_api_wiki.py
+
+      - name: Checkout wiki repo
+        run: git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki
+
+      - name: Copy generated API doc into wiki
+        run: cp backend/api_wiki.md wiki/API-Documentation.md
+
+      - name: Detect wiki changes
+        id: wiki_diff
+        run: |
+          cd wiki
+          if git diff --quiet -- API-Documentation.md; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No wiki updates detected."
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "API wiki page updated."
+          fi
+
+      - name: Commit and push wiki changes
+        if: steps.wiki_diff.outputs.changed == 'true'
+        run: |
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add API-Documentation.md
+          git commit -m "docs: auto-update API wiki"
+          git push
