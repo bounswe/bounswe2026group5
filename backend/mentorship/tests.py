@@ -14,6 +14,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import AppUsageMode
 from mentorship.models import Feedback, Match, MeetingSession, MentorshipRequest
 from mentorship.services import ensure_match_and_initial_session
+from notifications.models import Notification, NotificationType
 from profiles.models import AvailabilitySlot, Profile
 
 User: Any = get_user_model()
@@ -1074,3 +1075,134 @@ class MentorshipServiceTests(TestCase):
         assert session is not None
         self.assertEqual(session.status, MeetingSession.Status.SCHEDULED)
         self.assertEqual(session.scheduled_start_at_utc.isoformat(), slot.start_at.isoformat())
+
+    def test_create_mentorship_request_creates_notification(self) -> None:
+        from mentorship.services import create_mentorship_request
+        
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=timezone.now() + timedelta(days=5),
+            end_at=timezone.now() + timedelta(days=5, hours=1),
+        )
+        
+        create_mentorship_request(
+            mentee_profile=self.mentee_profile,
+            mentor_profile=self.mentor_profile,
+            selected_slot=slot,
+        )
+        
+        notification = Notification.objects.filter(
+            user=self.mentor_user, type=NotificationType.NEW_MENTORSHIP_REQUEST
+        ).first()
+        self.assertIsNotNone(notification)
+
+    def test_respond_to_mentorship_request_accept_creates_notification(self) -> None:
+        from mentorship.services import respond_to_mentorship_request
+        
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=timezone.now() + timedelta(days=5),
+            end_at=timezone.now() + timedelta(days=5, hours=1),
+        )
+        req = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=slot,
+        )
+        
+        respond_to_mentorship_request(mentorship_request=req, action="accept")
+        
+        notification = Notification.objects.filter(
+            user=self.mentee_user, type=NotificationType.NEW_MATCH
+        ).first()
+        self.assertIsNotNone(notification)
+
+    def test_respond_to_mentorship_request_reject_creates_notification(self) -> None:
+        from mentorship.services import respond_to_mentorship_request
+        
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=timezone.now() + timedelta(days=5),
+            end_at=timezone.now() + timedelta(days=5, hours=1),
+        )
+        req = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=slot,
+        )
+        
+        respond_to_mentorship_request(mentorship_request=req, action="reject")
+        
+        notification = Notification.objects.filter(
+            user=self.mentee_user, type=NotificationType.MENTORSHIP_REQUEST_REJECTED
+        ).first()
+        self.assertIsNotNone(notification)
+
+    def test_cancel_match_session_creates_notification(self) -> None:
+        from mentorship.services import cancel_match_session, respond_to_mentorship_request
+        
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=timezone.now() + timedelta(days=5),
+            end_at=timezone.now() + timedelta(days=5, hours=1),
+        )
+        req = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=slot,
+        )
+        respond_to_mentorship_request(mentorship_request=req, action="accept")
+        
+        match = Match.objects.get(request=req)
+        session = MeetingSession.objects.filter(match=match).first()
+        assert session is not None
+        
+        cancel_match_session(session=session, actor=self.mentee_user, actor_profile=self.mentee_profile)
+        
+        notification = Notification.objects.filter(
+            user=self.mentor_user, type=NotificationType.SESSION_CANCELED
+        ).first()
+        self.assertIsNotNone(notification)
+
+    def test_reschedule_match_session_creates_notification(self) -> None:
+        from mentorship.services import reschedule_match_session, respond_to_mentorship_request
+        
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=timezone.now() + timedelta(days=5),
+            end_at=timezone.now() + timedelta(days=5, hours=1),
+        )
+        req = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=slot,
+        )
+        respond_to_mentorship_request(mentorship_request=req, action="accept")
+        
+        match = Match.objects.get(request=req)
+        new_slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=timezone.now() + timedelta(days=6),
+            end_at=timezone.now() + timedelta(days=6, hours=1),
+        )
+        
+        reschedule_match_session(match=match, actor=self.mentee_user, new_slot=new_slot)
+        
+        notification = Notification.objects.filter(
+            user=self.mentor_user, type=NotificationType.SESSION_RESCHEDULED
+        ).first()
+        self.assertIsNotNone(notification)
+
+    def test_deactivate_match_creates_notification(self) -> None:
+        from mentorship.services import deactivate_match
+        
+        req = _create_accepted_request(mentor=self.mentor_profile, mentee=self.mentee_profile)
+        match = Match.objects.get(request=req)
+        
+        deactivate_match(match=match, actor_profile=self.mentee_profile)
+        
+        notification = Notification.objects.filter(
+            user=self.mentor_user, type=NotificationType.MATCH_DEACTIVATED
+        ).first()
+        self.assertIsNotNone(notification)
+
