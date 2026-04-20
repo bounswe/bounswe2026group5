@@ -20,6 +20,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
+import {toast} from "sonner";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -86,9 +87,20 @@ function CancelModal({ slot, username, onClose, onSuccess }: CancelModalProps) {
 
     const handleCancel = () => {
         if (!slot.sessionId) return
-        cancelSession.mutate(slot.sessionId, { onSuccess })
+        cancelSession.mutate(slot.sessionId, {
+            onSuccess: () => {
+                toast.warning('Session cancelled', {
+                    description: 'The booking has been removed and the slot is available again.',
+                })
+                onSuccess()
+            },
+            onError: (err) => {
+                toast.error('Could not cancel', {
+                    description: err.message,
+                })
+            },
+        })
     }
-
     return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
             <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -103,9 +115,6 @@ function CancelModal({ slot, username, onClose, onSuccess }: CancelModalProps) {
                     <Muted className="text-sm">
                         This slot is already booked. Cancelling will remove the mentorship session and make the slot available again.
                     </Muted>
-                    {cancelSession.isError && (
-                        <p className="text-xs text-destructive mt-3">{cancelSession.error.message}</p>
-                    )}
                 </div>
                 <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line">
                      <Button variant="outline" onClick={onClose} disabled={cancelSession.isPending}>
@@ -144,18 +153,41 @@ function BookingModal({ slot, mentorUsername, isFirstTime, onClose, onSuccess }:
     const sendRequest = useSendMentorshipRequest()
 
     const isPending = bookSlot.isPending || sendRequest.isPending
-    const error = bookSlot.error?.message || sendRequest.error?.message
 
     const handleSubmit = () => {
         if (isFirstTime) {
             sendRequest.mutate(
                 { mentor_username: mentorUsername, slot_id: slot.id, cover_letter: coverLetter },
-                { onSuccess }
+                {
+                    onSuccess: () => {
+                        toast.success('Request sent!', {
+                            description: 'Your mentorship request has been sent successfully.',
+                        })
+                        onSuccess()
+                    },
+                    onError: (err) => {
+                        toast.error('Failed to send request', {
+                            description: err.message,
+                        })
+                    },
+                }
             )
         } else {
             bookSlot.mutate(
                 { slotId: slot.id },
-                { onSuccess }
+                {
+                    onSuccess: () => {
+                        toast.success('Slot booked!', {
+                            description: 'Your session has been confirmed.',
+                        })
+                        onSuccess()
+                    },
+                    onError: (err) => {
+                        toast.error('Booking failed', {
+                            description: err.message,
+                        })
+                    },
+                }
             )
         }
     }
@@ -204,7 +236,6 @@ function BookingModal({ slot, mentorUsername, isFirstTime, onClose, onSuccess }:
                         </div>
                     )}
 
-                    {error && <p className="text-xs text-destructive">{error}</p>}
                 </div>
 
                 <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line">
@@ -272,8 +303,19 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
             if (existing.is_booked) return
             setTogglingSlotKey(key)
             deleteSlot.mutate(existing.id, {
-                onSuccess: () => { invalidate(); setTogglingSlotKey(null) },
-                onError: () => setTogglingSlotKey(null),
+                onSuccess: () => {
+                    toast.warning('Slot removed', {
+                        description: 'The availability slot has been removed.',
+                    })
+                    invalidate()
+                    setTogglingSlotKey(null)
+                },
+                onError: (err) => {
+                    toast.error('Failed to remove slot', {
+                        description: err.message,
+                    })
+                    setTogglingSlotKey(null)
+                },
             })
         } else {
             setTogglingSlotKey(key)
@@ -284,8 +326,19 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                     endTime: `${String(hour + 1).padStart(2, '0')}:00:00`,
                 },
                 {
-                    onSuccess: () => { invalidate(); setTogglingSlotKey(null) },
-                    onError: () => setTogglingSlotKey(null),
+                    onSuccess: () => {
+                        toast.success('Slot added', {
+                            description: 'You are now available at this time.',
+                        })
+                        invalidate()
+                        setTogglingSlotKey(null)
+                    },
+                    onError: (err) => {
+                        toast.error('Failed to add slot', {
+                            description: err.message,
+                        })
+                        setTogglingSlotKey(null)
+                    },
                 }
             )
         }

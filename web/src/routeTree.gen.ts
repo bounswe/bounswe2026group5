@@ -19,6 +19,7 @@ import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/lo
 import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/about'
 import { Route as OnBoardingGettingToKnowYouRouteImport } from './routes/_onBoarding/gettingToKnowYou'
 import { Route as AuthorizedScheduleRouteImport } from './routes/_authorized/schedule'
+import { Route as AuthorizedMessagesRouteImport } from './routes/_authorized/messages'
 import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/discover'
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 import { Route as AuthorizedConnectionsRouteImport } from './routes/_authorized/connections'
@@ -71,6 +72,11 @@ const AuthorizedScheduleRoute = AuthorizedScheduleRouteImport.update({
   path: '/schedule',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
+const AuthorizedMessagesRoute = AuthorizedMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => AuthorizedRouteRoute,
+} as any)
 const AuthorizedDiscoverRoute = AuthorizedDiscoverRouteImport.update({
   id: '/discover',
   path: '/discover',
@@ -92,6 +98,7 @@ export interface FileRoutesByFullPath {
   '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
+  '/messages': typeof AuthorizedMessagesRoute
   '/schedule': typeof AuthorizedScheduleRoute
   '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/about': typeof UnauthorizedAboutRoute
@@ -104,6 +111,7 @@ export interface FileRoutesByTo {
   '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
+  '/messages': typeof AuthorizedMessagesRoute
   '/schedule': typeof AuthorizedScheduleRoute
   '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/about': typeof UnauthorizedAboutRoute
@@ -120,6 +128,7 @@ export interface FileRoutesById {
   '/_authorized/connections': typeof AuthorizedConnectionsRoute
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
   '/_authorized/discover': typeof AuthorizedDiscoverRoute
+  '/_authorized/messages': typeof AuthorizedMessagesRoute
   '/_authorized/schedule': typeof AuthorizedScheduleRoute
   '/_onBoarding/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/_unauthorized/about': typeof UnauthorizedAboutRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/connections'
     | '/dashboard'
     | '/discover'
+    | '/messages'
     | '/schedule'
     | '/gettingToKnowYou'
     | '/about'
@@ -146,6 +156,7 @@ export interface FileRouteTypes {
     | '/connections'
     | '/dashboard'
     | '/discover'
+    | '/messages'
     | '/schedule'
     | '/gettingToKnowYou'
     | '/about'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/_authorized/connections'
     | '/_authorized/dashboard'
     | '/_authorized/discover'
+    | '/_authorized/messages'
     | '/_authorized/schedule'
     | '/_onBoarding/gettingToKnowYou'
     | '/_unauthorized/about'
@@ -249,6 +261,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedScheduleRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
+    '/_authorized/messages': {
+      id: '/_authorized/messages'
+      path: '/messages'
+      fullPath: '/messages'
+      preLoaderRoute: typeof AuthorizedMessagesRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
     '/_authorized/discover': {
       id: '/_authorized/discover'
       path: '/discover'
@@ -277,6 +296,7 @@ interface AuthorizedRouteRouteChildren {
   AuthorizedConnectionsRoute: typeof AuthorizedConnectionsRoute
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
   AuthorizedDiscoverRoute: typeof AuthorizedDiscoverRoute
+  AuthorizedMessagesRoute: typeof AuthorizedMessagesRoute
   AuthorizedScheduleRoute: typeof AuthorizedScheduleRoute
 }
 
@@ -284,6 +304,7 @@ const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
   AuthorizedConnectionsRoute: AuthorizedConnectionsRoute,
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,
   AuthorizedDiscoverRoute: AuthorizedDiscoverRoute,
+  AuthorizedMessagesRoute: AuthorizedMessagesRoute,
   AuthorizedScheduleRoute: AuthorizedScheduleRoute,
 }
 
