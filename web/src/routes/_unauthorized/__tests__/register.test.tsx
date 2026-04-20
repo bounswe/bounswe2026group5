@@ -1,16 +1,16 @@
 // web/src/routes/_unauthorized/__tests__/register.test.tsx
-import type { ReactNode } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
+globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
   disconnect: vi.fn(),
 }))
 
-global.matchMedia = vi.fn().mockImplementation((query: string) => ({
+globalThis.matchMedia = vi.fn().mockImplementation((query: string) => ({
   matches: false,
   media: query,
   onchange: null,
@@ -33,22 +33,38 @@ vi.mock('#/lib/demoAuth', () => ({
   setDemoAuthRole: vi.fn(),
 }))
 
-vi.mock('#/lib/queries/Authqueries', () => ({
-  registerFn: vi.fn(),
-  handleAuthSuccess: vi.fn(),
+const { mockRegisterFn, mockHandleAuthSuccess, createMutationMock } = vi.hoisted(() => ({
+  mockRegisterFn: vi.fn(),
+  mockHandleAuthSuccess: vi.fn(),
+  createMutationMock: (options: any, result: 'success' | 'error' = 'success', errorMessage = 'Registration failed') => ({
+    mutate: vi.fn(() => {
+      if (result === 'success' && options?.onSuccess) {
+        options.onSuccess({ user: { id: '1' } })
+      } else if (result === 'error' && options?.onError) {
+        options.onError(new Error('API Error'))
+      }
+    }),
+    isPending: false,
+    isError: result === 'error',
+    error: result === 'error' ? { message: errorMessage } : null,
+  })
+}))
+
+vi.mock('#/lib/queries/AuthQueries.ts', () => ({
+  registerFn: mockRegisterFn,
+  handleAuthSuccess: mockHandleAuthSuccess,
   meQueryOptions: { queryKey: ['me'], queryFn: () => null },
+}))
+
+const { mockUseMutation } = vi.hoisted(() => ({
+  mockUseMutation: vi.fn(),
 }))
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>()
   return {
     ...actual,
-    useMutation: () => ({
-      mutate: vi.fn(),
-      isPending: false,
-      isError: false,
-      error: null,
-    }),
+    useMutation: (options: Record<string, unknown>) => mockUseMutation(options),
   }
 })
 
@@ -65,7 +81,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 })
 
 vi.mock('lucide-react', async (importOriginal) => {
-  const actual = await importOriginal<any>()
+  const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
     User: () => <span data-testid="icon-user" />,
@@ -81,6 +97,7 @@ describe('RegisterPage Component', () => {
     mockLink.mockImplementation(({ children, to }: { children: ReactNode; to: string }) => (
         <a href={to} data-testid={`link-${to.replace('/', '')}`}>{children}</a>
     ))
+    mockUseMutation.mockImplementation((opts: any) => createMutationMock(opts))
   })
 
   describe('Rendering', () => {
@@ -318,6 +335,54 @@ describe('RegisterPage Component', () => {
 
       expect(screen.getByText(/Terms of Service/i)).toBeInTheDocument()
       expect(screen.getByText(/Privacy Policy/i)).toBeInTheDocument()
+    })
+  })
+
+  describe('Mutation States', () => {
+    it('calls handleAuthSuccess and navigates on success', async () => {
+      const user = userEvent.setup()
+      render(<RegisterPage />)
+
+      await user.type(screen.getByLabelText(/Email/i), 'john@example.com')
+      await user.type(screen.getByLabelText(/^Password$/i), 'password123')
+      await user.type(screen.getByLabelText(/Confirm password/i), 'password123')
+      await user.click(screen.getByRole('checkbox', { name: /Terms of Service/i }))
+      await user.click(screen.getByRole('button', { name: /Create Account/i }))
+
+      expect(mockHandleAuthSuccess).toHaveBeenCalled()
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/gettingToKnowYou' })
+    })
+
+    it('displays error message on mutation error and calls onError', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      
+      mockUseMutation.mockImplementation((opts: any) => createMutationMock(opts, 'error'))
+
+      const user = userEvent.setup()
+      render(<RegisterPage />)
+      
+      await user.type(screen.getByLabelText(/Email/i), 'john@example.com')
+      await user.type(screen.getByLabelText(/^Password$/i), 'password123')
+      await user.type(screen.getByLabelText(/Confirm password/i), 'password123')
+      await user.click(screen.getByRole('checkbox', { name: /Terms of Service/i }))
+      await user.click(screen.getByRole('button', { name: /Create Account/i }))
+
+      expect(screen.getByText('Registration failed')).toBeInTheDocument()
+      expect(consoleSpy).toHaveBeenCalledWith('Register error:', expect.any(Error))
+      
+      consoleSpy.mockRestore()
+    })
+
+    it('shows loading text when pending', () => {
+      mockUseMutation.mockReturnValue({
+        mutate: vi.fn(),
+        isPending: true,
+        isError: false,
+        error: null,
+      })
+
+      render(<RegisterPage />)
+      expect(screen.getByText('Creating account...')).toBeInTheDocument()
     })
   })
 })

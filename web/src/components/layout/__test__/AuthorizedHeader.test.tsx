@@ -8,7 +8,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
-    Link: ({ children, to, className }: any) => <a href={to} className={className}>{children}</a>,
+    Link: ({ children, to, className }: Record<string, unknown>) => <a href={to as string} className={className as string}>{children as React.ReactNode}</a>,
     useNavigate: () => vi.fn(),
     useLocation: () => ({ pathname: '/dashboard' }),
   }

@@ -1,8 +1,8 @@
 import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import {
+    useCancelSession,
     useMyMatches,
-    useSendMentorshipRequest,
-    useCancelSession
+    useSendMentorshipRequest
 } from '#/lib/queries/MentorshipQueries.ts'
 import {
     useAvailabilitySlots,
@@ -20,7 +20,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import {toast} from "sonner";
+import { toast } from "sonner"
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------

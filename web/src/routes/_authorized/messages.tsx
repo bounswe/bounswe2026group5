@@ -231,6 +231,7 @@ function Thread({ conversationId }: { conversationId: string }) {
                 <Button
                     type="submit"
                     size="icon"
+                    aria-label="Send message"
                     disabled={!text.trim() || sendMessage.isPending}
                     className="rounded-xl bg-accent hover:bg-accent/90 text-white shrink-0"
                 >
