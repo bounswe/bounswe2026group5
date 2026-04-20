@@ -14,7 +14,6 @@ from rest_framework.views import APIView
 
 from accounts.models import AppUsageMode
 from accounts.permissions import IsUser
-from notifications.models import Notification
 from profiles.models import AvailabilitySlot, Profile
 from profiles.services import (
     BookingCancelNotAllowedError,
@@ -223,13 +222,6 @@ class RespondToRequestAPIView(APIView):
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
-        if mentorship_request.status == MentorshipRequest.Status.ACCEPTED:
-            _create_notification_best_effort(
-                user=mentorship_request.mentee.user,
-                type="new_match",
-                message="Your mentorship request has been accepted.",
-            )
-
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
             status=status.HTTP_200_OK,
@@ -397,13 +389,9 @@ class CancelSessionAPIView(APIView):
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
-        # Notify the other participant
-        other_user = match.mentor.user if request.user == match.mentee.user else match.mentee.user
-        _create_notification_best_effort(
-            user=other_user,
-            type="session_canceled",
-            message="The session has been canceled.",
-        )
+        mentorship_request.refresh_from_db()
+
+
 
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
@@ -492,12 +480,9 @@ class RescheduleSessionAPIView(APIView):
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
 
-        # Notify the mentor
-        _create_notification_best_effort(
-            user=match.mentor.user,
-            type="session_rescheduled",
-            message="The session has been rescheduled.",
-        )
+        mentorship_request.refresh_from_db()
+
+
 
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
@@ -540,7 +525,7 @@ class DeactivateMatchAPIView(APIView):
         if profile not in (match.mentor, match.mentee):
             return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
 
-        match = deactivate_match(match=match)
+        match = deactivate_match(match=match, actor_profile=profile)
 
         return Response(MatchSerializer(match).data, status=status.HTTP_200_OK)
 
