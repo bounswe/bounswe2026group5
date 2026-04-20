@@ -14,11 +14,34 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { NotificationListItem } from "@/components/notifications/NotificationListItem";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { ApiError } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   useMarkNotificationReadMutation,
   useNotificationsQuery,
 } from "@/lib/queries/notifications";
+
+function getNotificationsErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 401) {
+      return "Your session may have expired. Please sign in again and retry.";
+    }
+
+    if (error.status >= 500) {
+      return "Notifications are temporarily unavailable. Please try again in a moment.";
+    }
+  }
+
+  if (error instanceof Error) {
+    if (error.message.toLowerCase().includes("timed out")) {
+      return "We could not reach the server in time. Check your connection and try again.";
+    }
+
+    return "Something went wrong while loading notifications. Please try again.";
+  }
+
+  return "Something went wrong while loading notifications. Please try again.";
+}
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
@@ -28,10 +51,7 @@ export default function NotificationsScreen() {
   const currentUsername = useAuthStore((state) => state.user?.username);
   const notificationsQuery = useNotificationsQuery(currentUsername);
   const markReadMutation = useMarkNotificationReadMutation(currentUsername);
-  const errorMessage =
-    notificationsQuery.error instanceof Error
-      ? notificationsQuery.error.message
-      : "Could not load notifications.";
+  const errorMessage = getNotificationsErrorMessage(notificationsQuery.error);
 
   const handleOpenNotification = async (
     notificationId: string,

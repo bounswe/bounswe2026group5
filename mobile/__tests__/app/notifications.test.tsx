@@ -26,13 +26,20 @@ jest.mock("@/lib/auth/store", () => ({
     }),
 }));
 
-jest.mock("@/lib/queries/notifications", () => ({
-  useNotificationsQuery: () => mockNotificationsQuery(),
-  useMarkNotificationReadMutation: () => ({
-    mutateAsync: mockMutateAsync,
-    isPending: false,
-  }),
-}));
+jest.mock("@/lib/queries/notifications", () => {
+  const actual = jest.requireActual<Record<string, unknown>>(
+    "@/lib/queries/notifications",
+  );
+
+  return {
+    ...actual,
+    useNotificationsQuery: () => mockNotificationsQuery(),
+    useMarkNotificationReadMutation: () => ({
+      mutateAsync: mockMutateAsync,
+      isPending: false,
+    }),
+  };
+});
 
 describe("NotificationsScreen", () => {
   beforeEach(() => {
