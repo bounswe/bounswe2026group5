@@ -4,6 +4,7 @@ module.exports = {
   // This tells Jest how to understand your "@/..." imports
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    '\\.(css|less)$': '<rootDir>/__mocks__/fileMock.js',
   },
   // This tells Jest to compile React Native and Expo modules properly
   transformIgnorePatterns: [
