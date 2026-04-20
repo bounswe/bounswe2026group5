@@ -18,7 +18,7 @@ skip = ["venv", ".venv", "migrations"]
 
 [tool.coverage.run]
 branch = true
-omit = ["*/migrations/*", "*/tests.py"]
+omit = ["*/migrations/*", "*/tests.py", "*/core/*", "*/manage.py"]
 
 [tool.coverage.report]
-omit = ["*/migrations/*", "*/tests.py"]
+omit = ["*/migrations/*", "*/tests.py", "*/core/*", "*/manage.py"]
