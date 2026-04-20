@@ -58,6 +58,10 @@ def create_mentorship_request(
     Notification.objects.create(
         user=mentor_profile.user,
         type=NotificationType.NEW_MENTORSHIP_REQUEST,
+        title="New Mentorship Request",
+        actor=mentee_profile,
+        resource_type="mentorship_request",
+        resource_id=mentorship_request.id,
         message=f'{mentee_profile.display_name} has sent you a mentorship request.',
     )
     
@@ -98,6 +102,10 @@ def respond_to_mentorship_request(
             Notification.objects.create(
                 user=mentorship_request.mentee.user,
                 type=NotificationType.NEW_MATCH,
+                title="Mentorship Request Accepted",
+                actor=mentorship_request.mentor,
+                resource_type="mentorship_request",
+                resource_id=mentorship_request.id,
                 message='Your mentorship request has been accepted.',
             )
         elif new_status == MentorshipRequest.Status.REJECTED:
@@ -105,6 +113,10 @@ def respond_to_mentorship_request(
             Notification.objects.create(
                 user=mentorship_request.mentee.user,
                 type=NotificationType.MENTORSHIP_REQUEST_REJECTED,
+                title="Mentorship Request Rejected",
+                actor=mentorship_request.mentor,
+                resource_type="mentorship_request",
+                resource_id=mentorship_request.id,
                 message='Your mentorship request has been denied.',
             )
 
@@ -175,7 +187,7 @@ def book_match_session(*, mentor_profile: Profile, slot_id: Any, actor: Any) -> 
             if active_match:
                 # Direct booking within an active match bypasses the request flow
                 # but should still manifest as a MeetingSession for dashboard visibility.
-                MeetingSession.objects.get_or_create(
+                session, _ = MeetingSession.objects.get_or_create(
                     match=active_match,
                     source_slot=slot,
                     defaults={
@@ -191,6 +203,10 @@ def book_match_session(*, mentor_profile: Profile, slot_id: Any, actor: Any) -> 
                 Notification.objects.create(
                     user=mentor_profile.user,
                     type=NotificationType.SLOT_BOOKED,
+                    title="Session Booked",
+                    actor=mentee_profile,
+                    resource_type="meeting_session",
+                    resource_id=session.id,
                     message=f'{mentee_profile.display_name} has booked a slot on {slot.start_at.strftime("%B %d, %Y at %I:%M %p")} - {slot.end_at.strftime("%I:%M %p")}.',
                 )
         except Profile.DoesNotExist:
@@ -252,6 +268,10 @@ def cancel_match_session(
         Notification.objects.create(
             user=other_user,
             type=NotificationType.SESSION_CANCELED,
+            title="Session Canceled",
+            actor=actor_profile,
+            resource_type="meeting_session",
+            resource_id=session.id,
             message='The session has been canceled.',
         )
 
@@ -329,10 +349,20 @@ def reschedule_match_session(
 
         _upsert_rescheduled_meeting_session(match=match, new_slot=new_slot)
         
-        # Notify the mentor
+        # We need to find the session that was rescheduled. It's the latest one for this match.
+        rescheduled_session = MeetingSession.objects.filter(match=match).order_by("-created_at").first()
+        actor_profile = match.mentor if actor == match.mentor.user else match.mentee
+        
+        # Notify the other participant
+        other_user = match.mentee.user if actor == match.mentor.user else match.mentor.user
+        
         Notification.objects.create(
-            user=match.mentor.user,
+            user=other_user,
             type=NotificationType.SESSION_RESCHEDULED,
+            title="Session Rescheduled",
+            actor=actor_profile,
+            resource_type="meeting_session",
+            resource_id=rescheduled_session.id if rescheduled_session else None,
             message='The session has been rescheduled.',
         )
 
@@ -351,6 +381,10 @@ def deactivate_match(*, match: Match, actor_profile: Profile) -> Match:
         Notification.objects.create(
             user=other_user,
             type=NotificationType.MATCH_DEACTIVATED,
+            title="Match Deactivated",
+            actor=actor_profile,
+            resource_type="match",
+            resource_id=match.id,
             message='Your mentorship match has been deactivated.',
         )
 
@@ -378,6 +412,17 @@ def _update_mentor_public_rating(*, mentor: Profile) -> None:
             else Decimal("0.00")
         )
         Profile.objects.filter(pk=mentor.pk).update(average_rating=quantized_rating)
+        
+        # Notify the mentor about the new batch of feedback
+        Notification.objects.create(
+            user=mentor.user,
+            type=NotificationType.NEW_FEEDBACK_AVAILABLE,
+            title="New Feedback Available",
+            actor=None,  # Batch notification, no specific actor
+            resource_type="profile",
+            resource_id=mentor.id,
+            message=f"You have received new feedback. Your average rating is now {quantized_rating}.",
+        )
 
 
 def create_match_feedback(

@@ -8,4 +8,16 @@ class NotificationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Notification
-        fields = ["id", "type", "message", "is_read", "created_at"]
+        fields = [
+            "id",
+            "type",
+            "title",
+            "message",
+            "actor",
+            "resource_type",
+            "resource_id",
+            "action_url",
+            "extra_metadata",
+            "is_read",
+            "created_at",
+        ]

@@ -1205,4 +1205,27 @@ class MentorshipServiceTests(TestCase):
             user=self.mentor_user, type=NotificationType.MATCH_DEACTIVATED
         ).first()
         self.assertIsNotNone(notification)
+        self.assertEqual(notification.title, "Match Deactivated")
+
+    def test_feedback_batch_creates_notification(self) -> None:
+        from mentorship.services import create_match_feedback
+        from django.test import override_settings
+        
+        req = _create_accepted_request(mentor=self.mentor_profile, mentee=self.mentee_profile)
+        match = Match.objects.get(request=req)
+        
+        with override_settings(RATING_UPDATE_THRESHOLD=1):
+            create_match_feedback(
+                match=match,
+                submitted_by=self.mentee_profile,
+                rating=5,
+                text="Great!",
+            )
+            
+        notification = Notification.objects.filter(
+            user=self.mentor_user, type=NotificationType.NEW_FEEDBACK_AVAILABLE
+        ).first()
+        self.assertIsNotNone(notification)
+        self.assertEqual(notification.title, "New Feedback Available")
+        self.assertEqual(notification.resource_type, "profile")
 
