@@ -57,6 +57,13 @@ export function AuthorizedHeader() {
               >
                 Connections
               </Link>
+              <Link
+                  to="/messages"
+                  activeProps={{ className: "bg-accent-muted text-ink font-semibold" }}
+                  className="text-sm font-medium text-ink-soft hover:text-ink hover:bg-accent-muted/60 transition-colors px-3 py-1.5 rounded-lg"
+              >
+                Messages
+              </Link>
             </nav>
           </div>
 

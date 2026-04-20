@@ -7,7 +7,6 @@ import { useState } from 'react'
 import { getInitials } from '#/lib/utils.ts'
 import { AvailabilityCalendar } from "#/components/profile/AvailabilityCalendar.tsx";
 import { useAvailabilitySlots } from "#/lib/queries/ProfileTimeSlotQueries.ts";
-
 interface BaseMappedProfile {
   full_name: string
   bio: string
@@ -142,9 +141,14 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                         <p className="text-gray-500 italic">No skills listed</p>
                     ) : (
                         <div className="flex flex-wrap gap-2">
-                          {profile.skills.map(skill => (
-                              <Badge key={skill} variant="secondary">{skill}</Badge>
-                          ))}
+                            {profile.skills.map(skill => (
+                                <span
+                                    key={skill}
+                                    className="px-3 py-1.5 rounded-full text-sm font-medium border bg-amber-50 text-amber-700 border-amber-200"
+                                >
+                                    {skill}
+                                </span>
+                            ))}
                         </div>
                     )}
                   </CardContent>
@@ -180,7 +184,12 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
                                         {profile.skills.map(skill => (
-                                            <Badge key={skill} variant="secondary">{skill}</Badge>
+                                            <span
+                                                key={skill}
+                                                className="px-3 py-1.5 rounded-full text-sm font-medium border bg-violet-50 text-violet-700 border-violet-200"
+                                            >
+                                                {skill}
+                                            </span>
                                         ))}
                                     </div>
                                 )}
