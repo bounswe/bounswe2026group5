@@ -1,10 +1,14 @@
 from rest_framework import serializers
 
+from mentorship.serializers import ProfileSummarySerializer
+
 from .models import Notification
 
 
 class NotificationSerializer(serializers.ModelSerializer):
     """Serializer for Notification model."""
+
+    actor = ProfileSummarySerializer(read_only=True)
 
     class Meta:
         model = Notification

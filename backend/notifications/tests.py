@@ -130,7 +130,8 @@ class NotificationAPITest(APITestCase):
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["type"], "new_message")
         self.assertEqual(data[0]["title"], "New Message")
-        self.assertEqual(data[0]["actor"], self.actor_profile.id)
+        self.assertEqual(data[0]["actor"]["id"], str(self.actor_profile.id))
+        self.assertEqual(data[0]["actor"]["display_name"], "Actor User")
         self.assertEqual(data[0]["resource_type"], "conversation")
         self.assertEqual(
             data[0]["resource_id"],
