@@ -339,7 +339,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
               Upcoming Messages
             </Text>
           </View>
-          <TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/messages" as Href)}>
             <Text className="text-[13px] font-bold text-primary">View All</Text>
           </TouchableOpacity>
         </View>
@@ -639,7 +639,7 @@ function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
               Upcoming Messages
             </Text>
           </View>
-          <TouchableOpacity activeOpacity={0.85}>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => router.push("/messages" as Href)}>
             <Text className="text-[13px] font-bold text-primary">View All</Text>
           </TouchableOpacity>
         </View>
