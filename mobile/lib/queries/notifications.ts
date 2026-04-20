@@ -14,6 +14,8 @@ export interface BackendNotification {
   type: string;
   title?: string;
   message: string;
+  action_url?: string;
+  extra_metadata?: Record<string, unknown>;
   is_read: boolean;
   created_at: string;
   actor?: BackendNotificationActor | null;
@@ -29,6 +31,7 @@ export interface MobileNotification {
   isRead: boolean;
   createdAt: string;
   actorName?: string;
+  actionUrl?: string;
   targetPath?: Href;
 }
 
@@ -52,23 +55,29 @@ export function getNotificationTitle(notification: BackendNotification): string 
   }
 
   switch (notification.type) {
+    case "new_message":
     case "incoming_message":
     case "message_received":
       return "New message";
+    case "new_mentorship_request":
     case "new_request":
     case "request_received":
       return "New request";
-    case "request_accepted":
     case "new_match":
+    case "request_accepted":
       return "Request accepted";
+    case "mentorship_request_rejected":
     case "request_rejected":
       return "Request declined";
+    case "slot_booked":
+      return "Slot booked";
     case "session_canceled":
       return "Session canceled";
     case "session_rescheduled":
       return "Session rescheduled";
     case "match_deactivated":
       return "Connection ended";
+    case "new_feedback_available":
     case "feedback_received":
       return "New feedback";
     default:
@@ -77,13 +86,27 @@ export function getNotificationTitle(notification: BackendNotification): string 
 }
 
 export function getNotificationTargetPath(
-  notification: Pick<BackendNotification, "type" | "resource_type">,
+  notification: Pick<
+    BackendNotification,
+    "type" | "resource_type" | "action_url" | "extra_metadata"
+  >,
 ): Href | undefined {
+  const extraMetadata = notification.extra_metadata ?? {};
+  const metadataTargetPath =
+    typeof extraMetadata.target_path === "string"
+      ? extraMetadata.target_path
+      : undefined;
+  if (metadataTargetPath?.startsWith("/")) {
+    return metadataTargetPath as Href;
+  }
+
   const normalizedResourceType = notification.resource_type?.toLowerCase();
 
   if (
     normalizedResourceType === "meeting_session" ||
     normalizedResourceType === "session" ||
+    normalizedResourceType === "availability_slot" ||
+    notification.type === "slot_booked" ||
     notification.type.startsWith("session_")
   ) {
     return "/(tabs)/schedule";
@@ -94,6 +117,10 @@ export function getNotificationTargetPath(
     normalizedResourceType === "message" ||
     normalizedResourceType === "mentorship_request" ||
     normalizedResourceType === "match" ||
+    notification.type === "new_message" ||
+    notification.type === "new_mentorship_request" ||
+    notification.type === "mentorship_request_rejected" ||
+    notification.type === "new_match" ||
     notification.type === "incoming_message" ||
     notification.type === "message_received" ||
     notification.type === "new_request" ||
@@ -106,7 +133,10 @@ export function getNotificationTargetPath(
     return "/(tabs)/connections";
   }
 
-  if (notification.type === "feedback_received") {
+  if (
+    notification.type === "feedback_received" ||
+    notification.type === "new_feedback_available"
+  ) {
     return "/(tabs)/profile";
   }
 
@@ -127,6 +157,7 @@ export function mapBackendNotification(
       notification.actor?.display_name?.trim() ||
       notification.actor?.username?.trim() ||
       undefined,
+    actionUrl: notification.action_url,
     targetPath: getNotificationTargetPath(notification),
   };
 }

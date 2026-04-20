@@ -18,7 +18,7 @@ describe("notifications query helpers", () => {
   it("maps backend notifications into mobile-friendly items", () => {
     const result = mapBackendNotification({
       id: "notif-1",
-      type: "incoming_message",
+      type: "new_message",
       message: "Ada sent you a new message.",
       is_read: false,
       created_at: "2026-04-20T11:45:00Z",
@@ -27,16 +27,21 @@ describe("notifications query helpers", () => {
         display_name: "Ada Lovelace",
       },
       resource_type: "conversation",
+      action_url: "https://neighborship.app/connections",
+      extra_metadata: {
+        target_path: "/(tabs)/connections",
+      },
     });
 
     expect(result).toEqual({
       id: "notif-1",
-      type: "incoming_message",
+      type: "new_message",
       title: "New message",
       message: "Ada sent you a new message.",
       isRead: false,
       createdAt: "2026-04-20T11:45:00Z",
       actorName: "Ada Lovelace",
+      actionUrl: "https://neighborship.app/connections",
       targetPath: "/(tabs)/connections",
     });
   });
@@ -60,6 +65,19 @@ describe("notifications query helpers", () => {
         resource_type: "meeting_session",
       }),
     ).toBe("/(tabs)/schedule");
+  });
+
+  it("uses extra metadata target path when provided", () => {
+    expect(
+      getNotificationTargetPath({
+        type: "new_message",
+        resource_type: "conversation",
+        action_url: "https://neighborship.app/connections",
+        extra_metadata: {
+          target_path: "/(tabs)/connections",
+        },
+      }),
+    ).toBe("/(tabs)/connections");
   });
 
   it("formats recent timestamps compactly", () => {

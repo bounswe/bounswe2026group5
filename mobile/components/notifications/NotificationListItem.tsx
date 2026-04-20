@@ -16,21 +16,29 @@ interface NotificationListItemProps {
 
 function iconNameForType(type: string): keyof typeof Ionicons.glyphMap {
   switch (type) {
+    case "new_message":
     case "incoming_message":
     case "message_received":
       return "chatbubble-ellipses-outline";
+    case "new_mentorship_request":
     case "new_request":
     case "request_received":
       return "mail-open-outline";
-    case "request_accepted":
     case "new_match":
+    case "request_accepted":
       return "checkmark-circle-outline";
+    case "mentorship_request_rejected":
     case "request_rejected":
       return "close-circle-outline";
+    case "slot_booked":
+      return "bookmark-outline";
     case "session_canceled":
       return "calendar-clear-outline";
     case "session_rescheduled":
       return "calendar-outline";
+    case "match_deactivated":
+      return "person-remove-outline";
+    case "new_feedback_available":
     case "feedback_received":
       return "star-outline";
     default:
@@ -76,6 +84,12 @@ export function NotificationListItem({
           <Text className="mt-1 text-sm leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
             {notification.message}
           </Text>
+
+          {notification.actorName && (
+            <Text className="mt-2 text-xs font-semibold text-on-surface-soft dark:text-on-surface-soft-dark">
+              From {notification.actorName}
+            </Text>
+          )}
 
           {notification.targetPath && (
             <Text className="mt-2 text-xs font-semibold text-primary dark:text-primary-dim">
