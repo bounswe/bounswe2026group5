@@ -16,7 +16,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode
-from mentorship.models import MentorshipRequest
+from mentorship.models import Feedback, Match, MentorshipRequest
 from profiles.models import AvailabilitySlot, Profile, Skill
 from profiles.serializers import AvailabilitySlotSerializer, LocationField
 from profiles.services import (
@@ -1739,6 +1739,209 @@ class MentorPublicRatingAPITests(TestCase):
         response = self.api_client.get(self._url(self.mentor_profile.username))
         self.assertEqual(response.json()["average_rating"], "4.20")
         self.assertEqual(response.json()["review_count"], 5)
+
+
+@override_settings(RATING_UPDATE_THRESHOLD=2)
+class ProfilePublicReviewsAPITests(TestCase):
+    """Tests for GET /api/profiles/{username}/reviews/."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+
+        self.mentor_user = User.objects.create_user(
+            email="mentor.reviews@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            display_name="Reviews Mentor",
+            is_visible=True,
+        )
+        self.url = f"/api/profiles/{self.mentor_profile.username}/reviews/"
+
+    def _create_mentee_feedback(self, idx: int, *, rating: int, text: str) -> Feedback:
+        mentee_user = User.objects.create_user(
+            email=f"mentee.review.{idx}@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        mentee_profile = Profile.objects.create(
+            user=mentee_user,
+            display_name=f"Mentee {idx}",
+        )
+        mentorship_request = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        match = Match.objects.create(
+            mentor=self.mentor_profile,
+            mentee=mentee_profile,
+            request=mentorship_request,
+        )
+        return Feedback.objects.create(
+            match=match,
+            submitted_by=mentee_profile,
+            rating=rating,
+            text=text,
+        )
+
+    def _create_mentee_client_and_feedback_url(self, idx: int) -> tuple[APIClient, str]:
+        mentee_user = User.objects.create_user(
+            email=f"mentee.reviews.api.{idx}@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        mentee_profile = Profile.objects.create(
+            user=mentee_user,
+            display_name=f"API Mentee {idx}",
+        )
+        mentorship_request = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        match = Match.objects.create(
+            mentor=self.mentor_profile,
+            mentee=mentee_profile,
+            request=mentorship_request,
+        )
+        api_client = APIClient()
+        token = str(RefreshToken.for_user(mentee_user).access_token)
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        return api_client, f"/api/mentorship/matches/{match.id}/feedback/"
+
+    def test_returns_404_for_missing_profile(self) -> None:
+        response = self.api_client.get("/api/profiles/missing-user/reviews/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_returns_404_for_invisible_profile(self) -> None:
+        self.mentor_profile.is_visible = False
+        self.mentor_profile.save(update_fields=["is_visible"])
+
+        response = self.api_client.get(self.url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_returns_only_public_text_review_fields(self) -> None:
+        self._create_mentee_feedback(1, rating=5, text="Excellent guidance")
+        self._create_mentee_feedback(2, rating=4, text="Clear explanations")
+        self.mentor_profile.review_count = 2
+        self.mentor_profile.save(update_fields=["review_count"])
+
+        response = self.api_client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual(len(payload["results"]), 2)
+        first_review = payload["results"][0]
+        self.assertEqual(set(first_review.keys()), {"rating", "text", "created_at"})
+        self.assertNotIn("submitted_by", first_review)
+        self.assertNotIn("match", first_review)
+
+    def test_empty_text_reviews_are_excluded(self) -> None:
+        self._create_mentee_feedback(1, rating=5, text="")
+        self._create_mentee_feedback(2, rating=4, text="Visible text")
+        self.mentor_profile.review_count = 2
+        self.mentor_profile.save(update_fields=["review_count"])
+
+        response = self.api_client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual([item["text"] for item in payload["results"]], ["Visible text"])
+
+    def test_threshold_gating_hides_incomplete_batch(self) -> None:
+        self._create_mentee_feedback(1, rating=5, text="Only one review")
+        self.mentor_profile.review_count = 1
+        self.mentor_profile.save(update_fields=["review_count"])
+
+        response = self.api_client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 0)
+        self.assertEqual(payload["results"], [])
+
+    def test_pagination_slices_results(self) -> None:
+        texts = ["Review A", "Review B", "Review C", "Review D"]
+        for idx, text in enumerate(texts, start=1):
+            self._create_mentee_feedback(idx, rating=5, text=text)
+        self.mentor_profile.review_count = 4
+        self.mentor_profile.save(update_fields=["review_count"])
+
+        response_page_1 = self.api_client.get(self.url, {"page": 1, "pageSize": 2})
+        response_page_2 = self.api_client.get(self.url, {"page": 2, "pageSize": 2})
+
+        self.assertEqual(response_page_1.status_code, 200)
+        self.assertEqual(response_page_2.status_code, 200)
+        payload_1 = response_page_1.json()
+        payload_2 = response_page_2.json()
+
+        self.assertEqual(payload_1["count"], 4)
+        self.assertEqual(payload_1["page"], 1)
+        self.assertEqual(payload_1["pageSize"], 2)
+        self.assertEqual(len(payload_1["results"]), 2)
+        self.assertEqual(payload_2["page"], 2)
+        self.assertEqual(len(payload_2["results"]), 2)
+
+        page_1_texts = {item["text"] for item in payload_1["results"]}
+        page_2_texts = {item["text"] for item in payload_2["results"]}
+        self.assertTrue(page_1_texts.isdisjoint(page_2_texts))
+
+    def test_invalid_pagination_params_return_400(self) -> None:
+        response = self.api_client.get(self.url, {"page": "abc", "pageSize": "x"})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("must be integers", response.json()["detail"])
+
+    def test_visible_feedback_deletion_keeps_public_reviews_visible(self) -> None:
+        first_client, first_feedback_url = self._create_mentee_client_and_feedback_url(1)
+        second_client, second_feedback_url = self._create_mentee_client_and_feedback_url(2)
+
+        create_first = first_client.post(
+            first_feedback_url,
+            {"rating": 5, "text": "First visible"},
+            format="json",
+        )
+        create_second = second_client.post(
+            second_feedback_url,
+            {"rating": 4, "text": "Second visible"},
+            format="json",
+        )
+        self.assertEqual(create_first.status_code, 201)
+        self.assertEqual(create_second.status_code, 201)
+
+        before_delete = self.api_client.get(self.url)
+        self.assertEqual(before_delete.status_code, 200)
+        self.assertEqual(before_delete.json()["count"], 2)
+
+        delete_first = first_client.delete(first_feedback_url)
+        self.assertEqual(delete_first.status_code, 204)
+
+        after_delete = self.api_client.get(self.url)
+        self.assertEqual(after_delete.status_code, 200)
+        self.assertEqual(after_delete.json()["count"], 1)
+        self.assertEqual(after_delete.json()["results"][0]["text"], "Second visible")
+
+    def test_hidden_feedback_deletion_does_not_make_batch_visible(self) -> None:
+        first_client, first_feedback_url = self._create_mentee_client_and_feedback_url(3)
+        create_first = first_client.post(
+            first_feedback_url,
+            {"rating": 5, "text": "Hidden candidate"},
+            format="json",
+        )
+        self.assertEqual(create_first.status_code, 201)
+
+        before_delete = self.api_client.get(self.url)
+        self.assertEqual(before_delete.status_code, 200)
+        self.assertEqual(before_delete.json()["count"], 0)
+
+        delete_first = first_client.delete(first_feedback_url)
+        self.assertEqual(delete_first.status_code, 204)
+
+        after_delete = self.api_client.get(self.url)
+        self.assertEqual(after_delete.status_code, 200)
+        self.assertEqual(after_delete.json()["count"], 0)
+        self.assertEqual(after_delete.json()["results"], [])
 
 
 class RecentlyAddedMentorsAPITests(TestCase):

@@ -520,6 +520,37 @@ def create_match_feedback(
     return feedback
 
 
+def delete_match_feedback(*, feedback: Feedback) -> None:
+    """Delete feedback and keep mentor review batch visibility semantics intact."""
+    match = feedback.match
+    if feedback.submitted_by != match.mentee:
+        feedback.delete()
+        return
+
+    mentor = match.mentor
+    threshold = max(1, int(getattr(settings, "RATING_UPDATE_THRESHOLD", 5)))
+
+    # Determine whether this feedback was already in a visible threshold batch.
+    mentee_feedback_ids = list(
+        Feedback.objects.filter(match__mentor=mentor).exclude(submitted_by=mentor).order_by("id")
+    )
+    visible_limit = (mentor.review_count // threshold) * threshold
+    feedback_index = next(
+        (idx for idx, item in enumerate(mentee_feedback_ids) if item.id == feedback.id),
+        None,
+    )
+
+    with transaction.atomic():
+        feedback.delete()
+        if feedback_index is None:
+            return
+
+        if feedback_index >= visible_limit:
+            Profile.objects.filter(pk=mentor.pk, review_count__gt=0).update(
+                review_count=F("review_count") - 1
+            )
+
+
 __all__ = [
     "NoActiveBookingError",
     "SameSlotSelectionError",
@@ -531,6 +562,7 @@ __all__ = [
     "reschedule_match_session",
     "deactivate_match",
     "create_match_feedback",
+    "delete_match_feedback",
     "book_match_session",
     "BookingCancelNotAllowedError",
     "SlotNotBookedError",

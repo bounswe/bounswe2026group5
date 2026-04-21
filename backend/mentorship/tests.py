@@ -723,6 +723,10 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
         response = self.anon_client.get(self.feedback_url)
         self.assertEqual(response.status_code, 401)
 
+    def test_unauthenticated_delete_returns_401(self) -> None:
+        response = self.anon_client.delete(self.feedback_url)
+        self.assertEqual(response.status_code, 401)
+
     def test_nonexistent_match_post_returns_404(self) -> None:
         url = f"/api/mentorship/matches/{uuid.uuid4()}/feedback/"
         response = self.mentee_client.post(url, {"rating": 4}, format="json")
@@ -739,6 +743,11 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
 
     def test_unrelated_user_cannot_view_feedback(self) -> None:
         response = self.other_client.get(self.feedback_url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_unrelated_user_cannot_delete_feedback(self) -> None:
+        Feedback.objects.create(match=self.match, submitted_by=self.mentee_profile, rating=4, text="Good")
+        response = self.other_client.delete(self.feedback_url)
         self.assertEqual(response.status_code, 403)
 
     def test_mentee_can_submit_feedback(self) -> None:
@@ -760,6 +769,41 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
         self.mentee_client.post(self.feedback_url, {"rating": 5}, format="json")
         response = self.mentee_client.post(self.feedback_url, {"rating": 3}, format="json")
         self.assertEqual(response.status_code, 400)
+
+    def test_delete_own_feedback_returns_204(self) -> None:
+        Feedback.objects.create(
+            match=self.match,
+            submitted_by=self.mentee_profile,
+            rating=5,
+            text="Delete me",
+        )
+        response = self.mentee_client.delete(self.feedback_url)
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(
+            Feedback.objects.filter(match=self.match, submitted_by=self.mentee_profile).exists()
+        )
+
+    def test_delete_missing_feedback_returns_404(self) -> None:
+        response = self.mentee_client.delete(self.feedback_url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_mentor_feedback_does_not_change_review_count(self) -> None:
+        self.mentor_client.post(self.feedback_url, {"rating": 4, "text": "Mentor note"}, format="json")
+        self.mentor_profile.refresh_from_db()
+        self.assertEqual(self.mentor_profile.review_count, 0)
+
+        delete_response = self.mentor_client.delete(self.feedback_url)
+        self.assertEqual(delete_response.status_code, 204)
+        self.mentor_profile.refresh_from_db()
+        self.assertEqual(self.mentor_profile.review_count, 0)
+
+    def test_delete_feedback_twice_returns_404_second_time(self) -> None:
+        self.mentee_client.post(self.feedback_url, {"rating": 5, "text": "Delete twice"}, format="json")
+        first_delete = self.mentee_client.delete(self.feedback_url)
+        second_delete = self.mentee_client.delete(self.feedback_url)
+
+        self.assertEqual(first_delete.status_code, 204)
+        self.assertEqual(second_delete.status_code, 404)
 
     def test_rating_below_1_returns_400(self) -> None:
         response = self.mentee_client.post(self.feedback_url, {"rating": 0}, format="json")
@@ -829,6 +873,53 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
         second_mentee_client.post(second_feedback_url, {"rating": 2}, format="json")
         self.mentor_profile.refresh_from_db()
         self.assertEqual(self.mentor_profile.average_rating, Decimal("3.00"))
+
+    @override_settings(RATING_UPDATE_THRESHOLD=2)
+    def test_delete_visible_feedback_keeps_batch_visibility(self) -> None:
+        """Deleting already visible feedback should not reduce visible batch count."""
+        second_mentee_user = User.objects.create_user(
+            email="mentee.visible2@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        second_mentee_profile = Profile.objects.create(
+            user=second_mentee_user, display_name="Second Visible Mentee"
+        )
+        second_request = _create_accepted_request(
+            mentor=self.mentor_profile,
+            mentee=second_mentee_profile,
+        )
+        second_match = Match.objects.get(request=second_request)
+        second_feedback_url = f"/api/mentorship/matches/{second_match.id}/feedback/"
+        second_mentee_client = APIClient()
+        second_mentee_client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {_token_for(second_mentee_user)}"
+        )
+
+        self.mentee_client.post(self.feedback_url, {"rating": 5, "text": "First"}, format="json")
+        second_mentee_client.post(
+            second_feedback_url, {"rating": 4, "text": "Second"}, format="json"
+        )
+
+        self.mentor_profile.refresh_from_db()
+        self.assertEqual(self.mentor_profile.review_count, 2)
+
+        delete_response = self.mentee_client.delete(self.feedback_url)
+        self.assertEqual(delete_response.status_code, 204)
+        self.mentor_profile.refresh_from_db()
+        self.assertEqual(self.mentor_profile.review_count, 2)
+
+    @override_settings(RATING_UPDATE_THRESHOLD=2)
+    def test_delete_hidden_feedback_reduces_pending_batch_count(self) -> None:
+        """Deleting not-yet-visible feedback should remove it from pending threshold progress."""
+        self.mentee_client.post(self.feedback_url, {"rating": 5, "text": "Only one"}, format="json")
+        self.mentor_profile.refresh_from_db()
+        self.assertEqual(self.mentor_profile.review_count, 1)
+
+        delete_response = self.mentee_client.delete(self.feedback_url)
+        self.assertEqual(delete_response.status_code, 204)
+        self.mentor_profile.refresh_from_db()
+        self.assertEqual(self.mentor_profile.review_count, 0)
 
 
 class CancelSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):

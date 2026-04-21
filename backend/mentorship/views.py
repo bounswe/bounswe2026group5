@@ -42,6 +42,7 @@ from .services import (
     create_match_feedback,
     create_mentorship_request,
     deactivate_match,
+    delete_match_feedback,
     reschedule_match_session,
     respond_to_mentorship_request,
 )
@@ -641,3 +642,39 @@ class MatchFeedbackListCreateAPIView(APIView):
             FeedbackSerializer(feedback).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @extend_schema(
+        responses={
+            204: OpenApiResponse(description="Feedback deleted."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Only match participants can delete feedback."),
+            404: OpenApiResponse(description="Match or feedback not found."),
+        },
+        description=(
+            "Delete authenticated participant's own feedback for the given match. "
+            "Deleting pre-threshold feedback removes it from pending batch counts, "
+            "while deleting already visible feedback does not reduce batch visibility."
+        ),
+        tags=["Mentorship"],
+    )
+    def delete(self, request: Request, match_id: str) -> Response:
+        """Delete the caller's own feedback entry for the identified match."""
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(_NO_PROFILE, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            match = Match.objects.select_related("mentor", "mentee").get(id=match_id)
+        except Match.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        if profile not in (match.mentor, match.mentee):
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+
+        feedback = Feedback.objects.filter(match=match, submitted_by=profile).first()
+        if feedback is None:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        delete_match_feedback(feedback=feedback)
+        return Response(status=status.HTTP_204_NO_CONTENT)
