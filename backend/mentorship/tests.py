@@ -993,6 +993,18 @@ class CancelSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
         response = self.mentee_client.post(self._cancel_url(uuid.uuid4()))
         self.assertEqual(response.status_code, 404)
 
+    @patch("mentorship.services.Notification.objects.create", side_effect=IntegrityError("boom"))
+    def test_cancel_succeeds_when_notification_create_fails(self, _mock_create) -> None:
+        """Cancellation should not fail if notification persistence raises an error."""
+        match, session = self._setup_active_match_with_booking()
+
+        response = self.mentee_client.post(self._cancel_url(session.id))
+        self.assertEqual(response.status_code, 200)
+
+        session.refresh_from_db()
+        self.assertEqual(session.status, MeetingSession.Status.CANCELED)
+        self.assertIsNone(session.source_slot)
+
     def test_canceling_older_session_keeps_newer_session_linked(self) -> None:
         """Canceling one session must not detach source_slot from another newer session."""
         request_obj = _create_accepted_request(

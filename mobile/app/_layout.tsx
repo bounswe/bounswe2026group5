@@ -51,6 +51,10 @@ export default function RootLayout() {
         {isAuthenticated ? (
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="notifications"
+              options={{ headerShown: false }}
+            />
             <Stack.Screen name="settings" options={{ headerShown: false }} />
             <Stack.Screen name="messages" options={{ headerShown: false }} />
           </Stack>

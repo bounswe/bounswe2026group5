@@ -15,7 +15,7 @@ export interface AvailabilitySlot {
     sessionId: string | null
     created_at: string
     updated_at: string
-    status?: 'SCHEDULED' | 'RESCHEDULED' | 'CANCELED' | 'COMPLETED'
+    status: 'AVAILABLE' | 'PENDING' | 'BOOKED'
 }
 
 export interface CreateSlotBody {

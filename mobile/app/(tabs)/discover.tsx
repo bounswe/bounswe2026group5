@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DiscoverFilterModal } from "@/components/discover/DiscoverFilterModal";
 import { DiscoverSearchBar } from "@/components/discover/DiscoverSearchBar";
 import { MentorCard } from "@/components/discover/MentorCard";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import {
   DEMO_DISCOVER_PROFILES,
   DEMO_DISCOVER_SKILLS,
@@ -235,11 +237,7 @@ export default function DiscoverScreen() {
     );
   } else if (errorText) {
     bodyContent = (
-      <View className="bg-error-container dark:bg-red-950 border border-error dark:border-red-800 rounded-xl p-4">
-        <Text className="text-error dark:text-red-200 font-semibold">
-          {errorText}
-        </Text>
-      </View>
+      <ErrorBanner message={errorText} />
     );
   } else if (profiles.length === 0) {
     bodyContent = (
@@ -293,9 +291,12 @@ export default function DiscoverScreen() {
         style={{ paddingTop: insets.top }}
       >
         <View className="px-4 pb-3 pt-2">
-          <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark mb-3">
-            Discover
-          </Text>
+          <View className="mb-3 flex-row items-center justify-between">
+            <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
+              Discover
+            </Text>
+            <NotificationBell />
+          </View>
 
           <View className="flex-row items-center gap-2">
             <View className="flex-1">
