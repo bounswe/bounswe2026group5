@@ -426,6 +426,7 @@ export function BookingModal({
                       return (
                         <TouchableOpacity
                           key={dateObj.date}
+                          testID={`date-option-${dateObj.rawDate}`}
                           activeOpacity={0.9}
                           onPress={() => {
                             setSelectedDateObj(dateObj);
@@ -471,6 +472,7 @@ export function BookingModal({
                           return (
                             <TouchableOpacity
                               key={slot}
+                              testID={`time-slot-${slot}`}
                               activeOpacity={0.9}
                               onPress={() => {
                                 setSelectedSlot(slot);
@@ -569,6 +571,7 @@ export function BookingModal({
                   </Text>
                 </View>
                 <TextInput
+                  testID="cover-letter-input"
                   value={coverLetter}
                   onChangeText={setCoverLetter}
                   placeholder="Introduce yourself and explain what you'd like to achieve in this session..."
@@ -584,6 +587,7 @@ export function BookingModal({
 
         <View className="px-6 py-4 border-t border-gray-100">
           <TouchableOpacity
+            testID="primary-action-button"
             activeOpacity={0.9}
             onPress={() => {
               void handlePrimaryAction();

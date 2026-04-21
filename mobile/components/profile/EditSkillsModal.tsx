@@ -94,7 +94,7 @@ export function EditSkillsModal({
                 currentSkills.map((skill) => ( 
                   <View key={skill} className={`px-3 py-1.5 rounded-full border flex-row items-center ${bgClass}`}>
                     <Text className={`text-sm font-semibold mr-1.5 ${textClass}`}>{skill}</Text>
-                    <TouchableOpacity onPress={() => handleRemoveSkill(skill)} className="p-0.5 bg-white/60 rounded-full">
+                    <TouchableOpacity testID={`remove-skill-${skill}`} onPress={() => handleRemoveSkill(skill)} className="p-0.5 bg-white/60 rounded-full">
                       <Ionicons name="close" size={12} color={isMentor ? '#4338ca' : '#047857'} />
                     </TouchableOpacity>
                   </View>
@@ -106,6 +106,7 @@ export function EditSkillsModal({
             <View className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 flex-row items-center mb-4">
               <Ionicons name="search" size={18} color="#9ca3af" className="mr-2" />
               <TextInput
+                testID="search-input"
                 value={inputText}
                 onChangeText={setInputText}
                 placeholder="Search for a skill..."
@@ -122,11 +123,12 @@ export function EditSkillsModal({
             {/* 3. Filtered Suggestions List */}
             <ScrollView showsVerticalScrollIndicator={false} className="flex-1 mb-4" keyboardShouldPersistTaps="handled">
               {filteredSuggestions.length === 0 ? (
-                <Text className="text-center text-gray-400 mt-4">No matching skills found.</Text>
+                <Text testID="no-results-state" className="text-center text-gray-400 mt-4">No matching skills found.</Text>
               ) : (
-                filteredSuggestions.map((skill) => ( 
-                  <TouchableOpacity 
-                    key={skill} 
+                filteredSuggestions.map((skill) => (
+                  <TouchableOpacity
+                    testID={`skill-suggestion-${skill}`}
+                    key={skill}
                     onPress={() => handleSelectSkill(skill)}
                     className="flex-row items-center justify-between py-3 border-b border-gray-100"
                   >
@@ -138,7 +140,8 @@ export function EditSkillsModal({
             </ScrollView>
 
             {/* Save Button */}
-            <TouchableOpacity 
+            <TouchableOpacity
+              testID="save-changes-button"
               onPress={() => { onSave(currentSkills); onClose(); }}
               className="bg-gray-900 py-4 rounded-xl items-center mt-auto"
             >

@@ -299,6 +299,7 @@ export default function ProfileScreen() {
             Profile
           </Text>
           <TouchableOpacity
+            testID="settings-button"
             onPress={() => router.push("/settings" as any)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >

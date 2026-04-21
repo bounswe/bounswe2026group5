@@ -119,6 +119,7 @@ export function FeedbackBottomSheet({
             {/* Role Badge */}
             <View className="flex-row items-center gap-2 mb-6">
               <View
+                testID={`role-badge-${yourRole.toLowerCase()}`}
                 className={`px-3 py-1 rounded-full ${
                   yourRole === "Mentor"
                     ? "bg-indigo-100 dark:bg-indigo-900"
@@ -179,7 +180,7 @@ export function FeedbackBottomSheet({
 
             {/* Error Message */}
             {error ? (
-              <View className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-xl p-3 mb-6">
+              <View testID="error-message" className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-xl p-3 mb-6">
                 <Text className="text-red-600 dark:text-red-200 text-sm font-medium">
                   {error}
                 </Text>
@@ -190,12 +191,13 @@ export function FeedbackBottomSheet({
           {/* Actions */}
           <View className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-800/50 gap-3">
             <TouchableOpacity
+              testID="submit-review-button"
               className="bg-indigo-600 py-4 rounded-xl items-center active:opacity-90 shadow-sm" // <-- Fixed color and padding
               onPress={handleSubmit}
               disabled={isSubmitting}
             >
               {isSubmitting ? (
-                <ActivityIndicator size="small" color="white" />
+                <ActivityIndicator testID="submitting-indicator" size="small" color="white" />
               ) : (
                 <Text className="text-white font-bold text-lg">
                   Submit Review
@@ -204,6 +206,7 @@ export function FeedbackBottomSheet({
             </TouchableOpacity>
 
             <TouchableOpacity
+              testID="cancel-button"
               className="bg-white dark:bg-gray-700 py-4 rounded-xl items-center border border-gray-300 dark:border-gray-600"
               onPress={onClose}
               disabled={isSubmitting}

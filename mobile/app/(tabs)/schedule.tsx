@@ -203,7 +203,7 @@ export default function ScheduleScreen() {
           </Text>
 
           {selectedSessions.length === 0 ? (
-            <View className="bg-surface-card dark:bg-surface-card-dark p-6 rounded-xl border border-divider dark:border-divider-dark items-center justify-center">
+            <View testID="empty-sessions-state" className="bg-surface-card dark:bg-surface-card-dark p-6 rounded-xl border border-divider dark:border-divider-dark items-center justify-center">
               <Text className="text-on-surface-soft dark:text-on-surface-soft-dark font-medium">
                 No sessions scheduled for this day.
               </Text>

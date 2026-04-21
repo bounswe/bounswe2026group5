@@ -54,6 +54,7 @@ export function SessionDetailsModal({
   if (session.status === "Completed") {
     primaryAction = (
       <TouchableOpacity
+        testID="action-leave-feedback"
         className="bg-indigo-600 py-4 rounded-xl items-center mb-3 shadow-sm"
         onPress={() => {
           onClose();
@@ -68,6 +69,7 @@ export function SessionDetailsModal({
   } else if (session.location) {
     primaryAction = (
       <TouchableOpacity
+        testID="action-get-directions"
         className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm flex-row justify-center gap-2"
         onPress={() => console.log(`TODO: Open Maps for ${session.location}`)}
       >
@@ -78,6 +80,7 @@ export function SessionDetailsModal({
   } else if (session.meetingUrl) {
     primaryAction = (
       <TouchableOpacity
+        testID="action-join-video-call"
         className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm flex-row justify-center gap-2"
         onPress={() => console.log(`TODO: Open Link ${session.meetingUrl}`)}
       >
@@ -159,6 +162,7 @@ export function SessionDetailsModal({
               {/* RESCHEDULE BUTTON: Only for Mentees */}
               {session.myRole === "Mentee" && (
                 <TouchableOpacity
+                  testID="action-reschedule"
                   className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
                   disabled={isCancelling}
                   onPress={() => {
@@ -176,6 +180,7 @@ export function SessionDetailsModal({
 
               {/* CANCEL BUTTON */}
               <TouchableOpacity
+                testID="action-cancel"
                 className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
                 disabled={isCancelling}
                 onPress={() => {
@@ -198,7 +203,7 @@ export function SessionDetailsModal({
                 }}
               >
                 {isCancelling ? (
-                  <ActivityIndicator size="small" color="#dc2626" />
+                  <ActivityIndicator testID="cancel-loading-indicator" size="small" color="#dc2626" />
                 ) : (
                   <Text className="font-bold text-base text-red-600">
                     Cancel

@@ -70,7 +70,7 @@ describe("EditAvailabilityModal", () => {
     const onChanged = jest.fn();
     const monday = toDateString(getMonday(new Date()));
 
-    const { getByText } = render(
+    const { getByTestId } = render(
       <EditAvailabilityModal
         visible
         onClose={jest.fn()}
@@ -81,7 +81,7 @@ describe("EditAvailabilityModal", () => {
     );
 
     await act(async () => {
-      fireEvent.press(getByText("09:00 - 10:00"));
+      fireEvent.press(getByTestId("hour-slot-9"));
     });
 
     expect(createMutateAsync).toHaveBeenCalledWith({
@@ -98,7 +98,7 @@ describe("EditAvailabilityModal", () => {
       .mockImplementation(() => undefined);
     const monday = toDateString(getMonday(new Date()));
 
-    const { getByText } = render(
+    const { getByTestId } = render(
       <EditAvailabilityModal
         visible
         onClose={jest.fn()}
@@ -115,11 +115,56 @@ describe("EditAvailabilityModal", () => {
       />,
     );
 
-    fireEvent.press(getByText("09:00 - 10:00"));
+    fireEvent.press(getByTestId("hour-slot-9"));
 
     expect(alertSpy).toHaveBeenCalledWith(
       "Cannot Make Slot Unavailable",
       expect.stringContaining("planned session"),
     );
+  });
+
+  it("deletes an existing active slot when tapping it", async () => {
+    const onChanged = jest.fn();
+    const monday = toDateString(getMonday(new Date()));
+
+    const { getByTestId } = render(
+      <EditAvailabilityModal
+        visible
+        onClose={jest.fn()}
+        username="mentor-1"
+        slots={[
+          {
+            id: "slot-active",
+            date: monday,
+            startTime: "10:00:00",
+            endTime: "11:00:00",
+            is_booked: false,
+          },
+        ]}
+        onChanged={onChanged}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.press(getByTestId("hour-slot-10"));
+    });
+
+    expect(deleteMutateAsync).toHaveBeenCalledWith("slot-active");
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("renders all hour slot buttons from HOURS range", () => {
+    const { getByTestId } = render(
+      <EditAvailabilityModal
+        visible
+        onClose={jest.fn()}
+        username="mentor-1"
+        slots={[]}
+      />,
+    );
+
+    // HOURS = 9 to 21 (13 hours)
+    expect(getByTestId("hour-slot-9")).toBeTruthy();
+    expect(getByTestId("hour-slot-21")).toBeTruthy();
   });
 });

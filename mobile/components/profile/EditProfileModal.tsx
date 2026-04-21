@@ -65,6 +65,7 @@ export function EditProfileModal({
         {/* Header */}
         <View className="flex-row justify-between items-center px-6 py-4 border-b border-gray-100 mb-2">
           <TouchableOpacity
+            testID="close-button"
             onPress={onClose}
             className="p-2 -ml-2"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -75,6 +76,7 @@ export function EditProfileModal({
             Edit Profile
           </Text>
           <TouchableOpacity
+            testID="save-button"
             onPress={handleSave}
             className="bg-gray-900 px-5 py-2 rounded-full"
           >
@@ -137,6 +139,7 @@ export function EditProfileModal({
                   Full Name
                 </Text>
                 <TextInput
+                  testID="name-input"
                   value={name}
                   onChangeText={setName}
                   placeholder="Enter your name"
@@ -158,6 +161,7 @@ export function EditProfileModal({
                   </Text>
                 </View>
                 <TextInput
+                  testID="bio-input"
                   value={bio}
                   onChangeText={setBio}
                   placeholder="Tell mentees about yourself..."

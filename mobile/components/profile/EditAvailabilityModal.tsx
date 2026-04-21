@@ -470,6 +470,7 @@ export function EditAvailabilityModal({
               return (
                 <TouchableOpacity
                   key={key}
+                  testID={`hour-slot-${hour}`}
                   onPress={() => handleToggleSlot(hour)}
                   disabled={isToggling || isPending || isPast}
                   activeOpacity={isBooked || isPast ? 1 : 0.85}
