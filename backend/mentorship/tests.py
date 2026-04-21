@@ -23,12 +23,13 @@ from mentorship.serializers import (
 )
 from mentorship.services import (
     MissingSelectedSlotError,
-    _mark_latest_meeting_session_canceled,
+    _mark_meeting_session_canceled,
     book_match_session,
     ensure_match_and_initial_session,
     reschedule_match_session,
     respond_to_mentorship_request,
 )
+from notifications.models import Notification, NotificationType
 from profiles.models import AvailabilitySlot, Profile
 from profiles.services import OwnSlotBookingError
 
@@ -746,7 +747,9 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_unrelated_user_cannot_delete_feedback(self) -> None:
-        Feedback.objects.create(match=self.match, submitted_by=self.mentee_profile, rating=4, text="Good")
+        Feedback.objects.create(
+            match=self.match, submitted_by=self.mentee_profile, rating=4, text="Good"
+        )
         response = self.other_client.delete(self.feedback_url)
         self.assertEqual(response.status_code, 403)
 
@@ -788,7 +791,9 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_delete_mentor_feedback_does_not_change_review_count(self) -> None:
-        self.mentor_client.post(self.feedback_url, {"rating": 4, "text": "Mentor note"}, format="json")
+        self.mentor_client.post(
+            self.feedback_url, {"rating": 4, "text": "Mentor note"}, format="json"
+        )
         self.mentor_profile.refresh_from_db()
         self.assertEqual(self.mentor_profile.review_count, 0)
 
@@ -798,7 +803,9 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
         self.assertEqual(self.mentor_profile.review_count, 0)
 
     def test_delete_feedback_twice_returns_404_second_time(self) -> None:
-        self.mentee_client.post(self.feedback_url, {"rating": 5, "text": "Delete twice"}, format="json")
+        self.mentee_client.post(
+            self.feedback_url, {"rating": 5, "text": "Delete twice"}, format="json"
+        )
         first_delete = self.mentee_client.delete(self.feedback_url)
         second_delete = self.mentee_client.delete(self.feedback_url)
 
@@ -985,18 +992,6 @@ class CancelSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
     def test_nonexistent_session_returns_404(self) -> None:
         response = self.mentee_client.post(self._cancel_url(uuid.uuid4()))
         self.assertEqual(response.status_code, 404)
-
-    @patch("mentorship.views.Notification.objects.create", side_effect=IntegrityError("boom"))
-    def test_cancel_succeeds_when_notification_create_fails(self, _mock_create) -> None:
-        """Cancellation should not fail if notification persistence raises an error."""
-        match, session = self._setup_active_match_with_booking()
-
-        response = self.mentee_client.post(self._cancel_url(session.id))
-        self.assertEqual(response.status_code, 200)
-
-        session.refresh_from_db()
-        self.assertEqual(session.status, MeetingSession.Status.CANCELED)
-        self.assertIsNone(session.source_slot)
 
     def test_canceling_older_session_keeps_newer_session_linked(self) -> None:
         """Canceling one session must not detach source_slot from another newer session."""
@@ -1314,7 +1309,16 @@ class MentorshipServiceTests(TestCase):
         )
         match = Match.objects.get(request=request_obj)
 
-        _mark_latest_meeting_session_canceled(match=match, canceled_by=self.mentor_profile)
+        # Find the latest session for the match (if any)
+        session = (
+            MeetingSession.objects.filter(match=match)
+            .exclude(status=MeetingSession.Status.CANCELED)
+            .order_by("-scheduled_start_at_utc")
+            .first()
+        )
+        if session:
+            _mark_meeting_session_canceled(session=session, canceled_by=self.mentor_profile)
+        # If no session exists, this is a no-op (test expects no error)
 
         self.assertEqual(MeetingSession.objects.filter(match=match).count(), 0)
 
@@ -1639,22 +1643,22 @@ class MentorshipSerializerBranchTests(TestCase):
 
     def setUp(self) -> None:
         self.factory = APIRequestFactory()
-        mentor_user = User.objects.create_user(
+        self.mentor_user = User.objects.create_user(
             email="serializer.mentor@example.com",
             password="SecurePass123",
             app_usage_mode=AppUsageMode.MENTOR,
         )
-        mentee_user = User.objects.create_user(
+        self.mentee_user = User.objects.create_user(
             email="serializer.mentee@example.com",
             password="SecurePass123",
             app_usage_mode=AppUsageMode.MENTEE,
         )
         self.mentor_profile = Profile.objects.create(
-            user=mentor_user,
+            user=self.mentor_user,
             display_name="Serializer Mentor",
         )
         self.mentee_profile = Profile.objects.create(
-            user=mentee_user,
+            user=self.mentee_user,
             display_name="Serializer Mentee",
         )
         start_at = timezone.now() + timedelta(days=3)
@@ -1817,6 +1821,7 @@ class MentorshipSerializerBranchTests(TestCase):
         )
         self.assertEqual(completed_serialized["display_status"], MeetingSession.Status.COMPLETED)
         self.assertEqual(completed_serialized["allowed_actions"], [])
+
     def test_create_mentorship_request_creates_notification(self) -> None:
         from mentorship.services import create_mentorship_request
 

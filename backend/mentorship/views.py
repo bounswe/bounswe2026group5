@@ -66,16 +66,6 @@ _INVALID_MEETING_SESSION_ROLE = {"detail": "Invalid role. Use one of: mentor, me
 logger = logging.getLogger(__name__)
 
 
-def _create_notification_best_effort(**kwargs: Any) -> None:
-    """Persist notifications without breaking the primary request flow on failure."""
-    try:
-        Notification.objects.create(**kwargs)
-    except IntegrityError as exc:
-        logger.warning("Notification persistence skipped due to integrity error: %s", exc)
-    except Exception:
-        logger.exception("Notification persistence failed for mentorship flow.")
-
-
 class MyRequestsListAPIView(APIView):
     """List all mentorship requests where the caller is mentor or mentee."""
 
@@ -222,13 +212,6 @@ class RespondToRequestAPIView(APIView):
             return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
         except AvailabilitySlot.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
-
-        if mentorship_request.status == MentorshipRequest.Status.ACCEPTED:
-            Notification.objects.create(
-                user=mentorship_request.mentee.user,
-                type="new_match",
-                message="Your mentorship request has been accepted.",
-            )
 
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
@@ -399,13 +382,7 @@ class CancelSessionAPIView(APIView):
 
         mentorship_request.refresh_from_db()
 
-        # Notify the other participant
-        other_user = match.mentor.user if request.user == match.mentee.user else match.mentee.user
-        Notification.objects.create(
-            user=other_user,
-            type="session_canceled",
-            message="The session has been canceled.",
-        )
+        # Notification is handled in the service layer; no need to duplicate here.
 
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
@@ -496,12 +473,7 @@ class RescheduleSessionAPIView(APIView):
 
         mentorship_request.refresh_from_db()
 
-        # Notify the mentor
-        Notification.objects.create(
-            user=match.mentor.user,
-            type="session_rescheduled",
-            message="The session has been rescheduled.",
-        )
+        # Notification is handled in the service layer; no need to duplicate here.
 
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
