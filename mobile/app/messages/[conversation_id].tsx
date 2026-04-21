@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -6,6 +7,8 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Text,
   TextInput,
@@ -13,7 +16,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQueryClient } from "@tanstack/react-query";
 
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -73,8 +75,15 @@ function buildListItems(messages: Message[]): ListItem[] {
   const items: ListItem[] = [];
   messages.forEach((msg, index) => {
     const prev = messages[index - 1];
-    if (index === 0 || (prev && isDifferentDay(prev.created_at, msg.created_at))) {
-      items.push({ type: "separator", date: msg.created_at, key: `sep-${msg.created_at}` });
+    if (
+      index === 0 ||
+      (prev && isDifferentDay(prev.created_at, msg.created_at))
+    ) {
+      items.push({
+        type: "separator",
+        date: msg.created_at,
+        key: `sep-${msg.created_at}`,
+      });
     }
     items.push({ type: "message", message: msg, key: msg.id });
   });
@@ -107,7 +116,10 @@ function Avatar({
       className="bg-surface-active items-center justify-center"
       style={{ width: size, height: size, borderRadius: size / 2 }}
     >
-      <Text className="font-bold text-primary" style={{ fontSize: size * 0.35 }}>
+      <Text
+        className="font-bold text-primary"
+        style={{ fontSize: size * 0.35 }}
+      >
         {getInitials(name)}
       </Text>
     </View>
@@ -126,17 +138,9 @@ function DateSeparator({ dateStr }: { dateStr: string }) {
   );
 }
 
-function MessageBubble({
-  message,
-  isMe,
-}: {
-  message: Message;
-  isMe: boolean;
-}) {
+function MessageBubble({ message, isMe }: { message: Message; isMe: boolean }) {
   return (
-    <View
-      className={`w-full mb-1 ${isMe ? "items-end" : "items-start"}`}
-    >
+    <View className={`w-full mb-1 ${isMe ? "items-end" : "items-start"}`}>
       <View style={{ maxWidth: "80%" }}>
         <View
           className={`rounded-2xl px-4 py-3 ${
@@ -203,7 +207,9 @@ function EmptyMessages() {
 // ---------------------------------------------------------------------------
 
 export default function ConversationScreen() {
-  const { conversation_id } = useLocalSearchParams<{ conversation_id: string }>();
+  const { conversation_id } = useLocalSearchParams<{
+    conversation_id: string;
+  }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -221,7 +227,9 @@ export default function ConversationScreen() {
   const sendMessage = useSendMessage(conversation_id ?? "");
   const [text, setText] = useState("");
   const flatListRef = useRef<FlatList<ListItem>>(null);
-  const prevMessageCount = useRef(0);
+  const isNearBottomRef = useRef(true);
+  const hasInitialScrollDoneRef = useRef(false);
+  const prevLastMessageIdRef = useRef<string | null>(null);
 
   const other = conversation
     ? conversation.mentor.username === currentUsername
@@ -231,13 +239,48 @@ export default function ConversationScreen() {
 
   const listItems = buildListItems(messages);
 
-  // Scroll to bottom when new messages arrive
   useEffect(() => {
-    if (messages.length > prevMessageCount.current && messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
+    isNearBottomRef.current = true;
+    hasInitialScrollDoneRef.current = false;
+    prevLastMessageIdRef.current = null;
+  }, [conversation_id]);
+
+  // Scroll to bottom on initial load, then only for new messages when user is near bottom
+  useEffect(() => {
+    const latestMessageId = messages[messages.length - 1]?.id ?? null;
+    const hasNewMessage =
+      latestMessageId !== null &&
+      latestMessageId !== prevLastMessageIdRef.current;
+
+    const shouldAutoScroll =
+      messages.length > 0 &&
+      (!hasInitialScrollDoneRef.current ||
+        (hasNewMessage && isNearBottomRef.current));
+
+    if (shouldAutoScroll) {
+      const timeoutId = setTimeout(() => {
+        flatListRef.current?.scrollToEnd({
+          animated: hasInitialScrollDoneRef.current,
+        });
+      }, 80);
+      hasInitialScrollDoneRef.current = true;
+      prevLastMessageIdRef.current = latestMessageId;
+      return () => clearTimeout(timeoutId);
     }
-    prevMessageCount.current = messages.length;
-  }, [messages.length]);
+
+    prevLastMessageIdRef.current = latestMessageId;
+  }, [messages]);
+
+  const handleListScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } =
+        event.nativeEvent;
+      const distanceFromBottom =
+        contentSize.height - (contentOffset.y + layoutMeasurement.height);
+      isNearBottomRef.current = distanceFromBottom <= 80;
+    },
+    [],
+  );
 
   const handleSend = useCallback(async () => {
     const body = text.trim();
@@ -287,7 +330,11 @@ export default function ConversationScreen() {
 
           {other ? (
             <View className="flex-row items-center flex-1 min-w-0">
-              <Avatar name={other.display_name} pictureUrl={other.picture_url} size={40} />
+              <Avatar
+                name={other.display_name}
+                pictureUrl={other.picture_url}
+                size={40}
+              />
               <View className="ml-3 flex-1 min-w-0">
                 <Text
                   className="text-[16px] font-bold text-on-surface"
@@ -355,9 +402,8 @@ export default function ConversationScreen() {
               flexGrow: 1,
             }}
             showsVerticalScrollIndicator={false}
-            onContentSizeChange={() =>
-              flatListRef.current?.scrollToEnd({ animated: false })
-            }
+            onScroll={handleListScroll}
+            scrollEventThrottle={16}
             ListEmptyComponent={<EmptyMessages />}
           />
         )}
