@@ -9,7 +9,13 @@ export const Route = createFileRoute('/_authorized')({
         const user = getStoredUser()
         if (!user) throw redirect({ to: '/login' })
     },
-    loader: ({ context }) => context.queryClient.ensureQueryData(meQueryOptions),
+    loader: async ({ context }) => {
+        const me = await context.queryClient.ensureQueryData(meQueryOptions)
+        if (me && !me.app_usage_mode) {
+            throw redirect({ to: '/gettingToKnowYou' })
+        }
+        return me
+    },
   component: AuthorizedLayout,
 })
 
