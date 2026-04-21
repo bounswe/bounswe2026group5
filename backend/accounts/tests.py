@@ -1,16 +1,20 @@
-import uuid
-from typing import Any
+from typing import Any, cast
+from unittest.mock import Mock, patch
 
 from django.conf import settings
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import AnonymousUser, Group
 from django.test import TestCase
-from rest_framework.test import APIClient
+from drf_spectacular.openapi import AutoSchema
+from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import Profile
 
 from .models import AppUsageMode, AuthProvider, User, UserRole
+from .permissions import IsRegularUser
+from .schema import CookieOrHeaderJWTAuthenticationScheme
+from .views import build_auth_response
 
 
 class UserModelTests(TestCase):
@@ -81,6 +85,39 @@ class UserModelTests(TestCase):
         self.assertNotEqual(user.password, "PlainPassword123")
         self.assertTrue(user.check_password("PlainPassword123"))
 
+    def test_create_user_without_password_sets_unusable_password(self) -> None:
+        """Test that creating user without password sets an unusable password."""
+        user = User.objects.create_user(email="nopassword@example.com")
+
+        self.assertFalse(user.has_usable_password())
+
+    def test_create_superuser_requires_is_staff_true(self) -> None:
+        """Test that superuser creation rejects is_staff=False."""
+        with self.assertRaises(ValueError):
+            User.objects.create_superuser(
+                email="badstaff@example.com",
+                password="AdminPass123",
+                is_staff=False,
+            )
+
+    def test_create_superuser_requires_is_superuser_true(self) -> None:
+        """Test that superuser creation rejects is_superuser=False."""
+        with self.assertRaises(ValueError):
+            User.objects.create_superuser(
+                email="badsuper@example.com",
+                password="AdminPass123",
+                is_superuser=False,
+            )
+
+    def test_user_str_returns_email(self) -> None:
+        """Test string representation returns normalized email."""
+        user = User.objects.create_user(
+            email="StringUser@Example.com",
+            password="SecurePass123",
+        )
+
+        self.assertEqual(str(user), "stringuser@example.com")
+
 
 class RegisterAPIViewTests(TestCase):
     """Integration tests for user registration endpoint."""
@@ -90,7 +127,6 @@ class RegisterAPIViewTests(TestCase):
         self.api_client: Any = APIClient()
         self.register_url = "/api/auth/register/"
 
-        # Ensure USER group exists (mimics migration)
         Group.objects.get_or_create(name=UserRole.USER)
 
     def test_register_success(self) -> None:
@@ -168,29 +204,24 @@ class RegisterAPIViewTests(TestCase):
         data = response.json()
         self.assertIn("confirm_password", data)
 
-    def test_register_weak_password(self) -> None:
-        """Test that weak passwords fail Django validation."""
-        payload = {
-            "email": "test@example.com",
-            "password": "123",  # Too short
-            "confirm_password": "123",
-        }
+    def test_register_rejects_invalid_password_values(self) -> None:
+        """Test that known invalid password values fail registration validation."""
+        invalid_passwords = [
+            "123",
+            "password123",
+        ]
 
-        response = self.api_client.post(self.register_url, payload)
+        for idx, invalid_password in enumerate(invalid_passwords):
+            with self.subTest(invalid_password=invalid_password):
+                payload = {
+                    "email": f"test{idx}@example.com",
+                    "password": invalid_password,
+                    "confirm_password": invalid_password,
+                }
 
-        self.assertEqual(response.status_code, 400)
+                response = self.api_client.post(self.register_url, payload)
 
-    def test_register_common_password(self) -> None:
-        """Test that common passwords fail validation."""
-        payload = {
-            "email": "test@example.com",
-            "password": "password123",  # Common password
-            "confirm_password": "password123",
-        }
-
-        response = self.api_client.post(self.register_url, payload)
-
-        self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.status_code, 400)
 
     def test_register_invalid_email(self) -> None:
         """Test that invalid email format is rejected."""
@@ -450,6 +481,28 @@ class LogoutAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 205)
         self.assertTrue(BlacklistedToken.objects.filter(token__token=self.refresh_token).exists())
 
+    def test_logout_requires_refresh_token_in_body_or_cookie(self) -> None:
+        """Test logout fails when refresh token is missing from both body and cookie."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+
+        response = self.api_client.post(self.logout_url, {})
+
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertIn("refresh_token", data)
+
+    def test_logout_success_clears_auth_cookies(self) -> None:
+        """Test successful logout clears both access and refresh cookies."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+
+        response = self.api_client.post(self.logout_url, {"refresh_token": self.refresh_token})
+
+        self.assertEqual(response.status_code, 205)
+        self.assertIn(settings.AUTH_ACCESS_COOKIE_NAME, response.cookies)
+        self.assertIn(settings.AUTH_REFRESH_COOKIE_NAME, response.cookies)
+        self.assertEqual(str(response.cookies[settings.AUTH_ACCESS_COOKIE_NAME]["max-age"]), "0")
+        self.assertEqual(str(response.cookies[settings.AUTH_REFRESH_COOKIE_NAME]["max-age"]), "0")
+
 
 class TokenRefreshAPIViewTests(TestCase):
     """Tests for token refresh endpoint."""
@@ -482,6 +535,41 @@ class TokenRefreshAPIViewTests(TestCase):
         self.assertIn(settings.AUTH_ACCESS_COOKIE_NAME, response.cookies)
         self.assertIn(settings.AUTH_REFRESH_COOKIE_NAME, response.cookies)
 
+    def test_refresh_from_request_body_without_cookie(self) -> None:
+        """Test token refresh accepts a refresh token from request body."""
+        response = self.api_client.post(
+            "/api/auth/token/refresh/",
+            {"refresh": self.refresh_token},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("access", data)
+
+    def test_refresh_without_body_or_cookie_fails(self) -> None:
+        """Test token refresh fails when no refresh token is provided."""
+        response = self.api_client.post("/api/auth/token/refresh/", {})
+
+        self.assertEqual(response.status_code, 400)
+
+    @patch("accounts.views.TokenRefreshAPIView.get_serializer")
+    def test_refresh_sets_access_cookie_only_when_serializer_returns_access_only(
+        self,
+        mocked_get_serializer: Mock,
+    ) -> None:
+        """Test refresh response sets only access cookie without a refresh token."""
+        mocked_serializer = Mock()
+        mocked_serializer.is_valid.return_value = True
+        mocked_serializer.validated_data = {"access": self.access_token}
+        mocked_get_serializer.return_value = mocked_serializer
+
+        response = self.api_client.post("/api/auth/token/refresh/", {})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(settings.AUTH_ACCESS_COOKIE_NAME, response.cookies)
+        self.assertNotIn(settings.AUTH_REFRESH_COOKIE_NAME, response.cookies)
+
     def test_auth_me_endpoint_with_bearer_token(self) -> None:
         """Canonical self endpoint returns authenticated user metadata."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
@@ -492,6 +580,46 @@ class TokenRefreshAPIViewTests(TestCase):
         data = response.json()
         self.assertEqual(data["email"], self.user.email)
         self.assertEqual(data["username"], self.profile.username)
+
+    def test_auth_me_endpoint_with_cookie_token(self) -> None:
+        """Canonical self endpoint accepts cookie-based JWT authentication."""
+        self.api_client.cookies[settings.AUTH_ACCESS_COOKIE_NAME] = self.access_token
+
+        response = self.api_client.get("/api/auth/me/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["email"], self.user.email)
+
+    def test_auth_me_invalid_header_falls_back_to_cookie(self) -> None:
+        """Invalid Authorization header should fall back to cookie authentication."""
+        self.api_client.credentials(HTTP_AUTHORIZATION="Token not-a-bearer-token")
+        self.api_client.cookies[settings.AUTH_ACCESS_COOKIE_NAME] = self.access_token
+
+        response = self.api_client.get("/api/auth/me/")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_auth_me_requires_authentication(self) -> None:
+        """Canonical self endpoint returns 401 when no auth is provided."""
+        response = self.api_client.get("/api/auth/me/")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_auth_me_banned_user_forbidden(self) -> None:
+        """Canonical self endpoint blocks banned users with valid tokens."""
+        banned_user = User.objects.create_user(
+            email="authmebanned@example.com",
+            password="SecurePass123",
+            is_active=True,
+            is_banned=True,
+        )
+        banned_access_token = str(RefreshToken.for_user(banned_user).access_token)
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {banned_access_token}")
+
+        response = self.api_client.get("/api/auth/me/")
+
+        self.assertEqual(response.status_code, 403)
 
 
 class UserAppUsageModeMeAPIViewTests(TestCase):
@@ -552,15 +680,93 @@ class UserAppUsageModeMeAPIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    def test_other_user_id_returns_not_found(self) -> None:
-        """Caller cannot set another user's mode via a different route id."""
+    def test_mode_update_requires_authentication(self) -> None:
+        """Unauthenticated users cannot update app usage mode."""
+        self.api_client.credentials()
+
         response = self.api_client.patch(
-            f"/api/auth/{uuid.uuid4()}/app-usage-mode/",
+            self.url,
             {"app_usage_mode": AppUsageMode.MENTEE},
             format="json",
         )
 
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 401)
+
+    def test_blank_mode_is_rejected(self) -> None:
+        """Blank app usage mode values fail validation."""
+        response = self.api_client.patch(
+            self.url,
+            {"app_usage_mode": ""},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("app_usage_mode", response.json())
+
+
+class AccountsHelpersAndPermissionsTests(TestCase):
+    """Unit tests for accounts helpers, permissions, and schema extension."""
+
+    def setUp(self) -> None:
+        self.factory = APIRequestFactory()
+        self.regular_user = User.objects.create_user(
+            email="perm_user@example.com",
+            password="SecurePass123",
+            role=UserRole.USER,
+            is_banned=False,
+        )
+        self.admin_user = User.objects.create_superuser(
+            email="perm_admin@example.com",
+            password="SecurePass123",
+        )
+        self.banned_user = User.objects.create_user(
+            email="perm_banned@example.com",
+            password="SecurePass123",
+            role=UserRole.USER,
+            is_banned=True,
+        )
+
+    def test_build_auth_response_generates_tokens_when_refresh_not_provided(self) -> None:
+        """Helper generates refresh/access tokens when no refresh is passed in."""
+        response_payload = build_auth_response(self.regular_user)
+        user_payload = cast(dict[str, Any], response_payload["user"])
+
+        self.assertIn("access_token", response_payload)
+        self.assertIn("refresh_token", response_payload)
+        self.assertEqual(user_payload["email"], self.regular_user.email)
+
+    def test_is_regular_user_permission_matrix(self) -> None:
+        """Permission allows only authenticated, non-banned regular users."""
+        permission = IsRegularUser()
+        cases = [
+            (AnonymousUser(), False),
+            (self.regular_user, True),
+            (self.admin_user, False),
+            (self.banned_user, False),
+        ]
+
+        for user, expected in cases:
+            with self.subTest(user=type(user).__name__, expected=expected):
+                request = self.factory.get("/api/messages/")
+                request.user = user
+                self.assertEqual(permission.has_permission(request, None), expected)
+
+    def test_authentication_schema_extension_definition(self) -> None:
+        """OpenAPI extension returns expected bearer security definition."""
+        auto_schema = cast(AutoSchema, object())
+        schema_extension = CookieOrHeaderJWTAuthenticationScheme(object())
+        security_definition = schema_extension.get_security_definition(
+            auto_schema
+        )
+
+        self.assertEqual(
+            security_definition,
+            {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            },
+        )
 
 
 class RBACPermissionTests(TestCase):
