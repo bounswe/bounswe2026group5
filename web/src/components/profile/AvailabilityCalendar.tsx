@@ -1,8 +1,9 @@
 import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import {
+    useCancelSession,
     useMyMatches,
-    useSendMentorshipRequest,
-    useCancelSession
+    useMyRequests,
+    useSendMentorshipRequest
 } from '#/lib/queries/MentorshipQueries.ts'
 import {
     useAvailabilitySlots,
@@ -20,7 +21,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import {toast} from "sonner";
+import { toast } from "sonner"
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -276,6 +277,13 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
     const { data: matches = [] } = useMyMatches()
     const isMatched = matches.some(m => m.mentor.username === username || m.mentee.username === username)
 
+    const { data: myRequests = [] } = useMyRequests()
+    const pendingSlotIds = new Set(
+        myRequests
+            .filter(r => r.status === 'PENDING')
+            .map(r => r.slot_id)
+    )
+
     const monday = getMonday(addDays(new Date(), weekOffset * 7))
     const weekDays = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
 
@@ -284,15 +292,13 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
         const hour = parseInt(slot.startTime.split(':')[0])
         slotsByDateHour[`${slot.date}-${hour}`] = slot
     }
-    console.log('slots prop:', slots)
-    console.log('slotsByDateHour:', slotsByDateHour)
-
     const weekLabel = `${monday.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${addDays(monday, 6).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
 
     const invalidate = () => {
         queryClient.refetchQueries({ queryKey: ['availability-slots', username] })
         queryClient.invalidateQueries({ queryKey: ['profiles', username] })
         queryClient.invalidateQueries({ queryKey: ['mentorship', 'meeting-sessions', 'me'] })
+        queryClient.invalidateQueries({ queryKey: ['mentorship', 'requests'] })
     }
 
     const handleCellClick = (dateStr: string, hour: number, existing: AvailabilitySlot | undefined) => {
@@ -300,7 +306,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
         if (togglingSlotKey === key) return
 
         if (existing) {
-            if (existing.is_booked) return
+            if (existing.status === 'BOOKED') return
             setTogglingSlotKey(key)
             deleteSlot.mutate(existing.id, {
                 onSuccess: () => {
@@ -376,11 +382,11 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
 
                     {isOwner ? (
                         <p className="text-xs text-ink-soft mt-2">
-                            Click any empty slot to mark yourself as available. Click an available slot to remove it. Booked slots are locked until cancelled.
+                            Click any empty slot to mark yourself as available. Click an available slot to remove it. Booked slots are locked until cancelled. Yellow slots have a pending request.
                         </p>
                     ) : (
                         <p className="text-xs text-ink-soft mt-2">
-                            Green slots are available to book. Click a slot to request a session with this mentor.
+                            Green slots are available to book. Yellow slots already have a pending request. Click a green slot to request a session with this mentor.
                         </p>
                     )}
                 </CardHeader>
@@ -428,9 +434,13 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                         let cellContent = null
                                         let cellClass = 'border border-line/30 h-14 relative transition-all '
 
+                                        const isMyPending = slot && pendingSlotIds.has(slot.id)
+                                        const isGlobalPending = slot && slot.status === 'PENDING'
+                                        const isPending = isMyPending || isGlobalPending
+
                                         if (isPast) {
                                             cellClass += 'bg-black/[0.02] opacity-50'
-                                        } else if (slot?.is_booked) {
+                                        } else if (slot?.status === 'BOOKED') {
                                             cellClass += 'bg-violet-50 border-violet-200'
                                             cellContent = (
                                                 <div className="flex flex-col items-center justify-center h-full gap-0.5">
@@ -443,6 +453,15 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                                             Cancel
                                                         </button>
                                                     )}
+                                                </div>
+                                            )
+                                        } else if (isPending) {
+                                            cellClass += 'bg-amber-50 border-amber-300'
+                                            cellContent = (
+                                                <div className="flex items-center justify-center h-full">
+                                                    <span className="text-amber-700 font-semibold text-xs">
+                                                        {isOwner ? 'Pending' : (isMyPending ? 'Requested' : 'Pending')}
+                                                    </span>
                                                 </div>
                                             )
                                         } else if (slot) {
@@ -474,10 +493,10 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                                 key={key}
                                                 className={cellClass}
                                                 onClick={() => {
-                                                    if (isPast) return
-                                                    if (isOwner && !slot?.is_booked) {
+                                                    if (isPast || isPending) return
+                                                    if (isOwner && slot?.status !== 'BOOKED') {
                                                         handleCellClick(dateStr, hour, slot)
-                                                    } else if (!isOwner && isAuthenticated && slot && !slot.is_booked) {
+                                                    } else if (!isOwner && isAuthenticated && slot && slot.status !== 'BOOKED') {
                                                         setBookingSlot(slot)
                                                     }
                                                 }}

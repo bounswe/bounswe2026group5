@@ -11,12 +11,13 @@ import {
   View,
 } from "react-native";
 
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+
 interface FeedbackBottomSheetProps {
   visible: boolean;
   onClose: () => void;
   onSubmit: (rating: number, text?: string) => Promise<void>;
   otherUserName: string;
-  yourRole: "Mentor" | "Mentee";
   isSubmitting?: boolean;
 }
 
@@ -25,7 +26,6 @@ export function FeedbackBottomSheet({
   onClose,
   onSubmit,
   otherUserName,
-  yourRole,
   isSubmitting = false,
 }: Readonly<FeedbackBottomSheetProps>): React.ReactNode {
   const [rating, setRating] = useState<number>(0);
@@ -116,27 +116,6 @@ export function FeedbackBottomSheet({
             }}
             showsVerticalScrollIndicator={false}
           >
-            {/* Role Badge */}
-            <View className="flex-row items-center gap-2 mb-6">
-              <View
-                className={`px-3 py-1 rounded-full ${
-                  yourRole === "Mentor"
-                    ? "bg-indigo-100 dark:bg-indigo-900"
-                    : "bg-emerald-100 dark:bg-emerald-900"
-                }`}
-              >
-                <Text
-                  className={`text-xs font-bold uppercase tracking-wider ${
-                    yourRole === "Mentor"
-                      ? "text-indigo-700 dark:text-indigo-200"
-                      : "text-emerald-700 dark:text-emerald-200"
-                  }`}
-                >
-                  As {yourRole}
-                </Text>
-              </View>
-            </View>
-
             {/* Star Rating */}
             <View className="mb-2">
               <Text className="text-gray-600 dark:text-gray-300 text-sm font-medium mb-2">
@@ -179,10 +158,8 @@ export function FeedbackBottomSheet({
 
             {/* Error Message */}
             {error ? (
-              <View className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-xl p-3 mb-6">
-                <Text className="text-red-600 dark:text-red-200 text-sm font-medium">
-                  {error}
-                </Text>
+              <View className="mb-6">
+                <ErrorBanner message={error} />
               </View>
             ) : null}
           </ScrollView>

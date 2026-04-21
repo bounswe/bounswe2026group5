@@ -8,6 +8,8 @@ import { RescheduleBottomSheet } from "@/components/dashboard/RescheduleBottomSh
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { SuccessCard } from "@/components/ui/SuccessCard";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -20,7 +22,7 @@ import {
   useRescheduleSessionMutation,
 } from "@/lib/queries/mentorship";
 import React, { useMemo, useState } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { Calendar, DateData } from "react-native-calendars";
 import {
   SafeAreaView,
@@ -43,8 +45,6 @@ type ScheduleSession = {
   status: "Pending" | "Upcoming" | "Completed";
   topic: string;
   myRole: string;
-  location?: string;
-  meetingUrl?: string;
 };
 
 const formatFriendlyDate = (dateString: string) => {
@@ -62,6 +62,8 @@ export default function ScheduleScreen() {
   const [selectedSession, setSelectedSession] =
     useState<ScheduleSession | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
@@ -90,6 +92,9 @@ export default function ScheduleScreen() {
       ),
     [meetingSessionsQuery.data],
   );
+  const queryError = meetingSessionsQuery.isError
+    ? "Failed to load upcoming sessions."
+    : null;
 
   const mentorAvailabilityForReschedule = useAvailabilitySlotsQuery(
     rescheduleMentorUsername,
@@ -102,16 +107,16 @@ export default function ScheduleScreen() {
         newSlotId,
       })
       .then(() => {
+        setActionError(null);
+        setSuccessMessage("Your session was updated.");
         setSelectedSession(null);
         setShowRescheduleSheet(false);
         setRescheduleSessionId(null);
         setRescheduleMentorUsername("");
         setRescheduleCurrentSlotId("");
-        Alert.alert("Session Rescheduled", "Your session was updated.");
       })
       .catch((error) => {
-        Alert.alert(
-          "Reschedule Failed",
+        setActionError(
           error instanceof Error
             ? error.message
             : "Could not reschedule this session.",
@@ -179,6 +184,24 @@ export default function ScheduleScreen() {
       </View>
 
       <ScrollView className="flex-1 pt-4" showsVerticalScrollIndicator={false}>
+        {queryError ? (
+          <View className="px-4 mb-4">
+            <ErrorBanner message={queryError} />
+          </View>
+        ) : null}
+
+        {successMessage ? (
+          <View className="px-4 mb-4">
+            <SuccessCard message={successMessage} />
+          </View>
+        ) : null}
+
+        {actionError ? (
+          <View className="px-4 mb-4">
+            <ErrorBanner message={actionError} />
+          </View>
+        ) : null}
+
         <View className="mx-4 mb-6 shadow-sm rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-2">
           <Calendar
             current={TODAY}
@@ -258,8 +281,7 @@ export default function ScheduleScreen() {
         }
         onCancelSession={() => {
           if (!selectedSession?.sessionId) {
-            Alert.alert(
-              "Cannot Cancel",
+            setActionError(
               "Could not resolve this session's match. Please refresh and try again.",
             );
             return;
@@ -268,12 +290,12 @@ export default function ScheduleScreen() {
           cancelSessionMutation
             .mutateAsync(selectedSession.sessionId)
             .then(() => {
+              setActionError(null);
+              setSuccessMessage("The session was cancelled.");
               setSelectedSession(null);
-              Alert.alert("Session Cancelled", "The session was cancelled.");
             })
             .catch((error) => {
-              Alert.alert(
-                "Cancellation Failed",
+              setActionError(
                 error instanceof Error
                   ? error.message
                   : "Could not cancel this session.",
@@ -284,15 +306,14 @@ export default function ScheduleScreen() {
           if (!selectedSession) return;
 
           if (selectedSession.myRole !== "Mentee") {
-            Alert.alert("Not Allowed", "Only mentees can reschedule sessions.");
+            setActionError("Only mentees can reschedule sessions.");
             return;
           }
 
           const mentorUsername = selectedSession.mentorUsername;
 
           if (!selectedSession.sessionId || !mentorUsername) {
-            Alert.alert(
-              "Cannot Reschedule",
+            setActionError(
               "Could not resolve session details. Please refresh and try again.",
             );
             return;
@@ -302,14 +323,6 @@ export default function ScheduleScreen() {
           setRescheduleMentorUsername(mentorUsername);
           setRescheduleCurrentSlotId(selectedSession.slotId);
           setShowRescheduleSheet(true);
-        }}
-        onLeaveFeedback={() => {
-          // Navigate to feedback screen or show feedback modal
-          setSelectedSession(null);
-          Alert.alert(
-            "Leave Feedback",
-            "Feedback submission feature coming soon.",
-          );
         }}
       />
     </SafeAreaView>

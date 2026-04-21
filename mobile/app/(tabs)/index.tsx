@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Import the components for the dashboard
@@ -10,6 +10,8 @@ import { RescheduleBottomSheet } from "@/components/dashboard/RescheduleBottomSh
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { SuccessCard } from "@/components/ui/SuccessCard";
 
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -53,6 +55,10 @@ export default function DashboardScreen() {
     () => mapMeetingSessionsToDashboard(meetingSessionsQuery.data ?? []),
     [meetingSessionsQuery.data],
   );
+  const queryError =
+    (requestsQuery.isError && "Failed to load mentorship requests.") ||
+    (meetingSessionsQuery.isError && "Failed to load upcoming sessions.") ||
+    null;
 
   // State for Modals
   const [selectedRequest, setSelectedRequest] =
@@ -60,6 +66,8 @@ export default function DashboardScreen() {
   const [selectedSession, setSelectedSession] =
     useState<DashboardSessionItem | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
@@ -80,6 +88,8 @@ export default function DashboardScreen() {
     }
 
     try {
+      setActionError(null);
+      setSuccessMessage(null);
       await respondMutation.mutateAsync({
         requestId: selectedRequest.requestId,
         action,
@@ -87,9 +97,13 @@ export default function DashboardScreen() {
       setSelectedRequest(null);
       requestsQuery.refetch();
       meetingSessionsQuery.refetch();
+      setSuccessMessage(
+        action === "accept"
+          ? "Request accepted successfully."
+          : "Request rejected successfully.",
+      );
     } catch (error) {
-      Alert.alert(
-        "Request Action Failed",
+      setActionError(
         error instanceof Error
           ? error.message
           : "Could not update request status.",
@@ -116,12 +130,13 @@ export default function DashboardScreen() {
     }
 
     try {
+      setActionError(null);
+      setSuccessMessage(null);
       await cancelSessionMutation.mutateAsync(selectedSession.sessionId);
       setSelectedSession(null);
-      Alert.alert("Session Cancelled", "The session was cancelled.");
+      setSuccessMessage("The session was cancelled.");
     } catch (error) {
-      Alert.alert(
-        "Cancel Failed",
+      setActionError(
         error instanceof Error
           ? error.message
           : "Could not cancel the session.",
@@ -131,13 +146,12 @@ export default function DashboardScreen() {
 
   const handleRescheduleSession = () => {
     if (selectedSession?.myRole !== "Mentee") {
-      Alert.alert("Not Available", "Only mentees can reschedule sessions.");
+      setActionError("Only mentees can reschedule sessions.");
       return;
     }
 
     if (!selectedSession.sessionId || !selectedMentorUsername) {
-      Alert.alert(
-        "Cannot Reschedule",
+      setActionError(
         "Could not resolve session details. Please refresh and try again.",
       );
       return;
@@ -146,6 +160,7 @@ export default function DashboardScreen() {
     setRescheduleSessionId(selectedSession.sessionId);
     setRescheduleSessionMentorUsername(selectedMentorUsername);
     setRescheduleCurrentSlotId(selectedSession.id);
+    setSuccessMessage(null);
     setShowRescheduleSheet(true);
   };
 
@@ -170,6 +185,24 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 160 }}
       >
+        {queryError ? (
+          <View className="mb-4">
+            <ErrorBanner message={queryError} />
+          </View>
+        ) : null}
+
+        {successMessage ? (
+          <View className="mb-4">
+            <SuccessCard message={successMessage} />
+          </View>
+        ) : null}
+
+        {actionError ? (
+          <View className="mb-4">
+            <ErrorBanner message={actionError} />
+          </View>
+        ) : null}
+
         {/* Requests Section */}
         <View className="mb-6">
           <View className="flex-row justify-between items-center mb-3 mt-2">
@@ -249,8 +282,7 @@ export default function DashboardScreen() {
         onAccept={() => handleRespond("accept")}
         onReject={() => handleRespond("reject")}
         onCancelOutgoing={() => {
-          Alert.alert(
-            "Not Supported Yet",
+          setActionError(
             "Outgoing request cancellation is not available on the current API.",
           );
         }}
@@ -285,13 +317,13 @@ export default function DashboardScreen() {
                 newSlotId,
               })
               .then(() => {
+                setActionError(null);
+                setSuccessMessage("Your session was updated.");
                 setSelectedSession(null);
                 setShowRescheduleSheet(false);
-                Alert.alert("Session Rescheduled", "Your session was updated.");
               })
               .catch((error) => {
-                Alert.alert(
-                  "Reschedule Failed",
+                setActionError(
                   error instanceof Error
                     ? error.message
                     : "Could not reschedule this session.",

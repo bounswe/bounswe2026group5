@@ -1,26 +1,26 @@
-import { render, screen } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../routeTree.gen', () => ({}))
 vi.mock('../../../router', () => ({}))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual = await importOriginal<any>()
+  const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
     createFileRoute: () => () => ({
       update: vi.fn().mockReturnThis(),
     }),
-    Link: ({ children, to, params, className }: any) => (
-        <a href={`${to}/${params?.username ?? ''}`} className={className}>{children}</a>
+    Link: ({ children, to, params, className }: Record<string, unknown>) => (
+        <a href={`${to as string}/${(params as Record<string, string>)?.username ?? ''}`} className={className as string}>{children as React.ReactNode}</a>
     ),
     useNavigate: () => vi.fn(),
   }
 })
 
 vi.mock('lucide-react', async (importOriginal) => {
-  const actual = await importOriginal<any>()
+  const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
     Loader2: () => <div data-testid="icon-loader" />,
@@ -59,7 +59,7 @@ const MOCK_MATCHES = [
   {
     id: 'match-2',
     mentor: {
-      id: 'mentor-1',
+      id: 'mentor-1b',
       username: 'john_mentor',
       display_name: 'John Smith',
       picture_url: '',

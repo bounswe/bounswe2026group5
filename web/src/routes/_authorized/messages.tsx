@@ -8,6 +8,7 @@ import {
     useSendMessage,
     type Conversation,
 } from '#/lib/queries/MessagingQueries.ts'
+import { useNotifications, useMarkAllNotificationsRead } from '#/lib/queries/NotificationQueries.ts'
 import { getInitials } from '#/lib/utils.ts'
 import { Button } from '@/components/ui/button'
 import { Loader2, MessageSquare, Send } from 'lucide-react'
@@ -15,6 +16,9 @@ import { cn } from '#/lib/utils.ts'
 
 export const Route = createFileRoute('/_authorized/messages')({
     component: MessagesPage,
+    validateSearch: (search: Record<string, unknown>) => ({
+        conversationId: (search.conversationId as string) ?? '',
+    }),
 })
 
 // ---------------------------------------------------------------------------
@@ -22,7 +26,26 @@ export const Route = createFileRoute('/_authorized/messages')({
 // ---------------------------------------------------------------------------
 
 export function MessagesPage() {
-    const [selectedId, setSelectedId] = useState<string | null>(null)
+    const { conversationId } = Route.useSearch()
+    const [selectedId, setSelectedId] = useState<string | null>(conversationId || null)
+
+    const { data: notifications = [] } = useNotifications()
+    const { mutate: markAllRead } = useMarkAllNotificationsRead()
+
+    const pendingMsgIdsRef = useRef<string[]>([])
+    useEffect(() => {
+        pendingMsgIdsRef.current = notifications
+            .filter(n => n.type === 'new_message')
+            .map(n => n.id)
+    }, [notifications])
+
+    useEffect(() => {
+        return () => {
+            if (pendingMsgIdsRef.current.length > 0) {
+                markAllRead(pendingMsgIdsRef.current)
+            }
+        }
+    }, [markAllRead])
 
     return (
         <div className="p-4 md:p-6 h-[calc(100vh-3.5rem)]">
@@ -231,6 +254,7 @@ function Thread({ conversationId }: { conversationId: string }) {
                 <Button
                     type="submit"
                     size="icon"
+                    aria-label="Send message"
                     disabled={!text.trim() || sendMessage.isPending}
                     className="rounded-xl bg-accent hover:bg-accent/90 text-white shrink-0"
                 >

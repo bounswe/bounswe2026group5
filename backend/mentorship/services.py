@@ -7,6 +7,7 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, F
 from django.utils import timezone
+from core.utils.timezone import to_local_time
 
 from notifications.models import Notification, NotificationType
 from profiles.models import AvailabilitySlot, Profile
@@ -21,6 +22,7 @@ from profiles.services import (
 )
 
 from .models import Feedback, Match, MeetingSession, MentorshipRequest
+import logging
 
 
 class MentorshipServiceError(Exception):
@@ -50,17 +52,29 @@ def _create_notification(
     resource_id: Any = None,
     extra_metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Create a structured notification payload for client consumption."""
-    Notification.objects.create(
-        user=user,
-        type=notification_type,
-        title=title,
-        message=message,
-        actor=actor,
-        resource_type=resource_type,
-        resource_id=resource_id,
-        extra_metadata=extra_metadata or {},
-    )
+    """Create a structured notification payload for client consumption.
+
+    Notification creation is performed as a 'best effort' operation: failures in
+    persistence (e.g. IntegrityError) are logged but do not roll back the
+    primary business transaction.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        Notification.objects.create(
+            user=user,
+            type=notification_type,
+            title=title,
+            message=message,
+            actor=actor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            extra_metadata=extra_metadata or {},
+        )
+    except Exception:
+        logger.exception("Notification persistence failed for mentorship flow.")
 
 
 def create_mentorship_request(
@@ -77,6 +91,7 @@ def create_mentorship_request(
         slot=selected_slot,
         cover_letter=cover_letter,
     )
+    selected_slot.mark_pending()
 
     _create_notification(
         user=mentor_profile.user,
@@ -141,6 +156,9 @@ def respond_to_mentorship_request(
                 },
             )
         elif new_status == MentorshipRequest.Status.REJECTED:
+            if mentorship_request.slot:
+                mentorship_request.slot.mark_available()
+
             _create_notification(
                 user=mentorship_request.mentee.user,
                 notification_type=NotificationType.MENTORSHIP_REQUEST_REJECTED,
@@ -241,8 +259,8 @@ def book_match_session(*, mentor_profile: Profile, slot_id: Any, actor: Any) -> 
                     title="Slot Booked",
                     message=(
                         f"{mentee_profile.display_name} booked a slot on "
-                        f"{slot.start_at.strftime('%B %d, %Y at %H:%M')} - "
-                        f"{slot.end_at.strftime('%H:%M')}."
+                        f"{to_local_time(slot.start_at).strftime('%B %d, %Y at %H:%M')} - "
+                        f"{to_local_time(slot.end_at).strftime('%H:%M')}."
                     ),
                     actor=mentee_profile,
                     resource_type="availability_slot",
@@ -520,6 +538,37 @@ def create_match_feedback(
     return feedback
 
 
+def delete_match_feedback(*, feedback: Feedback) -> None:
+    """Delete feedback and keep mentor review batch visibility semantics intact."""
+    match = feedback.match
+    if feedback.submitted_by != match.mentee:
+        feedback.delete()
+        return
+
+    mentor = match.mentor
+    threshold = max(1, int(getattr(settings, "RATING_UPDATE_THRESHOLD", 5)))
+
+    # Determine whether this feedback was already in a visible threshold batch.
+    mentee_feedback_ids = list(
+        Feedback.objects.filter(match__mentor=mentor).exclude(submitted_by=mentor).order_by("id")
+    )
+    visible_limit = (mentor.review_count // threshold) * threshold
+    feedback_index = next(
+        (idx for idx, item in enumerate(mentee_feedback_ids) if item.id == feedback.id),
+        None,
+    )
+
+    with transaction.atomic():
+        feedback.delete()
+        if feedback_index is None:
+            return
+
+        if feedback_index >= visible_limit:
+            Profile.objects.filter(pk=mentor.pk, review_count__gt=0).update(
+                review_count=F("review_count") - 1
+            )
+
+
 __all__ = [
     "NoActiveBookingError",
     "SameSlotSelectionError",
@@ -531,6 +580,7 @@ __all__ = [
     "reschedule_match_session",
     "deactivate_match",
     "create_match_feedback",
+    "delete_match_feedback",
     "book_match_session",
     "BookingCancelNotAllowedError",
     "SlotNotBookedError",

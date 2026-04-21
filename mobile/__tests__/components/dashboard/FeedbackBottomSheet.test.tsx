@@ -13,18 +13,19 @@ describe("FeedbackBottomSheet", () => {
   });
 
   it("renders correctly when visible", () => {
-    const { getByText } = render(
+    const { getByText, queryByText } = render(
       <FeedbackBottomSheet
         visible={true}
         onClose={mockOnClose}
         onSubmit={mockOnSubmit}
         otherUserName="Jane Doe"
-        yourRole="Mentee"
       />
     );
 
     expect(getByText("Submit Review")).toBeTruthy();
     expect(getByText("Cancel")).toBeTruthy();
+    expect(queryByText("As Mentee")).toBeNull();
+    expect(queryByText("As Mentor")).toBeNull();
   });
 
   it("shows an error if submitting without a rating", async () => {
@@ -34,7 +35,6 @@ describe("FeedbackBottomSheet", () => {
         onClose={mockOnClose}
         onSubmit={mockOnSubmit}
         otherUserName="Jane Doe"
-        yourRole="Mentee"
       />
     );
 
@@ -52,7 +52,6 @@ describe("FeedbackBottomSheet", () => {
         onClose={mockOnClose}
         onSubmit={mockOnSubmit}
         otherUserName="Jane Doe"
-        yourRole="Mentee"
       />
     );
 
@@ -67,7 +66,6 @@ describe("FeedbackBottomSheet", () => {
         onClose={mockOnClose}
         onSubmit={mockOnSubmit}
         otherUserName="Jane Doe"
-        yourRole="Mentee"
       />
     );
 
@@ -81,7 +79,6 @@ describe("FeedbackBottomSheet", () => {
         onClose={mockOnClose}
         onSubmit={mockOnSubmit}
         otherUserName="Jane Doe"
-        yourRole="Mentee"
       />
     );
 

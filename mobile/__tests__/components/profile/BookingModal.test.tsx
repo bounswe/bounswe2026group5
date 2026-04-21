@@ -1,14 +1,10 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
-import { Alert } from "react-native";
 
 import { BookingModal } from "@/components/profile/BookingModal";
 
 // Mock the icons to prevent font-loading warnings
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
-
-// Spy on Alert to test validation popups
-jest.spyOn(Alert, "alert");
 
 describe("BookingModal Component", () => {
   const mockOffering = {
@@ -57,7 +53,7 @@ describe("BookingModal Component", () => {
     expect(getByText("60 min • Senior")).toBeTruthy();
   });
 
-  it("shows validation alert if user tries to submit without selecting a time", () => {
+  it("shows inline validation if user tries to submit without selecting a time", () => {
     const mockOnSubmit = jest.fn();
     const { getByText } = render(
       <BookingModal
@@ -71,10 +67,7 @@ describe("BookingModal Component", () => {
 
     fireEvent.press(getByText("Continue"));
 
-    expect(Alert.alert).toHaveBeenCalledWith(
-      "Missing Information",
-      expect.any(String),
-    );
+    expect(getByText("Please select a date for the session.")).toBeTruthy();
     expect(mockOnSubmit).not.toHaveBeenCalled();
   });
 

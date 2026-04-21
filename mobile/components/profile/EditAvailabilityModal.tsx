@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   Text,
@@ -11,6 +10,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import {
   useCreateAvailabilitySlotMutation,
   useDeleteAvailabilitySlotMutation,
@@ -108,12 +109,21 @@ export function EditAvailabilityModal({
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingDeactivation, setPendingDeactivation] = useState<{
+    key: string;
+    slotId: string;
+    pendingRequestIds: string[];
+    count: number;
+  } | null>(null);
 
   useEffect(() => {
     if (visible) {
       setWeekOffset(0);
       setSelectedDayIndex(0);
       setTogglingKey(null);
+      setActionError(null);
+      setPendingDeactivation(null);
     }
   }, [visible]);
 
@@ -180,6 +190,7 @@ export function EditAvailabilityModal({
     setTogglingKey(key);
 
     try {
+      setActionError(null);
       for (const requestId of pendingRequestIds) {
         await respondToRequestMutation.mutateAsync({
           requestId,
@@ -190,8 +201,7 @@ export function EditAvailabilityModal({
       await deleteSlotMutation.mutateAsync(slotId);
       onChanged?.();
     } catch (error) {
-      Alert.alert(
-        "Update Failed",
+      setActionError(
         error instanceof Error
           ? error.message
           : "Could not update availability slot.",
@@ -210,10 +220,7 @@ export function EditAvailabilityModal({
     }
 
     if (isPastHourSlot(selectedDate, hour)) {
-      Alert.alert(
-        "Past Slot",
-        "Past availability slots cannot be modified.",
-      );
+      setActionError("Past availability slots cannot be modified.");
       return;
     }
 
@@ -227,32 +234,19 @@ export function EditAvailabilityModal({
       );
 
       if (existing.is_booked || acceptedRequests.length > 0) {
-        Alert.alert(
-          "Cannot Make Slot Unavailable",
-          `This slot has ${acceptedRequests.length} planned session(s). TODO: Cancelling accepted sessions from availability editing requires a backend endpoint that is not available yet.`,
+        setActionError(
+          `This slot has ${acceptedRequests.length} planned session(s). Cancelling accepted sessions from availability editing is not supported by the current backend.`,
         );
         return;
       }
 
       if (pendingRequests.length > 0) {
-        Alert.alert(
-          "Confirm Make Unavailable",
-          `This will decline ${pendingRequests.length} pending request(s) for this slot and then make it unavailable.`,
-          [
-            { text: "Keep Slot", style: "cancel" },
-            {
-              text: "Make Unavailable",
-              style: "destructive",
-              onPress: () => {
-                void deactivateSlot(
-                  key,
-                  existing.id,
-                  pendingRequests.map((request) => request.id),
-                );
-              },
-            },
-          ],
-        );
+        setPendingDeactivation({
+          key,
+          slotId: existing.id,
+          pendingRequestIds: pendingRequests.map((request) => request.id),
+          count: pendingRequests.length,
+        });
         return;
       }
 
@@ -263,6 +257,7 @@ export function EditAvailabilityModal({
     setTogglingKey(key);
 
     try {
+      setActionError(null);
       await createSlotMutation.mutateAsync({
         date: selectedDateString,
         startTime: `${String(hour).padStart(2, "0")}:00:00`,
@@ -271,8 +266,7 @@ export function EditAvailabilityModal({
 
       onChanged?.();
     } catch (error) {
-      Alert.alert(
-        "Update Failed",
+      setActionError(
         error instanceof Error
           ? error.message
           : "Could not update availability slot.",
@@ -315,6 +309,12 @@ export function EditAvailabilityModal({
         </View>
 
         <View className="px-6 pt-4">
+          {actionError ? (
+            <View className="mb-4">
+              <ErrorBanner message={actionError} />
+            </View>
+          ) : null}
+
           <View className="flex-row items-center justify-between">
             <TouchableOpacity
               className="w-8 h-8 rounded-full items-center justify-center bg-gray-100"
@@ -506,6 +506,33 @@ export function EditAvailabilityModal({
           </View>
         </ScrollView>
       </View>
+
+      <ConfirmationSheet
+        visible={pendingDeactivation !== null}
+        title="Make slot unavailable?"
+        message={
+          pendingDeactivation
+            ? `This will decline ${pendingDeactivation.count} pending request${
+                pendingDeactivation.count > 1 ? "s" : ""
+              } for this slot and then make it unavailable.`
+            : ""
+        }
+        confirmLabel="Make Unavailable"
+        cancelLabel="Keep Slot"
+        variant="destructive"
+        onCancel={() => setPendingDeactivation(null)}
+        onConfirm={() => {
+          const payload = pendingDeactivation;
+          setPendingDeactivation(null);
+          if (payload) {
+            void deactivateSlot(
+              payload.key,
+              payload.slotId,
+              payload.pendingRequestIds,
+            );
+          }
+        }}
+      />
     </Modal>
   );
 }

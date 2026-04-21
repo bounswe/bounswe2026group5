@@ -15,3 +15,10 @@ exclude = '''
 profile = "black"
 line_length = 100
 skip = ["venv", ".venv", "migrations"]
+
+[tool.coverage.run]
+branch = true
+omit = ["*/migrations/*", "*/tests.py", "*/core/*", "*/manage.py"]
+
+[tool.coverage.report]
+omit = ["*/migrations/*", "*/tests.py", "*/core/*", "*/manage.py"]

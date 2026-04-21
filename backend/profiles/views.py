@@ -1,5 +1,6 @@
 """Views for profile self-service API endpoints."""
 
+from django.conf import settings
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.db import IntegrityError, transaction
@@ -8,6 +9,7 @@ from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -15,6 +17,7 @@ from rest_framework.views import APIView
 
 from accounts.models import AppUsageMode
 from accounts.permissions import IsUser
+from mentorship.models import Feedback
 
 from .models import AvailabilitySlot, Profile, Skill
 from .serializers import (
@@ -24,6 +27,7 @@ from .serializers import (
     MentorProfileResponseSerializer,
     ProfileResponseSerializer,
     ProfileUpdateSerializer,
+    ProfileUsernameUpdateSerializer,
     PublicMentorProfileSearchListResponseSerializer,
     PublicMentorProfileSearchResultSerializer,
     SkillSerializer,
@@ -162,6 +166,36 @@ class ProfileMeAPIView(ProfileLookupMixin, APIView):
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         serializer = ProfileUpdateSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
+
+
+class ProfileUsernameUpdateAPIView(ProfileLookupMixin, APIView):
+    """Canonical self-scoped username update endpoint."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=ProfileUsernameUpdateSerializer,
+        responses={
+            200: ProfileResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Account banned."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Update authenticated user's username using `/api/profiles/me/username/`.",
+        tags=["Profiles"],
+    )
+    def patch(self, request: Request) -> Response:
+        """Update authenticated user's username."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ProfileUsernameUpdateSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
@@ -805,6 +839,85 @@ class MentorPublicRatingAPIView(ProfileLookupMixin, APIView):
                 "username": profile.username,
                 "average_rating": str(profile.average_rating),
                 "review_count": profile.review_count,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PublicProfileReviewSerializer(serializers.Serializer):
+    """Public-facing text review payload for profile pages."""
+
+    rating = serializers.IntegerField()
+    text = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class PublicProfileReviewListResponseSerializer(serializers.Serializer):
+    """Paginated response for public profile reviews endpoint."""
+
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    pageSize = serializers.IntegerField()
+    results = PublicProfileReviewSerializer(many=True)
+
+
+class ProfileReviewsByUsernameAPIView(ProfileLookupMixin, APIView):
+    """Return public, anonymous mentee text reviews for a visible mentor profile."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id="profiles_public_reviews",
+        responses={
+            200: PublicProfileReviewListResponseSerializer,
+            400: OpenApiResponse(description="Invalid pagination params."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "Return anonymous text reviews for a visible mentor profile. "
+            "Only complete batches of reviews are exposed based on the configured "
+            "rating update threshold. Supports pagination via `page` and `pageSize`."
+        ),
+        tags=["Profiles"],
+    )
+    def get(self, request: Request, username: str) -> Response:
+        profile = self._get_profile_or_404(username)
+        if profile is None or not profile.is_visible or not self._is_mentor_profile(profile):
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            page = int(request.query_params.get("page", 1))
+            page_size = int(request.query_params.get("pageSize", 6))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "`page` and `pageSize` must be integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        page = max(page, 1)
+        page_size = max(page_size, 1)
+        page_size = min(page_size, 50)
+
+        threshold = max(1, int(getattr(settings, "RATING_UPDATE_THRESHOLD", 5)))
+        allowed_reviews_count = (profile.review_count // threshold) * threshold
+
+        feedback_qs = (
+            Feedback.objects.filter(match__mentor=profile)
+            .exclude(submitted_by=profile)
+            .exclude(text="")
+            .order_by("id")
+        )
+
+        total = min(feedback_qs.count(), allowed_reviews_count)
+        offset = (page - 1) * page_size
+        items = feedback_qs[:allowed_reviews_count][offset : offset + page_size]
+
+        return Response(
+            {
+                "count": total,
+                "page": page,
+                "pageSize": page_size,
+                "results": PublicProfileReviewSerializer(items, many=True).data,
             },
             status=status.HTTP_200_OK,
         )
