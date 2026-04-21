@@ -380,19 +380,30 @@ export default function MentorProfileScreen() {
   });
 
   useEffect(() => {
-    setReviewsPage(1);
-    setReviews([]);
-  }, [username]);
-
-  useEffect(() => {
     if (!reviewsQuery.data) {
       return;
     }
 
     setReviews((prev) =>
-      reviewsPage === 1
-        ? reviewsQuery.data.results
-        : [...prev, ...reviewsQuery.data.results],
+      {
+        const nextReviews =
+          reviewsPage === 1
+            ? reviewsQuery.data.results
+            : [...prev, ...reviewsQuery.data.results];
+
+        const isSameCollection =
+          prev.length === nextReviews.length &&
+          prev.every((review, index) => {
+            const nextReview = nextReviews[index];
+            return (
+              review?.rating === nextReview?.rating &&
+              review?.text === nextReview?.text &&
+              review?.created_at === nextReview?.created_at
+            );
+          });
+
+        return isSameCollection ? prev : nextReviews;
+      },
     );
   }, [reviewsPage, reviewsQuery.data]);
 

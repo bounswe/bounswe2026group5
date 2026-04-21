@@ -155,13 +155,13 @@ describe("ProfileScreen Layout", () => {
   });
 
   it("renders mentor-only profile sections for mentor accounts", async () => {
-    const { getByText } = render(<ProfileScreen />);
+    const { getByText, getAllByText } = render(<ProfileScreen />);
 
     await waitFor(() => {
       expect(getByText("Ali Aydin")).toBeTruthy();
       expect(getByText("Availability")).toBeTruthy();
       expect(getByText("Mentees")).toBeTruthy();
-      expect(getByText("Reviews")).toBeTruthy();
+      expect(getAllByText("Reviews").length).toBeGreaterThan(0);
       expect(getByText("Anonymous mentee")).toBeTruthy();
     });
   });
@@ -171,6 +171,20 @@ describe("ProfileScreen Layout", () => {
       username: "Ece Yilmaz",
       app_usage_mode: "MENTEE",
     };
+    globalThis.fetch = jest.fn() as unknown as typeof fetch;
+    (globalThis.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          full_name: "Ece Yilmaz",
+          bio: "Profile bio",
+          skills: ["React", "Testing"],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ name: "React" }, { name: "Testing" }],
+      });
 
     const { getByText, queryByText } = render(<ProfileScreen />);
 
@@ -178,7 +192,7 @@ describe("ProfileScreen Layout", () => {
       expect(getByText("Ece Yilmaz")).toBeTruthy();
       expect(queryByText("Availability")).toBeNull();
       expect(queryByText("Mentees")).toBeNull();
-      expect(queryByText("Reviews")).toBeNull();
+      expect(queryByText("Anonymous mentee")).toBeNull();
     });
   });
 });
