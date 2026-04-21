@@ -51,8 +51,8 @@ async function markNotificationRead(id: string): Promise<void> {
 export const notificationsQueryOptions = queryOptions({
     queryKey: ['notifications'],
     queryFn: fetchNotifications,
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    staleTime: 10 * 1000,
+    refetchInterval: 10 * 1000,
 })
 
 export function useNotifications() {

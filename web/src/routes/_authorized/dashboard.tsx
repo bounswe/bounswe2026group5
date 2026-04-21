@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowRight, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, XCircle, X as XIcon } from 'lucide-react'
 import { useState, useEffect, useRef } from "react"
+import type { Notification } from "#/lib/queries/NotificationQueries.ts"
 import {toast} from "sonner";
 
 
@@ -77,18 +78,24 @@ export function DashboardHome() {
   const { data: notifications = [] } = useNotifications()
   const { mutate: markAllRead } = useMarkAllNotificationsRead()
 
-  const pendingIdsRef = useRef<string[]>([])
-  useEffect(() => {
-    pendingIdsRef.current = notifications.filter(n => n.type !== 'new_message').map(n => n.id)
-  }, [notifications])
+  // Accumulate non-message notifications as they arrive via polling.
+  // Each poll only adds genuinely new ones; already-seen IDs are skipped.
+  // Marking as read happens immediately on arrival, separate from visibility.
+  const [visibleNotifications, setVisibleNotifications] = useState<Notification[]>([])
+  const seenIds = useRef<Set<string>>(new Set())
 
   useEffect(() => {
-    return () => {
-      if (pendingIdsRef.current.length > 0) {
-        markAllRead(pendingIdsRef.current)
-      }
-    }
-  }, [markAllRead])
+    if (notifications.length === 0) return
+
+    const incoming = notifications.filter(n => !seenIds.current.has(n.id))
+    if (incoming.length === 0) return
+
+    incoming.forEach(n => seenIds.current.add(n.id))
+    setVisibleNotifications(prev => [...prev, ...incoming])
+
+    const unreadIds = incoming.filter(n => n.type !== 'new_message' && !n.is_read).map(n => n.id)
+    if (unreadIds.length > 0) markAllRead(unreadIds)
+  }, [notifications, markAllRead])
 
   const mode = (data?.app_usage_mode?.toLowerCase() as 'mentor' | 'mentee') ?? 'mentee'
   return (
@@ -109,14 +116,14 @@ export function DashboardHome() {
         )}
       </div>
 
-      {notifications.length > 0 && (
+      {visibleNotifications.length > 0 && (
         <section className="flex flex-col gap-3">
           <Heading as="h3" className="text-xl flex items-center gap-2">
             <Bell className="w-5 h-5 text-accent" />
             Notifications
           </Heading>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {notifications.map(n => (
+            {visibleNotifications.map(n => (
               <NotificationItem key={n.id} notification={n} />
             ))}
           </div>
