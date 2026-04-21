@@ -27,6 +27,7 @@ import { RequestCard } from "@/components/dashboard/RequestCard";
 import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
 
 import { useAuthStore } from "@/lib/auth/store";
+import { useConversations } from "@/lib/queries/MessagingQueries";
 import {
   mapRequestsToDashboard,
   useDeactivateMatchMutation,
@@ -155,6 +156,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const respondMutation = useRespondToMentorshipRequestMutation();
   const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
+  const { data: conversations = [] } = useConversations();
 
   // CHECK FEEDBACK FOR SELECTED MENTEE
   const activeMatchId = managedMentee?.matchIds[0];
@@ -210,8 +212,13 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
       .values(),
   );
 
-  const handleMessage = (_name: string) => {
-    // NOTE: Route to messaging thread when chat screen is implemented.
+  const handleMessage = (username: string) => {
+    const conv = conversations.find(
+      (c) => c.mentor.username === username || c.mentee.username === username,
+    );
+    if (conv) {
+      router.push(`/messages/${conv.id}` as Href);
+    }
   };
 
   const handleMenteeMore = ({
@@ -442,7 +449,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
             subtitle={mentee.subtitle}
             avatarUrl={mentee.avatarUrl}
             onPress={() => pushUserProfile(router, mentee.username)}
-            onMessage={() => handleMessage(mentee.name)}
+            onMessage={() => handleMessage(mentee.username)}
             onMore={() =>
               handleMenteeMore({
                 name: mentee.name,
@@ -481,6 +488,7 @@ function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
+  const { data: conversations = [] } = useConversations();
 
   // CHECK FEEDBACK FOR SELECTED MENTOR
   const activeMatchId = managedMentor?.matchIds[0];
@@ -552,8 +560,13 @@ function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
       .values(),
   );
 
-  const handleMessage = (_name: string) => {
-    // NOTE: Route to messaging thread when chat screen is implemented.
+  const handleMessage = (username: string) => {
+    const conv = conversations.find(
+      (c) => c.mentor.username === username || c.mentee.username === username,
+    );
+    if (conv) {
+      router.push(`/messages/${conv.id}` as Href);
+    }
   };
 
   const handleMore = ({
@@ -746,7 +759,7 @@ function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
             subtitle={mentor.subtitle}
             avatarUrl={mentor.avatarUrl}
             onPress={() => pushUserProfile(router, mentor.username)}
-            onMessage={() => handleMessage(mentor.name)}
+            onMessage={() => handleMessage(mentor.username)}
             onMore={() =>
               handleMore({
                 name: mentor.name,

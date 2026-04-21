@@ -32,6 +32,7 @@ export function useConversations() {
     queryKey: ["messaging", "conversations"],
     queryFn: () => apiGet<Conversation[]>("/api/messages/conversations/"),
     staleTime: 30 * 1000,
+    refetchOnMount: "always",
   });
 }
 
