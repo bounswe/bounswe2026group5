@@ -96,6 +96,13 @@ class Profile(models.Model):
 class AvailabilitySlot(models.Model):
     """Mentor availability time window that can be booked for sessions."""
 
+    class Status(models.TextChoices):
+        """Lifecycle statuses for an availability slot."""
+
+        AVAILABLE = "AVAILABLE", "Available"
+        PENDING = "PENDING", "Pending"
+        BOOKED = "BOOKED", "Booked"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     profile = models.ForeignKey(
         Profile,
@@ -104,6 +111,11 @@ class AvailabilitySlot(models.Model):
     )
     start_at = models.DateTimeField()
     end_at = models.DateTimeField()
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.AVAILABLE,
+    )
     is_booked = models.BooleanField(default=False)
     booked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -142,6 +154,7 @@ class AvailabilitySlot(models.Model):
         ]
         indexes = [
             models.Index(fields=["profile", "start_at"]),
+            models.Index(fields=["status", "start_at"]),
             models.Index(fields=["is_booked", "start_at"]),
             models.Index(fields=["booked_by", "start_at"]),
         ]
@@ -152,15 +165,23 @@ class AvailabilitySlot(models.Model):
     def mark_booked(self, user=None) -> None:
         """Mark slot as booked and optionally track who booked it."""
 
+        self.status = self.Status.BOOKED
         self.is_booked = True
         self.booked_by = user
         self.booked_at = timezone.now()
-        self.save(update_fields=["is_booked", "booked_by", "booked_at", "updated_at"])
+        self.save(update_fields=["status", "is_booked", "booked_by", "booked_at", "updated_at"])
+
+    def mark_pending(self) -> None:
+        """Mark slot as pending (requested)."""
+
+        self.status = self.Status.PENDING
+        self.save(update_fields=["status", "updated_at"])
 
     def mark_available(self) -> None:
         """Mark slot as available again."""
 
+        self.status = self.Status.AVAILABLE
         self.is_booked = False
         self.booked_by = None
         self.booked_at = None
-        self.save(update_fields=["is_booked", "booked_by", "booked_at", "updated_at"])
+        self.save(update_fields=["status", "is_booked", "booked_by", "booked_at", "updated_at"])

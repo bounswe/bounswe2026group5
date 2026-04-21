@@ -109,20 +109,15 @@ class MentorshipRequestCreateSerializer(serializers.Serializer):
                 {"slot_id": "Selected slot does not belong to the requested mentor."}
             )
 
-        if selected_slot.is_booked:
-            raise serializers.ValidationError({"slot_id": "Selected slot is already booked."})
-
-        if selected_slot.start_at <= timezone.now():
-            raise serializers.ValidationError({"slot_id": "Selected slot is in the past."})
-
-        has_pending_for_slot = MentorshipRequest.objects.filter(
-            slot=selected_slot,
-            status=MentorshipRequest.Status.PENDING,
-        ).exists()
-        if has_pending_for_slot:
+        if selected_slot.status != AvailabilitySlot.Status.AVAILABLE:
+            if selected_slot.status == AvailabilitySlot.Status.BOOKED:
+                raise serializers.ValidationError({"slot_id": "Selected slot is already booked."})
             raise serializers.ValidationError(
                 {"slot_id": "Selected slot already has a pending mentorship request."}
             )
+
+        if selected_slot.start_at <= timezone.now():
+            raise serializers.ValidationError({"slot_id": "Selected slot is in the past."})
 
         return attrs
 
@@ -133,12 +128,14 @@ class MentorshipRequestCreateSerializer(serializers.Serializer):
         selected_slot: AvailabilitySlot = validated_data["slot_id"]
         cover_letter: str = validated_data.get("cover_letter", "")
 
-        return MentorshipRequest.objects.create(
+        request_obj = MentorshipRequest.objects.create(
             mentor=mentor_profile,
             mentee=mentee_profile,
             slot=selected_slot,
             cover_letter=cover_letter,
         )
+        selected_slot.mark_pending()
+        return request_obj
 
 
 class RespondToRequestSerializer(serializers.Serializer):

@@ -51,7 +51,16 @@ def _create_notification(
     resource_id: Any = None,
     extra_metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Create a structured notification payload for client consumption, never raise."""
+    """Create a structured notification payload for client consumption.
+
+    Notification creation is performed as a 'best effort' operation: failures in
+    persistence (e.g. IntegrityError) are logged but do not roll back the
+    primary business transaction.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     try:
         Notification.objects.create(
             user=user,
@@ -63,14 +72,8 @@ def _create_notification(
             resource_id=resource_id,
             extra_metadata=extra_metadata or {},
         )
-    except IntegrityError as exc:
-        logging.getLogger(__name__).warning(
-            "Notification persistence skipped due to integrity error: %s", exc
-        )
     except Exception:
-        logging.getLogger(__name__).exception(
-            "Notification persistence failed for mentorship flow."
-        )
+        logger.exception("Notification persistence failed for mentorship flow.")
 
 
 def create_mentorship_request(
@@ -87,6 +90,7 @@ def create_mentorship_request(
         slot=selected_slot,
         cover_letter=cover_letter,
     )
+    selected_slot.mark_pending()
 
     _create_notification(
         user=mentor_profile.user,
@@ -151,6 +155,9 @@ def respond_to_mentorship_request(
                 },
             )
         elif new_status == MentorshipRequest.Status.REJECTED:
+            if mentorship_request.slot:
+                mentorship_request.slot.mark_available()
+
             _create_notification(
                 user=mentorship_request.mentee.user,
                 notification_type=NotificationType.MENTORSHIP_REQUEST_REJECTED,
