@@ -165,7 +165,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
     // MENTOR layout — restructure to put calendar full width below
     return (
         <main className="page-wrap py-10 sm:py-12 rise-in">
-            <section className="island-shell rounded-3xl p-6 sm:p-8 lg:p-10 space-y-8">
+            <section id="availability" className="island-shell rounded-3xl p-6 sm:p-8 lg:p-10 space-y-8">
 
                 {/* Top 2-col grid: left content + right snapshot */}
                 <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">

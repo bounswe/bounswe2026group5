@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsRegularUser
+from notifications.models import Notification, NotificationType
 from profiles.models import Profile
 
 from .models import Conversation, Message, MessageReport
@@ -42,9 +43,11 @@ class ConversationListAPIView(APIView):
         except Profile.DoesNotExist:
             return Response([], status=status.HTTP_200_OK)
 
-        conversations = Conversation.objects.filter(
-            Q(match__mentor=profile) | Q(match__mentee=profile)
-        ).select_related("match__mentor", "match__mentee")
+        conversations = (
+            Conversation.objects.filter(Q(match__mentor=profile) | Q(match__mentee=profile))
+            .select_related("match__mentor", "match__mentee")
+            .order_by("-updated_at")
+        )
 
         return Response(
             ConversationSerializer(conversations, many=True).data,
@@ -144,6 +147,21 @@ class ConversationDetailAPIView(APIView):
             sender=profile,
             body=validated_data.get("body", ""),
             attachment=validated_data.get("attachment"),
+        )
+
+        other_profile = (
+            conversation.match.mentor
+            if profile == conversation.match.mentee
+            else conversation.match.mentee
+        )
+        Notification.objects.create(
+            user=other_profile.user,
+            type=NotificationType.NEW_MESSAGE,
+            title="New Message",
+            actor=profile,
+            resource_type="conversation",
+            resource_id=conversation.id,
+            message=f"You have received a new message from {profile.display_name}.",
         )
 
         response_serializer = MessageSerializer(message, context={"request": request})
