@@ -21,6 +21,7 @@ from profiles.services import (
 )
 
 from .models import Feedback, Match, MeetingSession, MentorshipRequest
+import logging
 
 
 class MentorshipServiceError(Exception):

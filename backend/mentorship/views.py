@@ -66,8 +66,6 @@ _INVALID_MEETING_SESSION_ROLE = {"detail": "Invalid role. Use one of: mentor, me
 logger = logging.getLogger(__name__)
 
 
-
-
 class MyRequestsListAPIView(APIView):
     """List all mentorship requests where the caller is mentor or mentee."""
 
@@ -384,7 +382,7 @@ class CancelSessionAPIView(APIView):
 
         mentorship_request.refresh_from_db()
 
-
+        # Notification is handled in the service layer; no need to duplicate here.
 
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
@@ -475,7 +473,7 @@ class RescheduleSessionAPIView(APIView):
 
         mentorship_request.refresh_from_db()
 
-
+        # Notification is handled in the service layer; no need to duplicate here.
 
         return Response(
             MentorshipRequestSerializer(mentorship_request).data,
