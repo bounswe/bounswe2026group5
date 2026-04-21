@@ -42,6 +42,20 @@ def resolve_widdershins_command() -> list[str]:
     raise FileNotFoundError("Widdershins not found. Install with 'npm install -g widdershins'.")
 
 
+def strip_yaml_frontmatter(lines: list[str]) -> list[str]:
+    """Remove YAML frontmatter from the start of the markdown (GitHub Wiki doesn't support it)."""
+    if not lines:
+        return lines
+    if lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                res = lines[i + 1 :]
+                while res and res[0].strip() == "":
+                    res.pop(0)
+                return res
+    return lines
+
+
 def extract_h2_heading(line: str) -> str | None:
     """Extract heading text from an H2 line."""
     match = H2_PATTERN.match(line)
@@ -61,15 +75,6 @@ def is_method_heading(heading: str) -> bool:
     return METHOD_PATTERN.match(heading) is not None
 
 
-def find_method_line_after(lines: list[str], start: int) -> str | None:
-    """Find backticked METHOD /path after an endpoint heading."""
-    for index in range(start + 1, min(start + 10, len(lines))):
-        match = METHOD_LINE_PATTERN.match(lines[index].strip())
-        if match:
-            return f"{match.group(1)} {match.group(2).strip()}"
-    return None
-
-
 def find_anchor_after(lines: list[str], start: int) -> tuple[int, str] | None:
     """Find next anchor line index and anchor id after a heading."""
     for index in range(start + 1, min(start + 10, len(lines))):
@@ -87,33 +92,6 @@ def find_next_non_empty_index(lines: list[str], start: int) -> int | None:
     if index >= len(lines):
         return None
     return index
-
-
-def cleanup_extra_blank_line(lines: list[str], index: int) -> None:
-    """Remove a blank line when deletion creates two consecutive empty lines."""
-    if index >= len(lines) or index - 1 < 0:
-        return
-    if lines[index].strip() == "" and lines[index - 1].strip() == "":
-        del lines[index]
-
-
-def remove_duplicate_inline_after_heading(
-    lines: list[str], heading_index: int, heading: str
-) -> None:
-    """Remove backticked duplicate endpoint line under a heading if present."""
-    anchor = find_anchor_after(lines, heading_index)
-    if not anchor:
-        return
-
-    cursor = find_next_non_empty_index(lines, anchor[0] + 1)
-    if cursor is None:
-        return
-
-    if lines[cursor].strip() != f"`{heading}`":
-        return
-
-    del lines[cursor]
-    cleanup_extra_blank_line(lines, cursor)
 
 
 def update_current_section(
@@ -160,7 +138,7 @@ def collect_toc_sections(lines: list[str]) -> list[dict[str, object]]:
 
 def render_toc(sections: list[dict[str, object]]) -> list[str]:
     """Render markdown TOC block from collected sections."""
-    toc = ["<!-- TOC START -->", "## Table of Contents", ""]
+    toc = ["", "## Table of Contents", ""]
 
     for section in sections:
         items = section.get("items", [])
@@ -171,29 +149,47 @@ def render_toc(sections: list[dict[str, object]]) -> list[str]:
         for heading, anchor in items:
             toc.append(f"  - [{heading}](#{anchor})")
 
-    toc.extend(["", "<!-- TOC END -->", ""])
+    toc.extend(["", "", ""])
     return toc
 
 
-def rewrite_endpoint_headers(lines: list[str]) -> None:
-    """Replace operation ids in endpoint headings with METHOD + path."""
+def rewrite_endpoint_headers(lines: list[str]) -> list[str]:
+    """Replace operation ids in endpoint headings with METHOD + path and remove duplicates."""
+    lines_to_delete = set()
+
     for index, line in enumerate(lines):
         heading = extract_h2_heading(line)
         if not heading or is_method_heading(heading):
             continue
 
-        method_path = find_method_line_after(lines, index)
+        method_path = None
+        method_line_index = -1
+
+        # Search forward until the next section/endpoint to bypass the long Code Samples block
+        for j in range(index + 1, len(lines)):
+            if extract_h2_heading(lines[j]) or parse_section_header(lines[j]):
+                break
+            match = METHOD_LINE_PATTERN.match(lines[j].strip())
+            if match:
+                method_path = f"{match.group(1)} {match.group(2).strip()}"
+                method_line_index = j
+                break
+
         if method_path:
+            # Replace the heading (e.g., auth_login_create -> POST /api/auth/login/)
             lines[index] = f"## {method_path}"
+            # Mark the inline method duplicate for deletion
+            lines_to_delete.add(method_line_index)
 
+        # Cleanup redundant operation ID tag right after the anchor if it exists
+        anchor = find_anchor_after(lines, index)
+        if anchor:
+            cursor = find_next_non_empty_index(lines, anchor[0] + 1)
+            if cursor is not None and lines[cursor].strip() == f"`{heading}`":
+                lines_to_delete.add(cursor)
 
-def remove_duplicate_inline_method_path(lines: list[str]) -> None:
-    """Remove duplicate inline METHOD /path lines under endpoint headings."""
-    for index, line in enumerate(lines):
-        heading = extract_h2_heading(line)
-        if not heading or not is_method_heading(heading):
-            continue
-        remove_duplicate_inline_after_heading(lines, index, heading)
+    # Return lines filtering out the ones marked for deletion
+    return [line for i, line in enumerate(lines) if i not in lines_to_delete]
 
 
 def build_toc(lines: list[str]) -> list[str]:
@@ -207,9 +203,9 @@ def upsert_toc(lines: list[str], toc: list[str]) -> None:
     start = None
     end = None
     for index, line in enumerate(lines):
-        if line.strip() == "<!-- TOC START -->":
+        if line.strip() == "":
             start = index
-        if line.strip() == "<!-- TOC END -->":
+        if line.strip() == "":
             end = index
             break
 
@@ -229,9 +225,16 @@ def upsert_toc(lines: list[str], toc: list[str]) -> None:
 def rewrite_api_wiki() -> None:
     """Rewrite api_wiki.md headings and TOC for wiki readability."""
     lines = API_WIKI_FILE.read_text(encoding="utf-8").splitlines()
-    rewrite_endpoint_headers(lines)
-    remove_duplicate_inline_method_path(lines)
+
+    # 1. Strip the YAML frontmatter block to fix the header leak
+    lines = strip_yaml_frontmatter(lines)
+
+    # 2. Extract methods below 'Code samples' and replace headings
+    lines = rewrite_endpoint_headers(lines)
+
+    # 3. Generate and insert TOC
     upsert_toc(lines, build_toc(lines))
+
     API_WIKI_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
