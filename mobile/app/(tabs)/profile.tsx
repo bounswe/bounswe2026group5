@@ -12,6 +12,7 @@ import {
 } from "@/components/profile/EditProfileModal";
 import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { ProfileReviews } from "@/components/profile/ProfileReviews";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -26,6 +27,8 @@ import {
   useMentorshipRequestsQuery,
 } from "@/lib/queries/mentorship";
 import {
+  type ProfileReview,
+  useProfileReviewsQuery,
   useProfileRatingQuery,
   useUpdateOwnProfileMutation,
 } from "@/lib/queries/profile";
@@ -38,8 +41,11 @@ interface OwnProfileResponse {
   full_name: string;
   bio: string;
   picture_url: string;
+  hidden?: boolean;
   skills?: string[];
 }
+
+const REVIEWS_PAGE_SIZE = 6;
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -88,10 +94,21 @@ export default function ProfileScreen() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
+  const [isProfileHidden, setIsProfileHidden] = useState<boolean | null>(null);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviews, setReviews] = useState<ProfileReview[]>([]);
 
   const isMentorMode = appUsageMode === "MENTOR";
   const isMenteeMode = appUsageMode === "MENTEE";
   const shouldShowSkills = isMentorMode ? showExpertise : showEagerToLearn;
+  const shouldShowReviews =
+    isMentorMode && isProfileHidden === false && Boolean(currentUsername);
+  const reviewsQuery = useProfileReviewsQuery(
+    currentUsername,
+    reviewsPage,
+    REVIEWS_PAGE_SIZE,
+    shouldShowReviews,
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -127,12 +144,14 @@ export default function ProfileScreen() {
           bio: payload.bio || "",
         }));
 
+        setIsProfileHidden(Boolean(payload.hidden));
         setSkillsData(payload.skills ?? []);
       })
       .catch(() => {
         if (!mounted) {
           return;
         }
+        setIsProfileHidden(null);
         setPageError("Failed to load profile.");
       });
 
@@ -140,6 +159,23 @@ export default function ProfileScreen() {
       mounted = false;
     };
   }, [currentUsername]);
+
+  useEffect(() => {
+    setReviewsPage(1);
+    setReviews([]);
+  }, [currentUsername, shouldShowReviews]);
+
+  useEffect(() => {
+    if (!reviewsQuery.data) {
+      return;
+    }
+
+    setReviews((prev) =>
+      reviewsPage === 1
+        ? reviewsQuery.data.results
+        : [...prev, ...reviewsQuery.data.results],
+    );
+  }, [reviewsPage, reviewsQuery.data]);
 
   useEffect(() => {
     let mounted = true;
@@ -363,6 +399,35 @@ export default function ProfileScreen() {
               onEdit={() => setAvailabilityModalOpen(true)}
             />
           )}
+
+          {isMentorMode ? (
+            <View className="mt-6">
+              <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
+                Reviews
+              </Text>
+              {isProfileHidden === true ? (
+                <View className="rounded-2xl border border-divider/20 bg-surface-card dark:bg-surface-card-dark px-4 py-4">
+                  <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
+                    Public reviews appear only when your profile is visible.
+                  </Text>
+                </View>
+              ) : (
+                <ProfileReviews
+                  reviews={reviews}
+                  isLoading={reviewsQuery.isLoading && reviewsPage === 1}
+                  isLoadingMore={reviewsQuery.isFetching && reviewsPage > 1}
+                  errorMessage={
+                    reviewsQuery.error instanceof Error
+                      ? reviewsQuery.error.message
+                      : null
+                  }
+                  totalCount={reviewsQuery.data?.count ?? reviews.length}
+                  onLoadMore={() => setReviewsPage((prev) => prev + 1)}
+                  emptyMessage="No public reviews yet. Reviews appear once privacy thresholds are met."
+                />
+              )}
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 

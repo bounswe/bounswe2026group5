@@ -29,28 +29,35 @@ interface PublicProfileRatingResponse {
 }
 
 export interface ProfileReview {
-  id: string;
   rating: number;
-  text?: string;
+  text: string;
   created_at: string;
-  submitted_by: {
-    username: string;
-    display_name: string;
-    picture_url?: string;
-  };
+}
+
+export interface ProfileReviewsResponse {
+  count: number;
+  page: number;
+  pageSize: number;
+  results: ProfileReview[];
 }
 
 /**
  * Retrieve the list of public reviews for a specific profile.
  */
-export function useProfileReviewsQuery(username?: string) {
+export function useProfileReviewsQuery(
+  username?: string,
+  page: number = 1,
+  pageSize: number = 6,
+  enabled: boolean = true,
+) {
   return useQuery({
-    queryKey: ["profiles", username ?? "anonymous", "reviews"],
+    queryKey: ["profiles", username ?? "anonymous", "reviews", page, pageSize],
     queryFn: () =>
-      apiGet<ProfileReview[]>(
-        `/api/profiles/${encodeURIComponent(username || "")}/reviews/`
+      apiGet<ProfileReviewsResponse>(
+        `/api/profiles/${encodeURIComponent(username || "")}/reviews/?page=${page}&pageSize=${pageSize}`,
       ),
-    enabled: Boolean(username),
+    enabled: Boolean(username) && enabled,
+    staleTime: 60_000,
   });
 }
 

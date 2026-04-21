@@ -49,6 +49,23 @@ jest.mock("@/lib/queries/profile", () => ({
       review_count: 18,
     },
   }),
+  useProfileReviewsQuery: () => ({
+    data: {
+      count: 1,
+      page: 1,
+      pageSize: 6,
+      results: [
+        {
+          rating: 5,
+          text: "Very helpful mentor.",
+          created_at: "2026-04-21T12:00:00Z",
+        },
+      ],
+    },
+    isLoading: false,
+    isFetching: false,
+    error: null,
+  }),
   useUpdateOwnProfileMutation: () => ({
     mutateAsync: jest.fn(),
     isPending: false,
@@ -138,12 +155,14 @@ describe("ProfileScreen Layout", () => {
   });
 
   it("renders mentor-only profile sections for mentor accounts", async () => {
-    const { getByText, queryByText } = render(<ProfileScreen />);
+    const { getByText } = render(<ProfileScreen />);
 
     await waitFor(() => {
       expect(getByText("Ali Aydin")).toBeTruthy();
       expect(getByText("Availability")).toBeTruthy();
       expect(getByText("Mentees")).toBeTruthy();
+      expect(getByText("Reviews")).toBeTruthy();
+      expect(getByText("Anonymous mentee")).toBeTruthy();
     });
   });
 
@@ -159,6 +178,7 @@ describe("ProfileScreen Layout", () => {
       expect(getByText("Ece Yilmaz")).toBeTruthy();
       expect(queryByText("Availability")).toBeNull();
       expect(queryByText("Mentees")).toBeNull();
+      expect(queryByText("Reviews")).toBeNull();
     });
   });
 });
