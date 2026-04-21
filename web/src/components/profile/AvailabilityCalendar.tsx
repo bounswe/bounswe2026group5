@@ -292,9 +292,6 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
         const hour = parseInt(slot.startTime.split(':')[0])
         slotsByDateHour[`${slot.date}-${hour}`] = slot
     }
-    console.log('slots prop:', slots)
-    console.log('slotsByDateHour:', slotsByDateHour)
-
     const weekLabel = `${monday.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${addDays(monday, 6).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
 
     const invalidate = () => {
@@ -309,7 +306,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
         if (togglingSlotKey === key) return
 
         if (existing) {
-            if (existing.is_booked) return
+            if (existing.status === 'BOOKED') return
             setTogglingSlotKey(key)
             deleteSlot.mutate(existing.id, {
                 onSuccess: () => {
@@ -437,11 +434,13 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                         let cellContent = null
                                         let cellClass = 'border border-line/30 h-14 relative transition-all '
 
-                                        const isPending = slot && pendingSlotIds.has(slot.id)
+                                        const isMyPending = slot && pendingSlotIds.has(slot.id)
+                                        const isGlobalPending = slot && slot.status === 'PENDING'
+                                        const isPending = isMyPending || isGlobalPending
 
                                         if (isPast) {
                                             cellClass += 'bg-black/[0.02] opacity-50'
-                                        } else if (slot?.is_booked) {
+                                        } else if (slot?.status === 'BOOKED') {
                                             cellClass += 'bg-violet-50 border-violet-200'
                                             cellContent = (
                                                 <div className="flex flex-col items-center justify-center h-full gap-0.5">
@@ -461,7 +460,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                             cellContent = (
                                                 <div className="flex items-center justify-center h-full">
                                                     <span className="text-amber-700 font-semibold text-xs">
-                                                        {isOwner ? 'Pending' : 'Requested'}
+                                                        {isOwner ? 'Pending' : (isMyPending ? 'Requested' : 'Pending')}
                                                     </span>
                                                 </div>
                                             )
@@ -495,9 +494,9 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                                 className={cellClass}
                                                 onClick={() => {
                                                     if (isPast || isPending) return
-                                                    if (isOwner && !slot?.is_booked) {
+                                                    if (isOwner && slot?.status !== 'BOOKED') {
                                                         handleCellClick(dateStr, hour, slot)
-                                                    } else if (!isOwner && isAuthenticated && slot && !slot.is_booked) {
+                                                    } else if (!isOwner && isAuthenticated && slot && slot.status !== 'BOOKED') {
                                                         setBookingSlot(slot)
                                                     }
                                                 }}

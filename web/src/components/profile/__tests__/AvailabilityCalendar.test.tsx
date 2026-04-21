@@ -79,6 +79,7 @@ function makeSlot(overrides = {}) {
     startTime: '10:00:00',
     endTime: '11:00:00',
     is_booked: false,
+    status: 'AVAILABLE',
     bookedBy: null,
     bookedAt: null,
     sessionId: null,
@@ -177,5 +178,16 @@ describe('AvailabilityCalendar — Pending Slot Display', () => {
 
     expect(screen.getByText('Book')).toBeInTheDocument()
     expect(screen.queryByText('Requested')).not.toBeInTheDocument()
+  })
+
+  it('shows "Pending" label on a slot that is globally PENDING (someone else requested)', () => {
+    const slot = makeSlot({ status: 'PENDING' })
+    mockUseAvailabilitySlots.mockReturnValue({ data: [slot] })
+    mockUseMyRequests.mockReturnValue({ data: [] }) // Not my request
+
+    renderCalendar({ isOwner: false, isAuthenticated: true })
+
+    expect(screen.getByText('Pending')).toBeInTheDocument()
+    expect(screen.queryByText('Book')).not.toBeInTheDocument()
   })
 })

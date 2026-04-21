@@ -66,6 +66,7 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
             "date",
             "startTime",
             "endTime",
+            "status",
             "is_booked",
             "bookedBy",
             "bookedAt",
