@@ -54,6 +54,8 @@ class NotificationAPITest(APITestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(email="test@example.com", password="password")
         self.profile = Profile.objects.create(user=self.user, display_name="Test User")
+        self.actor_user = User.objects.create_user(email="actor@example.com", password="password")
+        self.actor_profile = Profile.objects.create(user=self.actor_user, display_name="Actor User")
         from rest_framework.test import APIClient
 
         cast(APIClient, self.client).force_authenticate(user=self.user)
@@ -209,3 +211,36 @@ class NotificationAPITest(APITestCase):
         response = self.client.put(url)
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+    
+    def test_list_unread_notifications_includes_structured_fields(self) -> None:
+        """Unread notification list includes actor/resource metadata for client routing."""
+        Notification.objects.create(
+            user=self.user,
+            type="new_message",
+            title="New Message",
+            message="You have a new message.",
+            actor=self.actor_profile,
+            resource_type="conversation",
+            resource_id="a25888e7-31e4-4c88-ab7d-f8a0dd3537da",
+            extra_metadata={"conversation_preview": "Hey there"},
+            is_read=False,
+        )
+
+        url = reverse("notification-list")
+        response = cast("Response", self.client.get(url))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        data = cast(list[Any], response.data)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["type"], "new_message")
+        self.assertEqual(data[0]["title"], "New Message")
+        self.assertEqual(data[0]["actor"], self.actor_profile.id)
+        self.assertEqual(data[0]["resource_type"], "conversation")
+        self.assertEqual(
+            data[0]["resource_id"],
+            "a25888e7-31e4-4c88-ab7d-f8a0dd3537da",
+        )
+        self.assertEqual(
+            data[0]["extra_metadata"],
+            {"conversation_preview": "Hey there"},
+        )

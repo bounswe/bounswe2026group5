@@ -1,5 +1,6 @@
 """Views for mentorship request and match API endpoints."""
 
+import logging
 from typing import Any, cast
 
 from django.db import IntegrityError
@@ -13,7 +14,6 @@ from rest_framework.views import APIView
 
 from accounts.models import AppUsageMode
 from accounts.permissions import IsUser
-from notifications.models import Notification
 from profiles.models import AvailabilitySlot, Profile
 from profiles.services import (
     BookingCancelNotAllowedError,
@@ -54,12 +54,25 @@ _MENTEE_REQUIRED = {"detail": "You need a MENTEE profile to send mentorship requ
 _MENTOR_REQUIRED = {"detail": "You need a MENTOR profile to access this resource."}
 _NO_PROFILE = {"detail": "Profile not found."}
 _SLOT_BOOKING_FAILED = {"detail": "Selected slot could not be booked while accepting this request."}
+_NO_ACTIVE_BOOKING = {"detail": "This session has no active booking to cancel."}
 _INVALID_MEETING_SESSION_STATUS = {
     "detail": (
         "Invalid status. Use one of: upcoming, past, scheduled, rescheduled, canceled, completed."
     )
 }
 _INVALID_MEETING_SESSION_ROLE = {"detail": "Invalid role. Use one of: mentor, mentee, all."}
+
+logger = logging.getLogger(__name__)
+
+
+def _create_notification_best_effort(**kwargs: Any) -> None:
+    """Persist notifications without breaking the primary request flow on failure."""
+    try:
+        Notification.objects.create(**kwargs)
+    except IntegrityError as exc:
+        logger.warning("Notification persistence skipped due to integrity error: %s", exc)
+    except Exception:
+        logger.exception("Notification persistence failed for mentorship flow.")
 
 
 class MyRequestsListAPIView(APIView):
@@ -376,16 +389,8 @@ class CancelSessionAPIView(APIView):
                 actor=request.user,
                 actor_profile=profile,
             )
-        except NoActiveBookingError:
-            return Response(
-                {"detail": "This session has no active booking to cancel."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except SlotNotBookedError:
-            return Response(
-                {"detail": "This session has no active booking to cancel."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        except (NoActiveBookingError, SlotNotBookedError):
+            return Response(_NO_ACTIVE_BOOKING, status=status.HTTP_400_BAD_REQUEST)
         except BookingCancelNotAllowedError:
             return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
         except AvailabilitySlot.DoesNotExist:
@@ -538,7 +543,7 @@ class DeactivateMatchAPIView(APIView):
         if profile not in (match.mentor, match.mentee):
             return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
 
-        match = deactivate_match(match=match)
+        match = deactivate_match(match=match, actor_profile=profile)
 
         return Response(MatchSerializer(match).data, status=status.HTTP_200_OK)
 

@@ -99,6 +99,9 @@ class MessagingAPIBaseTestCase(TestCase):
             mentee=self.mentee_profile,
             slot=slot,
         )
+        request_obj.status = MentorshipRequest.Status.ACCEPTED
+        request_obj.save()
+        ensure_match_and_initial_session(mentorship_request=request_obj)
         self.match = Match.objects.get(request=request_obj)
         self.conversation = Conversation.objects.get(match=self.match)
 
@@ -113,6 +116,9 @@ class MessagingAPIBaseTestCase(TestCase):
             mentee=self.other_profile,
             slot=other_slot,
         )
+        other_request.status = MentorshipRequest.Status.ACCEPTED
+        other_request.save()
+        ensure_match_and_initial_session(mentorship_request=other_request)
         self.other_match = Match.objects.get(request=other_request)
         self.other_conversation = Conversation.objects.get(match=self.other_match)
 
@@ -312,6 +318,20 @@ class MessageCreateAPIViewTests(MessagingAPIBaseTestCase):
         self.assertEqual(response.data["body"], "Test message")
         self.assertEqual(response.data["sender"]["id"], str(self.mentee_profile.id))
 
+    def test_participant_can_send_message_creates_notification(self) -> None:
+        url = self._conversation_detail_url(self.conversation.id)
+        response = self.mentee_client.post(url, {"body": "Test notification"})
+        self.assertEqual(response.status_code, 201)
+        
+        from notifications.models import Notification, NotificationType
+        notification = Notification.objects.filter(
+            user=self.mentor_user, type=NotificationType.NEW_MESSAGE
+        ).first()
+        self.assertIsNotNone(notification)
+        self.assertEqual(notification.title, "New Message")
+        self.assertEqual(notification.resource_type, "conversation")
+        self.assertEqual(str(notification.resource_id), str(self.conversation.id))
+
     def test_message_supports_markdown(self) -> None:
         url = self._conversation_detail_url(self.conversation.id)
         markdown_body = "# Heading\n\n**Bold text**"
@@ -487,6 +507,9 @@ class MessagingModelTests(TestCase):
             mentee=self.mentee_profile,
             slot=slot,
         )
+        request_obj.status = MentorshipRequest.Status.ACCEPTED
+        request_obj.save()
+        ensure_match_and_initial_session(mentorship_request=request_obj)
         self.match = Match.objects.get(request=request_obj)
 
     def test_conversation_created_from_match(self) -> None:

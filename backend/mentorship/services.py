@@ -8,6 +8,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Avg, F
 from django.utils import timezone
 
+from notifications.models import Notification, NotificationType
 from profiles.models import AvailabilitySlot, Profile
 from profiles.services import (
     BookingCancelNotAllowedError,
@@ -38,6 +39,30 @@ class SameSlotSelectionError(MentorshipServiceError):
     """Raised when rescheduling selects the same slot as current."""
 
 
+def _create_notification(
+    *,
+    user: Any,
+    notification_type: NotificationType,
+    title: str,
+    message: str,
+    actor: Profile | None = None,
+    resource_type: str = "",
+    resource_id: Any = None,
+    extra_metadata: dict[str, Any] | None = None,
+) -> None:
+    """Create a structured notification payload for client consumption."""
+    Notification.objects.create(
+        user=user,
+        type=notification_type,
+        title=title,
+        message=message,
+        actor=actor,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        extra_metadata=extra_metadata or {},
+    )
+
+
 def create_mentorship_request(
     *,
     mentee_profile: Profile,
@@ -46,12 +71,28 @@ def create_mentorship_request(
     cover_letter: str = "",
 ) -> MentorshipRequest:
     """Create and persist a mentorship request for the given profiles and slot."""
-    return MentorshipRequest.objects.create(
+    mentorship_request = MentorshipRequest.objects.create(
         mentor=mentor_profile,
         mentee=mentee_profile,
         slot=selected_slot,
         cover_letter=cover_letter,
     )
+
+    _create_notification(
+        user=mentor_profile.user,
+        notification_type=NotificationType.NEW_MENTORSHIP_REQUEST,
+        title="New Mentorship Request",
+        message=f"{mentee_profile.display_name} has sent you a mentorship request.",
+        actor=mentee_profile,
+        resource_type="mentorship_request",
+        resource_id=mentorship_request.id,
+        extra_metadata={
+            "mentee_display_name": mentee_profile.display_name,
+            "mentor_display_name": mentor_profile.display_name,
+        },
+    )
+
+    return mentorship_request
 
 
 def respond_to_mentorship_request(
@@ -82,7 +123,39 @@ def respond_to_mentorship_request(
         mentorship_request.save()
 
         if new_status == MentorshipRequest.Status.ACCEPTED:
-            ensure_match_and_initial_session(mentorship_request=mentorship_request)
+            match = ensure_match_and_initial_session(mentorship_request=mentorship_request)
+            _create_notification(
+                user=mentorship_request.mentee.user,
+                notification_type=NotificationType.NEW_MATCH,
+                title="Request Accepted",
+                message=(
+                    f"Your mentorship request to {mentorship_request.mentor.display_name} "
+                    "was accepted."
+                ),
+                actor=mentorship_request.mentor,
+                resource_type="match",
+                resource_id=match.id,
+                extra_metadata={
+                    "request_id": str(mentorship_request.id),
+                    "mentor_display_name": mentorship_request.mentor.display_name,
+                },
+            )
+        elif new_status == MentorshipRequest.Status.REJECTED:
+            _create_notification(
+                user=mentorship_request.mentee.user,
+                notification_type=NotificationType.MENTORSHIP_REQUEST_REJECTED,
+                title="Request Rejected",
+                message=(
+                    f"Your mentorship request to {mentorship_request.mentor.display_name} "
+                    "was rejected."
+                ),
+                actor=mentorship_request.mentor,
+                resource_type="mentorship_request",
+                resource_id=mentorship_request.id,
+                extra_metadata={
+                    "mentor_display_name": mentorship_request.mentor.display_name,
+                },
+            )
 
     return mentorship_request
 
@@ -139,13 +212,13 @@ def book_match_session(*, mentor_profile: Profile, slot_id: Any, actor: Any) -> 
     with transaction.atomic():
         slot = book_availability_slot(profile=mentor_profile, slot_id=slot_id, actor=actor)
 
-        # Resolve actor's profile to check for matches
+        # Resolve actor's profile to check for matches.
         try:
             mentee_profile = Profile.objects.get(user=actor)
             active_match = Match.objects.filter(
                 mentor=mentor_profile,
                 mentee=mentee_profile,
-                is_active=True
+                is_active=True,
             ).first()
 
             if active_match:
@@ -162,28 +235,44 @@ def book_match_session(*, mentor_profile: Profile, slot_id: Any, actor: Any) -> 
                         "status": MeetingSession.Status.SCHEDULED,
                     },
                 )
+                _create_notification(
+                    user=mentor_profile.user,
+                    notification_type=NotificationType.SLOT_BOOKED,
+                    title="Slot Booked",
+                    message=(
+                        f"{mentee_profile.display_name} booked a slot on "
+                        f"{slot.start_at.strftime('%B %d, %Y at %H:%M')} - "
+                        f"{slot.end_at.strftime('%H:%M')}."
+                    ),
+                    actor=mentee_profile,
+                    resource_type="availability_slot",
+                    resource_id=slot.id,
+                    extra_metadata={
+                        "match_id": str(active_match.id),
+                        "mentor_display_name": mentor_profile.display_name,
+                        "mentee_display_name": mentee_profile.display_name,
+                        "slot_start_at": slot.start_at.isoformat(),
+                        "slot_end_at": slot.end_at.isoformat(),
+                    },
+                )
         except Profile.DoesNotExist:
             pass
 
         return slot
 
 
-def _mark_latest_meeting_session_canceled(*, match: Match, canceled_by: Profile) -> None:
-    """Mark the latest canonical session for the match as canceled."""
-    meeting_session = MeetingSession.objects.filter(match=match).order_by("-created_at").first()
-    if meeting_session is None:
-        return
-
+def _mark_meeting_session_canceled(*, session: MeetingSession, canceled_by: Profile) -> None:
+    """Mark the provided meeting session as canceled and detach its slot link."""
     canceled_by_role = (
         MeetingSession.CanceledByRole.MENTOR
-        if canceled_by == match.mentor
+        if canceled_by == session.match.mentor
         else MeetingSession.CanceledByRole.MENTEE
     )
-    meeting_session.status = MeetingSession.Status.CANCELED
-    meeting_session.source_slot = None
-    meeting_session.canceled_by_role = canceled_by_role
-    meeting_session.cancel_reason = "Session canceled by participant."
-    meeting_session.save(
+    session.status = MeetingSession.Status.CANCELED
+    session.source_slot = None
+    session.canceled_by_role = canceled_by_role
+    session.cancel_reason = "Session canceled by participant."
+    session.save(
         update_fields=[
             "status",
             "source_slot",
@@ -200,21 +289,47 @@ def cancel_match_session(
     actor: Any,
     actor_profile: Profile,
 ) -> MentorshipRequest:
-    """Cancel the currently booked slot for a session and sync canonical session state."""
+    """Cancel the booked slot for the provided session and sync session state."""
     match = session.match
     mentorship_request = match.request
     slot = session.source_slot
 
-    if slot is None or not slot.is_booked:
-        raise NoActiveBookingError("This session has no active booking to cancel.")
+    # Idempotent behavior: repeated cancellation on an already canceled session
+    # should not fail with a client-visible error.
+    if session.status == MeetingSession.Status.CANCELED:
+        mentorship_request.refresh_from_db()
+        return mentorship_request
 
     with transaction.atomic():
-        cancel_availability_booking(
-            profile=match.mentor,
-            slot_id=slot.id,
-            actor=actor,
-        )
-        _mark_latest_meeting_session_canceled(match=match, canceled_by=actor_profile)
+        # If slot booking is still active, cancel it first.
+        # If booking was already released but session remained scheduled/rescheduled,
+        # proceed to cancel the session to repair consistency.
+        if slot is not None and slot.is_booked:
+            cancel_availability_booking(
+                profile=match.mentor,
+                slot_id=slot.id,
+                actor=actor,
+            )
+        _mark_meeting_session_canceled(session=session, canceled_by=actor_profile)
+
+        for recipient in (match.mentor, match.mentee):
+            _create_notification(
+                user=recipient.user,
+                notification_type=NotificationType.SESSION_CANCELED,
+                title="Session Canceled",
+                message=(
+                    f"Your session between {match.mentor.display_name} and "
+                    f"{match.mentee.display_name} was canceled."
+                ),
+                actor=actor_profile,
+                resource_type="meeting_session",
+                resource_id=session.id,
+                extra_metadata={
+                    "match_id": str(match.id),
+                    "mentor_display_name": match.mentor.display_name,
+                    "mentee_display_name": match.mentee.display_name,
+                },
+            )
 
     mentorship_request.refresh_from_db()
     return mentorship_request
@@ -290,14 +405,58 @@ def reschedule_match_session(
 
         _upsert_rescheduled_meeting_session(match=match, new_slot=new_slot)
 
+        latest_session = MeetingSession.objects.filter(match=match).order_by("-created_at").first()
+        for recipient in (match.mentor, match.mentee):
+            _create_notification(
+                user=recipient.user,
+                notification_type=NotificationType.SESSION_RESCHEDULED,
+                title="Session Rescheduled",
+                message=(
+                    f"Your session between {match.mentor.display_name} and "
+                    f"{match.mentee.display_name} was rescheduled."
+                ),
+                actor=match.mentee,
+                resource_type="meeting_session",
+                resource_id=latest_session.id if latest_session is not None else None,
+                extra_metadata={
+                    "match_id": str(match.id),
+                    "old_slot_id": str(old_slot.id) if old_slot is not None else "",
+                    "new_slot_id": str(new_slot.id),
+                    "new_slot_start_at": new_slot.start_at.isoformat(),
+                    "new_slot_end_at": new_slot.end_at.isoformat(),
+                },
+            )
+
     mentorship_request.refresh_from_db()
     return mentorship_request
 
 
-def deactivate_match(*, match: Match) -> Match:
-    """Set a match as inactive and return the updated in-memory instance."""
+def deactivate_match(*, match: Match, actor_profile: Profile) -> Match:
+    """Set a match as inactive, emit notifications, and return the updated instance."""
+    if not match.is_active:
+        return match
+
     Match.objects.filter(pk=match.pk).update(is_active=False)
     match.is_active = False
+
+    for recipient in (match.mentor, match.mentee):
+        _create_notification(
+            user=recipient.user,
+            notification_type=NotificationType.MATCH_DEACTIVATED,
+            title="Match Deactivated",
+            message=(
+                f"Your mentorship match between {match.mentor.display_name} and "
+                f"{match.mentee.display_name} has ended."
+            ),
+            actor=actor_profile,
+            resource_type="match",
+            resource_id=match.id,
+            extra_metadata={
+                "mentor_display_name": match.mentor.display_name,
+                "mentee_display_name": match.mentee.display_name,
+            },
+        )
+
     return match
 
 
@@ -341,6 +500,22 @@ def create_match_feedback(
 
     if submitted_by == match.mentee:
         _update_mentor_public_rating(mentor=match.mentor)
+
+    feedback_recipient = match.mentor if submitted_by == match.mentee else match.mentee
+    _create_notification(
+        user=feedback_recipient.user,
+        notification_type=NotificationType.NEW_FEEDBACK_AVAILABLE,
+        title="New Feedback Available",
+        message="You received new feedback.",
+        actor=submitted_by,
+        resource_type="profile",
+        resource_id=feedback_recipient.id,
+        extra_metadata={
+            "match_id": str(match.id),
+            "feedback_id": str(feedback.id),
+            "rating": rating,
+        },
+    )
 
     return feedback
 

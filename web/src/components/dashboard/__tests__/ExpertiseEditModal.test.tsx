@@ -9,16 +9,15 @@ vi.mock('lucide-react', () => ({
   XIcon: () => <span data-testid="icon-close" />,
 }))
 
-// Mock the mock data so our test is predictable and doesn't rely on external files
-vi.mock('@/lib/mocks/loggedInHome', () => ({
-  MOCK_DISCOVER_SKILLS: [
-    { id: '1', name: 'Test Driven Development', category: 'Software', description: 'TDD skills' },
-  ]
-}))
-
 describe('ExpertiseEditModal', () => {
   it('renders the trigger button, opens the modal, and displays current skills', () => {
-    render(<ExpertiseEditModal />)
+    render(
+      <ExpertiseEditModal
+        initialSkills={[
+          { id: '1', name: 'Test Driven Development', category: 'Software', description: 'TDD skills' },
+        ]}
+      />,
+    )
     
     // 1. Verify the button is on the dashboard
     const triggerButton = screen.getByRole('button', { name: /Edit Skills/i })

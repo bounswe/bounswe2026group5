@@ -103,8 +103,8 @@ AUTH_COOKIE_SECURE = env.bool("AUTH_COOKIE_SECURE", default=not DEBUG)
 AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax")
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Mentorship Network API",
-    "DESCRIPTION": "Campus-Neighborhood Mentorship Network API Documentation",
+    "TITLE": "Neighborship App API",
+    "DESCRIPTION": "Neighborship App API Documentation",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
 }

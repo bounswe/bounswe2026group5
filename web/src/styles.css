@@ -12,6 +12,30 @@
   --font-display: "Fraunces", Georgia, serif;
 }
 
+.cn-toast[data-type='success'] {
+  --normal-bg: #f0fdf4;
+  --normal-text: #166534;
+  --normal-border: #bbf7d0;
+}
+
+.cn-toast[data-type='error'] {
+  --normal-bg: #fef2f2;
+  --normal-text: #991b1b;
+  --normal-border: #fecaca;
+}
+
+.cn-toast[data-type='warning'] {
+  --normal-bg: #fff7ed;
+  --normal-text: #9a3412;
+  --normal-border: #fed7aa;
+}
+
+.cn-toast[data-type='info'] {
+  --normal-bg: #eff6ff;
+  --normal-text: #1e40af;
+  --normal-border: #bfdbfe;
+}
+
 /* ─── Brand tokens ───────────────────────────────────────────────────────────── */
 /*
     Beige theme: warm sand backgrounds, slate-ink text, dusty teal accent.

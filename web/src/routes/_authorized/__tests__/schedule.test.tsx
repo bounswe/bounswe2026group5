@@ -3,17 +3,21 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SchedulePage } from '../schedule'
 
+const { mockUseMeetingSessions } = vi.hoisted(() => ({
+  mockUseMeetingSessions: vi.fn(),
+}))
+
 vi.mock('../../../routeTree.gen', () => ({}))
 vi.mock('../../../router', () => ({}))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual = await importOriginal<any>()
+  const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
     createFileRoute: () => () => ({
       update: vi.fn().mockReturnThis(),
     }),
-    Link: ({ children, to, className }: any) => (
+    Link: ({ children, to, className }: { children: React.ReactNode, to: string, className?: string }) => (
         <a href={to} className={className}>{children}</a>
     ),
   }
@@ -59,14 +63,14 @@ const MOCK_MENTEE_MEETING_SESSIONS = [
     created_at: '2026-04-01T10:00:00Z',
     updated_at: '2026-04-01T10:00:00Z',
   },
-  {
+    {
     session_id: 'session-2',
     match_id: 'match-2',
     mentor: {
       id: 'mentor-1',
       username: 'john_mentor',
       display_name: 'John Smith',
-      picture_url: '',
+      picture_url: 'https://example.com/pic.jpg',
       title: 'Software Engineer',
     },
     mentee: {
@@ -79,8 +83,8 @@ const MOCK_MENTEE_MEETING_SESSIONS = [
     source_slot_id: 'slot-2',
     scheduled_start_at: '2026-04-28T16:00:00',
     scheduled_end_at: '2026-04-28T17:00:00',
-    status: 'SCHEDULED',
-    display_status: 'SCHEDULED',
+    status: 'COMPLETED',
+    display_status: 'COMPLETED',
     my_role: 'MENTEE',
     allowed_actions: [],
     canceled_by_role: null,
@@ -106,8 +110,8 @@ const MOCK_MENTOR_MEETING_SESSIONS = [
       id: 'mentee-1',
       username: 'mentee_user',
       display_name: 'Alice Mentee',
-      picture_url: '',
-      title: '',
+      picture_url: 'https://example.com/mentee.jpg',
+      title: 'Graduate Student',
     },
     source_slot_id: 'slot-3',
     scheduled_start_at: '2026-04-24T10:00:00',
@@ -141,8 +145,8 @@ const MOCK_MENTOR_MEETING_SESSIONS = [
     source_slot_id: 'slot-4',
     scheduled_start_at: '2026-04-28T14:00:00',
     scheduled_end_at: '2026-04-28T15:00:00',
-    status: 'SCHEDULED',
-    display_status: 'SCHEDULED',
+    status: 'COMPLETED',
+    display_status: 'COMPLETED',
     my_role: 'MENTOR',
     allowed_actions: [],
     canceled_by_role: null,
@@ -153,10 +157,7 @@ const MOCK_MENTOR_MEETING_SESSIONS = [
 ]
 
 vi.mock('#/lib/queries/MentorshipQueries.ts', () => ({
-  useMeetingSessions: (params?: { role?: 'mentor' | 'mentee' | 'all' }) => ({
-    data: params?.role === 'mentor' ? MOCK_MENTOR_MEETING_SESSIONS : MOCK_MENTEE_MEETING_SESSIONS,
-    isLoading: false,
-  }),
+  useMeetingSessions: (params?: { role?: 'mentor' | 'mentee' | 'all' }) => mockUseMeetingSessions(params),
   useMyRequests: () => ({ data: [], isLoading: false }),
   useRespondToRequest: () => ({ mutate: vi.fn(), isPending: false }),
 }))
@@ -193,6 +194,26 @@ function renderWithUser(appUsageMode: 'MENTOR' | 'MENTEE') {
 describe('SchedulePage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseMeetingSessions.mockImplementation((params?: { role?: 'mentor' | 'mentee' | 'all' }) => ({
+      data: params?.role === 'mentor' ? MOCK_MENTOR_MEETING_SESSIONS : MOCK_MENTEE_MEETING_SESSIONS,
+      isLoading: false,
+    }))
+  })
+
+  it('shows a loading indicator while sessions are being fetched', () => {
+    mockUseMeetingSessions.mockReturnValue({ data: [], isLoading: true })
+
+    renderWithUser('MENTEE')
+
+    expect(screen.getByTestId('icon-loader')).toBeInTheDocument()
+  })
+
+  it('shows an empty state when there are no sessions for the selected role', () => {
+    mockUseMeetingSessions.mockReturnValue({ data: [], isLoading: false })
+
+    renderWithUser('MENTEE')
+
+    expect(screen.getByText(/No sessions scheduled for this selection/i)).toBeInTheDocument()
   })
 
   it('renders the Mentee Learning Schedule for mentee', () => {
@@ -220,6 +241,19 @@ describe('SchedulePage', () => {
     expect(screen.getByText('Bob Mentee')).toBeInTheDocument()
   })
 
+  it('renders peer titles and pictures when available', () => {
+    renderWithUser('MENTEE')
+    expect(screen.getAllByText('Software Engineer').length).toBeGreaterThan(0)
+    const img = screen.getByAltText('John Smith')
+    expect(img).toHaveAttribute('src', 'https://example.com/pic.jpg')
+  })
+
+  it('renders status badges correctly', () => {
+    renderWithUser('MENTOR')
+    expect(screen.getAllByText('Upcoming').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Completed').length).toBeGreaterThan(0)
+  })
+
   it('filters sessions when a calendar day is clicked', () => {
     renderWithUser('MENTEE')
 
@@ -232,6 +266,10 @@ describe('SchedulePage', () => {
 
     // Filter header updates
     expect(screen.getByText(/Sessions for 28 April 2026/i)).toBeInTheDocument()
+
+    // Click day 28 again to deselect
+    fireEvent.click(day28)
+    expect(screen.getByText('All Sessions')).toBeInTheDocument()
   })
 
   it('clears filter when Clear Filter is clicked', () => {
