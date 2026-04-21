@@ -434,6 +434,91 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class ProfileUsernameUpdateTests(TestCase):
+    """Integration tests for username update endpoints."""
+
+    def setUp(self) -> None:
+        """Create test user, profile, and authenticated client."""
+        self.api_client: Any = APIClient()
+        self.user = User.objects.create_user(
+            email="username-update@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        # Profile is created by RegisterSerializer logic if called via view,
+        # but here we ensure it exists for the model tests.
+        self.profile = Profile.objects.create(
+            user=self.user,
+            display_name="Username Update User",
+        )
+
+        self.access_token = str(RefreshToken.for_user(self.user).access_token)
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+
+        self.me_url = "/api/profiles/me/"
+        self.username_url = "/api/profiles/me/username/"
+
+    def test_patch_username_via_me_endpoint_success(self) -> None:
+        """User can change username via the general profile me endpoint."""
+        new_username = "new_cool_username"
+        response = self.api_client.patch(
+            self.me_url,
+            {"username": new_username},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.profile.refresh_from_db()
+
+        self.assertEqual(self.user.username, new_username)
+        self.assertEqual(self.profile.username, new_username)
+
+    def test_patch_username_via_dedicated_endpoint_success(self) -> None:
+        """User can change username via the dedicated me/username endpoint."""
+        new_username = "dedicated_username"
+        response = self.api_client.patch(
+            self.username_url,
+            {"username": new_username},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.profile.refresh_from_db()
+
+        self.assertEqual(self.user.username, new_username)
+        self.assertEqual(self.profile.username, new_username)
+
+    def test_patch_username_validation_error_taken(self) -> None:
+        """User cannot change username to one that is already taken."""
+        User.objects.create_user(
+            email="other@example.com",
+            password="SecurePass123",
+            username="taken_username",
+        )
+
+        response = self.api_client.patch(
+            self.username_url,
+            {"username": "taken_username"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("username", response.json())
+
+    def test_patch_username_validation_error_invalid_chars(self) -> None:
+        """User cannot change username to one with invalid characters."""
+        response = self.api_client.patch(
+            self.username_url,
+            {"username": "invalid username!"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("username", response.json())
+
+
 class SkillListAPIViewTests(TestCase):
     """Tests for GET /api/profiles/skills/ endpoint."""
 
