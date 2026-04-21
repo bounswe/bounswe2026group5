@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter, type Href } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
@@ -785,6 +786,7 @@ function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
 
 export default function ConnectionsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useAuthStore();
 
   const submitFeedbackMutation = useSubmitMatchFeedbackMutation();
@@ -826,6 +828,13 @@ export default function ConnectionsScreen() {
           <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Connections
           </Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push("/messages" as Href)}
+            className="w-10 h-10 items-center justify-center rounded-full bg-surface-active dark:bg-surface-active-dark"
+          >
+            <Ionicons name="chatbubble-outline" size={20} color="#4a7c6f" />
+          </TouchableOpacity>
         </View>
       </View>
 

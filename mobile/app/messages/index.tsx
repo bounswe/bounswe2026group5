@@ -31,8 +31,7 @@ function formatRelativeTime(dateStr: string): string {
   if (diffMins < 1) return "Just now";
   if (diffMins < 60) return `${diffMins}m ago`;
 
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) {
+  if (date.toDateString() === now.toDateString()) {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
@@ -188,16 +187,21 @@ export default function MessagesScreen() {
   const { data: conversations = [], isLoading, isError, refetch } = useConversations();
   const [search, setSearch] = useState("");
 
-  const filtered = conversations.filter((conv) => {
-    if (!search.trim()) return true;
-    const other =
-      conv.mentor.username === currentUsername ? conv.mentee : conv.mentor;
-    const q = search.toLowerCase();
-    return (
-      other.display_name.toLowerCase().includes(q) ||
-      other.username.toLowerCase().includes(q)
+  const filtered = conversations
+    .filter((conv) => {
+      if (!search.trim()) return true;
+      const other =
+        conv.mentor.username === currentUsername ? conv.mentee : conv.mentor;
+      const q = search.toLowerCase();
+      return (
+        other.display_name.toLowerCase().includes(q) ||
+        other.username.toLowerCase().includes(q)
+      );
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     );
-  });
 
   return (
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
