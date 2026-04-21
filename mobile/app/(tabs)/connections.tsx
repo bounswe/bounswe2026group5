@@ -85,34 +85,6 @@ async function deactivateConnection(params: {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Mock data - messaging has no API yet
-// ---------------------------------------------------------------------------
-
-const MOCK_MESSAGES: MessageCardProps[] = [
-  {
-    id: "msg-1",
-    name: "Sarah Chen",
-    messagePreview:
-      '"I\'ve finished the draft for the system architecture. Could we schedule a review soon?"',
-    timeAgo: "2m ago",
-    hasUnread: true,
-  },
-  {
-    id: "msg-2",
-    name: "Marcus Wright",
-    messagePreview:
-      '"The interview went really well! They asked about distributed caches and I nailed it."',
-    timeAgo: "1h ago",
-  },
-  {
-    id: "msg-3",
-    name: "Elena Rodriguez",
-    messagePreview:
-      '"Just shared my portfolio link. Looking forward to your feedback!"',
-    timeAgo: "4h ago",
-  },
-];
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -336,36 +308,6 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
         }}
       />
 
-      {/* Section: Upcoming Messages */}
-      <View className="mb-8">
-        <View className="flex-row justify-between items-end mb-3.5">
-          <View>
-            <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
-              Recent Updates
-            </Text>
-            <Text className="text-[22px] font-extrabold text-on-surface mt-0.5">
-              Upcoming Messages
-            </Text>
-          </View>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/messages" as Href)}>
-            <Text className="text-[13px] font-bold text-primary">View All</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingRight: 16 }}
-        >
-          {MOCK_MESSAGES.map((msg) => (
-            <MessageCard
-              key={msg.id}
-              {...msg}
-              onPress={() => handleMessage(msg.name)}
-            />
-          ))}
-        </ScrollView>
-      </View>
 
       {/* Section: Pending Requests */}
       <View className="mb-8">
@@ -642,36 +584,6 @@ function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
         }}
       />
 
-      {/* Section: Upcoming Messages */}
-      <View className="mb-8">
-        <View className="flex-row justify-between items-end mb-3.5">
-          <View>
-            <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
-              Recent Updates
-            </Text>
-            <Text className="text-[22px] font-extrabold text-on-surface mt-0.5">
-              Upcoming Messages
-            </Text>
-          </View>
-          <TouchableOpacity activeOpacity={0.85} onPress={() => router.push("/messages" as Href)}>
-            <Text className="text-[13px] font-bold text-primary">View All</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingRight: 16 }}
-        >
-          {MOCK_MESSAGES.map((msg) => (
-            <MessageCard
-              key={msg.id}
-              {...msg}
-              onPress={() => handleMessage(msg.name)}
-            />
-          ))}
-        </ScrollView>
-      </View>
 
       {/* Section: Requests */}
       <View className="mb-8">
