@@ -70,9 +70,7 @@ export function NotificationItem({ notification }: { notification: Notification 
     const variant = VARIANT_MAP[notification.type]
     const Icon = variant.icon
     const conversationId =
-        notification.type === 'new_message'
-            ? (notification.extra_metadata.conversation_id as string | undefined)
-            : undefined
+        notification.type === 'new_message' ? (notification.resource_id ?? undefined) : undefined
 
     return (
         <div
