@@ -11,6 +11,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import AvailabilitySlot, Profile, Skill
+from core.utils.timezone import get_project_timezone, to_local_time
 
 if TYPE_CHECKING:
     from accounts.models import User as UserType
@@ -88,18 +89,18 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.DATE)
     def get_date(self, obj: AvailabilitySlot) -> str:
-        """Return slot date in current timezone."""
-        return timezone.localtime(obj.start_at).date().isoformat()
+        """Return slot date in project timezone."""
+        return to_local_time(obj.start_at).date().isoformat()
 
     @extend_schema_field(OpenApiTypes.TIME)
     def get_startTime(self, obj: AvailabilitySlot) -> str:
-        """Return slot start time in current timezone."""
-        return timezone.localtime(obj.start_at).time().replace(microsecond=0).isoformat()
+        """Return slot start time in project timezone."""
+        return to_local_time(obj.start_at).time().replace(microsecond=0).isoformat()
 
     @extend_schema_field(OpenApiTypes.TIME)
     def get_endTime(self, obj: AvailabilitySlot) -> str:
-        """Return slot end time in current timezone."""
-        return timezone.localtime(obj.end_at).time().replace(microsecond=0).isoformat()
+        """Return slot end time in project timezone."""
+        return to_local_time(obj.end_at).time().replace(microsecond=0).isoformat()
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_bookedBy(self, obj: AvailabilitySlot) -> str | None:
@@ -338,11 +339,11 @@ class AvailabilitySlotWriteSerializer(serializers.Serializer):
 
         if self.instance is not None:
             if slot_date is None:
-                slot_date = timezone.localtime(self.instance.start_at).date()
+                slot_date = to_local_time(self.instance.start_at).date()
             if start_time is None:
-                start_time = timezone.localtime(self.instance.start_at).time()
+                start_time = to_local_time(self.instance.start_at).time()
             if end_time is None:
-                end_time = timezone.localtime(self.instance.end_at).time()
+                end_time = to_local_time(self.instance.end_at).time()
 
         if slot_date is None:
             raise serializers.ValidationError({"date": "Date is required."})
@@ -361,7 +362,7 @@ class AvailabilitySlotWriteSerializer(serializers.Serializer):
                 {"endTime": "endTime must be greater than startTime."}
             )
 
-        timezone_info = timezone.get_current_timezone()
+        timezone_info = get_project_timezone()
         attrs["start_at"] = timezone.make_aware(
             datetime.combine(slot_date, start_time),
             timezone_info,
