@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter, type Href } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
@@ -29,6 +30,7 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
 
 import { useAuthStore } from "@/lib/auth/store";
+import { useConversations } from "@/lib/queries/MessagingQueries";
 import {
   mapRequestsToDashboard,
   useDeactivateMatchMutation,
@@ -86,34 +88,6 @@ async function deactivateConnection(params: {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Mock data - messaging has no API yet
-// ---------------------------------------------------------------------------
-
-const MOCK_MESSAGES: MessageCardProps[] = [
-  {
-    id: "msg-1",
-    name: "Sarah Chen",
-    messagePreview:
-      '"I\'ve finished the draft for the system architecture. Could we schedule a review soon?"',
-    timeAgo: "2m ago",
-    hasUnread: true,
-  },
-  {
-    id: "msg-2",
-    name: "Marcus Wright",
-    messagePreview:
-      '"The interview went really well! They asked about distributed caches and I nailed it."',
-    timeAgo: "1h ago",
-  },
-  {
-    id: "msg-3",
-    name: "Elena Rodriguez",
-    messagePreview:
-      '"Just shared my portfolio link. Looking forward to your feedback!"',
-    timeAgo: "4h ago",
-  },
-];
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -164,6 +138,7 @@ function MentorConnections({
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const respondMutation = useRespondToMentorshipRequestMutation();
   const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
+  const { data: conversations = [] } = useConversations();
 
   // CHECK FEEDBACK FOR SELECTED MENTEE
   const activeMatchId = managedMentee?.matchIds[0];
@@ -219,8 +194,13 @@ function MentorConnections({
       .values(),
   );
 
-  const handleMessage = (_name: string) => {
-    // NOTE: Route to messaging thread when chat screen is implemented.
+  const handleMessage = (username: string) => {
+    const conv = conversations.find(
+      (c) => c.mentor.username === username || c.mentee.username === username,
+    );
+    if (conv) {
+      router.push(`/messages/${conv.id}` as Href);
+    }
   };
 
   const handleMenteeMore = ({
@@ -324,36 +304,6 @@ function MentorConnections({
         }}
       />
 
-      {/* Section: Upcoming Messages */}
-      <View className="mb-8">
-        <View className="flex-row justify-between items-end mb-3.5">
-          <View>
-            <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
-              Recent Updates
-            </Text>
-            <Text className="text-[22px] font-extrabold text-on-surface mt-0.5">
-              Upcoming Messages
-            </Text>
-          </View>
-          <TouchableOpacity>
-            <Text className="text-[13px] font-bold text-primary">View All</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingRight: 16 }}
-        >
-          {MOCK_MESSAGES.map((msg) => (
-            <MessageCard
-              key={msg.id}
-              {...msg}
-              onPress={() => handleMessage(msg.name)}
-            />
-          ))}
-        </ScrollView>
-      </View>
 
       {/* Section: Pending Requests */}
       <View className="mb-8">
@@ -434,7 +384,7 @@ function MentorConnections({
             subtitle={mentee.subtitle}
             avatarUrl={mentee.avatarUrl}
             onPress={() => pushUserProfile(router, mentee.username)}
-            onMessage={() => handleMessage(mentee.name)}
+            onMessage={() => handleMessage(mentee.username)}
             onMore={() =>
               handleMenteeMore({
                 name: mentee.name,
@@ -477,6 +427,7 @@ function MenteeConnections({
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
+  const { data: conversations = [] } = useConversations();
 
   // CHECK FEEDBACK FOR SELECTED MENTOR
   const activeMatchId = managedMentor?.matchIds[0];
@@ -548,8 +499,13 @@ function MenteeConnections({
       .values(),
   );
 
-  const handleMessage = (_name: string) => {
-    // NOTE: Route to messaging thread when chat screen is implemented.
+  const handleMessage = (username: string) => {
+    const conv = conversations.find(
+      (c) => c.mentor.username === username || c.mentee.username === username,
+    );
+    if (conv) {
+      router.push(`/messages/${conv.id}` as Href);
+    }
   };
 
   const handleMore = ({
@@ -613,36 +569,6 @@ function MenteeConnections({
         }}
       />
 
-      {/* Section: Upcoming Messages */}
-      <View className="mb-8">
-        <View className="flex-row justify-between items-end mb-3.5">
-          <View>
-            <Text className="text-[10px] font-bold text-on-surface-muted uppercase tracking-[0.8px]">
-              Recent Updates
-            </Text>
-            <Text className="text-[22px] font-extrabold text-on-surface mt-0.5">
-              Upcoming Messages
-            </Text>
-          </View>
-          <TouchableOpacity activeOpacity={0.85}>
-            <Text className="text-[13px] font-bold text-primary">View All</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingRight: 16 }}
-        >
-          {MOCK_MESSAGES.map((msg) => (
-            <MessageCard
-              key={msg.id}
-              {...msg}
-              onPress={() => handleMessage(msg.name)}
-            />
-          ))}
-        </ScrollView>
-      </View>
 
       {/* Section: Requests */}
       <View className="mb-8">
@@ -727,7 +653,7 @@ function MenteeConnections({
             subtitle={mentor.subtitle}
             avatarUrl={mentor.avatarUrl}
             onPress={() => pushUserProfile(router, mentor.username)}
-            onMessage={() => handleMessage(mentor.name)}
+            onMessage={() => handleMessage(mentor.username)}
             onMore={() =>
               handleMore({
                 name: mentor.name,
@@ -753,6 +679,7 @@ function MenteeConnections({
 
 export default function ConnectionsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useAuthStore();
 
   const submitFeedbackMutation = useSubmitMatchFeedbackMutation();
@@ -797,6 +724,13 @@ export default function ConnectionsScreen() {
           <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Connections
           </Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push("/messages" as Href)}
+            className="w-10 h-10 items-center justify-center rounded-full bg-surface-active dark:bg-surface-active-dark"
+          >
+            <Ionicons name="chatbubble-outline" size={20} color="#4a7c6f" />
+          </TouchableOpacity>
           <NotificationBell />
         </View>
       </View>
