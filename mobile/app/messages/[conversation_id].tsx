@@ -291,6 +291,9 @@ export default function ConversationScreen() {
       queryClient.invalidateQueries({
         queryKey: ["messaging", "messages", conversation_id],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["messaging", "conversations"],
+      });
     } catch {
       // Restore text if send failed
       setText(body);
