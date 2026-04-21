@@ -7,6 +7,7 @@ from typing import Any
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
+from django.db import IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -14,8 +15,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode, UserRole
 from mentorship.models import Match, MentorshipRequest
+from mentorship.services import ensure_match_and_initial_session
 from profiles.models import AvailabilitySlot, Profile
 
+from . import signals
 from .models import Conversation, Message, MessageReport
 
 User: Any = get_user_model()
@@ -24,6 +27,16 @@ User: Any = get_user_model()
 def _token_for(user: Any) -> str:
     """Return a JWT access token string for the given user."""
     return str(RefreshToken.for_user(user).access_token)
+
+
+def _create_accepted_request(**kwargs: Any) -> MentorshipRequest:
+    """Create an accepted request and materialize its canonical match/session state."""
+    request_obj = MentorshipRequest.objects.create(
+        status=MentorshipRequest.Status.ACCEPTED,
+        **kwargs,
+    )
+    ensure_match_and_initial_session(mentorship_request=request_obj)
+    return request_obj
 
 
 class MessagingAPIBaseTestCase(TestCase):
@@ -81,14 +94,14 @@ class MessagingAPIBaseTestCase(TestCase):
             start_at=start_at,
             end_at=start_at + timedelta(hours=1),
         )
-        request_obj = MentorshipRequest.objects.create(
+        request_obj = _create_accepted_request(
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
             slot=slot,
-            status=MentorshipRequest.Status.PENDING,
         )
         request_obj.status = MentorshipRequest.Status.ACCEPTED
         request_obj.save()
+        ensure_match_and_initial_session(mentorship_request=request_obj)
         self.match = Match.objects.get(request=request_obj)
         self.conversation = Conversation.objects.get(match=self.match)
 
@@ -98,14 +111,14 @@ class MessagingAPIBaseTestCase(TestCase):
             start_at=start_at + timedelta(days=1),
             end_at=start_at + timedelta(days=1, hours=1),
         )
-        other_request = MentorshipRequest.objects.create(
+        other_request = _create_accepted_request(
             mentor=self.mentor_profile,
             mentee=self.other_profile,
             slot=other_slot,
-            status=MentorshipRequest.Status.PENDING,
         )
         other_request.status = MentorshipRequest.Status.ACCEPTED
         other_request.save()
+        ensure_match_and_initial_session(mentorship_request=other_request)
         self.other_match = Match.objects.get(request=other_request)
         self.other_conversation = Conversation.objects.get(match=self.other_match)
 
@@ -125,6 +138,22 @@ class MessagingAPIBaseTestCase(TestCase):
 
     def _message_report_url(self, message_id: uuid.UUID | str) -> str:
         return f"/api/messages/messages/{message_id}/report/"
+
+    def _authenticated_client_without_profile(
+        self,
+        *,
+        email: str,
+        app_usage_mode: str = AppUsageMode.MENTEE,
+    ) -> APIClient:
+        """Create an authenticated API client for a user that has no profile."""
+        user = User.objects.create_user(
+            email=email,
+            password="SecurePass123",
+            app_usage_mode=app_usage_mode,
+        )
+        client: Any = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {_token_for(user)}")
+        return client
 
 
 class ConversationListAPIViewTests(MessagingAPIBaseTestCase):
@@ -149,6 +178,16 @@ class ConversationListAPIViewTests(MessagingAPIBaseTestCase):
     def test_admin_cannot_access_conversations(self) -> None:
         response = self.admin_client.get(self.CONVERSATIONS_URL)
         self.assertEqual(response.status_code, 403)  # IsRegularUser blocks admins
+
+    def test_missing_profile_returns_empty_list(self) -> None:
+        no_profile_client = self._authenticated_client_without_profile(
+            email="no.profile.messages@example.com",
+        )
+
+        response: Any = no_profile_client.get(self.CONVERSATIONS_URL)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
 
 
 class ConversationDetailAPIViewTests(MessagingAPIBaseTestCase):
@@ -228,6 +267,36 @@ class ConversationDetailAPIViewTests(MessagingAPIBaseTestCase):
         self.assertEqual(response.data[0]["id"], str(old_message.id))
         self.assertEqual(response.data[1]["id"], str(new_message.id))
 
+    def test_conversation_not_found_returns_404(self) -> None:
+        url = self._conversation_detail_url(uuid.uuid4())
+
+        response = self.mentee_client.get(url)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_missing_profile_returns_404(self) -> None:
+        no_profile_client = self._authenticated_client_without_profile(
+            email="no.profile.detail@example.com",
+        )
+
+        response: Any = no_profile_client.get(self._conversation_detail_url(self.conversation.id))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_pagination_page_and_page_size_are_bounded(self) -> None:
+        for i in range(60):
+            Message.objects.create(
+                conversation=self.conversation,
+                sender=self.mentor_profile,
+                body=f"Message {i}",
+            )
+
+        url = self._conversation_detail_url(self.conversation.id)
+        response = self.mentee_client.get(url, {"page": 0, "pageSize": 100})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 50)
+
 
 class MessageCreateAPIViewTests(MessagingAPIBaseTestCase):
     """Tests for POST /api/messages/conversations/{id}/."""
@@ -248,6 +317,20 @@ class MessageCreateAPIViewTests(MessagingAPIBaseTestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["body"], "Test message")
         self.assertEqual(response.data["sender"]["id"], str(self.mentee_profile.id))
+
+    def test_participant_can_send_message_creates_notification(self) -> None:
+        url = self._conversation_detail_url(self.conversation.id)
+        response = self.mentee_client.post(url, {"body": "Test notification"})
+        self.assertEqual(response.status_code, 201)
+        
+        from notifications.models import Notification, NotificationType
+        notification = Notification.objects.filter(
+            user=self.mentor_user, type=NotificationType.NEW_MESSAGE
+        ).first()
+        self.assertIsNotNone(notification)
+        self.assertEqual(notification.title, "New Message")
+        self.assertEqual(notification.resource_type, "conversation")
+        self.assertEqual(str(notification.resource_id), str(self.conversation.id))
 
     def test_message_supports_markdown(self) -> None:
         url = self._conversation_detail_url(self.conversation.id)
@@ -304,6 +387,25 @@ class MessageCreateAPIViewTests(MessagingAPIBaseTestCase):
         response = self.mentee_client.post(url, {"body": "Test"})
         self.assertEqual(response.status_code, 403)
 
+    def test_post_conversation_not_found_returns_404(self) -> None:
+        url = self._conversation_detail_url(uuid.uuid4())
+
+        response = self.mentee_client.post(url, {"body": "Test"})
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_post_missing_profile_returns_404(self) -> None:
+        no_profile_client = self._authenticated_client_without_profile(
+            email="no.profile.create@example.com",
+        )
+
+        response: Any = no_profile_client.post(
+            self._conversation_detail_url(self.conversation.id),
+            {"body": "Test"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+
 
 class MessageReportAPIViewTests(MessagingAPIBaseTestCase):
     """Tests for POST /api/messages/{id}/report/."""
@@ -346,11 +448,29 @@ class MessageReportAPIViewTests(MessagingAPIBaseTestCase):
         response = self.admin_client.post(url, {"reason": "Admin review"})
         self.assertEqual(response.status_code, 201)
 
-    def test_regular_user_cannot_report_without_participation(self) -> None:
-        # Regular user who is not a participant should be blocked
+    def test_message_not_found_returns_404(self) -> None:
+        url = self._message_report_url(uuid.uuid4())
+
+        response = self.mentee_client.post(url, {"reason": "Spam"})
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_invalid_payload_returns_400(self) -> None:
         url = self._message_report_url(self.message.id)
-        response = self.other_client.post(url, {"reason": "Spam"})
-        self.assertEqual(response.status_code, 403)
+
+        response = self.mentee_client.post(url, {})
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_missing_profile_returns_404(self) -> None:
+        no_profile_client = self._authenticated_client_without_profile(
+            email="no.profile.report@example.com",
+        )
+
+        url = self._message_report_url(self.message.id)
+        response: Any = no_profile_client.post(url, {"reason": "Spam"})
+
+        self.assertEqual(response.status_code, 404)
 
 
 class MessagingModelTests(TestCase):
@@ -382,14 +502,14 @@ class MessagingModelTests(TestCase):
             start_at=timezone.now() + timedelta(days=1),
             end_at=timezone.now() + timedelta(days=1, hours=1),
         )
-        request_obj = MentorshipRequest.objects.create(
+        request_obj = _create_accepted_request(
             mentor=self.mentor_profile,
             mentee=self.mentee_profile,
             slot=slot,
-            status=MentorshipRequest.Status.PENDING,
         )
         request_obj.status = MentorshipRequest.Status.ACCEPTED
         request_obj.save()
+        ensure_match_and_initial_session(mentorship_request=request_obj)
         self.match = Match.objects.get(request=request_obj)
 
     def test_conversation_created_from_match(self) -> None:
@@ -435,10 +555,81 @@ class MessagingModelTests(TestCase):
             reported_by=self.mentee_profile,
             reason="First report",
         )
-        # Second report from same user should fail
-        with self.assertRaises(Exception):  # IntegrityError
+        # Second report from same user should fail with unique constraint violation.
+        with self.assertRaises(IntegrityError):
             MessageReport.objects.create(
                 message=message,
                 reported_by=self.mentee_profile,
                 reason="Second report",
             )
+
+    def test_model_string_representations(self) -> None:
+        conversation = Conversation.objects.get(match=self.match)
+        message = Message.objects.create(
+            conversation=conversation,
+            sender=self.mentor_profile,
+            body="Test message",
+        )
+        report = MessageReport.objects.create(
+            message=message,
+            reported_by=self.mentee_profile,
+            reason="Inappropriate",
+        )
+
+        self.assertIn(str(self.match.id), str(conversation))
+        self.assertIn(str(self.mentor_profile.id), str(message))
+        self.assertIn(str(message.id), str(report))
+
+
+class MessagingSignalsTests(TestCase):
+    """Unit tests for messaging signal behavior."""
+
+    def setUp(self) -> None:
+        mentor_user = User.objects.create_user(
+            email="mentor.signal@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        mentee_user = User.objects.create_user(
+            email="mentee.signal@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentor_profile = Profile.objects.create(user=mentor_user, display_name="Signal Mentor")
+        self.mentee_profile = Profile.objects.create(user=mentee_user, display_name="Signal Mentee")
+        start_at = timezone.now() + timedelta(days=3)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=start_at,
+            end_at=start_at + timedelta(hours=1),
+        )
+        request_obj = _create_accepted_request(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=slot,
+        )
+        self.match = Match.objects.get(request=request_obj)
+
+    def test_signal_noop_when_not_created(self) -> None:
+        existing_count = Conversation.objects.filter(match=self.match).count()
+
+        signals.create_conversation_for_new_match(
+            sender=Match,
+            instance=self.match,
+            created=False,
+            raw=False,
+        )
+
+        self.assertEqual(Conversation.objects.filter(match=self.match).count(), existing_count)
+
+    def test_signal_noop_on_raw_save(self) -> None:
+        existing_count = Conversation.objects.filter(match=self.match).count()
+
+        signals.create_conversation_for_new_match(
+            sender=Match,
+            instance=self.match,
+            created=True,
+            raw=True,
+        )
+
+        self.assertEqual(Conversation.objects.filter(match=self.match).count(), existing_count)

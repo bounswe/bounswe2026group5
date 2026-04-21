@@ -1,5 +1,5 @@
 // web/src/components/dashboard/SessionManagementModal.tsx
-import { useState } from 'react'
+import { Body, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,20 +11,38 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Body, Muted } from '@/components/Typography'
-import { Link2, CalendarDays, Clock, XCircle, Calendar } from 'lucide-react'
-import type { MockMeetingSession } from '@/lib/mocks/loggedInHome'
-
-interface SessionManagementModalProps {
-  session: MockMeetingSession
+import { Calendar, CalendarDays, Clock, Link2, XCircle } from 'lucide-react'
+import { useState } from 'react'
+interface SessionParticipant {
+  id: string
+  username: string
+  fullName: string
+  avatarUrl?: string
+  role: 'mentor' | 'mentee'
 }
 
-export function SessionManagementModal({ session }: SessionManagementModalProps) {
+interface SessionManagementData {
+  id: string
+  title: string
+  description: string
+  startAt: string
+  endAt: string
+  type: 'video' | 'in-person'
+  status: 'upcoming' | 'completed' | 'cancelled'
+  host: SessionParticipant
+  attendee: SessionParticipant
+}
+
+interface SessionManagementModalProps {
+  session: SessionManagementData
+}
+
+export function SessionManagementModal({ session }: Readonly<SessionManagementModalProps>) {
   const [isOpen, setIsOpen] = useState(false)
   const [meetingLink, setMeetingLink] = useState('')
   const [isSaved, setIsSaved] = useState(false)
 
-  const handleSaveLink = (e: React.FormEvent) => {
+  const handleSaveLink = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!meetingLink.trim()) return
     // FUTURE: Trigger TanStack Query mutation to update the session's meeting link on the backend

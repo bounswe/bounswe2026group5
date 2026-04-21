@@ -1,14 +1,18 @@
 // web/src/routes/_authorized/dashboard.tsx
 import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import { useMeetingSessions, useMyRequests, useRespondToRequest } from "#/lib/queries/MentorshipQueries.ts"
+import { useNotifications, useMarkAllNotificationsRead, NOTIFICATION_INVALIDATION_MAP } from "#/lib/queries/NotificationQueries.ts"
 import { getInitials } from "#/lib/utils.ts"
 import { Body, Heading, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { NotificationItem } from '@/components/notifications/NotificationItem'
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowRight, CalendarDays, Check, CheckCircle2, Clock, Loader2, XCircle, X as XIcon } from 'lucide-react'
-import { useState } from "react"
+import { ArrowRight, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, XCircle, X as XIcon } from 'lucide-react'
+import { useState, useEffect, useRef } from "react"
+import type { Notification } from "#/lib/queries/NotificationQueries.ts"
+import {toast} from "sonner";
 
 
 export const Route = createFileRoute('/_authorized/dashboard')({
@@ -70,22 +74,70 @@ function UserAvatar({ name }: Readonly<{ name: string }>) {
 
 export function DashboardHome() {
 
-  const { data, isSuccess } = useQuery(meQueryOptions)
+  const { data } = useQuery(meQueryOptions)
+  const { data: notifications = [] } = useNotifications()
+  const { mutate: markAllRead } = useMarkAllNotificationsRead()
+  const queryClient = useQueryClient()
+
+  // Accumulate non-message notifications as they arrive via polling.
+  // Each poll only adds genuinely new ones; already-seen IDs are skipped.
+  // Marking as read happens immediately on arrival, separate from visibility.
+  const [visibleNotifications, setVisibleNotifications] = useState<Notification[]>([])
+  const seenIds = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (notifications.length === 0) return
+
+    const incoming = notifications.filter(n => !seenIds.current.has(n.id))
+    if (incoming.length === 0) return
+
+    incoming.forEach(n => seenIds.current.add(n.id))
+    setVisibleNotifications(prev => [...prev, ...incoming])
+
+    const unreadIds = incoming.filter(n => n.type !== 'new_message' && !n.is_read).map(n => n.id)
+    if (unreadIds.length > 0) markAllRead(unreadIds)
+
+    const keysToInvalidate = new Set<string>()
+    for (const n of incoming) {
+      for (const key of NOTIFICATION_INVALIDATION_MAP[n.type]) {
+        keysToInvalidate.add(JSON.stringify(key))
+      }
+    }
+    keysToInvalidate.forEach(k => queryClient.invalidateQueries({ queryKey: JSON.parse(k) }))
+  }, [notifications, markAllRead, queryClient])
 
   const mode = (data?.app_usage_mode?.toLowerCase() as 'mentor' | 'mentee') ?? 'mentee'
   return (
     <div className="page-wrap py-10 rise-in flex flex-col gap-10">
-      {isSuccess && (
-          <p className="text-xs text-green-600">Logged in as: {data?.email}</p>
-      )}
-      <div className="flex flex-col gap-2">
-        <Heading as="h2">{mode === 'mentor' ? 'Mentor Dashboard' : 'Mentee Dashboard'}</Heading>
-        <Body className="text-ink-soft max-w-2xl">
-          {mode === 'mentor' 
-            ? 'Review incoming mentorship requests and manage your upcoming teaching sessions.' 
-            : 'Track your learning goals, view the status of your requests, and prepare for upcoming sessions.'}
-        </Body>
+      <div className="flex items-start justify-between gap-6">
+        <div className="flex flex-col gap-2">
+          <Heading as="h2">{mode === 'mentor' ? 'Mentor Dashboard' : 'Mentee Dashboard'}</Heading>
+          <Body className="text-ink-soft max-w-xl">
+            {mode === 'mentor'
+              ? 'Review incoming mentorship requests and manage your upcoming teaching sessions.'
+              : 'Track your learning goals, view the status of your requests, and prepare for upcoming sessions.'}
+          </Body>
+        </div>
+        {mode === 'mentor' && (
+          <Link to="/profiles/$username" params={{ username: data?.username ?? '' }} hash="availability" className="shrink-0 mt-1">
+            <Button variant="outline" size="sm">+ Add Availability</Button>
+          </Link>
+        )}
       </div>
+
+      {visibleNotifications.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <Heading as="h3" className="text-xl flex items-center gap-2">
+            <Bell className="w-5 h-5 text-accent" />
+            Notifications
+          </Heading>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {visibleNotifications.map(n => (
+              <NotificationItem key={n.id} notification={n} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {mode === 'mentor' ? <MentorDashboardView /> : <MenteeDashboardView />}
     </div>
@@ -120,6 +172,11 @@ function MenteeDashboardView() {
             <Heading as="h3" className="text-xl flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
+              {!sessionsLoading && upcomingSessions.length > 0 && (
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                  {upcomingSessions.length}
+                </span>
+              )}
             </Heading>
             <div className="flex flex-col gap-4">
               {sessionsLoading && (
@@ -130,7 +187,7 @@ function MenteeDashboardView() {
               {!sessionsLoading && displaySessions.length === 0 && (
                   <Card className="island-shell border-line bg-white shadow-sm">
                     <CardContent className="py-8 text-center">
-                      <Muted>No upcoming sessions in the next 7 days.</Muted>
+                      <Muted>No upcoming sessions yet.</Muted>
                     </CardContent>
                   </Card>
               )}
@@ -196,7 +253,14 @@ function MenteeDashboardView() {
         {/* RIGHT COLUMN: Sent Requests */}
         <div className="flex flex-col gap-8">
           <section className="space-y-5">
-            <Heading as="h3" className="text-xl">Sent Requests</Heading>
+            <Heading as="h3" className="text-xl flex items-center gap-2">
+              Sent Requests
+              {!requestsLoading && sentRequests.length > 0 && (
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                  {sentRequests.length}
+                </span>
+              )}
+            </Heading>
             <div className="flex flex-col gap-4">
               {requestsLoading && (
                   <div className="flex justify-center py-8">
@@ -206,8 +270,11 @@ function MenteeDashboardView() {
 
               {!requestsLoading && sentRequests.length === 0 && (
                   <Card className="island-shell border-line bg-white shadow-sm">
-                    <CardContent className="py-8 text-center">
+                    <CardContent className="py-8 text-center flex flex-col items-center gap-3">
                       <Muted>No pending requests right now.</Muted>
+                      <Link to="/discover">
+                        <Button variant="outline" size="sm">Find a Mentor <ArrowRight className="w-3.5 h-3.5 ml-1.5" /></Button>
+                      </Link>
                     </CardContent>
                   </Card>
               )}
@@ -306,9 +373,23 @@ function MentorDashboardView() {
               ...prev,
               [requestId]: action === 'accept' ? 'ACCEPTED' : 'REJECTED',
             }))
+            if (action === 'accept') {
+              toast.success('Request accepted', {
+                description: 'The mentee has been notified and the session is confirmed.',
+              })
+            } else {
+              toast.warning('Request declined', {
+                description: 'The mentee has been notified.',
+              })
+            }
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'requests'] })
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'matches'] })
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'meeting-sessions', 'me'] })
+          },
+          onError: (err) => {
+            toast.error('Failed to respond', {
+              description: err.message,
+            })
           },
         }
     )
@@ -323,6 +404,11 @@ function MentorDashboardView() {
             <Heading as="h3" className="text-xl flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
+              {!sessionsLoading && upcomingSessions.length > 0 && (
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                  {upcomingSessions.length}
+                </span>
+              )}
             </Heading>
             <div className="flex flex-col gap-4">
               {sessionsLoading && (
@@ -333,8 +419,11 @@ function MentorDashboardView() {
 
               {!sessionsLoading && upcomingSessions.length === 0 && (
                   <Card className="island-shell border-line bg-white shadow-sm">
-                    <CardContent className="py-8 text-center">
+                    <CardContent className="py-8 text-center flex flex-col items-center gap-3">
                       <Muted>No upcoming sessions in the next 7 days.</Muted>
+                      <Link to="/profiles/$username" params={{ username: me?.username ?? '' }} hash="availability">
+                        <Button variant="outline" size="sm">+ Add Availability</Button>
+                      </Link>
                     </CardContent>
                   </Card>
               )}
@@ -402,7 +491,14 @@ function MentorDashboardView() {
         {/* RIGHT COLUMN: Incoming Requests — unchanged */}
         <div className="flex flex-col gap-10">
           <section className="space-y-5">
-            <Heading as="h3" className="text-xl">Incoming Requests</Heading>
+            <Heading as="h3" className="text-xl flex items-center gap-2">
+              Incoming Requests
+              {!requestsLoading && displayRequests.length > 0 && (
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                  {pendingRequests.length}
+                </span>
+              )}
+            </Heading>
             <div className="flex flex-col gap-4">
               {requestsLoading && (
                   <div className="flex justify-center py-8">
@@ -416,6 +512,7 @@ function MentorDashboardView() {
                     </CardContent>
                   </Card>
               )}
+
               {displayRequests.map(req => {
                 const responded = respondedIds[req.id]
                 return (

@@ -1,8 +1,10 @@
-"""Serializers for profile self-service API endpoints."""
-
 from datetime import datetime
+from typing import Any, TYPE_CHECKING, cast
 
+from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
+from django.core import validators
+from django.db import transaction
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
@@ -10,16 +12,25 @@ from rest_framework import serializers
 
 from .models import AvailabilitySlot, Profile, Skill
 
+if TYPE_CHECKING:
+    from accounts.models import User as UserType
+else:
+    UserType = Any
+
+User = get_user_model()
+
 
 class LocationField(serializers.Field):
     """Serialize a PointField as {latitude, longitude} and accept the same on input."""
 
-    def to_representation(self, value):
+    def to_representation(self, value: Any) -> dict[str, float] | None:
+        """Convert PointField to {latitude, longitude} dictionary."""
         if value is None:
             return None
         return {"latitude": value.y, "longitude": value.x}
 
-    def to_internal_value(self, data):
+    def to_internal_value(self, data: Any) -> Point | None:
+        """Convert {latitude, longitude} dictionary to PointField."""
         if data is None:
             return None
         if isinstance(data, str) and not data.strip():
@@ -66,6 +77,7 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
             "date",
             "startTime",
             "endTime",
+            "status",
             "is_booked",
             "bookedBy",
             "bookedAt",
@@ -130,6 +142,7 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
         model = Profile
         fields = (
             "id",
+            "username",
             "full_name",
             "bio",
             "hidden",
@@ -138,7 +151,8 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
-    def to_representation(self, instance):
+    def to_representation(self, instance: Profile) -> dict[str, Any]:
+        """Add 'hidden' field to the output representation."""
         ret = super().to_representation(instance)
         # Invert is_visible to get "hidden" semantics
         ret["hidden"] = not instance.is_visible
@@ -160,6 +174,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
         model = Profile
         fields = (
             "id",
+            "username",
             "full_name",
             "title",
             "bio",
@@ -203,7 +218,28 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class ProfileUpdateSerializer(serializers.ModelSerializer):
+class UsernameUpdateMixin:
+    """Shared logic for username validation and cross-model synchronization."""
+
+    def _validate_unique_username(self, value: str, instance: Profile) -> str:
+        """Ensure username is unique across both Profile and User models."""
+        username = value.lower()
+        # Check Profile uniqueness
+        if Profile.objects.filter(username=username).exclude(id=instance.id).exists():
+            raise serializers.ValidationError("This username is already taken.")
+        # Check User uniqueness
+        if User.objects.filter(username=username).exclude(id=instance.user.id).exists():
+            raise serializers.ValidationError("This username is already taken.")
+        return username
+
+    def _sync_user_username(self, user: Any, new_username: str) -> None:
+        """Update the username on the User model if it has changed."""
+        if user.username != new_username:
+            user.username = new_username
+            user.save(update_fields=["username"])
+
+
+class ProfileUpdateSerializer(UsernameUpdateMixin, serializers.ModelSerializer):
     """Partial update serializer for authenticated user's profile."""
 
     location = LocationField(required=False, allow_null=True)
@@ -212,9 +248,21 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         required=False,
     )
 
+    username = serializers.CharField(
+        max_length=50,
+        required=False,
+        validators=[
+            validators.RegexValidator(
+                regex=r"^[a-zA-Z0-9_]+$",
+                message="Username can only contain alphanumeric characters and underscores.",
+            )
+        ],
+    )
+
     class Meta:
         model = Profile
         fields = (
+            "username",
             "display_name",
             "bio",
             "picture_url",
@@ -225,12 +273,54 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
             "skills",
         )
 
-    def validate(self, attrs: dict) -> dict:
+    def validate_username(self, value: str) -> str:
+        """Ensure username is unique across both Profile and User models."""
+        if self.instance is None:
+            return value.lower()
+        return self._validate_unique_username(value, cast(Profile, self.instance))
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """Validate profile update payload."""
         return attrs
 
-    def update(self, instance: Profile, validated_data: dict) -> Profile:
-        """Apply partial updates."""
+    @transaction.atomic
+    def update(self, instance: Profile, validated_data: dict[str, Any]) -> Profile:
+        """Apply partial updates and sync username to User model if changed."""
+        new_username = validated_data.get("username")
+        if new_username:
+            self._sync_user_username(instance.user, new_username)
+
+        return super().update(instance, validated_data)
+
+
+class ProfileUsernameUpdateSerializer(UsernameUpdateMixin, serializers.ModelSerializer):
+    """Dedicated serializer for updating only the username."""
+
+    username = serializers.CharField(
+        max_length=50,
+        validators=[
+            validators.RegexValidator(
+                regex=r"^[a-zA-Z0-9_]+$",
+                message="Username can only contain alphanumeric characters and underscores.",
+            )
+        ],
+    )
+
+    class Meta:
+        model = Profile
+        fields = ("username",)
+
+    def validate_username(self, value: str) -> str:
+        """Ensure username is unique across both Profile and User models."""
+        if self.instance is None:
+            return value.lower()
+        return self._validate_unique_username(value, cast(Profile, self.instance))
+
+    @transaction.atomic
+    def update(self, instance: Profile, validated_data: dict[str, Any]) -> Profile:
+        """Update username on both Profile and User models."""
+        new_username = validated_data["username"]
+        self._sync_user_username(instance.user, new_username)
         return super().update(instance, validated_data)
 
 
@@ -344,11 +434,13 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_full_name(self, obj: Profile) -> str:
+        """Return display name or initials based on 'show_initials_only' setting."""
         if obj.show_initials_only:
             return _get_display_initials(obj.display_name or "")
         return obj.display_name
 
-    def to_representation(self, instance: Profile) -> dict:
+    def to_representation(self, instance: Profile) -> dict[str, Any]:
+        """Add 'hidden' field to the output representation."""
         ret = super().to_representation(instance)
         # Invert is_visible to get "hidden" semantics.
         ret["hidden"] = not instance.is_visible

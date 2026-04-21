@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { RegistrationProfileSetupSheet } from "@/components/profile/RegistrationProfileSetupSheet";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
@@ -23,7 +24,6 @@ import {
   registerFn,
   updateProfileFn,
   updateUsageModeFn,
-  type AuthResponse,
 } from "@/lib/queries/authQueries";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -42,6 +42,12 @@ function validatePassword(value: string): string {
     return "Password must contain at least one uppercase letter.";
   if (!/\d/.test(value)) return "Password must contain at least one number.";
   return "";
+}
+
+function buildUsernamePreview(email: string): string {
+  const localPart = email.trim().toLowerCase().split("@")[0] ?? "";
+  const sanitized = localPart.replace(/[^a-z0-9._-]/g, "");
+  return sanitized || "assigned during registration";
 }
 
 function getRegistrationValidationErrors(params: {
@@ -91,12 +97,6 @@ export default function RegisterScreen() {
   const [termsError, setTermsError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [profileSetupVisible, setProfileSetupVisible] = useState(false);
-  const [pendingUser, setPendingUser] = useState<{
-    accessToken: string;
-    refreshToken: string;
-    username: string;
-    user: AuthResponse["user"];
-  } | null>(null);
 
   const {
     data: skillsData,
@@ -112,36 +112,38 @@ export default function RegisterScreen() {
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
-  const completeProfileSetup = useMutation({
+  const completeRegistration = useMutation({
     mutationFn: async (params: {
       displayName: string;
       bio: string;
       selectedSkills: string[];
     }) => {
-      if (!pendingUser) {
-        throw new Error("Registration session not found. Please try again.");
-      }
+      const registration = await registerFn({
+        email: email.trim(),
+        password,
+        confirm_password: confirmPassword,
+      });
 
       await updateUsageModeFn({
         app_usage_mode: role.toUpperCase() as "MENTOR" | "MENTEE",
-        accessToken: pendingUser.accessToken,
+        accessToken: registration.access_token,
       });
 
       const finalizedUser = {
-        ...pendingUser.user,
+        ...registration.user,
         app_usage_mode: role.toUpperCase() as "MENTOR" | "MENTEE",
       };
 
       await updateProfileFn({
-        accessToken: pendingUser.accessToken,
+        accessToken: registration.access_token,
         display_name: params.displayName,
         bio: params.bio.trim() || undefined,
         skills: params.selectedSkills,
       });
 
       await setAuthenticated(finalizedUser, {
-        access_token: pendingUser.accessToken,
-        refresh_token: pendingUser.refreshToken,
+        access_token: registration.access_token,
+        refresh_token: registration.refresh_token,
       });
     },
     onSuccess: () => {
@@ -152,27 +154,7 @@ export default function RegisterScreen() {
     },
   });
 
-  const register = useMutation({
-    mutationFn: registerFn,
-    onSuccess: async (data: AuthResponse) => {
-      setPendingUser({
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        username: data.user.username,
-        user: data.user,
-      });
-      setProfileSetupVisible(true);
-
-      if (!skillsData?.length) {
-        void refetchSkills();
-      }
-    },
-    onError: (error: Error) => {
-      setSubmitError(error.message);
-    },
-  });
-
-  const isPending = register.isPending || completeProfileSetup.isPending;
+  const isPending = completeRegistration.isPending;
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
@@ -211,11 +193,11 @@ export default function RegisterScreen() {
     const hasErrors = Boolean(eErr || pErr || cpErr || tErr);
     if (hasErrors) return;
 
-    register.mutate({
-      email: email.trim(),
-      password,
-      confirm_password: confirmPassword,
-    });
+    setProfileSetupVisible(true);
+
+    if (!skillsData?.length) {
+      void refetchSkills();
+    }
   };
 
   return (
@@ -505,11 +487,7 @@ export default function RegisterScreen() {
 
             {/* CTA + Log In link */}
             <View className="gap-5 pt-4">
-              {submitError ? (
-                <Text className="text-xs text-red-500 text-center">
-                  {submitError}
-                </Text>
-              ) : null}
+              {submitError ? <ErrorBanner message={submitError} /> : null}
               <TouchableOpacity
                 className="w-full h-16 rounded-xl items-center justify-center flex-row gap-3 bg-primary dark:bg-primary-dim"
                 activeOpacity={0.88}
@@ -520,7 +498,7 @@ export default function RegisterScreen() {
                 onPress={handleSubmit}
               >
                 <Text className="text-white font-bold text-lg">
-                  {isPending ? "Creating account…" : "Complete Registration"}
+                  {isPending ? "Creating account…" : "Continue"}
                 </Text>
                 {!isPending && (
                   <Ionicons
@@ -555,16 +533,16 @@ export default function RegisterScreen() {
         role={role}
         skills={skillNames}
         isLoadingSkills={isLoadingSkills}
-        isSubmitting={completeProfileSetup.isPending}
+        isSubmitting={completeRegistration.isPending}
         submitError={submitError}
-        username={pendingUser?.username ?? ""}
+        username={buildUsernamePreview(email)}
         onClose={() => {
           setProfileSetupVisible(false);
-          setPendingUser(null);
+          setSubmitError("");
         }}
         onSubmit={(values) => {
           setSubmitError("");
-          completeProfileSetup.mutate(values);
+          completeRegistration.mutate(values);
         }}
       />
     </SafeAreaView>

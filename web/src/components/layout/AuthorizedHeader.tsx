@@ -4,10 +4,15 @@ import { logout, meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import { useQuery } from "@tanstack/react-query"
 import { useProfile } from "#/lib/queries/ProfileQueries.ts"
 import { getInitials } from "#/lib/utils.ts"
+import { useNotifications } from "#/lib/queries/NotificationQueries.ts"
 
 export function AuthorizedHeader() {
   const { data: me } = useQuery(meQueryOptions)
   const { data: profile } = useProfile(me?.username ?? '')
+  const { data: notifications = [] } = useNotifications()
+
+  const hasUnread = notifications.length > 0
+  const hasMessageNotification = notifications.some(n => n.type === 'new_message')
 
   const initials = profile?.full_name
       ? getInitials(profile.full_name)
@@ -34,7 +39,12 @@ export function AuthorizedHeader() {
                   activeProps={{ className: "bg-accent-muted text-ink font-semibold" }}
                   className="text-sm font-medium text-ink-soft hover:text-ink hover:bg-accent-muted/60 transition-colors px-3 py-1.5 rounded-lg"
               >
-                Dashboard
+                <span className="relative">
+                  Dashboard
+                  {hasUnread && (
+                    <span className="absolute -top-1 -right-2.5 h-2 w-2 rounded-full bg-accent" />
+                  )}
+                </span>
               </Link>
               <Link
                   to="/schedule"
@@ -56,6 +66,19 @@ export function AuthorizedHeader() {
                   className="text-sm font-medium text-ink-soft hover:text-ink hover:bg-accent-muted/60 transition-colors px-3 py-1.5 rounded-lg"
               >
                 Connections
+              </Link>
+              <Link
+                  to="/messages"
+                  search={{ conversationId: '' }}
+                  activeProps={{ className: "bg-accent-muted text-ink font-semibold" }}
+                  className="text-sm font-medium text-ink-soft hover:text-ink hover:bg-accent-muted/60 transition-colors px-3 py-1.5 rounded-lg"
+              >
+                <span className="relative">
+                  Messages
+                  {hasMessageNotification && (
+                    <span className="absolute -top-1 -right-2.5 h-2 w-2 rounded-full bg-accent" />
+                  )}
+                </span>
               </Link>
             </nav>
           </div>

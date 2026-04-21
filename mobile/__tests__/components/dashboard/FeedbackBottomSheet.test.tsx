@@ -19,7 +19,6 @@ describe("FeedbackBottomSheet", () => {
         onClose={mockOnClose}
         onSubmit={mockOnSubmit}
         otherUserName="Jane Doe"
-        yourRole="Mentee"
       />
     );
 
@@ -34,7 +33,6 @@ describe("FeedbackBottomSheet", () => {
         onClose={mockOnClose}
         onSubmit={mockOnSubmit}
         otherUserName="Jane Doe"
-        yourRole="Mentor"
       />
     );
 
@@ -48,7 +46,6 @@ describe("FeedbackBottomSheet", () => {
         onClose={mockOnClose}
         onSubmit={mockOnSubmit}
         otherUserName="Jane Doe"
-        yourRole="Mentee"
       />
     );
 
@@ -67,7 +64,6 @@ describe("FeedbackBottomSheet", () => {
         onClose={mockOnClose}
         onSubmit={mockOnSubmit}
         otherUserName="Jane Doe"
-        yourRole="Mentee"
       />
     );
 
@@ -82,7 +78,6 @@ describe("FeedbackBottomSheet", () => {
         onClose={mockOnClose}
         onSubmit={mockOnSubmit}
         otherUserName="Jane Doe"
-        yourRole="Mentee"
       />
     );
 
@@ -97,7 +92,6 @@ describe("FeedbackBottomSheet", () => {
         onClose={mockOnClose}
         onSubmit={mockOnSubmit}
         otherUserName="Jane Doe"
-        yourRole="Mentee"
       />
     );
 
@@ -116,7 +110,6 @@ describe("FeedbackBottomSheet", () => {
         onClose={mockOnClose}
         onSubmit={mockOnSubmit}
         otherUserName="Jane Doe"
-        yourRole="Mentee"
       />
     );
 

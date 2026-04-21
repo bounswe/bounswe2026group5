@@ -1,21 +1,20 @@
 import React from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+
+import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 
 interface SessionDetailsModalProps {
   visible: boolean;
   onClose: () => void;
   onReschedule?: () => void;
   onCancelSession?: () => void;
-  onLeaveFeedback?: () => void;
   isCancelling?: boolean;
   session: {
     id?: string;
@@ -25,8 +24,6 @@ interface SessionDetailsModalProps {
     status: string;
     topic?: string;
     myRole?: string;
-    location?: string;
-    meetingUrl?: string;
     isSessionStarted?: boolean;
   } | null;
 }
@@ -36,10 +33,12 @@ export function SessionDetailsModal({
   onClose,
   onReschedule,
   onCancelSession,
-  onLeaveFeedback,
   isCancelling = false,
   session,
 }: Readonly<SessionDetailsModalProps>) {
+  const [showCancelConfirmation, setShowCancelConfirmation] =
+    React.useState(false);
+
   if (!session) return null;
 
   let statusTextClass = "text-gray-600";
@@ -47,47 +46,6 @@ export function SessionDetailsModal({
     statusTextClass = "text-green-600";
   } else if (session.status === "Pending") {
     statusTextClass = "text-amber-600";
-  }
-
-  // 1. Primary Action: completed sessions show feedback CTA.
-  let primaryAction: React.ReactNode = null;
-  if (session.status === "Completed") {
-    primaryAction = (
-      <TouchableOpacity
-        testID="action-leave-feedback"
-        className="bg-indigo-600 py-4 rounded-xl items-center mb-3 shadow-sm"
-        onPress={() => {
-          onClose();
-          if (onLeaveFeedback) {
-            setTimeout(() => onLeaveFeedback(), 300);
-          }
-        }}
-      >
-        <Text className="text-white font-bold text-lg">Leave Feedback</Text>
-      </TouchableOpacity>
-    );
-  } else if (session.location) {
-    primaryAction = (
-      <TouchableOpacity
-        testID="action-get-directions"
-        className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm flex-row justify-center gap-2"
-        onPress={() => console.log(`TODO: Open Maps for ${session.location}`)}
-      >
-        <Ionicons name="location" size={20} color="white" />
-        <Text className="text-white font-bold text-lg">Get Directions</Text>
-      </TouchableOpacity>
-    );
-  } else if (session.meetingUrl) {
-    primaryAction = (
-      <TouchableOpacity
-        testID="action-join-video-call"
-        className="bg-blue-600 py-4 rounded-xl items-center mb-3 shadow-sm flex-row justify-center gap-2"
-        onPress={() => console.log(`TODO: Open Link ${session.meetingUrl}`)}
-      >
-        <Ionicons name="videocam" size={20} color="white" />
-        <Text className="text-white font-bold text-lg">Join Video Call</Text>
-      </TouchableOpacity>
-    );
   }
 
   return (
@@ -132,18 +90,6 @@ export function SessionDetailsModal({
               </Text>
             </View>
 
-            <View className="flex-row justify-between mb-3">
-              <Text className="text-gray-500 font-medium">
-                {session.location ? "Location" : "Platform"}
-              </Text>
-              <Text
-                className="text-gray-900 font-semibold text-right flex-1 ml-4"
-                numberOfLines={1}
-              >
-                {session.location || "Video Call"}
-              </Text>
-            </View>
-
             <View className="flex-row justify-between">
               <Text className="text-gray-500 font-medium">Status</Text>
               <Text className={`font-bold ${statusTextClass}`}>
@@ -152,13 +98,9 @@ export function SessionDetailsModal({
             </View>
           </View>
 
-          {/* Dynamic Primary Action Button */}
-          {primaryAction}
-
-          {/* 2. Secondary Actions: Hidden completely if session has started or is completed */}
+          {/* Secondary actions are hidden once a session starts or completes. */}
           {!session.isSessionStarted && session.status !== "Completed" && (
             <View className="flex-row justify-between gap-3 mb-2 mt-2">
-              
               {/* RESCHEDULE BUTTON: Only for Mentees */}
               {session.myRole === "Mentee" && (
                 <TouchableOpacity
@@ -183,24 +125,7 @@ export function SessionDetailsModal({
                 testID="action-cancel"
                 className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
                 disabled={isCancelling}
-                onPress={() => {
-                  Alert.alert(
-                    "Cancel Session",
-                    "Are you sure you want to cancel this session?",
-                    [
-                      { text: "Keep Session", style: "cancel" },
-                      {
-                        text: "Cancel Session",
-                        style: "destructive",
-                        onPress: () => {
-                          if (onCancelSession) {
-                            onCancelSession();
-                          }
-                        },
-                      },
-                    ],
-                  );
-                }}
+                onPress={() => setShowCancelConfirmation(true)}
               >
                 {isCancelling ? (
                   <ActivityIndicator testID="cancel-loading-indicator" size="small" color="#dc2626" />
@@ -214,6 +139,21 @@ export function SessionDetailsModal({
           )}
         </Pressable>
       </Pressable>
+
+      <ConfirmationSheet
+        visible={showCancelConfirmation}
+        title="Cancel session?"
+        message="This will cancel the scheduled mentorship session for both participants."
+        confirmLabel="Cancel Session"
+        cancelLabel="Keep Session"
+        variant="destructive"
+        isConfirming={isCancelling}
+        onCancel={() => setShowCancelConfirmation(false)}
+        onConfirm={() => {
+          setShowCancelConfirmation(false);
+          onCancelSession?.();
+        }}
+      />
     </Modal>
   );
 }

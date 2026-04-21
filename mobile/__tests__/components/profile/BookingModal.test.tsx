@@ -1,15 +1,9 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
-import { Alert } from "react-native";
 
 import { BookingModal } from "@/components/profile/BookingModal";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
-jest.spyOn(Alert, "alert");
-
-// Fixed to a Monday so "next Monday" (7 days later) is predictable
-const FIXED_DATE = new Date(2026, 3, 13, 8, 0, 0); // Mon Apr 13 2026
-const NEXT_MONDAY_RAW = "2026-04-20";
 
 describe("BookingModal Component", () => {
   const mockOffering = {
@@ -58,7 +52,7 @@ describe("BookingModal Component", () => {
     expect(getByTestId("primary-action-button")).toBeTruthy();
   });
 
-  it("shows validation alert when submitting without selecting a time", () => {
+  it("shows inline validation if user tries to submit without selecting a time", () => {
     const mockOnSubmit = jest.fn();
     const { getByTestId } = render(
       <BookingModal
@@ -72,10 +66,7 @@ describe("BookingModal Component", () => {
 
     fireEvent.press(getByTestId("primary-action-button"));
 
-    expect(Alert.alert).toHaveBeenCalledWith(
-      "Missing Information",
-      expect.any(String),
-    );
+    expect(getByText("Please select a date for the session.")).toBeTruthy();
     expect(mockOnSubmit).not.toHaveBeenCalled();
   });
 
