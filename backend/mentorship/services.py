@@ -50,17 +50,29 @@ def _create_notification(
     resource_id: Any = None,
     extra_metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Create a structured notification payload for client consumption."""
-    Notification.objects.create(
-        user=user,
-        type=notification_type,
-        title=title,
-        message=message,
-        actor=actor,
-        resource_type=resource_type,
-        resource_id=resource_id,
-        extra_metadata=extra_metadata or {},
-    )
+    """Create a structured notification payload for client consumption.
+
+    Notification creation is performed as a 'best effort' operation: failures in
+    persistence (e.g. IntegrityError) are logged but do not roll back the
+    primary business transaction.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        Notification.objects.create(
+            user=user,
+            type=notification_type,
+            title=title,
+            message=message,
+            actor=actor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            extra_metadata=extra_metadata or {},
+        )
+    except Exception:
+        logger.exception("Notification persistence failed for mentorship flow.")
 
 
 def create_mentorship_request(

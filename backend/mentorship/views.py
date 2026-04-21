@@ -66,14 +66,6 @@ _INVALID_MEETING_SESSION_ROLE = {"detail": "Invalid role. Use one of: mentor, me
 logger = logging.getLogger(__name__)
 
 
-def _create_notification_best_effort(**kwargs: Any) -> None:
-    """Persist notifications without breaking the primary request flow on failure."""
-    try:
-        Notification.objects.create(**kwargs)
-    except IntegrityError as exc:
-        logger.warning("Notification persistence skipped due to integrity error: %s", exc)
-    except Exception:
-        logger.exception("Notification persistence failed for mentorship flow.")
 
 
 class MyRequestsListAPIView(APIView):

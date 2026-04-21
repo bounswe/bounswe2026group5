@@ -973,7 +973,7 @@ class CancelSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
         response = self.mentee_client.post(self._cancel_url(uuid.uuid4()))
         self.assertEqual(response.status_code, 404)
 
-    @patch("mentorship.views.Notification.objects.create", side_effect=IntegrityError("boom"))
+    @patch("mentorship.services.Notification.objects.create", side_effect=IntegrityError("boom"))
     def test_cancel_succeeds_when_notification_create_fails(self, _mock_create) -> None:
         """Cancellation should not fail if notification persistence raises an error."""
         match, session = self._setup_active_match_with_booking()
