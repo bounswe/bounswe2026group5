@@ -11,6 +11,9 @@ let mockAuthUser = {
 };
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+jest.mock("@/components/notifications/NotificationBell", () => ({
+  NotificationBell: () => null,
+}));
 
 jest.mock("@/lib/queries/mentorship", () => {
   const actual = jest.requireActual<Record<string, unknown>>(

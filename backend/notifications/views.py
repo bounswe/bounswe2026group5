@@ -1,3 +1,4 @@
+from django.conf import settings
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.request import Request
@@ -11,7 +12,7 @@ from .serializers import NotificationSerializer
 
 
 class NotificationListAPIView(APIView):
-    """List unread notifications for the authenticated user."""
+    """List recent notifications for the authenticated user."""
 
     permission_classes = [IsUser]
 
@@ -20,8 +21,10 @@ class NotificationListAPIView(APIView):
             200: NotificationSerializer(many=True),
             401: OpenApiResponse(description="Authentication required."),
         },
-        description="""List all unread notifications for the authenticated user,
-ordered by most recent first.
+        description="""List recent notifications for the authenticated user.
+Unread notifications are returned first, followed by read notifications,
+with newest items first inside each group. The response is capped to the
+configured notifications history limit.
 
 **Notification Types:**
 * `new_mentorship_request`: User received a mentorship request.
@@ -37,10 +40,11 @@ ordered by most recent first.
         tags=["Notifications"],
     )
     def get(self, request: Request) -> Response:
-        """Return unread notifications for the current user."""
-        notifications = Notification.objects.filter(user=request.user, is_read=False).order_by(
-            "-created_at"
-        )
+        """Return recent notifications for the current user."""
+        notifications = Notification.objects.filter(user=request.user).order_by(
+            "is_read",
+            "-created_at",
+        )[: settings.NOTIFICATIONS_HISTORY_LIMIT]
 
         return Response(
             NotificationSerializer(notifications, many=True).data,

@@ -7,6 +7,7 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, F
 from django.utils import timezone
+from core.utils.timezone import to_local_time
 
 from notifications.models import Notification, NotificationType
 from profiles.models import AvailabilitySlot, Profile
@@ -258,8 +259,8 @@ def book_match_session(*, mentor_profile: Profile, slot_id: Any, actor: Any) -> 
                     title="Slot Booked",
                     message=(
                         f"{mentee_profile.display_name} booked a slot on "
-                        f"{slot.start_at.strftime('%B %d, %Y at %H:%M')} - "
-                        f"{slot.end_at.strftime('%H:%M')}."
+                        f"{to_local_time(slot.start_at).strftime('%B %d, %Y at %H:%M')} - "
+                        f"{to_local_time(slot.end_at).strftime('%H:%M')}."
                     ),
                     actor=mentee_profile,
                     resource_type="availability_slot",

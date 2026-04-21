@@ -10,6 +10,9 @@ import {
 const mockPush = jest.fn();
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+jest.mock("@/components/notifications/NotificationBell", () => ({
+  NotificationBell: () => null,
+}));
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({
