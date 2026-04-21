@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AvailabilityPreview } from "@/components/profile/AvailabilityPreview";
@@ -14,6 +14,7 @@ import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 
 import { API_BASE_URL } from "@/constants/api";
 import { useAuthStore } from "@/lib/auth/store";
@@ -84,6 +85,7 @@ export default function ProfileScreen() {
   }, [authUser?.username]);
 
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
 
@@ -117,6 +119,7 @@ export default function ProfileScreen() {
         if (!mounted) {
           return;
         }
+        setPageError(null);
 
         setUserData((prev) => ({
           ...prev,
@@ -130,6 +133,7 @@ export default function ProfileScreen() {
         if (!mounted) {
           return;
         }
+        setPageError("Failed to load profile.");
       });
 
     return () => {
@@ -232,6 +236,7 @@ export default function ProfileScreen() {
     }
 
     try {
+      setPageError(null);
       const response = await updateProfileMutation.mutateAsync({
         username: currentUsername,
         display_name: updatedData.name,
@@ -242,8 +247,7 @@ export default function ProfileScreen() {
         bio: response.bio || updatedData.bio,
       });
     } catch (error) {
-      Alert.alert(
-        "Profile Update Failed",
+      setPageError(
         error instanceof Error
           ? error.message
           : "Could not update profile details.",
@@ -262,13 +266,13 @@ export default function ProfileScreen() {
     }
 
     try {
+      setPageError(null);
       await updateProfileMutation.mutateAsync({
         username: currentUsername,
         skills: nextSkills,
       });
     } catch (error) {
-      Alert.alert(
-        "Skill Update Failed",
+      setPageError(
         error instanceof Error ? error.message : "Could not update skills.",
       );
     }
@@ -312,6 +316,12 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 160 }}
       >
+        {pageError ? (
+          <View className="px-4 pt-4">
+            <ErrorBanner message={pageError} />
+          </View>
+        ) : null}
+
         <ProfileHeader
           name={userData.name}
           bio={userData.bio}

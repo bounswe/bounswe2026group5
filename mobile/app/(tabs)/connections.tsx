@@ -2,7 +2,6 @@ import { useRouter, type Href } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -25,6 +24,8 @@ import {
 import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
 import { RequestCard } from "@/components/dashboard/RequestCard";
 import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { SuccessCard } from "@/components/ui/SuccessCard";
 
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -67,15 +68,16 @@ async function deactivateConnection(params: {
   matchIds: string[];
   name: string;
   mutateAsync: (matchId: string) => Promise<unknown>;
+  onError?: (message: string) => void;
+  onSuccess?: (message: string) => void;
 }): Promise<void> {
   try {
     for (const matchId of params.matchIds) {
       await params.mutateAsync(matchId);
     }
-    Alert.alert("Connection Removed", `${params.name} has been removed.`);
+    params.onSuccess?.(`${params.name} has been removed.`);
   } catch (error) {
-    Alert.alert(
-      "Remove Failed",
+    params.onError?.(
       error instanceof Error
         ? error.message
         : "Could not remove this connection.",
@@ -125,6 +127,8 @@ type ConnectionViewProps = Readonly<{
     name: string,
     myRole: "Mentor" | "Mentee",
   ) => void;
+  onError: (message: string) => void;
+  onSuccess: (message: string) => void;
 }>;
 
 function pushUserProfile(
@@ -138,7 +142,11 @@ function pushUserProfile(
 // Mentor View
 // ---------------------------------------------------------------------------
 
-function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
+function MentorConnections({
+  onOpenFeedback,
+  onError,
+  onSuccess,
+}: ConnectionViewProps) {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [selectedRequest, setSelectedRequest] =
@@ -230,8 +238,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
     try {
       await respondMutation.mutateAsync({ requestId: id, action: "accept" });
     } catch (error) {
-      Alert.alert(
-        "Action Failed",
+      onError(
         error instanceof Error
           ? error.message
           : "Something went wrong. Please try again.",
@@ -247,8 +254,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
           action: "reject",
         });
       } catch (error) {
-        Alert.alert(
-          "Action Failed",
+        onError(
           error instanceof Error
             ? error.message
             : "Something went wrong. Please try again.",
@@ -307,24 +313,13 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
           }
           const target = managedMentee;
           setManagedMentee(null);
-          Alert.alert(
-            `Remove ${target.name}?`,
-            "This will end the active mentorship connection.",
-            [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Remove",
-                style: "destructive",
-                onPress: () => {
-                  void deactivateConnection({
-                    matchIds: target.matchIds,
-                    name: target.name,
-                    mutateAsync: deactivateMatchMutation.mutateAsync,
-                  });
-                },
-              },
-            ],
-          );
+          void deactivateConnection({
+            matchIds: target.matchIds,
+            name: target.name,
+            mutateAsync: deactivateMatchMutation.mutateAsync,
+            onError,
+            onSuccess,
+          });
         }}
       />
 
@@ -372,9 +367,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
 
         {requestsLoading && <ActivityIndicator className="mt-4" />}
         {requestsError && (
-          <Text className="text-[13px] text-error text-center mt-2">
-            Failed to load requests.
-          </Text>
+          <ErrorBanner message="Failed to load requests." />
         )}
         {pendingRequests.length > 0 && (
           <ScrollView
@@ -430,9 +423,7 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
 
         {matchesLoading && <ActivityIndicator className="mt-4" />}
         {matchesError && (
-          <Text className="text-[13px] text-error text-center mt-2">
-            Failed to load mentees.
-          </Text>
+          <ErrorBanner message="Failed to load mentees." />
         )}
         {displayedMentees.map((mentee) => (
           <MenteeCard
@@ -466,7 +457,11 @@ function MentorConnections({ onOpenFeedback }: ConnectionViewProps) {
 // Mentee View
 // ---------------------------------------------------------------------------
 
-function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
+function MenteeConnections({
+  onOpenFeedback,
+  onError,
+  onSuccess,
+}: ConnectionViewProps) {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [showAllMentors, setShowAllMentors] = useState(false);
@@ -607,24 +602,13 @@ function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
           }
           const target = managedMentor;
           setManagedMentor(null);
-          Alert.alert(
-            `Remove ${target.name}?`,
-            "This will end the active mentorship connection.",
-            [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Remove",
-                style: "destructive",
-                onPress: () => {
-                  void deactivateConnection({
-                    matchIds: target.matchIds,
-                    name: target.name,
-                    mutateAsync: deactivateMatchMutation.mutateAsync,
-                  });
-                },
-              },
-            ],
-          );
+          void deactivateConnection({
+            matchIds: target.matchIds,
+            name: target.name,
+            mutateAsync: deactivateMatchMutation.mutateAsync,
+            onError,
+            onSuccess,
+          });
         }}
       />
 
@@ -672,9 +656,7 @@ function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
 
         {requestsLoading && <ActivityIndicator className="mt-4" />}
         {requestsError && (
-          <Text className="text-[13px] text-error text-center mt-2">
-            Failed to load requests.
-          </Text>
+          <ErrorBanner message="Failed to load requests." />
         )}
         {pendingRequests.length > 0 && (
           <ScrollView
@@ -734,9 +716,7 @@ function MenteeConnections({ onOpenFeedback }: ConnectionViewProps) {
 
         {matchesLoading && <ActivityIndicator className="mt-4" />}
         {matchesError && (
-          <Text className="text-[13px] text-error text-center mt-2">
-            Failed to load mentors.
-          </Text>
+          <ErrorBanner message="Failed to load mentors." />
         )}
         {displayedMentors.map((mentor) => (
           <MenteeCard
@@ -780,21 +760,24 @@ export default function ConnectionsScreen() {
     userName: string;
     role: "Mentor" | "Mentee";
   } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleFeedbackSubmit = async (rating: number, text?: string) => {
     if (!feedbackConnection?.matchId) return;
 
     try {
+      setActionError(null);
+      setSuccessMessage(null);
       await submitFeedbackMutation.mutateAsync({
         matchId: feedbackConnection.matchId,
         rating,
         text,
       });
       setFeedbackConnection(null);
-      Alert.alert("Review Submitted", "Thank you for your feedback!");
+      setSuccessMessage("Thank you for your feedback!");
     } catch (error) {
-      Alert.alert(
-        "Feedback Failed",
+      setActionError(
         error instanceof Error ? error.message : "Could not submit feedback.",
       );
     }
@@ -826,14 +809,30 @@ export default function ConnectionsScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        {actionError ? (
+          <View className="mb-4">
+            <ErrorBanner message={actionError} />
+          </View>
+        ) : null}
+
+        {successMessage ? (
+          <View className="mb-4">
+            <SuccessCard message={successMessage} />
+          </View>
+        ) : null}
+
         {isMentor ? (
           <MentorConnections
+            onError={setActionError}
+            onSuccess={setSuccessMessage}
             onOpenFeedback={(matchId, name, role) =>
               setFeedbackConnection({ matchId, userName: name, role })
             }
           />
         ) : (
           <MenteeConnections
+            onError={setActionError}
+            onSuccess={setSuccessMessage}
             onOpenFeedback={(matchId, name, role) =>
               setFeedbackConnection({ matchId, userName: name, role })
             }
@@ -846,7 +845,6 @@ export default function ConnectionsScreen() {
         onClose={() => setFeedbackConnection(null)}
         onSubmit={handleFeedbackSubmit}
         otherUserName={feedbackConnection?.userName || ""}
-        yourRole={feedbackConnection?.role || "Mentee"}
         isSubmitting={submitFeedbackMutation.isPending}
       />
     </View>

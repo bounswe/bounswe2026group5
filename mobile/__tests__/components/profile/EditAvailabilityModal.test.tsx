@@ -1,6 +1,5 @@
 import { act, fireEvent, render } from "@testing-library/react-native";
 import React from "react";
-import { Alert } from "react-native";
 
 import { EditAvailabilityModal } from "@/components/profile/EditAvailabilityModal";
 
@@ -92,10 +91,7 @@ describe("EditAvailabilityModal", () => {
     expect(onChanged).toHaveBeenCalled();
   });
 
-  it("alerts when trying to deactivate a booked slot", () => {
-    const alertSpy = jest
-      .spyOn(Alert, "alert")
-      .mockImplementation(() => undefined);
+  it("shows inline error when trying to deactivate a booked slot", () => {
     const monday = toDateString(getMonday(new Date()));
 
     const { getByText } = render(
@@ -117,9 +113,10 @@ describe("EditAvailabilityModal", () => {
 
     fireEvent.press(getByText("09:00 - 10:00"));
 
-    expect(alertSpy).toHaveBeenCalledWith(
-      "Cannot Make Slot Unavailable",
-      expect.stringContaining("planned session"),
+    expect(
+      getByText(
+        "This slot has 0 planned session(s). Cancelling accepted sessions from availability editing is not supported by the current backend.",
+      ),
     );
   });
 });
