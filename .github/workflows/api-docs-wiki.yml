@@ -1,6 +1,6 @@
 name: API Docs Wiki Sync
 
-"on":
+on:
   push:
     branches: [main, dev]
     paths:
