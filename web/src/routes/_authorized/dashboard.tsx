@@ -1,7 +1,7 @@
 // web/src/routes/_authorized/dashboard.tsx
 import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import { useMeetingSessions, useMyRequests, useRespondToRequest } from "#/lib/queries/MentorshipQueries.ts"
-import { useNotifications, useMarkAllNotificationsRead } from "#/lib/queries/NotificationQueries.ts"
+import { useNotifications, useMarkAllNotificationsRead, NOTIFICATION_INVALIDATION_MAP } from "#/lib/queries/NotificationQueries.ts"
 import { getInitials } from "#/lib/utils.ts"
 import { Body, Heading, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
@@ -77,6 +77,7 @@ export function DashboardHome() {
   const { data } = useQuery(meQueryOptions)
   const { data: notifications = [] } = useNotifications()
   const { mutate: markAllRead } = useMarkAllNotificationsRead()
+  const queryClient = useQueryClient()
 
   // Accumulate non-message notifications as they arrive via polling.
   // Each poll only adds genuinely new ones; already-seen IDs are skipped.
@@ -95,7 +96,15 @@ export function DashboardHome() {
 
     const unreadIds = incoming.filter(n => n.type !== 'new_message' && !n.is_read).map(n => n.id)
     if (unreadIds.length > 0) markAllRead(unreadIds)
-  }, [notifications, markAllRead])
+
+    const keysToInvalidate = new Set<string>()
+    for (const n of incoming) {
+      for (const key of NOTIFICATION_INVALIDATION_MAP[n.type]) {
+        keysToInvalidate.add(JSON.stringify(key))
+      }
+    }
+    keysToInvalidate.forEach(k => queryClient.invalidateQueries({ queryKey: JSON.parse(k) }))
+  }, [notifications, markAllRead, queryClient])
 
   const mode = (data?.app_usage_mode?.toLowerCase() as 'mentor' | 'mentee') ?? 'mentee'
   return (
