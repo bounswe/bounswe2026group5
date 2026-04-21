@@ -2,6 +2,7 @@ import ScheduleScreen from "@/app/(tabs)/schedule";
 import { fireEvent, render } from "@testing-library/react-native";
 import React from "react";
 import { act } from "react-test-renderer";
+import { Alert } from "react-native";
 
 const mockMeetingSessionsQuery = jest.fn();
 const mockCancelSessionMutation = jest.fn();
@@ -91,6 +92,7 @@ describe("ScheduleScreen", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    jest.spyOn(Alert, "alert").mockImplementation(() => {});
     mockAvailabilitySlotsQuery.mockReturnValue({
       data: [
         {
@@ -175,13 +177,13 @@ describe("ScheduleScreen", () => {
     expect(queryByTestId("reschedule-sheet")).toBeNull();
   });
 
-  it("shows alert when reschedule mutation fails", async () => {
+  it("shows error when reschedule mutation fails", async () => {
     jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
     mockRescheduleSessionMutation.mockRejectedValue(
       new Error("Slot no longer available"),
     );
 
-    const { getByTestId, findByTestId } = render(<ScheduleScreen />);
+    const { getByTestId, findByTestId, findByText } = render(<ScheduleScreen />);
 
     fireEvent.press(getByTestId("session-card-Ada Lovelace"));
     fireEvent.press(await findByTestId("action-reschedule"));
@@ -194,41 +196,27 @@ describe("ScheduleScreen", () => {
       await Promise.resolve();
     });
 
-    expect(Alert.alert).toHaveBeenCalledWith(
-      "Reschedule Failed",
-      "Slot no longer available",
-    );
+    expect(await findByText("Slot no longer available")).toBeTruthy();
   });
 
-  it("shows alert when cancel session mutation fails", async () => {
+  it("shows error when cancel session mutation fails", async () => {
     jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
     mockCancelSessionMutation.mockRejectedValue(
       new Error("Cancellation not allowed"),
     );
 
-    const { getByTestId, findByTestId } = render(<ScheduleScreen />);
+    const { getByTestId, findByTestId, findByText } = render(<ScheduleScreen />);
 
     fireEvent.press(getByTestId("session-card-Ada Lovelace"));
     fireEvent.press(await findByTestId("action-cancel"));
 
-    // The cancel button shows a confirmation dialog — simulate the user confirming
-    const alertMock = Alert.alert as jest.Mock;
-    const confirmationButtons = alertMock.mock.calls[0][2] as Array<{
-      style?: string;
-      onPress?: () => void;
-    }>;
-    const destructiveButton = confirmationButtons.find(
-      (b) => b.style === "destructive",
-    );
+    // ConfirmationSheet appears — press "Cancel Session" to confirm
+    fireEvent.press(await findByText("Cancel Session"));
     await act(async () => {
-      destructiveButton?.onPress?.();
       await Promise.resolve();
     });
 
-    expect(Alert.alert).toHaveBeenCalledWith(
-      "Cancellation Failed",
-      "Cancellation not allowed",
-    );
+    expect(await findByText("Cancellation not allowed")).toBeTruthy();
   });
 
   it("shows empty state when no sessions exist for selected date", () => {

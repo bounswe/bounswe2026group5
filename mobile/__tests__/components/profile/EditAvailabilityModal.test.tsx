@@ -94,7 +94,7 @@ describe("EditAvailabilityModal", () => {
   it("shows inline error when trying to deactivate a booked slot", () => {
     const monday = toDateString(getMonday(new Date()));
 
-    const { getByTestId } = render(
+    const { getByTestId, getByText } = render(
       <EditAvailabilityModal
         visible
         onClose={jest.fn()}

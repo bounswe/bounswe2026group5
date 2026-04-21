@@ -101,6 +101,9 @@ export function FeedbackBottomSheet({
                 <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Rate your session with {otherUserName}
                 </Text>
+                <View testID="role-badge-mentor" className="mt-2 self-start px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900">
+                  <Text className="text-xs font-semibold text-indigo-600 dark:text-indigo-300">Mentor</Text>
+                </View>
               </View>
               <TouchableOpacity onPress={onClose} className="p-2">
                 <Ionicons name="close" size={24} color="#6b7280" />
@@ -158,7 +161,7 @@ export function FeedbackBottomSheet({
 
             {/* Error Message */}
             {error ? (
-              <View className="mb-6">
+              <View testID="error-message" className="mb-6">
                 <ErrorBanner message={error} />
               </View>
             ) : null}

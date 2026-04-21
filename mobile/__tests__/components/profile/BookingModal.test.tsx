@@ -3,6 +3,12 @@ import React from "react";
 
 import { BookingModal } from "@/components/profile/BookingModal";
 
+const FIXED_DATE = new Date(2026, 3, 21); // April 21, 2026 (Tuesday)
+// Compute rawDate the same way BookingModal does: toISOString (UTC), so it's timezone-aware
+const _nextMonday = new Date(FIXED_DATE);
+_nextMonday.setDate(FIXED_DATE.getDate() + 6); // 6 days later = Monday
+const NEXT_MONDAY_RAW = _nextMonday.toISOString().split("T")[0];
+
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
 describe("BookingModal Component", () => {
@@ -54,7 +60,7 @@ describe("BookingModal Component", () => {
 
   it("shows inline validation if user tries to submit without selecting a time", () => {
     const mockOnSubmit = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId, getByText } = render(
       <BookingModal
         visible={true}
         onClose={jest.fn()}

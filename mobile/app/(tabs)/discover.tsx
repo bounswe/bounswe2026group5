@@ -237,7 +237,9 @@ export default function DiscoverScreen() {
     );
   } else if (errorText) {
     bodyContent = (
-      <ErrorBanner message={errorText} />
+      <View testID="error-state">
+        <ErrorBanner message={errorText} />
+      </View>
     );
   } else if (profiles.length === 0) {
     bodyContent = (

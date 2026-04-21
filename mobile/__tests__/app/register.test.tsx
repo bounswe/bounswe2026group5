@@ -39,13 +39,22 @@ jest.mock(
   () => ({
     RegistrationProfileSetupSheet: ({
       visible,
+      onSubmit,
     }: {
       visible: boolean;
+      onSubmit: (values: { displayName: string; bio: string; selectedSkills: string[] }) => void;
     }) => {
-      const { Text } = require("react-native");
-      return visible ? (
-        <Text accessibilityLabel="profile-setup-sheet">Profile Setup Sheet</Text>
-      ) : null;
+      const { Text, TouchableOpacity } = require("react-native");
+      if (!visible) return null;
+      return (
+        <>
+          <Text accessibilityLabel="profile-setup-sheet">Profile Setup Sheet</Text>
+          <TouchableOpacity
+            accessibilityLabel="submit-profile-setup"
+            onPress={() => onSubmit({ displayName: "Test User", bio: "", selectedSkills: [] })}
+          />
+        </>
+      );
     },
   }),
 );
@@ -144,7 +153,7 @@ describe("RegisterScreen", () => {
       new Error("Email already taken"),
     );
 
-    const { getByLabelText, findByText } = renderRegister();
+    const { getByLabelText, findByText, findByLabelText } = renderRegister();
 
     fireEvent.changeText(getByLabelText("Email"), "user@example.com");
     fireEvent.changeText(getByLabelText("Password"), "Password1");
@@ -153,6 +162,9 @@ describe("RegisterScreen", () => {
       getByLabelText("I agree to the Terms of Service and Privacy Policy"),
     );
     fireEvent.press(getByLabelText("Complete registration"));
+
+    // Profile setup sheet appears — submit it to trigger the registration mutation
+    fireEvent.press(await findByLabelText("submit-profile-setup"));
 
     expect(await findByText("Email already taken")).toBeTruthy();
   });
@@ -185,7 +197,7 @@ describe("RegisterScreen", () => {
       }),
     );
 
-    const { getByLabelText } = renderRegister();
+    const { getByLabelText, findByLabelText } = renderRegister();
 
     fireEvent.changeText(getByLabelText("Email"), "user@example.com");
     fireEvent.changeText(getByLabelText("Password"), "Password1");
@@ -194,6 +206,9 @@ describe("RegisterScreen", () => {
       getByLabelText("I agree to the Terms of Service and Privacy Policy"),
     );
     fireEvent.press(getByLabelText("Complete registration"));
+
+    // Profile setup sheet appears — submit it to trigger the registration mutation
+    fireEvent.press(await findByLabelText("submit-profile-setup"));
 
     await waitFor(() => {
       const btn = getByLabelText("Complete registration");
