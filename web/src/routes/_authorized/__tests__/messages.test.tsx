@@ -22,7 +22,14 @@ vi.mock('#/lib/queries/AuthQueries.ts', () => ({
 }))
 
 vi.mock('@tanstack/react-router', () => ({
-  createFileRoute: () => () => ({}),
+  createFileRoute: () => () => ({
+    useSearch: () => ({ conversationId: '' }),
+  }),
+}))
+
+vi.mock('#/lib/queries/NotificationQueries.ts', () => ({
+  useNotifications: () => ({ data: [] }),
+  useMarkAllNotificationsRead: () => ({ mutate: vi.fn() }),
 }))
 
 const MOCK_CONVERSATIONS = [
