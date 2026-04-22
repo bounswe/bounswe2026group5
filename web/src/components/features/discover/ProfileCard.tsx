@@ -22,7 +22,7 @@ function ProfileAvatar({
                          displayName,
                          pictureUrl,
                        }: Readonly<{ displayName: string; pictureUrl: string | null }>) {
-  const initials = displayName
+  const initials = (displayName || '?')
       .split(' ')
       .map((n) => n[0])
       .join('')
@@ -81,10 +81,10 @@ export function ProfileCard({
         </div>
 
         {/* Expertises */}
-        <div className="flex flex-wrap gap-2">
-          {profile.expertises.map((skill) => (
-              <span
-                  key={skill}
+        <div className="px-6 pb-6 pt-2 flex flex-wrap gap-2 text-sm z-10 relative">
+          {profile.skills?.slice(0, 3).map((skill) => (
+            <span
+              key={skill}
                   className="px-3 py-1 bg-accent-muted text-accent text-xs font-bold uppercase tracking-wider rounded-full"
               >
             {skill}

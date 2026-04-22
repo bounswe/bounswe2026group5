@@ -5,12 +5,40 @@ import {infiniteQueryOptions, QueryClient, QueryClientProvider, queryOptions} fr
 
 // ── Hoist mocks ──────────────────────────────────────────────────────────────
 
-const { mockNavigate } = vi.hoisted(() => ({
+const { mockNavigate, mockMentorSearchLogic } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
+  mockMentorSearchLogic: (mentors: any[], params: any, page = 1) => {
+    const pageSize = params.pageSize ?? 6
+    let results = [...mentors]
+
+    if (params.q) {
+      const q = params.q.toLowerCase()
+      results = results.filter((m) => {
+        const nameMatch = m.full_name.toLowerCase().includes(q)
+        const bioMatch = m.bio.toLowerCase().includes(q)
+        const skillMatch = m.skills.some((s: string) => s.toLowerCase().includes(q))
+        return nameMatch || bioMatch || skillMatch
+      })
+    }
+
+    if (params.skills?.length) {
+      results = results.filter((m: any) =>
+        m.skills.some((s: string) => params.skills.includes(s)),
+      )
+    }
+
+    const start = (page - 1) * pageSize
+    return {
+      count: results.length,
+      page,
+      pageSize,
+      results: results.slice(start, start + pageSize),
+    }
+  },
 }))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual = await importOriginal<any>()
+  const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
     createFileRoute: () => () => ({}),
@@ -19,7 +47,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 })
 
 vi.mock('lucide-react', async (importOriginal) => {
-  const actual = await importOriginal<any>()
+  const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
     Search: () => <div data-testid="icon-search" />,
@@ -47,7 +75,7 @@ const makeMentor = (n: number) => ({
   title: `Engineer ${n}`,
   location: null,
   show_initials_only: false,
-  expertises: n % 2 === 0 ? ['Python'] : ['Kubernetes'],
+  skills: n % 2 === 0 ? ['Python'] : ['Kubernetes'],
   rating: 4.5,
   total_mentee_count: n,
 })
@@ -56,43 +84,15 @@ const makeMentor = (n: number) => ({
 const MOCK_MENTORS = Array.from({ length: 8 }, (_, i) => makeMentor(i + 1))
 
 vi.mock('@/lib/queries/DiscoverQueries.ts', async (importOriginal) => {
-  const actual = await importOriginal<any>()
+  const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
-    mentorSearchInfiniteQueryOptions: (params: any) =>
+    mentorSearchInfiniteQueryOptions: (params: { pageSize?: number; q?: string; skills?: string[] }) =>
         infiniteQueryOptions({
           queryKey: ['mentors', 'search', params],
-          queryFn: async ({ pageParam }) => {
-            const page = (pageParam as number) ?? 1
-            const pageSize = params.pageSize ?? 6
-            let results = [...MOCK_MENTORS]
-
-            if (params.q) {
-              const q = params.q.toLowerCase()
-              results = results.filter(
-                  (m) =>
-                      m.full_name.toLowerCase().includes(q) ||
-                      m.bio.toLowerCase().includes(q) ||
-                      m.expertises.some((e: string) => e.toLowerCase().includes(q)),
-              )
-            }
-
-            if (params.skills?.length) {
-              results = results.filter((m) =>
-                  m.expertises.some((e: string) => params.skills.includes(e)),
-              )
-            }
-
-            const start = (page - 1) * pageSize
-            return {
-              count: results.length,
-              page,
-              pageSize,
-              results: results.slice(start, start + pageSize),
-            }
-          },
+          queryFn: async ({ pageParam }) => mockMentorSearchLogic(MOCK_MENTORS, params, pageParam),
           initialPageParam: 1,
-          getNextPageParam: (lastPage: any) => {
+          getNextPageParam: (lastPage: { page: number; pageSize: number; count: number }) => {
             const fetched = lastPage.page * lastPage.pageSize
             return fetched < lastPage.count ? lastPage.page + 1 : undefined
           },

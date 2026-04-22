@@ -1,16 +1,47 @@
 // web/src/routes/_authorized/dashboard.tsx
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
+import { useMeetingSessions, useMyRequests, useRespondToRequest, matchFeedbackQueryOptions } from "#/lib/queries/MentorshipQueries.ts"
+import { useNotifications, useMarkAllNotificationsRead, NOTIFICATION_INVALIDATION_MAP } from "#/lib/queries/NotificationQueries.ts"
+import { getInitials } from "#/lib/utils.ts"
+import { Body, Heading, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
-import { Heading, Body, Muted } from '@/components/Typography'
-import {CalendarDays, Clock, CheckCircle2, XCircle, ArrowRight, Loader2} from 'lucide-react'
-import {meQueryOptions} from "#/lib/queries/AuthQueries.ts";
-import {useQuery, useQueryClient} from "@tanstack/react-query";
-import {useMyRequests, useRespondToRequest, useUpcomingSessions} from "#/lib/queries/MentorshipQueries.ts";
-import {useState} from "react";
-import { Check, X as XIcon } from 'lucide-react'
-import {getInitials} from "#/lib/utils.ts";
-import {useMentorUpcomingSessions} from "#/lib/queries/ProfileTimeSlotQueries.ts";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { NotificationItem } from '@/components/notifications/NotificationItem'
+import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query"
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { ArrowRight, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, Star, XCircle, X as XIcon } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from "react"
+import type { Notification } from "#/lib/queries/NotificationQueries.ts"
+import { RatingModal } from '#/components/RatingModal.tsx'
+import { SessionManagementModal } from '#/components/dashboard/SessionManagementModal.tsx'
+import { toast } from "sonner"
+import type { MeetingSession } from '#/lib/queries/MentorshipQueries.ts'
+
+function toSessionManagementData(session: MeetingSession) {
+  return {
+    id: session.session_id,
+    title: `Session with ${session.mentor.display_name}`,
+    description: '',
+    startAt: session.scheduled_start_at,
+    endAt: session.scheduled_end_at,
+    type: 'video' as const,
+    status: 'upcoming' as const,
+    host: {
+      id: session.mentor.username,
+      username: session.mentor.username,
+      fullName: session.mentor.display_name,
+      avatarUrl: session.mentor.picture_url,
+      role: 'mentor' as const,
+    },
+    attendee: {
+      id: session.mentee?.username ?? '',
+      username: session.mentee?.username ?? '',
+      fullName: session.mentee?.display_name ?? '',
+      avatarUrl: session.mentee?.picture_url ?? '',
+      role: 'mentee' as const,
+    },
+  }
+}
 
 
 export const Route = createFileRoute('/_authorized/dashboard')({
@@ -21,19 +52,22 @@ export const Route = createFileRoute('/_authorized/dashboard')({
 // UI HELPERS
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: Readonly<{ status: string }>) {
   let bg = 'bg-accent-muted text-ink border-line'
   let Icon = Clock
 
   if (status === 'PENDING') {
     bg = 'bg-yellow-50 text-yellow-700 border-yellow-200'
     Icon = Clock
-  } else if (status === 'ACCEPTED' || status === 'SCHEDULED') {
+  } else if (status === 'ACCEPTED' || status === 'SCHEDULED' || status === 'RESCHEDULED') {
     bg = 'bg-green-50 text-green-700 border-green-200'
     Icon = CheckCircle2
-  } else if (status === 'REJECTED' || status === 'CANCELLED') {
+  } else if (status === 'REJECTED' || status === 'CANCELLED' || status === 'CANCELED') {
     bg = 'bg-red-50 text-red-700 border-red-200'
     Icon = XCircle
+  } else if (status === 'COMPLETED') {
+    bg = 'bg-gray-100 text-gray-600 border-gray-200'
+    Icon = CheckCircle2
   }
 
   return (
@@ -44,8 +78,8 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function UserAvatar({ name }: { name: string }) {
-  const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2)
+function UserAvatar({ name }: Readonly<{ name: string }>) {
+  const initials = (name || '?').split(' ').map(n => n[0]).join('').substring(0, 2)
   const colors = [
     'bg-blue-100 text-blue-700', 
     'bg-emerald-100 text-emerald-700', 
@@ -69,22 +103,77 @@ function UserAvatar({ name }: { name: string }) {
 
 export function DashboardHome() {
 
-  const { data, isSuccess } = useQuery(meQueryOptions)
+  const { data } = useQuery(meQueryOptions)
+  const { data: notifications = [] } = useNotifications()
+  const { mutate: markAllRead } = useMarkAllNotificationsRead()
+  const queryClient = useQueryClient()
+
+  // Accumulate non-message notifications as they arrive via polling.
+  // Each poll only adds genuinely new ones; already-seen IDs are skipped.
+  // Marking as read happens immediately on arrival, separate from visibility.
+  const [visibleNotifications, setVisibleNotifications] = useState<Notification[]>([])
+  const seenIds = useRef<Set<string>>(new Set())
+  const isFirstRun = useRef(true)
+
+  useEffect(() => {
+    if (notifications.length === 0) return
+
+    const incoming = notifications.filter(n => !seenIds.current.has(n.id))
+    if (incoming.length === 0) return
+
+    incoming.forEach(n => seenIds.current.add(n.id))
+    const toShow = incoming.filter(n => !n.is_read)
+    if (toShow.length > 0) setVisibleNotifications(prev => [...prev, ...toShow])
+
+    const unreadIds = incoming.filter(n => n.type !== 'new_message' && !n.is_read).map(n => n.id)
+    if (unreadIds.length > 0) markAllRead(unreadIds)
+
+    if (isFirstRun.current) {
+      isFirstRun.current = false
+      return
+    }
+
+    const keysToInvalidate = new Set<string>()
+    for (const n of toShow) {
+      for (const key of NOTIFICATION_INVALIDATION_MAP[n.type]) {
+        keysToInvalidate.add(JSON.stringify(key))
+      }
+    }
+    keysToInvalidate.forEach(k => queryClient.invalidateQueries({ queryKey: JSON.parse(k) }))
+  }, [notifications, markAllRead, queryClient])
 
   const mode = (data?.app_usage_mode?.toLowerCase() as 'mentor' | 'mentee') ?? 'mentee'
   return (
     <div className="page-wrap py-10 rise-in flex flex-col gap-10">
-      {isSuccess && (
-          <p className="text-xs text-green-600">Logged in as: {data?.email}</p>
-      )}
-      <div className="flex flex-col gap-2">
-        <Heading as="h2">{mode === 'mentor' ? 'Mentor Dashboard' : 'Mentee Dashboard'}</Heading>
-        <Body className="text-ink-soft max-w-2xl">
-          {mode === 'mentor' 
-            ? 'Review incoming mentorship requests and manage your upcoming teaching sessions.' 
-            : 'Track your learning goals, view the status of your requests, and prepare for upcoming sessions.'}
-        </Body>
+      <div className="flex items-start justify-between gap-6">
+        <div className="flex flex-col gap-2">
+          <Heading as="h2">{mode === 'mentor' ? 'Mentor Dashboard' : 'Mentee Dashboard'}</Heading>
+          <Body className="text-ink-soft max-w-xl">
+            {mode === 'mentor'
+              ? 'Review incoming mentorship requests and manage your upcoming teaching sessions.'
+              : 'Track your learning goals, view the status of your requests, and prepare for upcoming sessions.'}
+          </Body>
+        </div>
+        {mode === 'mentor' && (
+          <Link to="/profiles/$username" params={{ username: data?.username ?? '' }} hash="availability" className="shrink-0 mt-1">
+            <Button variant="outline" size="sm">+ Add Availability</Button>
+          </Link>
+        )}
       </div>
+
+      {visibleNotifications.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <Heading as="h3" className="text-xl flex items-center gap-2">
+            <Bell className="w-5 h-5 text-accent" />
+            Notifications
+          </Heading>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {visibleNotifications.map(n => (
+              <NotificationItem key={n.id} notification={n} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {mode === 'mentor' ? <MentorDashboardView /> : <MenteeDashboardView />}
     </div>
@@ -97,8 +186,53 @@ export function DashboardHome() {
 
 function MenteeDashboardView() {
   const { data: me } = useQuery(meQueryOptions)
-  const { data: upcomingSessions = [], isLoading: sessionsLoading } = useUpcomingSessions()
+  const { data: upcomingSessions = [], isLoading: sessionsLoading } = useMeetingSessions({
+    role: 'mentee',
+    status: 'upcoming',
+  })
+  const { data: pastSessions = [] } = useMeetingSessions({
+    role: 'mentee',
+  })
   const { data: allRequests = [], isLoading: requestsLoading } = useMyRequests()
+
+  const [ratingMatchId, setRatingMatchId] = useState<string | null>(null)
+  const [ratingMentorName, setRatingMentorName] = useState('')
+
+  // Determine matches where the first session has fully passed and wasn't canceled.
+  // Only the earliest session per match qualifies — subsequent sessions do not.
+  const rateableMatches = useMemo(() => {
+    const now = new Date()
+    // LALALALALAAL
+    // CHANGE HERE IF YOU WNAT TO MAKE NON-PASS SESSIONS NOT-RATEABLE.
+    const eligible = pastSessions//.filter(
+   //   s => new Date(s.scheduled_end_at) < now && s.status !== 'CANCELED'
+  //  )
+    const firstStart: Record<string, string> = {}
+    for (const s of eligible) {
+      if (!firstStart[s.match_id] || s.scheduled_start_at < firstStart[s.match_id]) {
+        firstStart[s.match_id] = s.scheduled_start_at
+      }
+    }
+    const seen = new Set<string>()
+    return eligible.filter(s => {
+      if (s.scheduled_start_at === firstStart[s.match_id] && !seen.has(s.match_id)) {
+        seen.add(s.match_id)
+        return true
+      }
+      return false
+    })
+  }, [pastSessions])
+
+  // Fetch feedback for every rateable match in parallel to know which are already rated.
+  const feedbackQueries = useQueries({
+    queries: rateableMatches.map(s => matchFeedbackQueryOptions(s.match_id)),
+  })
+  const feedbackLoading = feedbackQueries.some(q => q.isLoading)
+
+  const pendingMatches = rateableMatches.filter((_, i) => {
+    const feedbacks = feedbackQueries[i]?.data
+    return !feedbacks?.some(f => f.submitted_by.username === me?.username)
+  })
 
   // Only show PENDING requests where I am the mentee
   const sentRequests = allRequests.filter(
@@ -108,14 +242,20 @@ function MenteeDashboardView() {
   const displaySessions = upcomingSessions.slice(0, 3)
 
   return (
+      <>
       <div className="grid grid-cols-1 lg:grid-cols-[5fr_4fr] gap-8 items-start">
 
-        {/* LEFT COLUMN: Sessions — unchanged from previous */}
+        {/* LEFT COLUMN: Sessions */}
         <div className="flex flex-col gap-8">
           <section className="space-y-5">
             <Heading as="h3" className="text-xl flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
+              {!sessionsLoading && upcomingSessions.length > 0 && (
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                  {upcomingSessions.length}
+                </span>
+              )}
             </Heading>
             <div className="flex flex-col gap-4">
               {sessionsLoading && (
@@ -126,19 +266,19 @@ function MenteeDashboardView() {
               {!sessionsLoading && displaySessions.length === 0 && (
                   <Card className="island-shell border-line bg-white shadow-sm">
                     <CardContent className="py-8 text-center">
-                      <Muted>No upcoming sessions in the next 7 days.</Muted>
+                      <Muted>No upcoming sessions yet.</Muted>
                     </CardContent>
                   </Card>
               )}
               {displaySessions.map(session => (
-                  <Card key={session.slot_id} className="island-shell border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
+                  <Card key={session.session_id} className="island-shell border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
                     <div className="bg-accent h-1.5 w-full" />
                     <CardHeader className="pb-3">
                       <div className="flex justify-between items-start gap-4">
                         <CardTitle className="text-lg leading-tight">
                           Session with {session.mentor.display_name}
                         </CardTitle>
-                        <StatusBadge status={session.status} />
+                        <StatusBadge status={session.display_status} />
                       </div>
                     </CardHeader>
                     <CardContent className="flex items-center justify-between gap-4">
@@ -161,21 +301,22 @@ function MenteeDashboardView() {
                           )}
                           <Muted className="text-sm flex items-center gap-1.5 mt-0.5">
                             <Clock className="w-3.5 h-3.5" />
-                            {new Date(`${session.slot_date}T00:00:00`).toLocaleDateString('en-GB', {
-                              weekday: 'short', day: 'numeric', month: 'short'
-                            })}
+                            {formatSessionDate(session.scheduled_start_at)}
                             {' · '}
-                            {session.slot_start_time.slice(0, 5)} – {session.slot_end_time.slice(0, 5)}
+                            {formatSessionTime(session.scheduled_start_at)} – {formatSessionTime(session.scheduled_end_at)}
                           </Muted>
                         </div>
                       </div>
-                      <Link
-                          to="/profiles/$username"
-                          params={{ username: session.mentor.username }}
-                          className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
-                      >
-                        View profile
-                      </Link>
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <Link
+                            to="/profiles/$username"
+                            params={{ username: session.mentor.username }}
+                            className="text-xs text-accent hover:underline underline-offset-4"
+                        >
+                          View profile
+                        </Link>
+                        <SessionManagementModal session={toSessionManagementData(session)} />
+                      </div>
                     </CardContent>
                   </Card>
               ))}
@@ -189,12 +330,79 @@ function MenteeDashboardView() {
               </Link>
             </div>
           </section>
+
+          {/* Rate Your Mentors — only shown while there are unrated matches */}
+          {(feedbackLoading || pendingMatches.length > 0) && (
+            <section className="space-y-5">
+              <Heading as="h3" className="text-xl flex items-center gap-2">
+                <Star className="w-5 h-5 text-amber-500" />
+                Rate Your Mentors
+                {!feedbackLoading && (
+                  <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
+                    {pendingMatches.length}
+                  </span>
+                )}
+              </Heading>
+              {feedbackLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
+                </div>
+              ) : (
+              <div className="flex flex-col gap-3">
+                {pendingMatches.map(session => (
+                  <Card key={session.match_id} className="island-shell border-line bg-white shadow-sm">
+                    <CardContent className="py-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        {session.mentor.picture_url ? (
+                          <img
+                            src={session.mentor.picture_url}
+                            alt={session.mentor.display_name}
+                            className="h-10 w-10 rounded-full object-cover border border-white/50 shadow-sm"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-sm font-bold shrink-0 border border-white/50 shadow-sm">
+                            {getInitials(session.mentor.display_name)}
+                          </div>
+                        )}
+                        <div>
+                          <Body className="font-medium">{session.mentor.display_name}</Body>
+                          <Muted className="text-xs">
+                            Session ended · {formatSessionDate(session.scheduled_end_at)}
+                          </Muted>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 border-amber-300 text-amber-700 hover:bg-amber-50"
+                        onClick={() => {
+                          setRatingMatchId(session.match_id)
+                          setRatingMentorName(session.mentor.display_name)
+                        }}
+                      >
+                        <Star className="w-3.5 h-3.5 mr-1.5" />
+                        Rate
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              )}
+            </section>
+          )}
         </div>
 
         {/* RIGHT COLUMN: Sent Requests */}
         <div className="flex flex-col gap-8">
           <section className="space-y-5">
-            <Heading as="h3" className="text-xl">Sent Requests</Heading>
+            <Heading as="h3" className="text-xl flex items-center gap-2">
+              Sent Requests
+              {!requestsLoading && sentRequests.length > 0 && (
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                  {sentRequests.length}
+                </span>
+              )}
+            </Heading>
             <div className="flex flex-col gap-4">
               {requestsLoading && (
                   <div className="flex justify-center py-8">
@@ -204,8 +412,11 @@ function MenteeDashboardView() {
 
               {!requestsLoading && sentRequests.length === 0 && (
                   <Card className="island-shell border-line bg-white shadow-sm">
-                    <CardContent className="py-8 text-center">
+                    <CardContent className="py-8 text-center flex flex-col items-center gap-3">
                       <Muted>No pending requests right now.</Muted>
+                      <Link to="/discover">
+                        <Button variant="outline" size="sm">Find a Mentor <ArrowRight className="w-3.5 h-3.5 ml-1.5" /></Button>
+                      </Link>
                     </CardContent>
                   </Card>
               )}
@@ -257,7 +468,7 @@ function MenteeDashboardView() {
                                         </span>
                       </div>
                       {req.cover_letter && (
-                          <div className="bg-black/[0.03] rounded-lg p-4 border border-line/50">
+                          <div className="bg-black/3 rounded-lg p-4 border border-line/50">
                             <Muted className="line-clamp-3 italic text-sm text-ink-soft leading-relaxed">
                               "{req.cover_letter}"
                             </Muted>
@@ -271,6 +482,15 @@ function MenteeDashboardView() {
         </div>
 
       </div>
+
+      {ratingMatchId && (
+        <RatingModal
+          matchId={ratingMatchId}
+          mentorName={ratingMentorName}
+          onClose={() => setRatingMatchId(null)}
+        />
+      )}
+      </>
   )
 }
 
@@ -284,12 +504,10 @@ function MentorDashboardView() {
   const { data: me } = useQuery(meQueryOptions)
   const { data: allRequests = [], isLoading: requestsLoading } = useMyRequests()
   const respondToRequest = useRespondToRequest()
-
-  const {
-    sessions: upcomingSessions,
-    profilesByUsername,
-    isLoading: sessionsLoading,
-  } = useMentorUpcomingSessions(me?.username ?? '')
+  const { data: upcomingSessions = [], isLoading: sessionsLoading } = useMeetingSessions({
+    role: 'mentor',
+    status: 'upcoming',
+  })
 
   const pendingRequests = allRequests.filter(
       req => req.status === 'PENDING' && req.mentor.username === me?.username
@@ -306,12 +524,21 @@ function MentorDashboardView() {
               ...prev,
               [requestId]: action === 'accept' ? 'ACCEPTED' : 'REJECTED',
             }))
+            if (action === 'accept') {
+              toast.success('Request accepted', {
+                description: 'The mentee has been notified and the session is confirmed.',
+              })
+            } else {
+              toast.warning('Request declined', {
+                description: 'The mentee has been notified.',
+              })
+            }
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'requests'] })
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'matches'] })
-            if (me?.username) {
-              queryClient.invalidateQueries({ queryKey: ['profiles', me.username] })
-              queryClient.invalidateQueries({ queryKey: ['availability-slots', me.username] })
-            }
+            queryClient.invalidateQueries({ queryKey: ['mentorship', 'meeting-sessions', 'me'] })
+          },
+          onError: (err) => {
+            toast.error(err.message)
           },
         }
     )
@@ -326,6 +553,11 @@ function MentorDashboardView() {
             <Heading as="h3" className="text-xl flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
+              {!sessionsLoading && upcomingSessions.length > 0 && (
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                  {upcomingSessions.length}
+                </span>
+              )}
             </Heading>
             <div className="flex flex-col gap-4">
               {sessionsLoading && (
@@ -336,20 +568,20 @@ function MentorDashboardView() {
 
               {!sessionsLoading && upcomingSessions.length === 0 && (
                   <Card className="island-shell border-line bg-white shadow-sm">
-                    <CardContent className="py-8 text-center">
+                    <CardContent className="py-8 text-center flex flex-col items-center gap-3">
                       <Muted>No upcoming sessions in the next 7 days.</Muted>
+                      <Link to="/profiles/$username" params={{ username: me?.username ?? '' }} hash="availability">
+                        <Button variant="outline" size="sm">+ Add Availability</Button>
+                      </Link>
                     </CardContent>
                   </Card>
               )}
 
-              {upcomingSessions.slice(0, 3).map(slot => {
-                const menteeProfile = slot.bookedBy
-                    ? profilesByUsername[slot.bookedBy]
-                    : null
-                const displayName = menteeProfile?.full_name ?? slot.bookedBy ?? 'Unknown'
+              {upcomingSessions.slice(0, 3).map(session => {
+                const displayName = session.mentee.display_name
 
                 return (
-                    <Card key={slot.id} className="island-shell border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
+                    <Card key={session.session_id} className="island-shell border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
                       <div className="bg-accent h-1.5 w-full" />
                       <CardHeader className="pb-3">
                         <CardTitle className="text-lg leading-tight">
@@ -358,9 +590,9 @@ function MentorDashboardView() {
                       </CardHeader>
                       <CardContent className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
-                          {menteeProfile?.picture_url ? (
+                          {session.mentee.picture_url ? (
                               <img
-                                  src={menteeProfile.picture_url}
+                                  src={session.mentee.picture_url}
                                   alt={displayName}
                                   className="h-11 w-11 rounded-full object-cover border border-white/50 shadow-sm"
                               />
@@ -373,23 +605,24 @@ function MentorDashboardView() {
                             <Body className="font-medium">{displayName}</Body>
                             <Muted className="text-sm flex items-center gap-1.5 mt-0.5">
                               <Clock className="w-3.5 h-3.5" />
-                              {new Date(`${slot.date}T00:00:00`).toLocaleDateString('en-GB', {
-                                weekday: 'short', day: 'numeric', month: 'short'
-                              })}
+                              {formatSessionDate(session.scheduled_start_at)}
                               {' · '}
-                              {slot.startTime.slice(0, 5)} – {slot.endTime.slice(0, 5)}
+                              {formatSessionTime(session.scheduled_start_at)} – {formatSessionTime(session.scheduled_end_at)}
                             </Muted>
                           </div>
                         </div>
-                        {slot.bookedBy && (
-                            <Link
-                                to="/profiles/$username"
-                                params={{ username: slot.bookedBy }}
-                                className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
-                            >
-                              View profile
-                            </Link>
-                        )}
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          {session.mentee.username && (
+                              <Link
+                                  to="/profiles/$username"
+                                  params={{ username: session.mentee.username }}
+                                  className="text-xs text-accent hover:underline underline-offset-4"
+                              >
+                                View profile
+                              </Link>
+                          )}
+                          <SessionManagementModal session={toSessionManagementData(session)} />
+                        </div>
                       </CardContent>
                     </Card>
                 )
@@ -410,7 +643,14 @@ function MentorDashboardView() {
         {/* RIGHT COLUMN: Incoming Requests — unchanged */}
         <div className="flex flex-col gap-10">
           <section className="space-y-5">
-            <Heading as="h3" className="text-xl">Incoming Requests</Heading>
+            <Heading as="h3" className="text-xl flex items-center gap-2">
+              Incoming Requests
+              {!requestsLoading && displayRequests.length > 0 && (
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                  {pendingRequests.length}
+                </span>
+              )}
+            </Heading>
             <div className="flex flex-col gap-4">
               {requestsLoading && (
                   <div className="flex justify-center py-8">
@@ -424,6 +664,7 @@ function MentorDashboardView() {
                     </CardContent>
                   </Card>
               )}
+
               {displayRequests.map(req => {
                 const responded = respondedIds[req.id]
                 return (
@@ -464,7 +705,7 @@ function MentorDashboardView() {
                                             </span>
                         </div>
                         {req.cover_letter && (
-                            <div className="bg-black/[0.03] p-4 rounded-lg border border-line/50">
+                            <div className="bg-black/3 p-4 rounded-lg border border-line/50">
                               <Body className="text-ink-soft text-sm leading-relaxed italic">
                                 "{req.cover_letter}"
                               </Body>
@@ -513,4 +754,20 @@ function MentorDashboardView() {
         </div>
       </div>
   )
+}
+
+function formatSessionDate(value: string): string {
+  return new Date(value).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
+function formatSessionTime(value: string): string {
+  return new Date(value).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }

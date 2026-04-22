@@ -3,71 +3,72 @@
  * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
  */
 
-import { Platform } from 'react-native';
+import { Platform } from "react-native";
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+const tintColorLight = "#4a7c6f";
+const tintColorDark = "#88c4b8";
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
+    text: "#1c1c18",
+    background: "#faf8f4",
     tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
+    icon: "#6b6456",
+    tabIconDefault: "#6b6456",
     tabIconSelected: tintColorLight,
-    // Brand tokens — used by login and future auth screens
-    primary: '#004ac6',
-    surfaceBase: '#f7f9fb',
-    inputBackground: '#e6e8ea',
-    cardBackground: '#ffffff',
-    surfaceActive: '#e8eeff', // selected / active row background (light)
-    textPrimary: '#191c1e',
-    textSoft: '#434655',
-    textMuted: '#737686',
-    divider: '#c3c6d7',
+    // Brand tokens tuned to match web's warm-neutral + dusty teal palette
+    primary: "#4a7c6f",
+    surfaceBase: "#faf8f4",
+    inputBackground: "#f5f0e8",
+    cardBackground: "#ffffff",
+    surfaceActive: "#e8f2f0", // selected / active row background (light)
+    textPrimary: "#1c1c18",
+    textSoft: "#6b6456",
+    textMuted: "#8a8172",
+    divider: "#ddd6c9",
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
+    text: "#f0ece4",
+    background: "#14120e",
     tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
+    icon: "#b8ad9a",
+    tabIconDefault: "#b8ad9a",
     tabIconSelected: tintColorDark,
-    // Brand tokens — used by login and future auth screens
-    primary: '#4a80e8',
-    surfaceBase: '#0f1214',
-    inputBackground: '#1e2530',
-    cardBackground: '#141920',
-    surfaceActive: '#1c253d', // selected / active row background (dark)
-    textPrimary: '#e2e8f0',
-    textSoft: '#94a3b8',
-    textMuted: '#4a5568',
-    divider: '#2d3748',
+    // Brand tokens tuned to match web dark palette
+    primary: "#6db0a2",
+    surfaceBase: "#14120e",
+    inputBackground: "#1e1c16",
+    cardBackground: "#1a1710",
+    surfaceActive: "#0f201e", // selected / active row background (dark)
+    textPrimary: "#f0ece4",
+    textSoft: "#b8ad9a",
+    textMuted: "#948a79",
+    divider: "#353024",
   },
 };
 
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
+    sans: "system-ui",
     /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
+    serif: "ui-serif",
     /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
+    rounded: "ui-rounded",
     /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
+    mono: "ui-monospace",
   },
   default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
+    sans: "normal",
+    serif: "serif",
+    rounded: "normal",
+    mono: "monospace",
   },
   web: {
     sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
     serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
+    rounded:
+      "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
   },
 });

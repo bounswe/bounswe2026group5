@@ -29,7 +29,7 @@ export function EditProfileModal({
   onClose,
   initialData,
   onSave,
-}: EditProfileModalProps) {
+}: Readonly<EditProfileModalProps>) {
   const insets = useSafeAreaInsets();
 
   const [name, setName] = useState("");
@@ -65,6 +65,7 @@ export function EditProfileModal({
         {/* Header */}
         <View className="flex-row justify-between items-center px-6 py-4 border-b border-gray-100 mb-2">
           <TouchableOpacity
+            testID="close-button"
             onPress={onClose}
             className="p-2 -ml-2"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -75,6 +76,7 @@ export function EditProfileModal({
             Edit Profile
           </Text>
           <TouchableOpacity
+            testID="save-button"
             onPress={handleSave}
             className="bg-gray-900 px-5 py-2 rounded-full"
           >
@@ -137,6 +139,7 @@ export function EditProfileModal({
                   Full Name
                 </Text>
                 <TextInput
+                  testID="name-input"
                   value={name}
                   onChangeText={setName}
                   placeholder="Enter your name"
@@ -154,15 +157,16 @@ export function EditProfileModal({
                 <View className="flex-row justify-between items-end mb-2 ml-1 mr-1">
                   <Text className="text-sm font-bold text-gray-700">Bio</Text>
                   <Text className="text-xs text-gray-400 font-medium">
-                    {bio.length}/150
+                    {bio.length}/500
                   </Text>
                 </View>
                 <TextInput
+                  testID="bio-input"
                   value={bio}
                   onChangeText={setBio}
                   placeholder="Tell mentees about yourself..."
                   multiline={true}
-                  maxLength={150}
+                  maxLength={500}
                   textAlignVertical="top"
                   className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-4 text-base text-gray-900 h-32"
                 />

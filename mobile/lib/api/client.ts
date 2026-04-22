@@ -15,6 +15,18 @@ export class ApiError extends Error {
 }
 
 /**
+ * Error type thrown when an API request fails with field-specific validation errors (400 Bad Request).
+ */
+export class ApiValidationError extends ApiError {
+  fieldErrors: Record<string, string>;
+
+  constructor(status: number, message: string, fieldErrors: Record<string, string>) {
+    super(status, message);
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+/**
  * Perform a typed GET request against the backend API.
  * Uses the access token from auth store.
  *
@@ -100,6 +112,41 @@ export async function apiPatch<TResponse, TPayload>(
   if (!response.ok) {
     const message = await readErrorMessage(response);
     throw new ApiError(response.status, message);
+  }
+
+  return (await response.json()) as TResponse;
+}
+
+/**
+ * Perform a typed PUT request against the backend API.
+ * Uses the access token from auth store.
+ *
+ * @param path Relative API path (e.g. /api/notifications/<id>/read/)
+ * @param payload Optional JSON payload
+ */
+export async function apiPut<TResponse, TPayload = unknown>(
+  path: string,
+  payload?: TPayload,
+): Promise<TResponse> {
+  const accessToken = useAuthStore.getState().accessToken;
+
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  if (response.status === 204) {
+    return undefined as TResponse;
   }
 
   return (await response.json()) as TResponse;

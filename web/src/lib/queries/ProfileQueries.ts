@@ -1,26 +1,13 @@
+import { throwApiError } from "#/lib/apiError.ts"
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query"
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 // ---- Types ----
 
-export interface Skill {
-    id: number
-    name: string
-}
+
 
 // GET response types
-export interface AvailabilitySlot {
-    id: string
-    date: string
-    startTime: string
-    endTime: string
-    is_booked: boolean
-    bookedBy: string | null
-    bookedAt: string | null
-    created_at: string
-    updated_at: string
-}
 
 export interface MenteeProfile {
     id: string
@@ -28,7 +15,8 @@ export interface MenteeProfile {
     bio: string
     hidden: boolean
     picture_url: string
-    eager_to_learn: string[] | null
+    skills: string[] | null
+    app_usage_mode: "MENTOR" | "MENTEE"
 }
 
 export interface MentorProfile {
@@ -38,18 +26,17 @@ export interface MentorProfile {
     hidden: boolean
     picture_url: string
     title: string
-    expertises: string[] | null
-    rating: number
+    skills: string[] | null
+    average_rating: number
     total_mentee_count: number
-    available_slots: AvailabilitySlot[]
+    app_usage_mode: "MENTOR" | "MENTEE"
 }
 
 export type ProfileResponse = MenteeProfile | MentorProfile
 
 export function isMentorProfile(p: ProfileResponse): p is MentorProfile {
-    return 'available_slots' in p
+    return 'total_mentee_count' in p
 }
-
 // PATCH request body
 export interface UpdateProfileBody {
     display_name?: string
@@ -59,8 +46,7 @@ export interface UpdateProfileBody {
     location?: string
     is_visible?: boolean
     show_initials_only?: boolean
-    expertises?: string[]
-    eager_to_learn?: string[]
+    skills?: string[]
 }
 
 // ---- Fetchers ----
@@ -70,13 +56,24 @@ async function fetchProfile(username: string): Promise<ProfileResponse> {
     const res = await fetch(`${API_BASE_URL}/profiles/${username}/`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-    if (!res.ok) throw new Error(`${res.status}`)
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
-async function patchProfile(username: string, body: UpdateProfileBody): Promise<void> {
+export type OwnProfileResponse = ProfileResponse & { available_catalog_skills?: string[] }
+
+async function fetchOwnProfile(): Promise<OwnProfileResponse> {
     const token = localStorage.getItem('access_token')
-    const res = await fetch(`${API_BASE_URL}/profiles/${username}/`, {
+    const res = await fetch(`${API_BASE_URL}/profiles/me/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
+async function patchProfile(body: UpdateProfileBody): Promise<void> {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`${API_BASE_URL}/profiles/me/`, {
         method: 'PATCH',
         headers: {
             'Content-Type': 'application/json',
@@ -84,7 +81,7 @@ async function patchProfile(username: string, body: UpdateProfileBody): Promise<
         },
         body: JSON.stringify(body),
     })
-    if (!res.ok) throw new Error('Failed to update profile')
+    if (!res.ok) await throwApiError(res)
 }
 
 // ---- Query Options ----
@@ -97,17 +94,11 @@ export const profileQueryOptions = (username: string) =>
         gcTime: Infinity,
     })
 
-export const skillsQueryOptions = queryOptions({
-    queryKey: ['skills'],
-    queryFn: async () => {
-        const token = localStorage.getItem('access_token')
-        const res = await fetch(`${API_BASE_URL}/profiles/skills/`, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
-        if (!res.ok) throw new Error('Failed to fetch skills')
-        return res.json() as Promise<Skill[]>
-    },
-    staleTime: Infinity,
+export const ownProfileQueryOptions = queryOptions({
+    queryKey: ['profiles', 'me'],
+    queryFn: fetchOwnProfile,
+    staleTime: 5 * 60 * 1000,
+    gcTime: Infinity,
 })
 
 // ---- Custom Hooks ----
@@ -116,8 +107,62 @@ export function useProfile(username: string) {
     return useQuery(profileQueryOptions(username))
 }
 
-export function useUpdateProfile(username: string) {
+export function useOwnProfile() {
+    return useQuery(ownProfileQueryOptions)
+}
+
+export function useUpdateProfile() {
     return useMutation({
-        mutationFn: (body: UpdateProfileBody) => patchProfile(username, body),
+        mutationFn: (body: UpdateProfileBody) => patchProfile(body),
+    })
+}
+
+async function patchUsername(newUsername: string): Promise<void> {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`${API_BASE_URL}/profiles/me/username/`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ username: newUsername }),
+    })
+    if (!res.ok) await throwApiError(res)
+}
+
+export function useUpdateUsername() {
+    return useMutation({
+        mutationFn: (newUsername: string) => patchUsername(newUsername),
+    })
+}
+
+// ---- Public mentor reviews ----
+
+export interface PublicReview {
+    rating: number
+    text: string
+    created_at: string
+}
+
+export interface PublicReviewsResponse {
+    count: number
+    page: number
+    pageSize: number
+    results: PublicReview[]
+}
+
+async function fetchMentorReviews(username: string, page: number, pageSize: number): Promise<PublicReviewsResponse> {
+    const res = await fetch(
+        `${API_BASE_URL}/profiles/${username}/reviews/?page=${page}&pageSize=${pageSize}`,
+    )
+    if (!res.ok) throw new Error('Failed to fetch reviews')
+    return res.json()
+}
+
+export function useMentorReviews(username: string, page = 1, pageSize = 6) {
+    return useQuery({
+        queryKey: ['profiles', username, 'reviews', page],
+        queryFn: () => fetchMentorReviews(username, page, pageSize),
+        staleTime: 5 * 60 * 1000,
     })
 }

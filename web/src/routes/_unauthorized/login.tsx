@@ -1,8 +1,5 @@
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
+import { Body, Display, Heading, Muted } from "@/components/Typography"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Search, CalendarDays, TrendingUp } from 'lucide-react'
 import {
     Card,
     CardContent,
@@ -11,13 +8,15 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-import { Heading, Muted, Body, Display } from "@/components/Typography"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
+import { CalendarDays, Search, TrendingUp } from 'lucide-react'
 
 // DEMO BYPASS IMPORT - FUTURE: Delete this once real auth is merged
-import { setDemoAuthRole } from '@/lib/demoAuth'
-import {handleAuthSuccess, loginFn} from "#/lib/queries/AuthQueries.ts";
-import {useMutation} from "@tanstack/react-query";
-import {useState} from "react";
+import { handleAuthSuccess, loginFn } from "#/lib/queries/AuthQueries.ts"
+import { useMutation } from "@tanstack/react-query"
+import { useState } from "react"
 
 const FEATURES = [
     { icon: Search,      title: 'Find tutors',    desc: 'Browse verified tutors from your campus' },
@@ -26,10 +25,10 @@ const FEATURES = [
 ]
 
 export const Route = createFileRoute('/_unauthorized/login')({
-    component: RouteComponent,
+    component: LoginPage,
 })
 
-function RouteComponent() {
+export function LoginPage() {
     const router = useRouter()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -44,7 +43,7 @@ function RouteComponent() {
         }
     })
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
         e.preventDefault()
         login.mutate({ email, password })
     }

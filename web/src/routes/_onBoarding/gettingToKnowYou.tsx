@@ -1,13 +1,13 @@
-import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
-import { Heading, Subheading, Muted } from "#/components/Typography.tsx"
-import { Input } from "#/components/ui/input.tsx"
-import { Button } from "#/components/ui/button.tsx"
-import { Textarea } from "#/components/ui/textarea.tsx"
 import { SkillPicker } from "#/components/SkillPicker.tsx"
-import {useQuery, useQueryClient} from "@tanstack/react-query"
-import { meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/AuthQueries.ts"
-import { useUpdateProfile } from "#/lib/queries/ProfileQueries.ts"
+import { Heading, Muted, Subheading } from "#/components/Typography.tsx"
+import { Button } from "#/components/ui/button.tsx"
+import { Input } from "#/components/ui/input.tsx"
+import { Textarea } from "#/components/ui/textarea.tsx"
+import { logout, meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/AuthQueries.ts"
+import { useOwnProfile, useUpdateProfile, useUpdateUsername } from "#/lib/queries/ProfileQueries.ts"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { createFileRoute, useRouter } from '@tanstack/react-router'
+import { useState, useEffect } from 'react'
 
 export const Route = createFileRoute('/_onBoarding/gettingToKnowYou')({
     loader: ({ context }) => context.queryClient.ensureQueryData(meQueryOptions),
@@ -25,6 +25,7 @@ type UserAnswers = {
     bio: string
     learnSkills: string[]
     teachSkills: string[]
+    username: string
 }
 
 type Question = {
@@ -32,7 +33,7 @@ type Question = {
     question: string
     clarification: string
     mutedText?: string
-    type: 'text' | 'textarea' | 'choice' | 'skills'
+    type: 'text' | 'textarea' | 'choice' | 'skills' | 'username'
     skillsKey?: 'learnSkills' | 'teachSkills'
     validate: (answers: UserAnswers) => string | null
 }
@@ -100,9 +101,21 @@ const MENTOR_QUESTIONS: Question[] = [
     },
 ]
 
+const USERNAME_QUESTION: Question = {
+    key: 'username',
+    question: "Choose a username.",
+    clarification: "Your username is separate from your display name and identifies your public profile.",
+    type: 'username',
+    validate: ({ username }) => {
+        if (username.trim().length < 3) return "Username must be at least 3 characters."
+        if (!/^[a-zA-Z0-9_-]+$/.test(username)) return "Username can only contain letters, numbers, underscores, and hyphens."
+        return null
+    },
+}
+
 function getQuestions(primaryUsage: UserAnswers['primaryUsage']): Question[] {
-    if (primaryUsage === 'mentor') return [...BASE_QUESTIONS, ...MENTOR_QUESTIONS]
-    return [...BASE_QUESTIONS, ...MENTEE_QUESTIONS]
+    const skillsQuestions = primaryUsage === 'mentor' ? MENTOR_QUESTIONS : MENTEE_QUESTIONS
+    return [...BASE_QUESTIONS, ...skillsQuestions, USERNAME_QUESTION]
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +125,7 @@ function getQuestions(primaryUsage: UserAnswers['primaryUsage']): Question[] {
 function RouteComponent() {
     const router = useRouter()
     const { data: me } = useQuery(meQueryOptions)
+    const { data: profileData } = useOwnProfile()
     const queryClient = useQueryClient();
 
     const [activeIndex, setActiveIndex] = useState(0)
@@ -122,20 +136,31 @@ function RouteComponent() {
         bio: '',
         learnSkills: [],
         teachSkills: [],
+        username: '',
     })
     const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (me?.email) {
+            setAnswers(prev => ({
+                ...prev,
+                username: prev.username || me.email.split('@')[0],
+            }))
+        }
+    }, [me?.email])
 
     const questions = getQuestions(answers.primaryUsage)
     const current = questions[activeIndex]
 
     const updateUsageMode = useUpdateAppUsageMode()
-    const updateProfile = useUpdateProfile(me?.username ?? '')
+    const updateProfile = useUpdateProfile()
+    const updateUsername = useUpdateUsername()
 
-    const isSubmitting = updateUsageMode.isPending || updateProfile.isPending
-    const submitError = updateUsageMode.error?.message || updateProfile.error?.message
+    const isSubmitting = updateUsageMode.isPending || updateProfile.isPending || updateUsername.isPending
+    const submitError = updateUsageMode.error?.message || updateProfile.error?.message || updateUsername.error?.message
 
     const handleFinish = () => {
-        if (!me?.id || !me?.username) return
+        if (!me?.username) return
 
         const skills = answers.primaryUsage === 'mentor'
             ? answers.teachSkills
@@ -143,7 +168,6 @@ function RouteComponent() {
 
         updateUsageMode.mutate(
             {
-                userId: me.id,
                 app_usage_mode: answers.primaryUsage.toUpperCase() as 'MENTEE' | 'MENTOR',
             },
             {
@@ -152,13 +176,19 @@ function RouteComponent() {
                         {
                             display_name: `${answers.firstName} ${answers.lastName}`.trim(),
                             bio: answers.bio,
-                            expertises: answers.primaryUsage === 'mentor' ? skills : undefined,
-                            eager_to_learn: answers.primaryUsage === 'mentee' ? skills : undefined,
+                            skills: skills,
                         },
                         {
                             onSuccess: () => {
-                                queryClient.invalidateQueries({ queryKey: ['me'] })
-                                router.navigate({ to: '/dashboard' })
+                                updateUsername.mutate(
+                                    answers.username,
+                                    {
+                                        onSuccess: () => {
+                                            queryClient.invalidateQueries({ queryKey: ['me'] })
+                                            router.navigate({ to: '/dashboard' })
+                                        },
+                                    }
+                                )
                             },
                         }
                     )
@@ -181,6 +211,10 @@ function RouteComponent() {
 
     const handleBack = () => {
         setError(null)
+        if (activeIndex === 0) {
+            logout()
+            return
+        }
         setActiveIndex(i => i - 1)
     }
 
@@ -255,9 +289,30 @@ function RouteComponent() {
                         </div>
                     )}
 
+                    {current.type === 'username' && (
+                        <div className="flex flex-col gap-2">
+                            <Input
+                                className="bg-background"
+                                placeholder="username"
+                                value={answers.username}
+                                onChange={e =>
+                                    setAnswers(prev => ({ ...prev, username: e.target.value }))
+                                }
+                                onKeyDown={e => e.key === 'Enter' && handleNext()}
+                            />
+                            <div className="flex flex-col gap-0.5">
+                                <Muted className="text-xs">Your profile URL will be:</Muted>
+                                <Muted className="text-sm font-mono">
+                                    https://neighborship.app/profiles/{answers.username || '...'}
+                                </Muted>
+                            </div>
+                        </div>
+                    )}
+
                     {current.type === 'skills' && current.skillsKey && (
                         <SkillPicker
                             selected={answers[current.skillsKey]}
+                            available={profileData?.available_catalog_skills ?? []}
                             onChange={skills => setAnswers(prev => ({ ...prev, [current.skillsKey!]: skills }))}
                             mode={answers.primaryUsage === 'mentor' ? 'mentor' : 'mentee'}
                         />
@@ -272,7 +327,7 @@ function RouteComponent() {
                     <Button
                         variant="ghost"
                         onClick={handleBack}
-                        disabled={activeIndex === 0 || isSubmitting}
+                        disabled={isSubmitting}
                         className="text-muted-foreground"
                     >
                         ← Back

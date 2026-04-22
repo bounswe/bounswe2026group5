@@ -1,31 +1,30 @@
-import React, { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, Stack } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { SettingItem } from "@/components/settings/SettingItem";
-import { useLogoutMutation } from "@/lib/queries/auth";
+import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { SuccessCard } from "@/components/ui/SuccessCard";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
 import { useProfileVisibilityStore } from "@/lib/profile/preferences";
-import { API_BASE_URL } from "@/constants/api";
-
-type UsageMode = "MENTOR" | "MENTEE" | "BOTH";
-
-function includesMentor(mode?: string): boolean {
-  return mode === "MENTOR" || mode === "BOTH";
-}
-
-function includesMentee(mode?: string): boolean {
-  return mode === "MENTEE" || mode === "BOTH";
-}
+import { useLogoutMutation } from "@/lib/queries/auth";
+import { Ionicons } from "@expo/vector-icons";
+import { Stack, useRouter } from "expo-router";
+import React, { useState } from "react";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const logoutMutation = useLogoutMutation();
   const authUser = useAuthStore((state) => state.user);
-  const accessToken = useAuthStore((state) => state.accessToken);
-  const updateUser = useAuthStore((state) => state.updateUser);
+  const colorScheme = useColorScheme() ?? "light";
+  const theme = Colors[colorScheme];
+
+  const isMentor = authUser?.app_usage_mode === "MENTOR";
+  const isMentee = authUser?.app_usage_mode === "MENTEE";
+  const showMentorVisibilityControls = !authUser?.app_usage_mode || isMentor;
+  const showMenteeVisibilityControls = !authUser?.app_usage_mode || isMentee;
 
   const showExpertise = useProfileVisibilityStore(
     (state) => state.showExpertise,
@@ -52,127 +51,48 @@ export default function SettingsScreen() {
     (state) => state.setShowOfferings,
   );
 
-  const [roleState, setRoleState] = useState({
-    mentor: includesMentor(authUser?.app_usage_mode),
-    mentee: includesMentee(authUser?.app_usage_mode),
-  });
+  let roleModeLabel = "Not Set";
+  if (authUser?.app_usage_mode === "MENTOR") {
+    roleModeLabel = "Mentor";
+  } else if (authUser?.app_usage_mode === "MENTEE") {
+    roleModeLabel = "Mentee";
+  }
+
+  const roleModeDescription = authUser?.app_usage_mode
+    ? "Account role is fixed. Use a separate account to use the other role."
+    : "Choose your account role during onboarding.";
 
   const [prefs, setPrefs] = useState({
     notifRequests: true,
     notifReminders: true,
     notifUpdates: false,
   });
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
 
   const togglePref = (key: keyof typeof prefs) => {
     setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const syncUsageMode = async (mode: UsageMode) => {
-    if (!authUser?.id || !accessToken) {
-      return;
-    }
-
-    if (mode === "BOTH") {
-      await updateUser({ app_usage_mode: "BOTH" });
-      return;
-    }
-
-    const response = await fetch(
-      `${API_BASE_URL}/api/auth/${encodeURIComponent(authUser.id)}/app-usage-mode/`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ app_usage_mode: mode }),
-      },
-    );
-
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => ({}))) as {
-        detail?: string;
-      };
-      throw new Error(payload.detail || "Failed to update app usage mode.");
-    }
-
-    await updateUser({ app_usage_mode: mode });
-  };
-
-  const handleRoleToggle = async (key: "mentor" | "mentee", value: boolean) => {
-    const next = {
-      ...roleState,
-      [key]: value,
-    };
-
-    if (!next.mentor && !next.mentee) {
-      Alert.alert("Role Required", "At least one role must remain enabled.");
-      return;
-    }
-
-    let nextMode: UsageMode = "MENTEE";
-    if (next.mentor && next.mentee) {
-      nextMode = "BOTH";
-    } else if (next.mentor) {
-      nextMode = "MENTOR";
-    }
-
-    try {
-      await syncUsageMode(nextMode);
-      setRoleState(next);
-    } catch (error) {
-      Alert.alert(
-        "Update Failed",
-        error instanceof Error ? error.message : "Could not update role mode.",
-      );
-    }
-  };
-
   const handleLogout = () => {
-    Alert.alert("Log Out", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await logoutMutation.mutateAsync();
-            router.replace("/login");
-          } catch (error) {
-            console.error("Logout failed:", error);
-            Alert.alert("Error", "Failed to log out. Please try again.");
-          }
-        },
-      },
-    ]);
+    setShowLogoutConfirmation(true);
   };
 
   const handleAccountDeletion = () => {
-    Alert.alert(
-      "Delete Account",
-      "Are you sure you want to permanently delete your account? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => console.log("Account deleted"),
-        },
-      ],
-    );
+    setShowDeleteConfirmation(true);
   };
 
   return (
-    <View className="flex-1 bg-gray-50">
-      {/* 1. FORCE HIDE DEFAULT HEADER */}
+    <View className="flex-1 bg-surface dark:bg-surface-dark">
       <Stack.Screen
         options={{ headerShown: false, headerBackVisible: false }}
       />
 
-      {/* 2. ONLY ONE CUSTOM HEADER */}
       <View
-        className="bg-white z-10 shadow-sm border-b border-gray-100"
+        className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
         style={{ paddingTop: insets.top }}
       >
         <View className="flex-row items-center px-4 pb-3 pt-2">
@@ -181,9 +101,11 @@ export default function SettingsScreen() {
             className="p-2 -ml-2 mr-2"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="arrow-back" size={24} color="#4b5563" />
+            <Ionicons name="arrow-back" size={24} color={theme.textSoft} />
           </TouchableOpacity>
-          <Text className="text-xl font-extrabold text-gray-900">Settings</Text>
+          <Text className="text-xl font-extrabold text-on-surface dark:text-on-surface-dark">
+            Settings
+          </Text>
         </View>
       </View>
 
@@ -192,94 +114,88 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 60 }}
       >
-        {/* Section: Role Mode */}
-        <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-4 mt-6 mb-2">
-          Role Mode
+        {actionError ? (
+          <View className="px-4 pt-4">
+            <ErrorBanner message={actionError} />
+          </View>
+        ) : null}
+
+        {infoMessage ? (
+          <View className="px-4 pt-4">
+            <ErrorBanner message={infoMessage} variant="info" />
+          </View>
+        ) : null}
+
+        {successMessage ? (
+          <View className="px-4 pt-4">
+            <SuccessCard message={successMessage} />
+          </View>
+        ) : null}
+
+        {/* Section: Account Role */}
+        <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-6 mb-2">
+          Account Role
         </Text>
-        <View className="bg-white border-t border-gray-100">
+        <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
           <SettingItem
-            type="toggle"
-            icon="school-outline"
-            label="Mentor Mode"
-            isToggled={roleState.mentor}
-            onToggle={(value) => handleRoleToggle("mentor", value)}
-          />
-          <SettingItem
-            type="toggle"
-            icon="rocket-outline"
-            label="Mentee Mode"
-            isToggled={roleState.mentee}
-            onToggle={(value) => handleRoleToggle("mentee", value)}
+            icon="person-circle-outline"
+            label="Role"
+            value={roleModeLabel}
+            onPress={() => setInfoMessage(roleModeDescription)}
           />
         </View>
 
         {/* Section: Profile Visibility */}
-        <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-4 mt-6 mb-2">
+        <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-8 mb-2">
           Profile Visibility
         </Text>
-        <View className="bg-white border-t border-gray-100">
-          <SettingItem
-            type="toggle"
-            icon="bulb-outline"
-            label="Show Expertise"
-            isToggled={showExpertise}
-            onToggle={setShowExpertise}
-          />
-          <SettingItem
-            type="toggle"
-            icon="trail-sign-outline"
-            label="Show Eager to Learn"
-            isToggled={showEagerToLearn}
-            onToggle={setShowEagerToLearn}
-          />
-          <SettingItem
-            type="toggle"
-            icon="calendar-outline"
-            label="Show Availability Slots"
-            isToggled={showAvailability}
-            onToggle={setShowAvailability}
-          />
-          <SettingItem
-            type="toggle"
-            icon="library-outline"
-            label="Show Mentorship Offerings"
-            isToggled={showOfferings}
-            onToggle={(value) => {
-              setShowOfferings(value);
-              if (value) {
-                Alert.alert(
-                  "MVP Scope",
-                  "Offerings are disabled in MVP and may not be fully functional yet.",
-                );
-              }
-            }}
-          />
-        </View>
+        <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
+          {showMentorVisibilityControls && (
+            <SettingItem
+              type="toggle"
+              icon="school-outline"
+              label="Show Expertise"
+              isToggled={showExpertise}
+              onToggle={setShowExpertise}
+            />
+          )}
 
-        {/* Section: Preferences */}
-        <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-4 mt-8 mb-2">
-          Preferences
-        </Text>
-        <View className="bg-white border-t border-gray-100">
-          <SettingItem
-            icon="time-outline"
-            label="Timezone"
-            value="Europe/Istanbul"
-            onPress={() => console.log("Open Timezone Picker")}
-          />
-          <SettingItem
-            icon="globe-outline"
-            label="Language"
-            value="English"
-            onPress={() => console.log("Open Language Picker")}
-          />
+          {showMenteeVisibilityControls && (
+            <SettingItem
+              type="toggle"
+              icon="bulb-outline"
+              label="Show Eager to Learn"
+              isToggled={showEagerToLearn}
+              onToggle={setShowEagerToLearn}
+            />
+          )}
+
+          {showMentorVisibilityControls && (
+            <SettingItem
+              type="toggle"
+              icon="calendar-outline"
+              label="Show Availability"
+              isToggled={showAvailability}
+              onToggle={setShowAvailability}
+            />
+          )}
+
+          {showMentorVisibilityControls && (
+            <SettingItem
+              type="toggle"
+              icon="briefcase-outline"
+              label="Show Offerings"
+              isToggled={showOfferings}
+              onToggle={setShowOfferings}
+            />
+          )}
         </View>
 
         {/* Section: Notifications */}
-        <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-4 mt-8 mb-2">
+        <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-8 mb-2">
           Notifications
         </Text>
-        <View className="bg-white border-t border-gray-100">
+        <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
           <SettingItem
             type="toggle"
             icon="person-add-outline"
@@ -304,10 +220,10 @@ export default function SettingsScreen() {
         </View>
 
         {/* Section: Account & About */}
-        <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-4 mt-8 mb-2">
+        <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-8 mb-2">
           Account
         </Text>
-        <View className="bg-white border-t border-gray-100">
+        <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
           <SettingItem
             icon="lock-closed-outline"
             label="Privacy Policy"
@@ -332,10 +248,52 @@ export default function SettingsScreen() {
           />
         </View>
 
-        <Text className="text-center text-gray-400 font-medium text-xs mt-8">
+        <Text className="text-center text-on-surface-muted dark:text-on-surface-muted-dark font-medium text-xs mt-8">
           Version 1.0.0 (MVP)
         </Text>
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={showLogoutConfirmation}
+        title="Log out?"
+        message="You will need to sign in again to access your dashboard."
+        confirmLabel="Log Out"
+        cancelLabel="Stay Logged In"
+        variant="destructive"
+        isConfirming={logoutMutation.isPending}
+        onCancel={() => setShowLogoutConfirmation(false)}
+        onConfirm={async () => {
+          try {
+            setActionError(null);
+            setSuccessMessage(null);
+            await logoutMutation.mutateAsync();
+            setShowLogoutConfirmation(false);
+            router.replace("/login");
+          } catch (error) {
+            console.error("Logout failed:", error);
+            setShowLogoutConfirmation(false);
+            setActionError(
+              error instanceof Error
+                ? error.message
+                : "Failed to log out. Please try again.",
+            );
+          }
+        }}
+      />
+
+      <ConfirmationSheet
+        visible={showDeleteConfirmation}
+        title="Delete account?"
+        message="This action cannot be undone. Your account deletion flow is not implemented yet."
+        confirmLabel="Delete"
+        cancelLabel="Keep Account"
+        variant="destructive"
+        onCancel={() => setShowDeleteConfirmation(false)}
+        onConfirm={() => {
+          setShowDeleteConfirmation(false);
+          setInfoMessage("Account deletion is not implemented yet.");
+        }}
+      />
     </View>
   );
 }

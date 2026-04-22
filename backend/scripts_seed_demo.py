@@ -193,6 +193,7 @@ def seed_availability(profile, offset_days: int) -> None:
     """Create deterministic future availability slots for one mentor profile."""
 
     from django.utils import timezone
+
     from profiles.models import AvailabilitySlot
 
     reset_profile_slots(profile)
@@ -239,7 +240,9 @@ def seed_requests_and_matches(profile_map: dict[str, object], user_map: dict[str
 
     from django.db.models import Q
     from django.utils import timezone
+
     from mentorship.models import MentorshipRequest
+    from mentorship.services import ensure_match_and_initial_session
     from profiles.models import AvailabilitySlot
 
     demo_usernames = {
@@ -288,6 +291,7 @@ def seed_requests_and_matches(profile_map: dict[str, object], user_map: dict[str
         status=MentorshipRequest.Status.ACCEPTED,
         cover_letter="Can we do a focused mobile architecture review session?",
     )
+    ensure_match_and_initial_session(mentorship_request=accepted)
     accepted.slot.mark_booked(user=user_map["mert-aydin"])
 
     MentorshipRequest.objects.create(
@@ -299,7 +303,7 @@ def seed_requests_and_matches(profile_map: dict[str, object], user_map: dict[str
     )
 
     historical_start = timezone.now() - timedelta(days=7)
-    MentorshipRequest.objects.create(
+    historical_accepted = MentorshipRequest.objects.create(
         mentor=metin,
         mentee=ayse,
         slot=None,
@@ -308,6 +312,7 @@ def seed_requests_and_matches(profile_map: dict[str, object], user_map: dict[str
         status=MentorshipRequest.Status.ACCEPTED,
         cover_letter="Thanks for the previous debugging session; it was very helpful.",
     )
+    ensure_match_and_initial_session(mentorship_request=historical_accepted)
 
 
 def seed_demo_data() -> None:

@@ -75,6 +75,14 @@ export default function TabLayout() {
           tabBarIcon: renderProfileIcon,
         }}
       />
+
+      <Tabs.Screen
+        name="user/[username]"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
     </Tabs>
   );
 }

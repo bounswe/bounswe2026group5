@@ -1,29 +1,31 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { router, Stack } from "expo-router";
 import { useState } from "react";
 import {
-  View,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  Pressable,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  View,
 } from "react-native";
-import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Colors } from "@/constants/theme";
 import { RegistrationProfileSetupSheet } from "@/components/profile/RegistrationProfileSetupSheet";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
+import { ApiValidationError } from "@/lib/api/client";
 import {
-  registerFn,
-  updateUsageModeFn,
-  updateProfileFn,
   fetchSkillsFn,
-  type AuthResponse,
+  registerFn,
+  updateProfileFn,
+  updateUsernameFn,
+  updateUsageModeFn,
 } from "@/lib/queries/authQueries";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -42,6 +44,12 @@ function validatePassword(value: string): string {
     return "Password must contain at least one uppercase letter.";
   if (!/\d/.test(value)) return "Password must contain at least one number.";
   return "";
+}
+
+function buildUsernamePreview(email: string): string {
+  const localPart = email.trim().toLowerCase().split("@")[0] ?? "";
+  const sanitized = localPart.replace(/[^a-z0-9_]/g, "_");
+  return sanitized || "user";
 }
 
 function getRegistrationValidationErrors(params: {
@@ -76,6 +84,8 @@ export default function RegisterScreen() {
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme];
 
+  const setAuthenticated = useAuthStore((state) => state.setAuthenticated);
+
   const [role, setRole] = useState<"mentor" | "mentee">("mentor");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
@@ -88,14 +98,14 @@ export default function RegisterScreen() {
   const [terms, setTerms] = useState(false);
   const [termsError, setTermsError] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [usernameError, setUsernameError] = useState("");
   const [profileSetupVisible, setProfileSetupVisible] = useState(false);
-  const [pendingUser, setPendingUser] = useState<{
-    id: string;
-    username: string;
-    accessToken: string;
-  } | null>(null);
 
-  const { data: skillsData, isLoading: isLoadingSkills } = useQuery({
+  const {
+    data: skillsData,
+    isLoading: isLoadingSkills,
+    refetch: refetchSkills,
+  } = useQuery({
     queryKey: ["skills"],
     queryFn: fetchSkillsFn,
     staleTime: 10 * 60 * 1000,
@@ -105,67 +115,66 @@ export default function RegisterScreen() {
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
-  const completeProfileSetup = useMutation({
+  const completeRegistration = useMutation({
     mutationFn: async (params: {
+      username: string;
       displayName: string;
       bio: string;
       selectedSkills: string[];
     }) => {
-      if (!pendingUser) {
-        throw new Error("Registration session not found. Please try again.");
-      }
+      const registration = await registerFn({
+        email: email.trim(),
+        password,
+        confirm_password: confirmPassword,
+      });
 
       await updateUsageModeFn({
-        userId: pendingUser.id,
         app_usage_mode: role.toUpperCase() as "MENTOR" | "MENTEE",
-        accessToken: pendingUser.accessToken,
-        _username: pendingUser.username,
+        accessToken: registration.access_token,
       });
 
-      await useAuthStore.getState().updateUser({
+      let finalizedUsername = registration.user.username;
+
+      if (params.username !== registration.user.username) {
+        const updatedUsername = await updateUsernameFn({
+          accessToken: registration.access_token,
+          username: params.username,
+        });
+        finalizedUsername = updatedUsername.username ?? params.username;
+      }
+
+      const finalizedUser = {
+        ...registration.user,
+        username: finalizedUsername,
         app_usage_mode: role.toUpperCase() as "MENTOR" | "MENTEE",
-      });
+      };
 
       await updateProfileFn({
-        username: pendingUser.username,
-        accessToken: pendingUser.accessToken,
+        accessToken: registration.access_token,
         display_name: params.displayName,
         bio: params.bio.trim() || undefined,
-        ...(role === "mentor"
-          ? { expertises: params.selectedSkills }
-          : { eager_to_learn: params.selectedSkills }),
+        skills: params.selectedSkills,
+      });
+
+      await setAuthenticated(finalizedUser, {
+        access_token: registration.access_token,
+        refresh_token: registration.refresh_token,
       });
     },
     onSuccess: () => {
       router.replace("/(tabs)");
     },
     onError: (error: Error) => {
+      if (error instanceof ApiValidationError && error.fieldErrors.username) {
+        setUsernameError(error.fieldErrors.username);
+        setSubmitError("");
+        return;
+      }
       setSubmitError(error.message);
     },
   });
 
-  const setAuthenticated = useAuthStore((state) => state.setAuthenticated);
-  const register = useMutation({
-    mutationFn: registerFn,
-    onSuccess: async (data: AuthResponse) => {
-      await setAuthenticated(data.user as import("@/lib/auth/types").AuthUser, {
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-      });
-
-      setPendingUser({
-        id: data.user.id,
-        username: data.user.username,
-        accessToken: data.access_token,
-      });
-      setProfileSetupVisible(true);
-    },
-    onError: (error: Error) => {
-      setSubmitError(error.message);
-    },
-  });
-
-  const isPending = register.isPending || completeProfileSetup.isPending;
+  const isPending = completeRegistration.isPending;
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
@@ -200,21 +209,23 @@ export default function RegisterScreen() {
     setConfirmPasswordError(cpErr);
     setTermsError(tErr);
     setSubmitError("");
+    setUsernameError("");
 
     const hasErrors = Boolean(eErr || pErr || cpErr || tErr);
     if (hasErrors) return;
 
-    register.mutate({
-      email: email.trim(),
-      password,
-      confirm_password: confirmPassword,
-    });
+    setProfileSetupVisible(true);
+
+    if (!skillsData?.length) {
+      void refetchSkills();
+    }
   };
 
   return (
     <SafeAreaView
       className={`flex-1 ${isDark ? "bg-surface-dark" : "bg-surface"}`}
     >
+      <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -497,11 +508,7 @@ export default function RegisterScreen() {
 
             {/* CTA + Log In link */}
             <View className="gap-5 pt-4">
-              {submitError ? (
-                <Text className="text-xs text-red-500 text-center">
-                  {submitError}
-                </Text>
-              ) : null}
+              {submitError ? <ErrorBanner message={submitError} /> : null}
               <TouchableOpacity
                 className="w-full h-16 rounded-xl items-center justify-center flex-row gap-3 bg-primary dark:bg-primary-dim"
                 activeOpacity={0.88}
@@ -512,7 +519,7 @@ export default function RegisterScreen() {
                 onPress={handleSubmit}
               >
                 <Text className="text-white font-bold text-lg">
-                  {isPending ? "Creating account…" : "Complete Registration"}
+                  {isPending ? "Creating account…" : "Continue"}
                 </Text>
                 {!isPending && (
                   <Ionicons
@@ -547,16 +554,20 @@ export default function RegisterScreen() {
         role={role}
         skills={skillNames}
         isLoadingSkills={isLoadingSkills}
-        isSubmitting={completeProfileSetup.isPending}
+        isSubmitting={completeRegistration.isPending}
         submitError={submitError}
-        username={pendingUser?.username ?? ""}
+        usernameError={usernameError}
+        username={buildUsernamePreview(email)}
+        onUsernameChange={() => setUsernameError("")}
         onClose={() => {
           setProfileSetupVisible(false);
-          setPendingUser(null);
+          setSubmitError("");
+          setUsernameError("");
         }}
         onSubmit={(values) => {
           setSubmitError("");
-          completeProfileSetup.mutate(values);
+          setUsernameError("");
+          completeRegistration.mutate(values);
         }}
       />
     </SafeAreaView>

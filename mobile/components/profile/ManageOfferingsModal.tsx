@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { 
   View, Text, Modal, TouchableOpacity, ScrollView, 
-  KeyboardAvoidingView, Platform, TextInput, Alert 
+  KeyboardAvoidingView, Platform, TextInput
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { Offering } from './MentorshipOfferings';
 
 interface ManageOfferingsModalProps {
@@ -37,12 +38,14 @@ export function ManageOfferingsModal({
   const [selectedDuration, setSelectedDuration] = useState('60 min');
   const [selectedLevel, setSelectedLevel] = useState('All Levels');
   const [selectedIcon, setSelectedIcon] = useState<keyof typeof Ionicons.glyphMap>('bulb-outline');
+  const [formError, setFormError] = useState('');
 
   const handleAdd = () => {
     if (!title.trim()) {
-      Alert.alert('Missing Title', 'Please give your package a title.');
+      setFormError('Please give your package a title.');
       return;
     }
+    setFormError('');
     const newOffering: Offering = {
       id: Date.now().toString(), 
       title: title.trim(),
@@ -91,10 +94,18 @@ export function ManageOfferingsModal({
             {/* 1. QUICK COMPOSER SECTION */}
             <View className="bg-white px-6 pt-6 pb-8 border-b border-gray-100 mb-2">
               <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Create New</Text>
+              {formError ? (
+                <View className="mb-4">
+                  <ErrorBanner message={formError} />
+                </View>
+              ) : null}
               
               <TextInput
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={(value) => {
+                  setTitle(value);
+                  if (formError) setFormError('');
+                }}
                 placeholder="Offering Title (e.g., React Review)"
                 className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-base text-gray-900 font-bold mb-3"
               />

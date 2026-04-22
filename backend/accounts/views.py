@@ -1,5 +1,4 @@
 from typing import Any, cast
-from uuid import UUID
 
 from django.conf import settings
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -209,8 +208,8 @@ class TokenRefreshAPIView(TokenRefreshView):
         return response
 
 
-class AuthUserByIdAPIView(APIView):
-    """Return authenticated user metadata for the matching user id route."""
+class AuthMeAPIView(APIView):
+    """Return authenticated user metadata from a canonical self-scoped route."""
 
     permission_classes = [IsAuthenticated, IsNotBanned]
 
@@ -218,28 +217,21 @@ class AuthUserByIdAPIView(APIView):
         responses={
             200: UserResponseSerializer,
             401: OpenApiResponse(description="Authentication required."),
-            404: OpenApiResponse(description="User not found."),
             403: OpenApiResponse(description="Account banned."),
         },
-        description="Get authenticated user details by own user id route.",
+        description="Get authenticated user details from the canonical `/api/auth/me/` route.",
         tags=["Auth"],
     )
-    def get(self, request: Request, user_id: UUID) -> Response:
-        request_user_id = getattr(request.user, "id", None)
-        if request_user_id is None:
-            request_user_id = getattr(request.user, "pk", None)
-
-        if str(request_user_id) != str(user_id):
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
+    def get(self, request: Request) -> Response:
+        """Return the currently authenticated user's metadata."""
         return Response(
             UserResponseSerializer(cast(User, request.user)).data,
             status=status.HTTP_200_OK,
         )
 
 
-class UserAppUsageModeAPIView(APIView):
-    """Update app usage mode for the authenticated user route."""
+class UserAppUsageModeMeAPIView(APIView):
+    """Set app usage mode from canonical self-scoped route."""
 
     permission_classes = [IsAuthenticated, IsNotBanned]
 
@@ -249,20 +241,16 @@ class UserAppUsageModeAPIView(APIView):
             200: UserResponseSerializer,
             400: OpenApiResponse(description="Validation error."),
             401: OpenApiResponse(description="Authentication required."),
-            404: OpenApiResponse(description="User not found."),
         },
-        description="Update app usage mode for the authenticated user.",
+        description=(
+            "Set app usage mode for the authenticated user. "
+            "Role can be assigned once and cannot be switched after assignment."
+        ),
         tags=["Auth"],
     )
-    def patch(self, request: Request, user_id: UUID) -> Response:
-        request_user_id = getattr(request.user, "id", None)
-        if request_user_id is None:
-            request_user_id = getattr(request.user, "pk", None)
-
-        if str(request_user_id) != str(user_id):
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = UserAppUsageModeUpdateSerializer(request.user, data=request.data, partial=True)
+    def patch(self, request: Request) -> Response:
+        """Set app usage mode for the currently authenticated user."""
+        serializer = UserAppUsageModeUpdateSerializer(request.user, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 

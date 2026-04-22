@@ -1,22 +1,27 @@
-import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Muted } from '@/components/Typography'
-import { ChevronLeft, ChevronRight, CalendarDays, Loader2, X } from 'lucide-react'
-import { createPortal } from 'react-dom'
+import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import {
+    useCancelSession,
+    useMyMatches,
+    useMyRequests,
+    useSendMentorshipRequest
+} from '#/lib/queries/MentorshipQueries.ts'
+import {
+    useAvailabilitySlots,
+    useBookSlot,
     useCreateSlot,
     useDeleteSlot,
-    useCancelBooking,
-    useAvailabilitySlots
+    type AvailabilitySlot,
 } from '#/lib/queries/ProfileTimeSlotQueries.ts'
-import type { AvailabilitySlot } from '#/lib/queries/ProfileTimeSlotQueries.ts'
-import {useQuery, useQueryClient} from '@tanstack/react-query'
-import { useMyMatches, useSendMentorshipRequest } from '#/lib/queries/MentorshipQueries.ts'
-import { useBookSlot } from '#/lib/queries/ProfileTimeSlotQueries.ts'
-import { Textarea } from '@/components/ui/textarea'
+import { Muted } from '@/components/Typography'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import {meQueryOptions} from "#/lib/queries/AuthQueries.ts";
+import { Textarea } from '@/components/ui/textarea'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { CalendarDays, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react'
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { toast } from "sonner"
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -79,8 +84,22 @@ interface CancelModalProps {
 }
 
 function CancelModal({ slot, username, onClose, onSuccess }: CancelModalProps) {
-    const cancelBooking = useCancelBooking(username)
+    const cancelSession = useCancelSession()
 
+    const handleCancel = () => {
+        if (!slot.sessionId) return
+        cancelSession.mutate(slot.sessionId, {
+            onSuccess: () => {
+                toast.warning('Session cancelled', {
+                    description: 'The booking has been removed and the slot is available again.',
+                })
+                onSuccess()
+            },
+            onError: (err) => {
+                toast.error(err.message)
+            },
+        })
+    }
     return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
             <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -93,22 +112,19 @@ function CancelModal({ slot, username, onClose, onSuccess }: CancelModalProps) {
                 </div>
                 <div className="px-6 py-5">
                     <Muted className="text-sm">
-                        This slot is already booked. Cancelling will remove the booking and make the slot available again.
+                        This slot is already booked. Cancelling will remove the mentorship session and make the slot available again.
                     </Muted>
-                    {cancelBooking.isError && (
-                        <p className="text-xs text-destructive mt-3">{cancelBooking.error.message}</p>
-                    )}
                 </div>
                 <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line">
-                    <Button variant="outline" onClick={onClose} disabled={cancelBooking.isPending}>
+                     <Button variant="outline" onClick={onClose} disabled={cancelSession.isPending}>
                         Keep booking
                     </Button>
                     <Button
                         className="bg-red-500 hover:bg-red-600 text-white min-w-[90px]"
-                        onClick={() => cancelBooking.mutate(slot.id, { onSuccess })}
-                        disabled={cancelBooking.isPending}
+                        onClick={handleCancel}
+                        disabled={cancelSession.isPending || !slot.sessionId}
                     >
-                        {cancelBooking.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Cancel booking'}
+                        {cancelSession.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Cancel booking'}
                     </Button>
                 </div>
             </div>
@@ -136,18 +152,37 @@ function BookingModal({ slot, mentorUsername, isFirstTime, onClose, onSuccess }:
     const sendRequest = useSendMentorshipRequest()
 
     const isPending = bookSlot.isPending || sendRequest.isPending
-    const error = bookSlot.error?.message || sendRequest.error?.message
 
     const handleSubmit = () => {
         if (isFirstTime) {
             sendRequest.mutate(
                 { mentor_username: mentorUsername, slot_id: slot.id, cover_letter: coverLetter },
-                { onSuccess }
+                {
+                    onSuccess: () => {
+                        toast.success('Request sent!', {
+                            description: 'Your mentorship request has been sent successfully.',
+                        })
+                        onSuccess()
+                    },
+                    onError: (err) => {
+                        toast.error(err.message)
+                    },
+                }
             )
         } else {
             bookSlot.mutate(
                 { slotId: slot.id },
-                { onSuccess }
+                {
+                    onSuccess: () => {
+                        toast.success('Slot booked!', {
+                            description: 'Your session has been confirmed.',
+                        })
+                        onSuccess()
+                    },
+                    onError: (err) => {
+                        toast.error(err.message)
+                    },
+                }
             )
         }
     }
@@ -196,7 +231,6 @@ function BookingModal({ slot, mentorUsername, isFirstTime, onClose, onSuccess }:
                         </div>
                     )}
 
-                    {error && <p className="text-xs text-destructive">{error}</p>}
                 </div>
 
                 <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line">
@@ -223,7 +257,7 @@ function BookingModal({ slot, mentorUsername, isFirstTime, onClose, onSuccess }:
 
 export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: AvailabilityCalendarProps) {
     const { data: slots = [] } = useAvailabilitySlots(username)
-    const { data: myData, isSuccess } = useQuery(meQueryOptions)
+    const { data: myData } = useQuery(meQueryOptions)
     const queryClient = useQueryClient()
     const NOW_HOUR = new Date().getHours()
     const [weekOffset, setWeekOffset] = useState(0)
@@ -237,6 +271,13 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
     const { data: matches = [] } = useMyMatches()
     const isMatched = matches.some(m => m.mentor.username === username || m.mentee.username === username)
 
+    const { data: myRequests = [] } = useMyRequests()
+    const pendingSlotIds = new Set(
+        myRequests
+            .filter(r => r.status === 'PENDING')
+            .map(r => r.slot_id)
+    )
+
     const monday = getMonday(addDays(new Date(), weekOffset * 7))
     const weekDays = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
 
@@ -245,15 +286,13 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
         const hour = parseInt(slot.startTime.split(':')[0])
         slotsByDateHour[`${slot.date}-${hour}`] = slot
     }
-    console.log('slots prop:', slots)
-    console.log('slotsByDateHour:', slotsByDateHour)
-
     const weekLabel = `${monday.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${addDays(monday, 6).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
 
     const invalidate = () => {
         queryClient.refetchQueries({ queryKey: ['availability-slots', username] })
         queryClient.invalidateQueries({ queryKey: ['profiles', username] })
-        queryClient.invalidateQueries({ queryKey: ['mentorship', 'sessions', 'upcoming'] })
+        queryClient.invalidateQueries({ queryKey: ['mentorship', 'meeting-sessions', 'me'] })
+        queryClient.invalidateQueries({ queryKey: ['mentorship', 'requests'] })
     }
 
     const handleCellClick = (dateStr: string, hour: number, existing: AvailabilitySlot | undefined) => {
@@ -261,11 +300,20 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
         if (togglingSlotKey === key) return
 
         if (existing) {
-            if (existing.is_booked) return
+            if (existing.status === 'BOOKED') return
             setTogglingSlotKey(key)
             deleteSlot.mutate(existing.id, {
-                onSuccess: () => { invalidate(); setTogglingSlotKey(null) },
-                onError: () => setTogglingSlotKey(null),
+                onSuccess: () => {
+                    toast.warning('Slot removed', {
+                        description: 'The availability slot has been removed.',
+                    })
+                    invalidate()
+                    setTogglingSlotKey(null)
+                },
+                onError: (err) => {
+                    toast.error(err.message)
+                    setTogglingSlotKey(null)
+                },
             })
         } else {
             setTogglingSlotKey(key)
@@ -276,8 +324,17 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                     endTime: `${String(hour + 1).padStart(2, '0')}:00:00`,
                 },
                 {
-                    onSuccess: () => { invalidate(); setTogglingSlotKey(null) },
-                    onError: () => setTogglingSlotKey(null),
+                    onSuccess: () => {
+                        toast.success('Slot added', {
+                            description: 'You are now available at this time.',
+                        })
+                        invalidate()
+                        setTogglingSlotKey(null)
+                    },
+                    onError: (err) => {
+                        toast.error(err.message)
+                        setTogglingSlotKey(null)
+                    },
                 }
             )
         }
@@ -315,11 +372,11 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
 
                     {isOwner ? (
                         <p className="text-xs text-ink-soft mt-2">
-                            Click any empty slot to mark yourself as available. Click an available slot to remove it. Booked slots are locked until cancelled.
+                            Click any empty slot to mark yourself as available. Click an available slot to remove it. Booked slots are locked until cancelled. Yellow slots have a pending request.
                         </p>
                     ) : (
                         <p className="text-xs text-ink-soft mt-2">
-                            Green slots are available to book. Click a slot to request a session with this mentor.
+                            Green slots are available to book. Yellow slots already have a pending request. Click a green slot to request a session with this mentor.
                         </p>
                     )}
                 </CardHeader>
@@ -367,9 +424,13 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                         let cellContent = null
                                         let cellClass = 'border border-line/30 h-14 relative transition-all '
 
+                                        const isMyPending = slot && pendingSlotIds.has(slot.id)
+                                        const isGlobalPending = slot && slot.status === 'PENDING'
+                                        const isPending = isMyPending || isGlobalPending
+
                                         if (isPast) {
                                             cellClass += 'bg-black/[0.02] opacity-50'
-                                        } else if (slot?.is_booked) {
+                                        } else if (slot?.status === 'BOOKED') {
                                             cellClass += 'bg-violet-50 border-violet-200'
                                             cellContent = (
                                                 <div className="flex flex-col items-center justify-center h-full gap-0.5">
@@ -382,6 +443,15 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                                             Cancel
                                                         </button>
                                                     )}
+                                                </div>
+                                            )
+                                        } else if (isPending) {
+                                            cellClass += 'bg-amber-50 border-amber-300'
+                                            cellContent = (
+                                                <div className="flex items-center justify-center h-full">
+                                                    <span className="text-amber-700 font-semibold text-xs">
+                                                        {isOwner ? 'Pending' : (isMyPending ? 'Requested' : 'Pending')}
+                                                    </span>
                                                 </div>
                                             )
                                         } else if (slot) {
@@ -413,10 +483,10 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                                 key={key}
                                                 className={cellClass}
                                                 onClick={() => {
-                                                    if (isPast) return
-                                                    if (isOwner && !slot?.is_booked) {
+                                                    if (isPast || isPending) return
+                                                    if (isOwner && slot?.status !== 'BOOKED') {
                                                         handleCellClick(dateStr, hour, slot)
-                                                    } else if (!isOwner && isAuthenticated && slot && !slot.is_booked) {
+                                                    } else if (!isOwner && isAuthenticated && slot && slot.status !== 'BOOKED') {
                                                         setBookingSlot(slot)
                                                     }
                                                 }}

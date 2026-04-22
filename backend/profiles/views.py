@@ -1,5 +1,6 @@
 """Views for profile self-service API endpoints."""
 
+from django.conf import settings
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.db import IntegrityError, transaction
@@ -8,13 +9,15 @@ from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.permissions import AllowAny, BasePermission
+from rest_framework import serializers
+from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import AppUsageMode
 from accounts.permissions import IsUser
+from mentorship.models import Feedback
 
 from .models import AvailabilitySlot, Profile, Skill
 from .serializers import (
@@ -24,19 +27,12 @@ from .serializers import (
     MentorProfileResponseSerializer,
     ProfileResponseSerializer,
     ProfileUpdateSerializer,
+    ProfileUsernameUpdateSerializer,
     PublicMentorProfileSearchListResponseSerializer,
     PublicMentorProfileSearchResultSerializer,
     SkillSerializer,
 )
-from .services import (
-    BookingCancelNotAllowedError,
-    OwnSlotBookingError,
-    SlotAlreadyBookedError,
-    SlotInPastError,
-    SlotNotBookedError,
-    book_availability_slot,
-    cancel_availability_booking,
-)
+from .services import OwnSlotBookingError, SlotAlreadyBookedError, SlotInPastError
 
 NOT_FOUND_DETAIL = {"detail": "Not found."}
 OVERLAP_DETAIL = {"detail": "Availability slot overlaps with an existing slot."}
@@ -57,6 +53,27 @@ class ProfileLookupMixin:
         """Return True when the user's app usage mode is MENTOR."""
         return profile.user.app_usage_mode == AppUsageMode.MENTOR
 
+    def _get_request_profile_or_404(self, request: Request) -> Profile | None:
+        """Return profile bound to authenticated request user when it exists."""
+        try:
+            return Profile.objects.select_related("user").get(user=request.user)
+        except Profile.DoesNotExist:
+            return None
+
+    def _serialize_profile_by_mode(self, profile: Profile) -> dict[str, object]:
+        """Serialize profile response using role-appropriate schema shape."""
+        app_usage_mode = profile.user.app_usage_mode
+        if app_usage_mode == AppUsageMode.MENTEE:
+            serializer = MenteeProfileResponseSerializer(profile)
+        elif app_usage_mode == AppUsageMode.MENTOR:
+            serializer = MentorProfileResponseSerializer(profile)
+        else:
+            serializer = ProfileResponseSerializer(profile)
+
+        data = dict(serializer.data)
+        data["app_usage_mode"] = app_usage_mode
+        return data
+
 
 class SkillListAPIView(APIView):
     """List all available predefined skills in the catalog."""
@@ -74,33 +91,10 @@ class SkillListAPIView(APIView):
         return Response(SkillSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
 
-class AvailabilitySlotLookupMixin(ProfileLookupMixin):
-    """Shared availability slot lookup helper."""
-
-    def _get_slot_or_404(self, profile: Profile, slot_id: str) -> AvailabilitySlot | None:
-        """Return slot when it belongs to provided profile; otherwise None."""
-        try:
-            return AvailabilitySlot.objects.get(id=slot_id, profile=profile)
-        except AvailabilitySlot.DoesNotExist:
-            return None
-
-
 class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
-    """Retrieve by username and update own profile by username."""
+    """Retrieve profile by username for public reads."""
 
-    def get_permissions(self) -> list[BasePermission]:
-        """Allow public reads but require auth and role checks for mutations."""
-        if self.request.method == "GET":
-            return [AllowAny()]
-
-        return [IsUser()]
-
-    def _get_owned_profile_or_404(self, request: Request, username: str) -> Profile | None:
-        """Return profile only if it belongs to current user and username matches."""
-        try:
-            return Profile.objects.get(user=request.user, username=username)
-        except Profile.DoesNotExist:
-            return None
+    permission_classes = [AllowAny]
 
     @extend_schema(
         responses={
@@ -124,16 +118,34 @@ class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
         if not is_owner and not profile.is_visible:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
-        app_usage_mode = profile.user.app_usage_mode
-        if app_usage_mode == AppUsageMode.MENTEE:
-            serializer = MenteeProfileResponseSerializer(profile)
-        elif app_usage_mode == AppUsageMode.MENTOR:
-            serializer = MentorProfileResponseSerializer(profile)
-        else:
-            # Fallback for users who haven't set their usage mode yet
-            serializer = ProfileResponseSerializer(profile)
+        return Response(self._serialize_profile_by_mode(profile), status=status.HTTP_200_OK)
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
+class ProfileMeAPIView(ProfileLookupMixin, APIView):
+    """Canonical self-scoped profile read/update endpoint."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: ProfileResponseSerializer,
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Account banned."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Get authenticated user's own profile using canonical `/api/profiles/me/`.",
+        tags=["Profiles"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return authenticated user's own profile using role-shaped response."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        data = self._serialize_profile_by_mode(profile)
+        data["available_catalog_skills"] = list(Skill.objects.values_list("name", flat=True))
+
+        return Response(data, status=status.HTTP_200_OK)
 
     @extend_schema(
         request=ProfileUpdateSerializer,
@@ -144,12 +156,12 @@ class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
             403: OpenApiResponse(description="Account banned."),
             404: OpenApiResponse(description="Profile not found."),
         },
-        description="Partially update authenticated user's profile by username.",
+        description="Partially update authenticated user's profile using `/api/profiles/me/`.",
         tags=["Profiles"],
     )
-    def patch(self, request: Request, username: str) -> Response:
-        """Handle PATCH requests for own profile by username."""
-        profile = self._get_owned_profile_or_404(request, username)
+    def patch(self, request: Request) -> Response:
+        """Partially update authenticated user's own profile."""
+        profile = self._get_request_profile_or_404(request)
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -160,8 +172,70 @@ class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
         return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
 
 
+class ProfileUsernameUpdateAPIView(ProfileLookupMixin, APIView):
+    """Canonical self-scoped username update endpoint."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=ProfileUsernameUpdateSerializer,
+        responses={
+            200: ProfileResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Account banned."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Update authenticated user's username using `/api/profiles/me/username/`.",
+        tags=["Profiles"],
+    )
+    def patch(self, request: Request) -> Response:
+        """Update authenticated user's username."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ProfileUsernameUpdateSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
+
+
 class AvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
-    """Create and list mentor availability slots scoped by username."""
+    """List mentor availability slots scoped by username."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        responses={
+            200: AvailabilitySlotSerializer(many=True),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="List upcoming availability slots for a mentor by username.",
+        tags=["Profiles"],
+    )
+    def get(self, request: Request, username: str) -> Response:
+        """List upcoming availability slots for the mentor matching username."""
+        profile = self._get_profile_or_404(username)
+        if profile is None or not self._is_mentor_profile(profile):
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        upcoming_slots = AvailabilitySlot.objects.filter(
+            profile=profile,
+            start_at__gte=timezone.now(),
+        ).order_by("start_at")
+
+        return Response(
+            AvailabilitySlotSerializer(upcoming_slots, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class MyAvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
+    """Canonical owner-scoped availability slot list/create endpoint."""
 
     permission_classes = [IsUser]
 
@@ -172,20 +246,21 @@ class AvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
             400: OpenApiResponse(description="Validation error."),
             401: OpenApiResponse(description="Authentication required."),
             403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Profile not found."),
         },
         description=(
-            "Create a mentor availability slot using date/startTime/endTime. "
-            "endTime must be later than startTime."
+            "Create an availability slot for the authenticated mentor using "
+            "canonical `/api/profiles/me/availability-slots/`."
         ),
         tags=["Profiles"],
     )
-    def post(self, request: Request, username: str) -> Response:
-        """Create an availability slot for mentor matching requested username."""
-        profile = self._get_profile_or_404(username)
+    def post(self, request: Request) -> Response:
+        """Create an availability slot for authenticated mentor profile."""
+        profile = self._get_request_profile_or_404(request)
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
-        if request.user != profile.user or not self._is_mentor_profile(profile):
+        if not self._is_mentor_profile(profile):
             return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
 
         serializer = AvailabilitySlotWriteSerializer(
@@ -206,15 +281,22 @@ class AvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
             200: AvailabilitySlotSerializer(many=True),
             401: OpenApiResponse(description="Authentication required."),
             403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Profile not found."),
         },
-        description="List upcoming availability slots for authenticated mentor.",
+        description=(
+            "List upcoming availability slots owned by authenticated mentor via "
+            "canonical `/api/profiles/me/availability-slots/`."
+        ),
         tags=["Profiles"],
     )
-    def get(self, request: Request, username: str) -> Response:
-        """List upcoming availability slots for the mentor matching username."""
-        profile = self._get_profile_or_404(username)
-        if profile is None or not self._is_mentor_profile(profile):
+    def get(self, request: Request) -> Response:
+        """List upcoming availability slots for authenticated mentor profile."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        if not self._is_mentor_profile(profile):
+            return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
 
         upcoming_slots = AvailabilitySlot.objects.filter(
             profile=profile,
@@ -227,26 +309,44 @@ class AvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
         )
 
 
-class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
-    """Retrieve, update, and delete mentor-owned availability slots."""
+class MyAvailabilitySlotDetailAPIView(ProfileLookupMixin, APIView):
+    """Canonical owner-scoped availability slot detail/update/delete endpoint."""
 
     permission_classes = [IsUser]
+
+    def _get_owned_slot_or_404(
+        self,
+        request: Request,
+        slot_id: str,
+    ) -> tuple[Profile | None, AvailabilitySlot | None]:
+        """Return authenticated mentor profile and owned slot, or None values when missing."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return None, None
+
+        if not self._is_mentor_profile(profile):
+            return profile, None
+
+        slot = AvailabilitySlot.objects.filter(id=slot_id, profile=profile).first()
+        return profile, slot
 
     @extend_schema(
         responses={
             200: AvailabilitySlotSerializer,
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
             404: OpenApiResponse(description="Availability slot not found."),
         },
-        description="Retrieve a mentor-owned availability slot by ID.",
+        description="Retrieve one availability slot owned by authenticated mentor.",
         tags=["Profiles"],
     )
-    def get(self, request: Request, username: str, slot_id: str) -> Response:
-        """Retrieve one availability slot for mentor matching username."""
-        profile = self._get_profile_or_404(username)
-        if profile is None or not self._is_mentor_profile(profile):
+    def get(self, request: Request, slot_id: str) -> Response:
+        """Retrieve one availability slot for authenticated mentor."""
+        profile, slot = self._get_owned_slot_or_404(request, slot_id)
+        if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-
-        slot = self._get_slot_or_404(profile, slot_id)
+        if not self._is_mentor_profile(profile):
+            return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
         if slot is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -257,21 +357,20 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
         responses={
             200: AvailabilitySlotSerializer,
             400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
             404: OpenApiResponse(description="Availability slot not found."),
         },
-        description="Update a mentor-owned availability slot.",
+        description="Partially update one availability slot owned by authenticated mentor.",
         tags=["Profiles"],
     )
-    def patch(self, request: Request, username: str, slot_id: str) -> Response:
-        """Partially update one availability slot for owner mentor only."""
-        profile = self._get_profile_or_404(username)
+    def patch(self, request: Request, slot_id: str) -> Response:
+        """Partially update one availability slot for authenticated mentor."""
+        profile, slot = self._get_owned_slot_or_404(request, slot_id)
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-
-        if request.user != profile.user or not self._is_mentor_profile(profile):
+        if not self._is_mentor_profile(profile):
             return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
-
-        slot = self._get_slot_or_404(profile, slot_id)
         if slot is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -290,21 +389,20 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
         responses={
             200: AvailabilitySlotSerializer,
             400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
             404: OpenApiResponse(description="Availability slot not found."),
         },
-        description="Replace a mentor-owned availability slot.",
+        description="Replace one availability slot owned by authenticated mentor.",
         tags=["Profiles"],
     )
-    def put(self, request: Request, username: str, slot_id: str) -> Response:
-        """Fully update one availability slot for owner mentor only."""
-        profile = self._get_profile_or_404(username)
+    def put(self, request: Request, slot_id: str) -> Response:
+        """Fully update one availability slot for authenticated mentor."""
+        profile, slot = self._get_owned_slot_or_404(request, slot_id)
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-
-        if request.user != profile.user or not self._is_mentor_profile(profile):
+        if not self._is_mentor_profile(profile):
             return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
-
-        slot = self._get_slot_or_404(profile, slot_id)
         if slot is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -321,21 +419,20 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
     @extend_schema(
         responses={
             204: OpenApiResponse(description="Availability slot deleted."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
             404: OpenApiResponse(description="Availability slot not found."),
         },
-        description="Delete a mentor-owned availability slot.",
+        description="Delete one availability slot owned by authenticated mentor.",
         tags=["Profiles"],
     )
-    def delete(self, request: Request, username: str, slot_id: str) -> Response:
-        """Delete one availability slot for owner mentor only."""
-        profile = self._get_profile_or_404(username)
+    def delete(self, request: Request, slot_id: str) -> Response:
+        """Delete one availability slot for authenticated mentor."""
+        profile, slot = self._get_owned_slot_or_404(request, slot_id)
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-
-        if request.user != profile.user or not self._is_mentor_profile(profile):
+        if not self._is_mentor_profile(profile):
             return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
-
-        slot = self._get_slot_or_404(profile, slot_id)
         if slot is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -347,7 +444,7 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
 
                 if locked_slot.is_booked:
                     return Response(
-                        {"detail": ("Cannot delete a booked slot. Cancel the booking first.")},
+                        {"detail": "Cannot delete a booked slot. Cancel the booking first."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
@@ -394,6 +491,7 @@ class AvailabilitySlotDetailAPIView(AvailabilitySlotLookupMixin, APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -416,12 +514,14 @@ class AvailabilitySlotBookAPIView(ProfileLookupMixin, APIView):
     )
     def post(self, request: Request, username: str, slot_id: str) -> Response:
         """Book a slot for requester when business rules permit."""
+        from mentorship.services import book_match_session
+
         profile = self._get_profile_or_404(username)
         if profile is None or not self._is_mentor_profile(profile):
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            slot = book_availability_slot(profile=profile, slot_id=slot_id, actor=request.user)
+            slot = book_match_session(mentor_profile=profile, slot_id=slot_id, actor=request.user)
         except AvailabilitySlot.DoesNotExist:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
         except SlotAlreadyBookedError as exc:
@@ -434,39 +534,88 @@ class AvailabilitySlotBookAPIView(ProfileLookupMixin, APIView):
         return Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_200_OK)
 
 
-class AvailabilitySlotCancelBookingAPIView(ProfileLookupMixin, APIView):
-    """Cancel an existing slot booking."""
+class RecentlyAddedMentorsListAPIView(APIView):
+    """Public listing of the most recently created visible mentor profiles."""
 
-    permission_classes = [IsUser]
+    permission_classes = [AllowAny]
 
     @extend_schema(
-        request=None,
         responses={
-            200: AvailabilitySlotSerializer,
-            400: OpenApiResponse(description="Cancellation validation error."),
-            401: OpenApiResponse(description="Authentication required."),
-            403: OpenApiResponse(description="Permission denied."),
-            404: OpenApiResponse(description="Availability slot not found."),
+            200: PublicMentorProfileSearchListResponseSerializer,
+            400: OpenApiResponse(description="Invalid `limit` value."),
         },
-        description="Cancel a mentor availability slot booking.",
+        description=(
+            "Return the most recently created visible mentor profiles, "
+            "sorted by creation date descending. "
+            "Use `limit` (1–50, default 10) to control the list size."
+        ),
         tags=["Profiles"],
     )
-    def post(self, request: Request, username: str, slot_id: str) -> Response:
-        """Cancel an existing booking when requester is permitted."""
-        profile = self._get_profile_or_404(username)
-        if profile is None or not self._is_mentor_profile(profile):
-            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-
+    def get(self, request: Request) -> Response:
         try:
-            slot = cancel_availability_booking(profile=profile, slot_id=slot_id, actor=request.user)
-        except AvailabilitySlot.DoesNotExist:
-            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-        except SlotNotBookedError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except BookingCancelNotAllowedError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+            limit = int(request.query_params.get("limit", 10))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "`limit` must be an integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        return Response(AvailabilitySlotSerializer(slot).data, status=status.HTTP_200_OK)
+        limit = max(1, min(limit, 50))
+
+        qs = (
+            Profile.objects.select_related("user")
+            .filter(
+                is_visible=True,
+                user__app_usage_mode=AppUsageMode.MENTOR,
+                user__is_active=True,
+            )
+            .order_by("-created_at")[:limit]
+        )
+
+        serializer = PublicMentorProfileSearchResultSerializer(qs, many=True)
+        return Response({"results": serializer.data}, status=status.HTTP_200_OK)
+
+
+class PopularMentorsListAPIView(APIView):
+    """Public listing of the highest-rated visible mentor profiles."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        responses={
+            200: PublicMentorProfileSearchListResponseSerializer,
+            400: OpenApiResponse(description="Invalid `limit` value."),
+        },
+        description=(
+            "Return the most popular visible mentor profiles, sorted by average rating "
+            "descending with total mentee count as a tiebreaker. "
+            "Use `limit` (1–50, default 10) to control the list size."
+        ),
+        tags=["Profiles"],
+    )
+    def get(self, request: Request) -> Response:
+        try:
+            limit = int(request.query_params.get("limit", 10))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "`limit` must be an integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        limit = max(1, min(limit, 50))
+
+        qs = (
+            Profile.objects.select_related("user")
+            .filter(
+                is_visible=True,
+                user__app_usage_mode=AppUsageMode.MENTOR,
+                user__is_active=True,
+            )
+            .order_by("-average_rating", "-total_mentee_count")[:limit]
+        )
+
+        serializer = PublicMentorProfileSearchResultSerializer(qs, many=True)
+        return Response({"results": serializer.data}, status=status.HTTP_200_OK)
 
 
 class PublicMentorProfilesSearchListAPIView(APIView):
@@ -528,11 +677,7 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         if mode == AppUsageMode.MENTEE:
             return [AppUsageMode.MENTEE]
 
-        # "BOTH" isn't a first-class value in our backend, but we treat it as mentor.
-        if mode == "BOTH":
-            return [AppUsageMode.MENTOR]
-
-        raise ValueError("Invalid mentorshipMode. Expected MENTOR, MENTEE, or BOTH.")
+        raise ValueError("Invalid mentorshipMode. Expected MENTOR or MENTEE.")
 
     @staticmethod
     def _maybe_parse_coordinates(request: Request) -> tuple[float, float] | None:
@@ -661,6 +806,118 @@ class PublicMentorProfilesSearchListAPIView(APIView):
                 "page": page,
                 "pageSize": page_size,
                 "results": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class MentorPublicAverageRatingAPIView(ProfileLookupMixin, APIView):
+    """Return the public batch-updated average rating for a mentor profile."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(description="Public average rating data."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "Return the public average rating and review count for a mentor profile. "
+            "The average rating is updated in batches (per the configured threshold), "
+            "not on every individual review."
+        ),
+        tags=["Profiles"],
+    )
+    def get(self, request: Request, username: str) -> Response:
+        """Return average_rating and review_count for the named profile."""
+        profile = self._get_profile_or_404(username)
+        if profile is None or not profile.is_visible:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(
+            {
+                "username": profile.username,
+                "average_rating": str(profile.average_rating),
+                "review_count": profile.review_count,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PublicProfileReviewSerializer(serializers.Serializer):
+    """Public-facing text review payload for profile pages."""
+
+    rating = serializers.IntegerField()
+    text = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class PublicProfileReviewListResponseSerializer(serializers.Serializer):
+    """Paginated response for public profile reviews endpoint."""
+
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    pageSize = serializers.IntegerField()
+    results = PublicProfileReviewSerializer(many=True)
+
+
+class ProfileReviewsByUsernameAPIView(ProfileLookupMixin, APIView):
+    """Return public, anonymous mentee text reviews for a visible mentor profile."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id="profiles_public_reviews",
+        responses={
+            200: PublicProfileReviewListResponseSerializer,
+            400: OpenApiResponse(description="Invalid pagination params."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "Return anonymous text reviews for a visible mentor profile. "
+            "Only complete batches of reviews are exposed based on the configured "
+            "rating update threshold. Supports pagination via `page` and `pageSize`."
+        ),
+        tags=["Profiles"],
+    )
+    def get(self, request: Request, username: str) -> Response:
+        profile = self._get_profile_or_404(username)
+        if profile is None or not profile.is_visible or not self._is_mentor_profile(profile):
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            page = int(request.query_params.get("page", 1))
+            page_size = int(request.query_params.get("pageSize", 6))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "`page` and `pageSize` must be integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        page = max(page, 1)
+        page_size = max(page_size, 1)
+        page_size = min(page_size, 50)
+
+        threshold = max(1, int(getattr(settings, "RATING_UPDATE_THRESHOLD", 5)))
+        allowed_reviews_count = (profile.review_count // threshold) * threshold
+
+        feedback_qs = (
+            Feedback.objects.filter(match__mentor=profile)
+            .exclude(submitted_by=profile)
+            .exclude(text="")
+            .order_by("id")
+        )
+
+        total = min(feedback_qs.count(), allowed_reviews_count)
+        offset = (page - 1) * page_size
+        items = feedback_qs[:allowed_reviews_count][offset : offset + page_size]
+
+        return Response(
+            {
+                "count": total,
+                "page": page,
+                "pageSize": page_size,
+                "results": PublicProfileReviewSerializer(items, many=True).data,
             },
             status=status.HTTP_200_OK,
         )

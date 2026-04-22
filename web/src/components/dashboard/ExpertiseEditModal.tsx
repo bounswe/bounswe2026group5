@@ -1,5 +1,5 @@
 // web/src/components/dashboard/ExpertiseEditModal.tsx
-import { useState } from 'react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,15 +11,24 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { X } from 'lucide-react'
-import { MOCK_DISCOVER_SKILLS } from '@/lib/mocks/loggedInHome' // Mock data for existing skills. Replace with actual data from backend in the future.
+import { useState } from 'react'
 
-export function ExpertiseEditModal() {
+interface ExpertiseSkill {
+  id: string
+  name: string
+  category: string
+  description: string
+}
+
+interface ExpertiseEditModalProps {
+  initialSkills?: ExpertiseSkill[]
+}
+
+export function ExpertiseEditModal({ initialSkills = [] }: Readonly<ExpertiseEditModalProps>) {
   const [isOpen, setIsOpen] = useState(false)
-  
-  // Local state initialized with our mock data
-  const [skills, setSkills] = useState(MOCK_DISCOVER_SKILLS)
+
+  const [skills, setSkills] = useState<ExpertiseSkill[]>(initialSkills)
   const [newSkillText, setNewSkillText] = useState('')
 
   const handleRemoveSkill = (idToRemove: string) => {
@@ -43,7 +52,7 @@ export function ExpertiseEditModal() {
   }
 
   const handleSave = () => {
-    // FUTURE: Trigger TanStack Query mutation to update ProfileExpertise on the backend
+    // FUTURE: Trigger TanStack Query mutation to update profile skills on the backend
     console.log('Saving updated skills:', skills)
     setIsOpen(false)
   }
@@ -58,7 +67,7 @@ export function ExpertiseEditModal() {
       
       <DialogContent className="sm:max-w-[425px] island-shell border-line">
         <DialogHeader>
-          <DialogTitle>Edit Expertise</DialogTitle>
+          <DialogTitle>Edit Skills</DialogTitle>
           <DialogDescription>
             Add or remove skills from your profile to help mentees find you.
           </DialogDescription>

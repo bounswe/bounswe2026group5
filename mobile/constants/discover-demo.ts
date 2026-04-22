@@ -23,8 +23,8 @@ export const DEMO_DISCOVER_PROFILES: DiscoverMentorProfile[] = [
     picture_url: "",
     title: "Mobile Engineer",
     show_initials_only: false,
-    expertises: ["React Native", "TypeScript", "System Design"],
-    rating: 5,
+    skills: ["React Native", "TypeScript", "System Design"],
+    average_rating: "5.00",
     total_mentee_count: 18,
   },
   {
@@ -36,8 +36,8 @@ export const DEMO_DISCOVER_PROFILES: DiscoverMentorProfile[] = [
     picture_url: "",
     title: "Backend Mentor",
     show_initials_only: false,
-    expertises: ["Django", "PostgreSQL", "SQL"],
-    rating: 4,
+    skills: ["Django", "PostgreSQL", "SQL"],
+    average_rating: "4.00",
     total_mentee_count: 11,
   },
   {
@@ -49,8 +49,8 @@ export const DEMO_DISCOVER_PROFILES: DiscoverMentorProfile[] = [
     picture_url: "",
     title: "Engineering Mentor",
     show_initials_only: false,
-    expertises: ["Docker", "GraphQL", "System Design"],
-    rating: 5,
+    skills: ["Docker", "GraphQL", "System Design"],
+    average_rating: "5.00",
     total_mentee_count: 24,
   },
 ];

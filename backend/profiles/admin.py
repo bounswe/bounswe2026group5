@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AvailabilitySlot, ExpertiseField, Profile, ProfileExpertise, Skill
+from .models import AvailabilitySlot, Profile, Skill
 
 
 @admin.register(Profile)
@@ -25,26 +25,6 @@ class SkillAdmin(admin.ModelAdmin):
     ordering = ("name",)
 
 
-@admin.register(ExpertiseField)
-class ExpertiseFieldAdmin(admin.ModelAdmin):
-    list_display = ("name", "created_at")
-    search_fields = ("name", "description")
-    ordering = ("name",)
-
-
-@admin.register(ProfileExpertise)
-class ProfileExpertiseAdmin(admin.ModelAdmin):
-    list_display = (
-        "profile",
-        "expertise_field",
-        "proficiency_level",
-        "average_rating",
-        "rating_count",
-        "created_at",
-    )
-    list_filter = ("proficiency_level",)
-    search_fields = ("profile__display_name", "expertise_field__name")
-    ordering = ("-created_at",)
 
 
 @admin.register(AvailabilitySlot)

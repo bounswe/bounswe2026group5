@@ -1,42 +1,47 @@
-import { useMemo, useState } from "react";
-import { Alert, View, Text, ScrollView, TouchableOpacity } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useMemo, useState } from "react";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Import the components for the dashboard
 import { RequestCard } from "@/components/dashboard/RequestCard";
+import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
+import { RescheduleBottomSheet } from "@/components/dashboard/RescheduleBottomSheet";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
-import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { SuccessCard } from "@/components/ui/SuccessCard";
 
+import { useAuthStore } from "@/lib/auth/store";
 import {
-  mapMatchesToSessions,
-  mapUpcomingSessionsToDashboard,
+  mapMeetingSessionsToDashboard,
   mapRequestsToDashboard,
-  useMentorshipMatchesQuery,
-  useMentorshipUpcomingSessionsQuery,
+  useAvailabilitySlotsQuery,
+  useCancelSessionMutation,
+  useMentorshipMeetingSessionsQuery,
   useMentorshipRequestsQuery,
+  useRescheduleSessionMutation,
   useRespondToMentorshipRequestMutation,
   type DashboardRequestItem,
   type DashboardSessionItem,
 } from "@/lib/queries/mentorship";
-import { useAuthStore } from "@/lib/auth/store";
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const currentUsername = useAuthStore((state) => state.user?.username);
-  const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
 
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
-  const matchesQuery = useMentorshipMatchesQuery(currentUsername);
-  const upcomingSessionsQuery = useMentorshipUpcomingSessionsQuery(currentUsername);
+  const meetingSessionsQuery = useMentorshipMeetingSessionsQuery(
+    currentUsername,
+    { status: "upcoming" },
+  );
   const respondMutation = useRespondToMentorshipRequestMutation();
-
-  const isMenteeOnly = appUsageMode === "MENTEE";
-  const isMentorOnly = appUsageMode === "MENTOR";
+  const cancelSessionMutation = useCancelSessionMutation(currentUsername);
+  const rescheduleSessionMutation =
+    useRescheduleSessionMutation(currentUsername);
 
   // Debug logging
   const requests = useMemo<DashboardRequestItem[]>(() => {
@@ -44,62 +49,38 @@ export default function DashboardScreen() {
       return mapRequestsToDashboard(requestsQuery.data, currentUsername);
     }
     return [];
-  }, [requestsQuery.data, requestsQuery.isLoading, requestsQuery.error, currentUsername]);
+  }, [requestsQuery.data, currentUsername]);
 
-  const sessions = useMemo(() => {
-    if (!currentUsername) {
-      return [];
-    }
-
-    if (isMenteeOnly) {
-      return mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []);
-    }
-
-    if (isMentorOnly) {
-      return mapMatchesToSessions(
-        requestsQuery.data ?? [],
-        matchesQuery.data ?? [],
-        currentUsername,
-      );
-    }
-
-    const byKey = new Map<string, DashboardSessionItem>();
-
-    mapUpcomingSessionsToDashboard(upcomingSessionsQuery.data ?? []).forEach(
-      (session) => {
-        byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
-      },
-    );
-
-    mapMatchesToSessions(
-      requestsQuery.data ?? [],
-      matchesQuery.data ?? [],
-      currentUsername,
-    ).forEach((session) => {
-      byKey.set(`${session.rawDate}|${session.time}|${session.user}`, session);
-    });
-
-    return Array.from(byKey.values()).sort((a, b) => {
-      const aKey = `${a.rawDate}T${a.time.split(" - ")[0] ?? "00:00"}`;
-      const bKey = `${b.rawDate}T${b.time.split(" - ")[0] ?? "00:00"}`;
-      return aKey.localeCompare(bKey);
-    });
-  }, [
-    currentUsername,
-    appUsageMode,
-    isMenteeOnly,
-    isMentorOnly,
-    upcomingSessionsQuery.data,
-    requestsQuery.data,
-    matchesQuery.data,
-  ]);
+  const sessions = useMemo(
+    () => mapMeetingSessionsToDashboard(meetingSessionsQuery.data ?? []),
+    [meetingSessionsQuery.data],
+  );
+  const queryError =
+    (requestsQuery.isError && "Failed to load mentorship requests.") ||
+    (meetingSessionsQuery.isError && "Failed to load upcoming sessions.") ||
+    null;
 
   // State for Modals
   const [selectedRequest, setSelectedRequest] =
     useState<DashboardRequestItem | null>(null);
-  const [selectedSession, setSelectedSession] = useState<
-    (typeof sessions)[0] | null
-  >(null);
+  const [selectedSession, setSelectedSession] =
+    useState<DashboardSessionItem | null>(null);
+  const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
+    null,
+  );
+  const [rescheduleSessionMentorUsername, setRescheduleSessionMentorUsername] =
+    useState<string | null>(null);
+  const [rescheduleCurrentSlotId, setRescheduleCurrentSlotId] = useState("");
+  const selectedMentorUsername =
+    selectedSession?.myRole === "Mentee"
+      ? selectedSession.mentorUsername
+      : undefined;
+  const mentorAvailabilityForReschedule = useAvailabilitySlotsQuery(
+    rescheduleSessionMentorUsername || "",
+  );
 
   const handleRespond = async (action: "accept" | "reject") => {
     if (!selectedRequest) {
@@ -107,17 +88,22 @@ export default function DashboardScreen() {
     }
 
     try {
+      setActionError(null);
+      setSuccessMessage(null);
       await respondMutation.mutateAsync({
         requestId: selectedRequest.requestId,
         action,
       });
       setSelectedRequest(null);
       requestsQuery.refetch();
-      matchesQuery.refetch();
-      upcomingSessionsQuery.refetch();
+      meetingSessionsQuery.refetch();
+      setSuccessMessage(
+        action === "accept"
+          ? "Request accepted successfully."
+          : "Request rejected successfully.",
+      );
     } catch (error) {
-      Alert.alert(
-        "Request Action Failed",
+      setActionError(
         error instanceof Error
           ? error.message
           : "Could not update request status.",
@@ -125,18 +111,71 @@ export default function DashboardScreen() {
     }
   };
 
+  const handleOpenRequestProfile = (request: DashboardRequestItem) => {
+    const targetUsername =
+      request.type === "incoming"
+        ? request.menteeUsername
+        : request.mentorUsername;
+
+    if (!targetUsername) {
+      return;
+    }
+
+    router.push(`/user/${encodeURIComponent(targetUsername)}`);
+  };
+
+  const handleCancelSession = async () => {
+    if (!selectedSession?.sessionId) {
+      return;
+    }
+
+    try {
+      setActionError(null);
+      setSuccessMessage(null);
+      await cancelSessionMutation.mutateAsync(selectedSession.sessionId);
+      setSelectedSession(null);
+      setSuccessMessage("The session was cancelled.");
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Could not cancel the session.",
+      );
+    }
+  };
+
+  const handleRescheduleSession = () => {
+    if (selectedSession?.myRole !== "Mentee") {
+      setActionError("Only mentees can reschedule sessions.");
+      return;
+    }
+
+    if (!selectedSession.sessionId || !selectedMentorUsername) {
+      setActionError(
+        "Could not resolve session details. Please refresh and try again.",
+      );
+      return;
+    }
+
+    setRescheduleSessionId(selectedSession.sessionId);
+    setRescheduleSessionMentorUsername(selectedMentorUsername);
+    setRescheduleCurrentSlotId(selectedSession.id);
+    setSuccessMessage(null);
+    setShowRescheduleSheet(true);
+  };
+
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-surface dark:bg-surface-dark">
       {/* 1. FIXED TOP HEADER */}
       <View
-        className="bg-white z-10 shadow-sm border-b border-gray-100"
+        className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
         style={{ paddingTop: insets.top }}
       >
         <View className="flex-row justify-between items-center px-4 pb-3 pt-2">
-          <Text className="text-2xl font-extrabold text-gray-900">
+          <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Dashboard
           </Text>
-          <Ionicons name="notifications-outline" size={24} color="#4b5563" />
+          <NotificationBell />
         </View>
       </View>
 
@@ -146,23 +185,43 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 160 }}
       >
+        {queryError ? (
+          <View className="mb-4">
+            <ErrorBanner message={queryError} />
+          </View>
+        ) : null}
+
+        {successMessage ? (
+          <View className="mb-4">
+            <SuccessCard message={successMessage} />
+          </View>
+        ) : null}
+
+        {actionError ? (
+          <View className="mb-4">
+            <ErrorBanner message={actionError} />
+          </View>
+        ) : null}
+
         {/* Requests Section */}
         <View className="mb-6">
           <View className="flex-row justify-between items-center mb-3 mt-2">
             <View className="flex-row items-center">
-              <Text className="text-lg font-bold text-gray-900">
+              <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
                 Pending Requests
               </Text>
               {requests.length > 0 && (
-                <View className="bg-red-500 rounded-full px-2 py-0.5 ml-2 justify-center items-center">
+                <View className="bg-primary rounded-full px-2 py-0.5 ml-2 justify-center items-center">
                   <Text className="text-white text-xs font-bold">
                     {requests.length}
                   </Text>
                 </View>
               )}
             </View>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/connections')}>
-              <Text className="text-indigo-600 font-semibold text-sm">
+            <TouchableOpacity
+              onPress={() => router.push("/(tabs)/connections")}
+            >
+              <Text className="text-primary dark:text-primary-dim font-semibold text-sm">
                 View All
               </Text>
             </TouchableOpacity>
@@ -176,6 +235,7 @@ export default function DashboardScreen() {
               topic={req.topic}
               type={req.type}
               onPress={() => setSelectedRequest(req)}
+              onShowProfile={() => handleOpenRequestProfile(req)}
             />
           ))}
         </View>
@@ -183,19 +243,19 @@ export default function DashboardScreen() {
         {/* Sessions Section */}
         <View className="mb-6">
           <View className="flex-row justify-between items-center mb-3 mt-2">
-            <Text className="text-lg font-bold text-gray-900">
+            <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
               Your Sessions
             </Text>
             <TouchableOpacity onPress={() => router.push("/schedule")}>
-              <Text className="text-blue-600 font-semibold text-sm">
+              <Text className="text-primary dark:text-primary-dim font-semibold text-sm">
                 View All {sessions.length > 0 ? `(${sessions.length})` : ""}
               </Text>
             </TouchableOpacity>
           </View>
 
           {sessions.length === 0 ? (
-            <View className="bg-white p-4 rounded-xl border border-gray-100">
-              <Text className="text-gray-500 font-medium">
+            <View className="bg-surface-card dark:bg-surface-card-dark p-4 rounded-xl border border-divider dark:border-divider-dark">
+              <Text className="text-on-surface-soft dark:text-on-surface-soft-dark font-medium">
                 No upcoming sessions yet.
               </Text>
             </View>
@@ -222,8 +282,7 @@ export default function DashboardScreen() {
         onAccept={() => handleRespond("accept")}
         onReject={() => handleRespond("reject")}
         onCancelOutgoing={() => {
-          Alert.alert(
-            "Not Supported Yet",
+          setActionError(
             "Outgoing request cancellation is not available on the current API.",
           );
         }}
@@ -234,14 +293,45 @@ export default function DashboardScreen() {
         visible={!!selectedSession}
         session={selectedSession}
         onClose={() => setSelectedSession(null)}
-        onReschedule={() => {
-          Alert.alert(
-            "Coming Soon",
-            "Rescheduling will be wired after the dedicated API endpoint is finalized.",
-          );
-        }}
+        onCancelSession={handleCancelSession}
+        onReschedule={handleRescheduleSession}
+        isCancelling={cancelSessionMutation.isPending}
       />
 
+      <RescheduleBottomSheet
+        visible={showRescheduleSheet}
+        onClose={() => {
+          setShowRescheduleSheet(false);
+          setRescheduleSessionId(null);
+          setRescheduleSessionMentorUsername(null);
+          setRescheduleCurrentSlotId("");
+        }}
+        slots={mentorAvailabilityForReschedule.data ?? []}
+        isLoading={mentorAvailabilityForReschedule.isLoading}
+        currentSlotId={rescheduleCurrentSlotId}
+        onSelectSlot={(newSlotId: string) => {
+          if (rescheduleSessionId) {
+            rescheduleSessionMutation
+              .mutateAsync({
+                sessionId: rescheduleSessionId,
+                newSlotId,
+              })
+              .then(() => {
+                setActionError(null);
+                setSuccessMessage("Your session was updated.");
+                setSelectedSession(null);
+                setShowRescheduleSheet(false);
+              })
+              .catch((error) => {
+                setActionError(
+                  error instanceof Error
+                    ? error.message
+                    : "Could not reschedule this session.",
+                );
+              });
+          }
+        }}
+      />
     </View>
   );
 }

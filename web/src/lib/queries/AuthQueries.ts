@@ -1,6 +1,7 @@
 // lib/queries/auth.ts
-import {queryOptions, useMutation} from "@tanstack/react-query"
 import { queryClient, router } from "#/router.tsx"
+import { throwApiError } from "#/lib/apiError.ts"
+import { queryOptions, useMutation } from "@tanstack/react-query"
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -27,10 +28,9 @@ export const meQueryOptions = queryOptions({
     queryKey: ['me'],
     queryFn: async () => {
         const token = localStorage.getItem('access_token')
-        const id = localStorage.getItem('id')
-        if (!token || !id) return null
+        if (!token) return null
 
-        let res = await fetch(`${API_BASE_URL}/auth/${id}/`, {
+        let res = await fetch(`${API_BASE_URL}/auth/me/`, {
             headers: { Authorization: `Bearer ${token}` }
         })
 
@@ -58,7 +58,7 @@ export const meQueryOptions = queryOptions({
             localStorage.setItem('access_token', access)
 
             // Retry original request with new token
-            res = await fetch(`${API_BASE_URL}/auth/${id}/`, {
+            res = await fetch(`${API_BASE_URL}/auth/me/`, {
                 headers: { Authorization: `Bearer ${access}` }
             })
         }
@@ -74,8 +74,8 @@ export const meQueryOptions = queryOptions({
 export const getStoredUser = (): Partial<User> | null => {
     const token = localStorage.getItem('access_token')
     const id = localStorage.getItem('id')
-    if (!token || !id) return null
-    return { id }
+    if (!token) return null
+    return id ? { id } : {}
 }
 
 export function handleAuthSuccess(data: AuthResponse) {
@@ -112,7 +112,7 @@ export async function loginFn(credentials: { email: string; password: string }) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
     })
-    if (!res.ok) throw new Error('Invalid credentials')
+    if (!res.ok) await throwApiError(res)
     return res.json() as Promise<AuthResponse>
 }
 
@@ -122,21 +122,21 @@ export async function registerFn(credentials: { email: string; password: string;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
     })
-    if (!res.ok) throw new Error('Registration failed')
+    if (!res.ok) await throwApiError(res)
     return res.json() as Promise<AuthResponse>
 }
 
-export async function updateAppUsageModeFn({ userId, app_usage_mode }: {
-    userId: string
+export async function updateAppUsageModeFn({ app_usage_mode }: {
+    userId?: string
     app_usage_mode: 'MENTEE' | 'MENTOR'
 }) {
     const token = localStorage.getItem('access_token')
-    const res = await fetch(`${API_BASE_URL}/auth/${userId}/app-usage-mode/`, {
+    const res = await fetch(`${API_BASE_URL}/auth/me/role/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ app_usage_mode }),
     })
-    if (!res.ok) throw new Error('Failed to update usage mode')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 

@@ -1,14 +1,15 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, Pressable } from 'react-native';
+import { ActivityIndicator, Modal, View, Text, TouchableOpacity, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface DeclineConfirmModalProps {
   visible: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  isLoading?: boolean;
 }
 
-export function DeclineConfirmModal({ visible, onCancel, onConfirm }: DeclineConfirmModalProps) {
+export function DeclineConfirmModal({ visible, onCancel, onConfirm, isLoading = false }: Readonly<DeclineConfirmModalProps>) {
   return (
     <Modal animationType="fade" transparent={true} visible={visible} onRequestClose={onCancel}>
       <Pressable
@@ -39,19 +40,27 @@ export function DeclineConfirmModal({ visible, onCancel, onConfirm }: DeclineCon
             {/* Action Buttons */}
             <View className="flex-row gap-3 w-full">
               <TouchableOpacity
+                testID="decline-modal-cancel"
                 activeOpacity={0.8}
                 onPress={onCancel}
+                disabled={isLoading}
                 className="flex-1 py-3.5 rounded-full bg-gray-100 items-center justify-center"
               >
                 <Text className="font-bold text-on-surface-variant text-sm">Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
+                testID="decline-modal-confirm"
                 activeOpacity={0.85}
                 onPress={onConfirm}
+                disabled={isLoading}
                 className="flex-1 py-3.5 rounded-full bg-error items-center justify-center"
               >
-                <Text className="font-bold text-white text-sm">Confirm Decline</Text>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text className="font-bold text-white text-sm">Confirm Decline</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>

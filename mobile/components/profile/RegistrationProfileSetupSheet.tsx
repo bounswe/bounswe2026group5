@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Colors } from "@/constants/theme";
 
 type Role = "mentor" | "mentee";
@@ -24,12 +25,29 @@ interface RegistrationProfileSetupSheetProps {
   isLoadingSkills: boolean;
   isSubmitting: boolean;
   submitError: string;
+  usernameError?: string;
+  onUsernameChange?: () => void;
   onClose: () => void;
   onSubmit: (values: {
+    username: string;
     displayName: string;
     bio: string;
     selectedSkills: string[];
   }) => void;
+}
+
+function validateUsername(value: string): string {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "Username is required.";
+  }
+
+  if (!/^[a-zA-Z0-9_]+$/.test(trimmedValue)) {
+    return "Use only letters, numbers, and underscores.";
+  }
+
+  return "";
 }
 
 function buildDisplayNameSuggestion(username: string): string {
@@ -47,6 +65,14 @@ function buildDisplayNameSuggestion(username: string): string {
     .join(" ");
 }
 
+function formatUsername(username: string): string {
+  if (!username) {
+    return "Assigned during registration";
+  }
+
+  return username.startsWith("@") ? username : `@${username}`;
+}
+
 export function RegistrationProfileSetupSheet({
   visible,
   role,
@@ -55,6 +81,8 @@ export function RegistrationProfileSetupSheet({
   isLoadingSkills,
   isSubmitting,
   submitError,
+  usernameError,
+  onUsernameChange,
   onClose,
   onSubmit,
 }: Readonly<RegistrationProfileSetupSheetProps>) {
@@ -69,9 +97,11 @@ export function RegistrationProfileSetupSheet({
       : "Pick the topics you want to learn.";
 
   const [displayName, setDisplayName] = useState("");
+  const [editableUsername, setEditableUsername] = useState("");
   const [bio, setBio] = useState("");
   const [search, setSearch] = useState("");
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [localUsernameError, setLocalUsernameError] = useState("");
   const [displayNameError, setDisplayNameError] = useState("");
   const [skillsError, setSkillsError] = useState("");
 
@@ -85,13 +115,15 @@ export function RegistrationProfileSetupSheet({
       return;
     }
 
+    setEditableUsername(username);
     setDisplayName(suggestedDisplayName);
     setBio("");
     setSearch("");
     setSelectedSkills([]);
+    setLocalUsernameError("");
     setDisplayNameError("");
     setSkillsError("");
-  }, [visible, suggestedDisplayName]);
+  }, [username, visible, suggestedDisplayName]);
 
   const toggleSkill = (skill: string) => {
     setSelectedSkills((current) =>
@@ -152,23 +184,27 @@ export function RegistrationProfileSetupSheet({
   }
 
   const handleSubmit = () => {
+    const trimmedUsername = editableUsername.trim();
     const trimmedDisplayName = displayName.trim();
     const trimmedBio = bio.trim();
 
+    const nextUsernameError = validateUsername(trimmedUsername);
     const nextDisplayNameError = trimmedDisplayName
       ? ""
       : "Display name is required.";
     const nextSkillsError =
       selectedSkills.length === 0 ? "Please select at least one skill." : "";
 
+    setLocalUsernameError(nextUsernameError);
     setDisplayNameError(nextDisplayNameError);
     setSkillsError(nextSkillsError);
 
-    if (nextDisplayNameError || nextSkillsError) {
+    if (nextUsernameError || nextDisplayNameError || nextSkillsError) {
       return;
     }
 
     onSubmit({
+      username: trimmedUsername,
       displayName: trimmedDisplayName,
       bio: trimmedBio,
       selectedSkills,
@@ -214,14 +250,57 @@ export function RegistrationProfileSetupSheet({
           keyboardShouldPersistTaps="handled"
         >
           {submitError ? (
-            <View className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30">
-              <Text className="text-sm font-medium text-red-600 dark:text-red-300">
-                {submitError}
-              </Text>
+            <View className="mb-4">
+              <ErrorBanner message={submitError} />
             </View>
           ) : null}
 
           <View className="gap-5">
+            <View className="gap-1.5">
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                Username
+              </Text>
+              <View className="flex-row items-center h-14 rounded-xl px-4 gap-2 bg-surface-input dark:bg-surface-input-dark">
+                <Ionicons
+                  name="at-outline"
+                  size={18}
+                  color={theme.textMuted}
+                />
+                <TextInput
+                  className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
+                  placeholder="your_username"
+                  placeholderTextColor={theme.textMuted}
+                  value={editableUsername}
+                  onChangeText={(text) => {
+                    setEditableUsername(text);
+                    onUsernameChange?.();
+                    if (localUsernameError) {
+                      setLocalUsernameError(validateUsername(text));
+                    }
+                  }}
+                  onBlur={() =>
+                    setLocalUsernameError(validateUsername(editableUsername))
+                  }
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  accessibilityLabel="Username"
+                />
+              </View>
+              <Text
+                className={`text-xs ml-1 ${localUsernameError || usernameError ? "text-red-500" : "text-on-surface-soft dark:text-on-surface-soft-dark"}`}
+              >
+                {localUsernameError ||
+                  usernameError ||
+                  `This will be your username: ${formatUsername(
+                    editableUsername || username,
+                  )}`}
+              </Text>
+              {usernameError ? (
+                <Text className="text-xs text-red-500 mt-1">{usernameError}</Text>
+              ) : null}
+            </View>
+
             <View className="gap-1.5">
               <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
                 Display Name
@@ -268,12 +347,12 @@ export function RegistrationProfileSetupSheet({
                   onChangeText={setBio}
                   multiline
                   textAlignVertical="top"
-                  maxLength={220}
+                  maxLength={500}
                   accessibilityLabel="Bio"
                 />
               </View>
               <Text className="text-xs ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
-                {bio.length}/220
+                {bio.length}/500
               </Text>
             </View>
 

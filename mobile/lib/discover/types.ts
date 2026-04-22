@@ -14,8 +14,8 @@ export interface DiscoverMentorProfile {
   picture_url: string;
   title: string;
   show_initials_only: boolean;
-  expertises: string[];
-  rating: number;
+  skills: string[];
+  average_rating: string;
   total_mentee_count: number;
 }
 

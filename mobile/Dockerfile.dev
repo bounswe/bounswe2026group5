@@ -1,0 +1,15 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies
+# We use alpine so we might need some build tools if there are native dependencies in node_modules, 
+# but usually for JS tests alpine is enough.
+COPY package*.json ./
+RUN npm install
+
+# Copy project files
+COPY . .
+
+# Default command
+CMD ["npm", "test"]

@@ -5,10 +5,10 @@ import uuid
 from decimal import Decimal
 
 from django.conf import settings
+from django.contrib.gis.db import models as gis_models
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.fields.ranges import RangeOperators
-from django.contrib.gis.db import models as gis_models
 from django.db import models
 from django.db.models import F, Func, Q, Value
 from django.utils import timezone
@@ -49,14 +49,13 @@ class Profile(models.Model):
         blank=True,
         default=list,
     )
-    rating = models.PositiveIntegerField(default=0)
     total_mentee_count = models.PositiveIntegerField(default=0)
-    expertise_fields = models.ManyToManyField(
-        "ExpertiseField",
-        through="ProfileExpertise",
-        related_name="profiles",
-        blank=True,
+    average_rating = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=Decimal("0.00"),
     )
+    review_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -93,85 +92,15 @@ class Profile(models.Model):
         return candidate
 
 
-class ExpertiseField(models.Model):
-    """Catalog of expertise fields that can be attached to profiles."""
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=80, unique=True)
-    description = models.TextField(blank=True, default="")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "expertise_fields"
-        ordering = ["name"]
-
-    def __str__(self) -> str:
-        return self.name
-
-
-class ProfileExpertise(models.Model):
-    """Join model for profile-to-expertise relation and rating metadata."""
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    profile = models.ForeignKey(
-        Profile,
-        on_delete=models.CASCADE,
-        related_name="profile_expertise",
-    )
-    expertise_field = models.ForeignKey(
-        ExpertiseField,
-        on_delete=models.CASCADE,
-        related_name="profile_expertise",
-    )
-    proficiency_level = models.PositiveSmallIntegerField(default=1)
-    average_rating = models.DecimalField(
-        max_digits=3,
-        decimal_places=2,
-        default=Decimal("0.00"),
-    )
-    rating_count = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "profile_expertise"
-        ordering = ["-created_at"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["profile", "expertise_field"],
-                name="uniq_profile_expertise",
-            ),
-            models.CheckConstraint(
-                condition=Q(proficiency_level__gte=1) & Q(proficiency_level__lte=5),
-                name="profile_expertise_proficiency_level_between_1_5",
-            ),
-            models.CheckConstraint(
-                condition=Q(average_rating__gte=0) & Q(average_rating__lte=5),
-                name="profile_expertise_average_rating_between_0_5",
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["profile", "expertise_field"]),
-        ]
-
-    def __str__(self) -> str:
-        return f"{self.profile.display_name} - {self.expertise_field.name}"
-
-    def update_rating(self, incoming_rating: float) -> None:
-        """Update aggregate rating values using a single incoming rating."""
-
-        if incoming_rating < 0 or incoming_rating > 5:
-            raise ValueError("incoming_rating must be between 0 and 5.")
-
-        total_rating = float(self.average_rating) * self.rating_count
-        total_rating += incoming_rating
-        self.rating_count += 1
-        self.average_rating = total_rating / self.rating_count
-        self.save(update_fields=["average_rating", "rating_count", "updated_at"])
-
-
 class AvailabilitySlot(models.Model):
     """Mentor availability time window that can be booked for sessions."""
+
+    class Status(models.TextChoices):
+        """Lifecycle statuses for an availability slot."""
+
+        AVAILABLE = "AVAILABLE", "Available"
+        PENDING = "PENDING", "Pending"
+        BOOKED = "BOOKED", "Booked"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     profile = models.ForeignKey(
@@ -181,6 +110,11 @@ class AvailabilitySlot(models.Model):
     )
     start_at = models.DateTimeField()
     end_at = models.DateTimeField()
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.AVAILABLE,
+    )
     is_booked = models.BooleanField(default=False)
     booked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -219,6 +153,7 @@ class AvailabilitySlot(models.Model):
         ]
         indexes = [
             models.Index(fields=["profile", "start_at"]),
+            models.Index(fields=["status", "start_at"]),
             models.Index(fields=["is_booked", "start_at"]),
             models.Index(fields=["booked_by", "start_at"]),
         ]
@@ -229,15 +164,23 @@ class AvailabilitySlot(models.Model):
     def mark_booked(self, user=None) -> None:
         """Mark slot as booked and optionally track who booked it."""
 
+        self.status = self.Status.BOOKED
         self.is_booked = True
         self.booked_by = user
         self.booked_at = timezone.now()
-        self.save(update_fields=["is_booked", "booked_by", "booked_at", "updated_at"])
+        self.save(update_fields=["status", "is_booked", "booked_by", "booked_at", "updated_at"])
+
+    def mark_pending(self) -> None:
+        """Mark slot as pending (requested)."""
+
+        self.status = self.Status.PENDING
+        self.save(update_fields=["status", "updated_at"])
 
     def mark_available(self) -> None:
         """Mark slot as available again."""
 
+        self.status = self.Status.AVAILABLE
         self.is_booked = False
         self.booked_by = None
         self.booked_at = None
-        self.save(update_fields=["is_booked", "booked_by", "booked_at", "updated_at"])
+        self.save(update_fields=["status", "is_booked", "booked_by", "booked_at", "updated_at"])

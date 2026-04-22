@@ -1,28 +1,29 @@
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Body, Heading, Muted } from '@/components/Typography'
-import { Star, Sparkles, Pencil, EyeOff } from 'lucide-react'
+import { Star, Sparkles, Pencil, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react'
 import { EditProfileModal } from '#/components/profile/EditProfileModal.tsx'
 import { useState } from 'react'
-import type { AvailabilitySlot } from '#/lib/queries/ProfileQueries.ts'
 import { getInitials } from '#/lib/utils.ts'
-import {AvailabilityCalendar} from "#/components/profile/AvailabilityCalendar.tsx";
-
+import { AvailabilityCalendar } from "#/components/profile/AvailabilityCalendar.tsx";
+import { useAvailabilitySlots } from "#/lib/queries/ProfileTimeSlotQueries.ts";
+import { useMentorReviews } from '#/lib/queries/ProfileQueries.ts'
+import { Button } from '@/components/ui/button'
+import { Loader2 } from 'lucide-react'
 interface BaseMappedProfile {
   full_name: string
   bio: string
   hidden: boolean
   picture_url: string
-  expertises: string[]
+  skills: string[]
   username: string,
 }
 
 interface MentorMappedProfile extends BaseMappedProfile {
   isMentor: true
   title: string
-  rating: number
+  average_rating: number
   total_mentee_count: number
-  available_slots: AvailabilitySlot[]
 }
 
 interface MenteeMappedProfile extends BaseMappedProfile {
@@ -37,6 +38,80 @@ interface ProfilePageViewProps {
   isAuthenticatedViewer: boolean
 }
 
+function StarRow({ rating }: { rating: number }) {
+    return (
+        <div className="flex items-center gap-0.5">
+            {[1, 2, 3, 4, 5].map(n => (
+                <Star
+                    key={n}
+                    className={`h-3.5 w-3.5 ${n <= rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`}
+                />
+            ))}
+        </div>
+    )
+}
+
+function MentorReviewsList({ username }: { username: string }) {
+    const [page, setPage] = useState(1)
+    const pageSize = 5
+    const { data, isLoading } = useMentorReviews(username, page, pageSize)
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-ink-soft" />
+            </div>
+        )
+    }
+
+    if (!data || data.results.length === 0) {
+        return <p className="text-sm text-gray-500 italic">No public reviews yet.</p>
+    }
+
+    const totalPages = Math.ceil(data.count / pageSize)
+
+    return (
+        <div className="space-y-1">
+            {data.results.map((review, i) => (
+                <div key={i} className="border-b border-line py-3 last:border-0">
+                    <StarRow rating={review.rating} />
+                    {review.text && (
+                        <Body className="text-sm text-ink-soft mt-1">{review.text}</Body>
+                    )}
+                    <Muted className="text-xs mt-1">
+                        {new Date(review.created_at).toLocaleDateString('en-GB', {
+                            day: 'numeric', month: 'short', year: 'numeric',
+                        })}
+                    </Muted>
+                </div>
+            ))}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between pt-2">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={page === 1}
+                        onClick={() => setPage(p => p - 1)}
+                        className="h-7 px-2"
+                    >
+                        <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Muted className="text-xs">{page} / {totalPages}</Muted>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={page === totalPages}
+                        onClick={() => setPage(p => p + 1)}
+                        className="h-7 px-2"
+                    >
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
+                </div>
+            )}
+        </div>
+    )
+}
+
 function HiddenField({ label }: { label: string }) {
   return (
       <div className="flex items-center gap-2 text-ink-soft text-sm italic">
@@ -49,6 +124,7 @@ function HiddenField({ label }: { label: string }) {
 export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: ProfilePageViewProps) {
   const [editOpen, setEditOpen] = useState(false)
   const isHidden = profile.hidden && !isOwner
+  const { data: slots = [] } = useAvailabilitySlots(profile.username, profile.isMentor)
 
   const avatarBlock = (
       <div className="flex flex-wrap items-center gap-5">
@@ -114,7 +190,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
             bio: profile.bio ?? '',
             title: profile.isMentor ? profile.title : undefined,
             hidden: profile.hidden,
-            skills: profile.expertises,
+            skills: profile.skills,
           }}
           onClose={() => setEditOpen(false)}
       />
@@ -138,18 +214,18 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                   <CardContent>
                     {isHidden ? (
                         <HiddenField label="Learning interests" />
-                    ) : profile.expertises.length === 0 ? (
-                        <Muted>No learning interests listed yet.</Muted>
+                    ) : profile.skills.length === 0 ? (
+                        <p className="text-gray-500 italic">No skills listed</p>
                     ) : (
                         <div className="flex flex-wrap gap-2">
-                          {profile.expertises.map(skill => (
-                              <span
-                                  key={skill}
-                                  className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
-                              >
-    {skill}
-</span>
-                          ))}
+                            {profile.skills.map(skill => (
+                                <span
+                                    key={skill}
+                                    className="px-3 py-1.5 rounded-full text-sm font-medium border bg-amber-50 text-amber-700 border-amber-200"
+                                >
+                                    {skill}
+                                </span>
+                            ))}
                         </div>
                     )}
                   </CardContent>
@@ -161,13 +237,12 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
         </main>
     )
   }
-
-  const openSlots = profile.available_slots.filter(s => !s.is_booked)
+  const openSlots = slots.filter(s => !s.is_booked)
 
     // MENTOR layout — restructure to put calendar full width below
     return (
         <main className="page-wrap py-10 sm:py-12 rise-in">
-            <section className="island-shell rounded-3xl p-6 sm:p-8 lg:p-10 space-y-8">
+            <section id="availability" className="island-shell rounded-3xl p-6 sm:p-8 lg:p-10 space-y-8">
 
                 {/* Top 2-col grid: left content + right snapshot */}
                 <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
@@ -181,22 +256,36 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                             <CardContent>
                                 {isHidden ? (
                                     <HiddenField label="Expertise" />
-                                ) : profile.expertises.length === 0 ? (
-                                    <Muted>No expertise listed yet.</Muted>
+                                ) : profile.skills.length === 0 ? (
+                                    <p className="text-gray-500 italic">No skills listed</p>
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
-                                        {profile.expertises.map(skill => (
+                                        {profile.skills.map(skill => (
                                             <span
                                                 key={skill}
-                                                className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors"
+                                                className="px-3 py-1.5 rounded-full text-sm font-medium border bg-violet-50 text-violet-700 border-violet-200"
                                             >
-                                            {skill}
-                                        </span>
+                                                {skill}
+                                            </span>
                                         ))}
                                     </div>
                                 )}
                             </CardContent>
                         </Card>
+
+                        {!isHidden && (
+                            <Card className="border-line bg-white/70 shadow-sm">
+                                <CardHeader>
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                        <Star className="h-4 w-4 text-amber-500" />
+                                        Reviews
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <MentorReviewsList username={profile.username} />
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
 
                     <aside className="space-y-4">
@@ -212,7 +301,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                                     ) : (
                                         <p className="text-2xl font-semibold text-ink mt-1 flex items-center gap-1">
                                             <Star className="h-4 w-4 fill-current text-amber-500" />
-                                            {profile.rating.toFixed(1)}
+                                            {profile.average_rating.toFixed(1)}
                                         </p>
                                     )}
                                 </div>

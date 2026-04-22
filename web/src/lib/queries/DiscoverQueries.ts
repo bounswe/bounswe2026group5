@@ -1,3 +1,4 @@
+import { throwApiError } from '#/lib/apiError.ts'
 import { queryOptions, infiniteQueryOptions } from '@tanstack/react-query'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -12,7 +13,7 @@ export interface PublicMentorProfile {
     title: string
     location: string | null
     show_initials_only: boolean
-    expertises: string[]
+    skills: string[]
     rating: number
     total_mentee_count: number
 }
@@ -46,13 +47,13 @@ export async function fetchMentors(
     if (params.skills?.length) params.skills.forEach(s => url.searchParams.append('skill', s))
 
     const res = await fetch(url.toString())
-    if (!res.ok) throw new Error('Failed to fetch mentors')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
 export async function fetchAllSkills(): Promise<Skill[]> {
     const res = await fetch(`${API_BASE_URL}/profiles/skills/`)
-    if (!res.ok) throw new Error('Failed to fetch skills')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -73,3 +74,35 @@ export const allSkillsQueryOptions = queryOptions({
     queryFn: fetchAllSkills,
     staleTime: Infinity,
 })
+
+export async function fetchPopularMentors(limit = 6): Promise<PublicMentorProfile[]> {
+    const url = new URL(`${API_BASE_URL}/profiles/popular/`, window.location.origin)
+    url.searchParams.set('limit', String(limit))
+    const res = await fetch(url.toString())
+    if (!res.ok) await throwApiError(res)
+    const data = await res.json()
+    return data.results
+}
+
+export async function fetchRecentlyAddedMentors(limit = 6): Promise<PublicMentorProfile[]> {
+    const url = new URL(`${API_BASE_URL}/profiles/recently-added/`, window.location.origin)
+    url.searchParams.set('limit', String(limit))
+    const res = await fetch(url.toString())
+    if (!res.ok) await throwApiError(res)
+    const data = await res.json()
+    return data.results
+}
+
+export const popularMentorsQueryOptions = (limit = 6) =>
+    queryOptions({
+        queryKey: ['mentors', 'popular', limit],
+        queryFn: () => fetchPopularMentors(limit),
+        staleTime: 1000 * 60 * 5,
+    })
+
+export const recentlyAddedMentorsQueryOptions = (limit = 6) =>
+    queryOptions({
+        queryKey: ['mentors', 'recently-added', limit],
+        queryFn: () => fetchRecentlyAddedMentors(limit),
+        staleTime: 1000 * 60 * 5,
+    })

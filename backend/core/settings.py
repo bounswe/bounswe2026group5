@@ -77,12 +77,18 @@ INSTALLED_APPS = [
     "accounts",
     "profiles",
     "mentorship",
+    "notifications",
+    "messaging",
 ]
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": ("accounts.authentication.CookieOrHeaderJWTAuthentication",),
 }
+
+# Messaging settings
+MAX_MESSAGE_ATTACHMENT_SIZE_MB = 20
+MAX_MESSAGE_ATTACHMENT_SIZE_BYTES = MAX_MESSAGE_ATTACHMENT_SIZE_MB * 1024 * 1024
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1440),
@@ -97,8 +103,8 @@ AUTH_COOKIE_SECURE = env.bool("AUTH_COOKIE_SECURE", default=not DEBUG)
 AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax")
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Mentorship Network API",
-    "DESCRIPTION": "Campus-Neighborhood Mentorship Network API Documentation",
+    "TITLE": "Neighborship App API",
+    "DESCRIPTION": "Neighborship App API Documentation",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
 }
@@ -112,6 +118,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.TimezoneMiddleware",
 ]
 
 ROOT_URLCONF = "core.urls"
@@ -167,7 +174,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = "Europe/Istanbul"
 
 USE_I18N = True
 
@@ -180,3 +187,9 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Feedback & rating
+RATING_UPDATE_THRESHOLD = int(os.getenv("RATING_UPDATE_THRESHOLD", "5"))
+
+# Notifications
+NOTIFICATIONS_HISTORY_LIMIT = int(os.getenv("NOTIFICATIONS_HISTORY_LIMIT", "100"))

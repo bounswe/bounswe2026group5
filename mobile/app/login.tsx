@@ -14,6 +14,7 @@ import { router, type Href } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 import { useLoginMutation } from "@/lib/queries/auth";
@@ -109,11 +110,7 @@ export default function LoginScreen() {
           <View className="gap-5">
             {/* Error Message */}
             {(loginMutation.error || localError) && (
-              <View className="p-3 rounded-lg bg-error/10 dark:bg-error-dark/10 border border-error dark:border-error-dark">
-                <Text className="text-sm font-medium text-error dark:text-error-dark">
-                  {localError || loginMutation.error?.message}
-                </Text>
-              </View>
+              <ErrorBanner message={localError || loginMutation.error?.message || ""} />
             )}
 
             {/* Email / Username */}
@@ -184,9 +181,6 @@ export default function LoginScreen() {
                   accessibilityLabel="Password"
                   onSubmitEditing={handleLogin}
                 />
-                {/* Pressable avoids the stuck-opacity bug that TouchableOpacity
-                    (which wraps children in Animated.View) causes when secureTextEntry
-                    toggles rebuild the TextInput and interrupt the fade animation. */}
                 <Pressable
                   onPress={() => setShowPassword((prev) => !prev)}
                   style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}

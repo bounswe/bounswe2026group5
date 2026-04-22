@@ -11,9 +11,10 @@ export interface MessageCardProps {
   onPress?: () => void;
 }
 
-export function MessageCard({ name, messagePreview, timeAgo, avatarUrl, hasUnread, onPress }: MessageCardProps) {
+export function MessageCard({ id, name, messagePreview, timeAgo, avatarUrl, hasUnread, onPress }: MessageCardProps) {
   return (
     <TouchableOpacity
+      testID={`message-card-${id}`}
       activeOpacity={0.75}
       onPress={onPress}
       className="w-[260px] flex-row items-start gap-3 bg-white p-5 pr-3 mr-3 rounded-xl overflow-hidden shadow-sm"
@@ -33,7 +34,7 @@ export function MessageCard({ name, messagePreview, timeAgo, avatarUrl, hasUnrea
           </View>
         )}
         {hasUnread && (
-          <View className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-primary border-2 border-white" />
+          <View testID="message-card-unread" className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-primary border-2 border-white" />
         )}
       </View>
 
