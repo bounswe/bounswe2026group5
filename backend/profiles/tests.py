@@ -717,6 +717,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
         """Create endpoint maps overlap database errors to 400 response."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_access_token}")
         start_at = timezone.now() + timedelta(days=5)
+        start_at = start_at.replace(hour=10, minute=0, second=0, microsecond=0)
         AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
             start_at=start_at,
