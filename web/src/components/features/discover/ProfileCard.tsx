@@ -22,7 +22,7 @@ function ProfileAvatar({
                          displayName,
                          pictureUrl,
                        }: Readonly<{ displayName: string; pictureUrl: string | null }>) {
-  const initials = displayName
+  const initials = (displayName || '?')
       .split(' ')
       .map((n) => n[0])
       .join('')

@@ -3,7 +3,7 @@ import { Heading, Muted, Subheading } from "#/components/Typography.tsx"
 import { Button } from "#/components/ui/button.tsx"
 import { Input } from "#/components/ui/input.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
-import { meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/AuthQueries.ts"
+import { logout, meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/AuthQueries.ts"
 import { useOwnProfile, useUpdateProfile, useUpdateUsername } from "#/lib/queries/ProfileQueries.ts"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useRouter } from '@tanstack/react-router'
@@ -211,6 +211,10 @@ function RouteComponent() {
 
     const handleBack = () => {
         setError(null)
+        if (activeIndex === 0) {
+            logout()
+            return
+        }
         setActiveIndex(i => i - 1)
     }
 
@@ -323,7 +327,7 @@ function RouteComponent() {
                     <Button
                         variant="ghost"
                         onClick={handleBack}
-                        disabled={activeIndex === 0 || isSubmitting}
+                        disabled={isSubmitting}
                         className="text-muted-foreground"
                     >
                         ← Back
