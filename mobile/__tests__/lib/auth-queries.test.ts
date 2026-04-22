@@ -1,5 +1,5 @@
+import { ApiValidationError } from "@/lib/api/client";
 import {
-  ApiValidationError,
   updateProfileFn,
   updateUsernameFn,
   updateUsageModeFn,

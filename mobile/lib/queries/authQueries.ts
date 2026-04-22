@@ -25,16 +25,6 @@ export interface Skill {
   name: string;
 }
 
-export class ApiValidationError extends Error {
-  fieldErrors: Record<string, string>;
-
-  constructor(message: string, fieldErrors: Record<string, string> = {}) {
-    super(message);
-    this.name = "ApiValidationError";
-    this.fieldErrors = fieldErrors;
-  }
-}
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function extractErrorMessage(
@@ -148,7 +138,7 @@ export async function updateUsageModeFn(params: {
   if (!res.ok) {
     const fieldErrors = await extractFieldErrors(res);
     const message = await extractErrorMessage(res, "Failed to set usage mode.");
-    throw new ApiValidationError(message, fieldErrors);
+    throw new ApiValidationError(res.status, message, fieldErrors);
   }
 
   return res.json() as Promise<User>;
@@ -174,7 +164,7 @@ export async function updateProfileFn(params: {
   if (!res.ok) {
     const fieldErrors = await extractFieldErrors(res);
     const message = await extractErrorMessage(res, "Failed to update profile.");
-    throw new ApiValidationError(message, fieldErrors);
+    throw new ApiValidationError(res.status, message, fieldErrors);
   }
 
   return res.json();
@@ -196,7 +186,7 @@ export async function updateUsernameFn(params: {
   if (!res.ok) {
     const fieldErrors = await extractFieldErrors(res);
     const message = await extractErrorMessage(res, "Failed to update username.");
-    throw new ApiValidationError(message, fieldErrors);
+    throw new ApiValidationError(res.status, message, fieldErrors);
   }
 
   return res.json() as Promise<{ username?: string }>;

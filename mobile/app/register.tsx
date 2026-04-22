@@ -21,7 +21,6 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
 import { ApiValidationError } from "@/lib/api/client";
 import {
-  ApiValidationError,
   fetchSkillsFn,
   registerFn,
   updateProfileFn,
