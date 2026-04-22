@@ -587,7 +587,7 @@ class PopularMentorsListAPIView(APIView):
             400: OpenApiResponse(description="Invalid `limit` value."),
         },
         description=(
-            "Return the most popular visible mentor profiles, sorted by rating "
+            "Return the most popular visible mentor profiles, sorted by average rating "
             "descending with total mentee count as a tiebreaker. "
             "Use `limit` (1–50, default 10) to control the list size."
         ),
@@ -611,7 +611,7 @@ class PopularMentorsListAPIView(APIView):
                 user__app_usage_mode=AppUsageMode.MENTOR,
                 user__is_active=True,
             )
-            .order_by("-rating", "-total_mentee_count")[:limit]
+            .order_by("-average_rating", "-total_mentee_count")[:limit]
         )
 
         serializer = PublicMentorProfileSearchResultSerializer(qs, many=True)
@@ -811,14 +811,14 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         )
 
 
-class MentorPublicRatingAPIView(ProfileLookupMixin, APIView):
-    """Return the public batch-updated rating for a mentor profile."""
+class MentorPublicAverageRatingAPIView(ProfileLookupMixin, APIView):
+    """Return the public batch-updated average rating for a mentor profile."""
 
     permission_classes = [AllowAny]
 
     @extend_schema(
         responses={
-            200: OpenApiResponse(description="Public rating data."),
+            200: OpenApiResponse(description="Public average rating data."),
             404: OpenApiResponse(description="Profile not found."),
         },
         description=(

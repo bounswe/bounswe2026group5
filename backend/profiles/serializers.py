@@ -168,7 +168,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
     picture_url = serializers.URLField(read_only=True)
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
-    rating = serializers.IntegerField(read_only=True)
+    average_rating = serializers.DecimalField(max_digits=3, decimal_places=2, read_only=True)
     total_mentee_count = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -182,7 +182,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
             "hidden",
             "picture_url",
             "skills",
-            "rating",
+            "average_rating",
             "total_mentee_count",
         )
         read_only_fields = fields
@@ -429,7 +429,7 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
             "location",
             "show_initials_only",
             "skills",
-            "rating",
+            "average_rating",
             "total_mentee_count",
         )
         read_only_fields = fields
