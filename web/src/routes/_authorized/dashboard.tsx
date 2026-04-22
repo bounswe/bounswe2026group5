@@ -92,7 +92,8 @@ export function DashboardHome() {
     if (incoming.length === 0) return
 
     incoming.forEach(n => seenIds.current.add(n.id))
-    setVisibleNotifications(prev => [...prev, ...incoming])
+    const toShow = incoming.filter(n => !n.is_read)
+    if (toShow.length > 0) setVisibleNotifications(prev => [...prev, ...toShow])
 
     const unreadIds = incoming.filter(n => n.type !== 'new_message' && !n.is_read).map(n => n.id)
     if (unreadIds.length > 0) markAllRead(unreadIds)

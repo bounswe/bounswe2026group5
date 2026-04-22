@@ -7,7 +7,7 @@ import { meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/AuthQueries
 import { useOwnProfile, useUpdateProfile, useUpdateUsername } from "#/lib/queries/ProfileQueries.ts"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export const Route = createFileRoute('/_onBoarding/gettingToKnowYou')({
     loader: ({ context }) => context.queryClient.ensureQueryData(meQueryOptions),
@@ -136,9 +136,18 @@ function RouteComponent() {
         bio: '',
         learnSkills: [],
         teachSkills: [],
-        username: me?.email?.split('@')[0] ?? '',
+        username: '',
     })
     const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (me?.email) {
+            setAnswers(prev => ({
+                ...prev,
+                username: prev.username || me.email.split('@')[0],
+            }))
+        }
+    }, [me?.email])
 
     const questions = getQuestions(answers.primaryUsage)
     const current = questions[activeIndex]
