@@ -153,6 +153,19 @@ async function cancelSession(sessionId: string): Promise<MentorshipRequest> {
     return res.json()
 }
 
+export async function rescheduleSession(sessionId: string, newSlotId: string): Promise<MeetingSession> {
+    const res = await fetch(`${API_BASE_URL}/mentorship/sessions/${sessionId}/reschedule/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...withAuthHeaders(),
+        },
+        body: JSON.stringify({ new_slot_id: newSlotId }),
+    })
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
 
 // ---- Query Options ----
 
@@ -212,6 +225,13 @@ export function useMeetingSessions(params: MeetingSessionQueryParams = {}) {
 export function useCancelSession() {
     return useMutation({
         mutationFn: cancelSession,
+    })
+}
+
+export function useRescheduleSession() {
+    return useMutation({
+        mutationFn: ({ sessionId, newSlotId }: { sessionId: string; newSlotId: string }) =>
+            rescheduleSession(sessionId, newSlotId),
     })
 }
 

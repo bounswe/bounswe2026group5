@@ -3,6 +3,7 @@ import {
   meetingSessionsQueryOptions,
   myMatchesQueryOptions,
   myRequestsQueryOptions,
+  rescheduleSession,
 } from '../MentorshipQueries'
 
 function jsonResponse(data: unknown, init?: ResponseInit): Response {
@@ -122,5 +123,70 @@ describe('MentorshipQueries query options', () => {
     await expect(
       meetingSessionsQueryOptions({ role: 'mentee', status: 'upcoming' }).queryFn!({} as never),
     ).rejects.toThrow('Something went wrong. Please try again.')
+  })
+})
+
+describe('rescheduleSession', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn<typeof globalThis, 'fetch'>>
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.clearAllMocks()
+    fetchSpy = vi.spyOn(globalThis, 'fetch')
+  })
+
+  afterEach(() => {
+    fetchSpy.mockRestore()
+  })
+
+  it('POSTs to the correct reschedule URL with new_slot_id in body', async () => {
+    localStorage.setItem('access_token', 'tok-1')
+    const mockSession = { session_id: 'sess-1', status: 'RESCHEDULED' }
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify(mockSession), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const result = await rescheduleSession('sess-1', 'slot-42')
+
+    expect(result).toEqual(mockSession)
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    expect(new URL(url, globalThis.location.origin).pathname).toBe(
+      '/api/mentorship/sessions/sess-1/reschedule/',
+    )
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({ new_slot_id: 'slot-42' })
+    expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer tok-1')
+  })
+
+  it('includes bearer token when access_token is present', async () => {
+    localStorage.setItem('access_token', 'my-token')
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    )
+
+    await rescheduleSession('sess-2', 'slot-99')
+
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer my-token')
+  })
+
+  it('sends no Authorization header when no token is present', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    )
+
+    await rescheduleSession('sess-3', 'slot-1')
+
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    expect((init.headers as Record<string, string>)['Authorization']).toBeUndefined()
+  })
+
+  it('throws when the API returns an error', async () => {
+    fetchSpy.mockResolvedValueOnce(new Response(null, { status: 403 }))
+
+    await expect(rescheduleSession('sess-4', 'slot-2')).rejects.toThrow()
   })
 })

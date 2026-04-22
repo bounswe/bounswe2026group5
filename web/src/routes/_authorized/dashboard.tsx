@@ -13,7 +13,35 @@ import { ArrowRight, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, St
 import { useState, useEffect, useRef, useMemo } from "react"
 import type { Notification } from "#/lib/queries/NotificationQueries.ts"
 import { RatingModal } from '#/components/RatingModal.tsx'
-import {toast} from "sonner";
+import { SessionManagementModal } from '#/components/dashboard/SessionManagementModal.tsx'
+import { toast } from "sonner"
+import type { MeetingSession } from '#/lib/queries/MentorshipQueries.ts'
+
+function toSessionManagementData(session: MeetingSession) {
+  return {
+    id: session.session_id,
+    title: `Session with ${session.mentor.display_name}`,
+    description: '',
+    startAt: session.scheduled_start_at,
+    endAt: session.scheduled_end_at,
+    type: 'video' as const,
+    status: 'upcoming' as const,
+    host: {
+      id: session.mentor.username,
+      username: session.mentor.username,
+      fullName: session.mentor.display_name,
+      avatarUrl: session.mentor.picture_url,
+      role: 'mentor' as const,
+    },
+    attendee: {
+      id: session.mentee?.username ?? '',
+      username: session.mentee?.username ?? '',
+      fullName: session.mentee?.display_name ?? '',
+      avatarUrl: session.mentee?.picture_url ?? '',
+      role: 'mentee' as const,
+    },
+  }
+}
 
 
 export const Route = createFileRoute('/_authorized/dashboard')({
@@ -279,13 +307,16 @@ function MenteeDashboardView() {
                           </Muted>
                         </div>
                       </div>
-                      <Link
-                          to="/profiles/$username"
-                          params={{ username: session.mentor.username }}
-                          className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
-                      >
-                        View profile
-                      </Link>
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <Link
+                            to="/profiles/$username"
+                            params={{ username: session.mentor.username }}
+                            className="text-xs text-accent hover:underline underline-offset-4"
+                        >
+                          View profile
+                        </Link>
+                        <SessionManagementModal session={toSessionManagementData(session)} />
+                      </div>
                     </CardContent>
                   </Card>
               ))}
@@ -580,15 +611,18 @@ function MentorDashboardView() {
                             </Muted>
                           </div>
                         </div>
-                        {session.mentee.username && (
-                            <Link
-                                to="/profiles/$username"
-                                params={{ username: session.mentee.username }}
-                                className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
-                            >
-                              View profile
-                            </Link>
-                        )}
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          {session.mentee.username && (
+                              <Link
+                                  to="/profiles/$username"
+                                  params={{ username: session.mentee.username }}
+                                  className="text-xs text-accent hover:underline underline-offset-4"
+                              >
+                                View profile
+                              </Link>
+                          )}
+                          <SessionManagementModal session={toSessionManagementData(session)} />
+                        </div>
                       </CardContent>
                     </Card>
                 )
