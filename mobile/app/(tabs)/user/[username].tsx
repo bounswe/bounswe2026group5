@@ -18,6 +18,7 @@ import {
   type AvailabilitySlot,
 } from "@/components/profile/AvailabilityPreview";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { ProfileReviews } from "@/components/profile/ProfileReviews";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
@@ -30,7 +31,11 @@ import {
   useCreateMentorshipRequestMutation,
   useMentorshipMatchesQuery,
 } from "@/lib/queries/mentorship";
-import { useProfileRatingQuery } from "@/lib/queries/profile";
+import {
+  type ProfileReview,
+  useProfileRatingQuery,
+  useProfileReviewsQuery,
+} from "@/lib/queries/profile";
 
 interface PublicProfileResponse {
   full_name: string;
@@ -105,6 +110,12 @@ type BodyContentProps = {
   requestFeedbackVariant?: "error" | "warning" | "info" | "success";
   canRequestMentorship: boolean;
   isViewedMentor: boolean;
+  reviews: ProfileReview[];
+  reviewsTotalCount: number;
+  reviewsError: string | null;
+  isReviewsLoading: boolean;
+  isReviewsLoadingMore: boolean;
+  onLoadMoreReviews: () => void;
   availability: AvailabilitySlot[];
   selectedSlot: SelectedSlot | null;
   hasExistingMentorConnection: boolean;
@@ -135,6 +146,12 @@ function renderBodyContent({
   requestFeedbackVariant = "info",
   canRequestMentorship,
   isViewedMentor,
+  reviews,
+  reviewsTotalCount,
+  reviewsError,
+  isReviewsLoading,
+  isReviewsLoadingMore,
+  onLoadMoreReviews,
   availability,
   selectedSlot,
   hasExistingMentorConnection,
@@ -239,6 +256,21 @@ function renderBodyContent({
         )}
 
         {isViewedMentor && (
+          <View className="mb-6">
+            <Text className="mb-3 text-lg font-bold text-gray-900">Reviews</Text>
+            <ProfileReviews
+              reviews={reviews}
+              totalCount={reviewsTotalCount}
+              errorMessage={reviewsError}
+              isLoading={isReviewsLoading}
+              isLoadingMore={isReviewsLoadingMore}
+              onLoadMore={onLoadMoreReviews}
+              emptyMessage="No public reviews yet. Reviews appear once privacy thresholds are met."
+            />
+          </View>
+        )}
+
+        {isViewedMentor && (
           <AvailabilityPreview
             schedule={availability}
             selectedSlot={selectedSlotPreview}
@@ -297,6 +329,8 @@ function renderBodyContent({
   );
 }
 
+const REVIEWS_PAGE_SIZE = 6;
+
 export default function MentorProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -317,6 +351,14 @@ export default function MentorProfileScreen() {
     profile?.app_usage_mode === "MENTOR",
   );
   const ratingQuery = useProfileRatingQuery(username ?? "");
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviews, setReviews] = useState<ProfileReview[]>([]);
+  const reviewsQuery = useProfileReviewsQuery(
+    username ?? "",
+    reviewsPage,
+    REVIEWS_PAGE_SIZE,
+    profile?.app_usage_mode === "MENTOR",
+  );
 
   const [requestFeedback, setRequestFeedback] = useState<string | null>(null);
   const [requestFeedbackVariant, setRequestFeedbackVariant] = useState<
@@ -336,6 +378,34 @@ export default function MentorProfileScreen() {
     skills: [],
     variant: "mentor",
   });
+
+  useEffect(() => {
+    if (!reviewsQuery.data) {
+      return;
+    }
+
+    setReviews((prev) =>
+      {
+        const nextReviews =
+          reviewsPage === 1
+            ? reviewsQuery.data.results
+            : [...prev, ...reviewsQuery.data.results];
+
+        const isSameCollection =
+          prev.length === nextReviews.length &&
+          prev.every((review, index) => {
+            const nextReview = nextReviews[index];
+            return (
+              review?.rating === nextReview?.rating &&
+              review?.text === nextReview?.text &&
+              review?.created_at === nextReview?.created_at
+            );
+          });
+
+        return isSameCollection ? prev : nextReviews;
+      },
+    );
+  }, [reviewsPage, reviewsQuery.data]);
 
   useEffect(() => {
     let mounted = true;
@@ -601,6 +671,13 @@ export default function MentorProfileScreen() {
     requestFeedbackVariant,
     canRequestMentorship,
     isViewedMentor,
+    reviews,
+    reviewsTotalCount: reviewsQuery.data?.count ?? reviews.length,
+    reviewsError:
+      reviewsQuery.error instanceof Error ? reviewsQuery.error.message : null,
+    isReviewsLoading: reviewsQuery.isLoading && reviewsPage === 1,
+    isReviewsLoadingMore: reviewsQuery.isFetching && reviewsPage > 1,
+    onLoadMoreReviews: () => setReviewsPage((prev) => prev + 1),
     availability,
     selectedSlot,
     hasExistingMentorConnection,
