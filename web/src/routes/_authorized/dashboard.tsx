@@ -1,17 +1,18 @@
 // web/src/routes/_authorized/dashboard.tsx
 import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
-import { useMeetingSessions, useMyRequests, useRespondToRequest } from "#/lib/queries/MentorshipQueries.ts"
+import { useMeetingSessions, useMyRequests, useRespondToRequest, matchFeedbackQueryOptions } from "#/lib/queries/MentorshipQueries.ts"
 import { useNotifications, useMarkAllNotificationsRead, NOTIFICATION_INVALIDATION_MAP } from "#/lib/queries/NotificationQueries.ts"
 import { getInitials } from "#/lib/utils.ts"
 import { Body, Heading, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { NotificationItem } from '@/components/notifications/NotificationItem'
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowRight, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, XCircle, X as XIcon } from 'lucide-react'
-import { useState, useEffect, useRef } from "react"
+import { ArrowRight, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, Star, XCircle, X as XIcon } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from "react"
 import type { Notification } from "#/lib/queries/NotificationQueries.ts"
+import { RatingModal } from '#/components/RatingModal.tsx'
 import {toast} from "sonner";
 
 
@@ -161,7 +162,49 @@ function MenteeDashboardView() {
     role: 'mentee',
     status: 'upcoming',
   })
+  const { data: pastSessions = [] } = useMeetingSessions({
+    role: 'mentee',
+  })
   const { data: allRequests = [], isLoading: requestsLoading } = useMyRequests()
+
+  const [ratingMatchId, setRatingMatchId] = useState<string | null>(null)
+  const [ratingMentorName, setRatingMentorName] = useState('')
+
+  // Determine matches where the first session has fully passed and wasn't canceled.
+  // Only the earliest session per match qualifies — subsequent sessions do not.
+  const rateableMatches = useMemo(() => {
+    const now = new Date()
+    // LALALALALAAL
+    // CHANGE HERE IF YOU WNAT TO MAKE NON-PASS SESSIONS NOT-RATEABLE.
+    const eligible = pastSessions//.filter(
+   //   s => new Date(s.scheduled_end_at) < now && s.status !== 'CANCELED'
+  //  )
+    const firstStart: Record<string, string> = {}
+    for (const s of eligible) {
+      if (!firstStart[s.match_id] || s.scheduled_start_at < firstStart[s.match_id]) {
+        firstStart[s.match_id] = s.scheduled_start_at
+      }
+    }
+    const seen = new Set<string>()
+    return eligible.filter(s => {
+      if (s.scheduled_start_at === firstStart[s.match_id] && !seen.has(s.match_id)) {
+        seen.add(s.match_id)
+        return true
+      }
+      return false
+    })
+  }, [pastSessions])
+
+  // Fetch feedback for every rateable match in parallel to know which are already rated.
+  const feedbackQueries = useQueries({
+    queries: rateableMatches.map(s => matchFeedbackQueryOptions(s.match_id)),
+  })
+  const feedbackLoading = feedbackQueries.some(q => q.isLoading)
+
+  const pendingMatches = rateableMatches.filter((_, i) => {
+    const feedbacks = feedbackQueries[i]?.data
+    return !feedbacks?.some(f => f.submitted_by.username === me?.username)
+  })
 
   // Only show PENDING requests where I am the mentee
   const sentRequests = allRequests.filter(
@@ -171,9 +214,10 @@ function MenteeDashboardView() {
   const displaySessions = upcomingSessions.slice(0, 3)
 
   return (
+      <>
       <div className="grid grid-cols-1 lg:grid-cols-[5fr_4fr] gap-8 items-start">
 
-        {/* LEFT COLUMN: Sessions — unchanged from previous */}
+        {/* LEFT COLUMN: Sessions */}
         <div className="flex flex-col gap-8">
           <section className="space-y-5">
             <Heading as="h3" className="text-xl flex items-center gap-2">
@@ -255,6 +299,66 @@ function MenteeDashboardView() {
               </Link>
             </div>
           </section>
+
+          {/* Rate Your Mentors — only shown while there are unrated matches */}
+          {(feedbackLoading || pendingMatches.length > 0) && (
+            <section className="space-y-5">
+              <Heading as="h3" className="text-xl flex items-center gap-2">
+                <Star className="w-5 h-5 text-amber-500" />
+                Rate Your Mentors
+                {!feedbackLoading && (
+                  <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
+                    {pendingMatches.length}
+                  </span>
+                )}
+              </Heading>
+              {feedbackLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
+                </div>
+              ) : (
+              <div className="flex flex-col gap-3">
+                {pendingMatches.map(session => (
+                  <Card key={session.match_id} className="island-shell border-line bg-white shadow-sm">
+                    <CardContent className="py-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        {session.mentor.picture_url ? (
+                          <img
+                            src={session.mentor.picture_url}
+                            alt={session.mentor.display_name}
+                            className="h-10 w-10 rounded-full object-cover border border-white/50 shadow-sm"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-sm font-bold shrink-0 border border-white/50 shadow-sm">
+                            {getInitials(session.mentor.display_name)}
+                          </div>
+                        )}
+                        <div>
+                          <Body className="font-medium">{session.mentor.display_name}</Body>
+                          <Muted className="text-xs">
+                            Session ended · {formatSessionDate(session.scheduled_end_at)}
+                          </Muted>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 border-amber-300 text-amber-700 hover:bg-amber-50"
+                        onClick={() => {
+                          setRatingMatchId(session.match_id)
+                          setRatingMentorName(session.mentor.display_name)
+                        }}
+                      >
+                        <Star className="w-3.5 h-3.5 mr-1.5" />
+                        Rate
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              )}
+            </section>
+          )}
         </div>
 
         {/* RIGHT COLUMN: Sent Requests */}
@@ -347,6 +451,15 @@ function MenteeDashboardView() {
         </div>
 
       </div>
+
+      {ratingMatchId && (
+        <RatingModal
+          matchId={ratingMatchId}
+          mentorName={ratingMentorName}
+          onClose={() => setRatingMatchId(null)}
+        />
+      )}
+      </>
   )
 }
 
