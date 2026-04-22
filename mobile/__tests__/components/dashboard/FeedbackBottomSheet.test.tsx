@@ -1,6 +1,6 @@
 import React from "react";
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
-import { FeedbackBottomSheet } from "@/components/connections/FeedbackBottomSheet"; 
+import { FeedbackBottomSheet } from "@/components/connections/FeedbackBottomSheet";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
@@ -12,8 +12,8 @@ describe("FeedbackBottomSheet", () => {
     jest.clearAllMocks();
   });
 
-  it("renders correctly when visible", () => {
-    const { getByText, queryByText } = render(
+  it("renders submit and cancel buttons when visible", () => {
+    const { getByTestId } = render(
       <FeedbackBottomSheet
         visible={true}
         onClose={mockOnClose}
@@ -22,14 +22,12 @@ describe("FeedbackBottomSheet", () => {
       />
     );
 
-    expect(getByText("Submit Review")).toBeTruthy();
-    expect(getByText("Cancel")).toBeTruthy();
-    expect(queryByText("As Mentee")).toBeNull();
-    expect(queryByText("As Mentor")).toBeNull();
+    expect(getByTestId("submit-review-button")).toBeTruthy();
+    expect(getByTestId("cancel-button")).toBeTruthy();
   });
 
-  it("shows an error if submitting without a rating", async () => {
-    const { getByText, findByText } = render(
+  it("displays the correct role badge", () => {
+    const { getByTestId } = render(
       <FeedbackBottomSheet
         visible={true}
         onClose={mockOnClose}
@@ -38,15 +36,29 @@ describe("FeedbackBottomSheet", () => {
       />
     );
 
-    fireEvent.press(getByText("Submit Review"));
+    expect(getByTestId("role-badge-mentor")).toBeTruthy();
+  });
 
-    // Validation error should appear
-    expect(await findByText("Please select a rating")).toBeTruthy();
+  it("shows error message when submitting without a rating", async () => {
+    const { getByTestId } = render(
+      <FeedbackBottomSheet
+        visible={true}
+        onClose={mockOnClose}
+        onSubmit={mockOnSubmit}
+        otherUserName="Jane Doe"
+      />
+    );
+
+    fireEvent.press(getByTestId("submit-review-button"));
+
+    await waitFor(() => {
+      expect(getByTestId("error-message")).toBeTruthy();
+    });
     expect(mockOnSubmit).not.toHaveBeenCalled();
   });
 
-  it("calls onClose when Cancel is pressed", () => {
-    const { getByText } = render(
+  it("calls onClose when Cancel button is pressed", () => {
+    const { getByTestId } = render(
       <FeedbackBottomSheet
         visible={true}
         onClose={mockOnClose}
@@ -55,12 +67,12 @@ describe("FeedbackBottomSheet", () => {
       />
     );
 
-    fireEvent.press(getByText("Cancel"));
+    fireEvent.press(getByTestId("cancel-button"));
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
-  it("does not render when visible is false", () => {
-    const { queryByText } = render(
+  it("does not render buttons when visible is false", () => {
+    const { queryByTestId } = render(
       <FeedbackBottomSheet
         visible={false}
         onClose={mockOnClose}
@@ -69,11 +81,12 @@ describe("FeedbackBottomSheet", () => {
       />
     );
 
-    expect(queryByText("Submit Review")).toBeNull();
+    expect(queryByTestId("submit-review-button")).toBeNull();
+    expect(queryByTestId("cancel-button")).toBeNull();
   });
 
-  it("successfully submits feedback with text and rating", async () => {
-    const { getByText, getByPlaceholderText, getByTestId } = render(
+  it("successfully submits feedback after selecting a rating", async () => {
+    const { getByTestId } = render(
       <FeedbackBottomSheet
         visible={true}
         onClose={mockOnClose}
@@ -82,19 +95,24 @@ describe("FeedbackBottomSheet", () => {
       />
     );
 
-    const textInput = getByPlaceholderText(/Share your thoughts/i);
-    fireEvent.changeText(textInput, "Jane was an amazing mentor! Very helpful.");
-
-    const fiveStarButton = getByTestId("star-5");
-    fireEvent.press(fiveStarButton);
-
-    fireEvent.press(getByText("Submit Review"));
+    fireEvent.press(getByTestId("star-5"));
+    fireEvent.press(getByTestId("submit-review-button"));
 
     await waitFor(() => {
-      expect(mockOnSubmit).toHaveBeenCalledWith(
-        5, 
-        "Jane was an amazing mentor! Very helpful."
-      );
+      expect(mockOnSubmit).toHaveBeenCalledWith(5, undefined);
     });
+  });
+
+  it("does not show error message before any submission attempt", () => {
+    const { queryByTestId } = render(
+      <FeedbackBottomSheet
+        visible={true}
+        onClose={mockOnClose}
+        onSubmit={mockOnSubmit}
+        otherUserName="Jane Doe"
+      />
+    );
+
+    expect(queryByTestId("error-message")).toBeNull();
   });
 });

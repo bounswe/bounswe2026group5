@@ -50,7 +50,7 @@ function StatusBadge({ status }: Readonly<{ status: string }>) {
 }
 
 function UserAvatar({ name }: Readonly<{ name: string }>) {
-  const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2)
+  const initials = (name || '?').split(' ').map(n => n[0]).join('').substring(0, 2)
   const colors = [
     'bg-blue-100 text-blue-700', 
     'bg-emerald-100 text-emerald-700', 
@@ -84,6 +84,7 @@ export function DashboardHome() {
   // Marking as read happens immediately on arrival, separate from visibility.
   const [visibleNotifications, setVisibleNotifications] = useState<Notification[]>([])
   const seenIds = useRef<Set<string>>(new Set())
+  const isFirstRun = useRef(true)
 
   useEffect(() => {
     if (notifications.length === 0) return
@@ -92,13 +93,19 @@ export function DashboardHome() {
     if (incoming.length === 0) return
 
     incoming.forEach(n => seenIds.current.add(n.id))
-    setVisibleNotifications(prev => [...prev, ...incoming])
+    const toShow = incoming.filter(n => !n.is_read)
+    if (toShow.length > 0) setVisibleNotifications(prev => [...prev, ...toShow])
 
     const unreadIds = incoming.filter(n => n.type !== 'new_message' && !n.is_read).map(n => n.id)
     if (unreadIds.length > 0) markAllRead(unreadIds)
 
+    if (isFirstRun.current) {
+      isFirstRun.current = false
+      return
+    }
+
     const keysToInvalidate = new Set<string>()
-    for (const n of incoming) {
+    for (const n of toShow) {
       for (const key of NOTIFICATION_INVALIDATION_MAP[n.type]) {
         keysToInvalidate.add(JSON.stringify(key))
       }
@@ -387,9 +394,7 @@ function MentorDashboardView() {
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'meeting-sessions', 'me'] })
           },
           onError: (err) => {
-            toast.error('Failed to respond', {
-              description: err.message,
-            })
+            toast.error(err.message)
           },
         }
     )

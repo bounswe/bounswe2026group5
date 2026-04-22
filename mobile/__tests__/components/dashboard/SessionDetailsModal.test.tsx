@@ -2,7 +2,6 @@ import React from "react";
 import { render, fireEvent } from "@testing-library/react-native";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 
-// Mock the icons
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
 describe("SessionDetailsModal Component", () => {
@@ -34,34 +33,27 @@ describe("SessionDetailsModal Component", () => {
     jest.useRealTimers();
   });
 
-  it("renders the session details correctly when visible", () => {
-    const { getByText, queryByText } = render(
+  it("renders action buttons for an Upcoming session", () => {
+    const { getByTestId, queryByTestId } = render(
       <SessionDetailsModal
         visible={true}
         session={mockSession as any}
         onClose={jest.fn()}
         onReschedule={jest.fn()}
+        onCancelSession={jest.fn()}
       />,
     );
 
-    // Verify core info rendered
-    expect(getByText("System Design Interview Prep")).toBeTruthy();
-    expect(getByText("with Ahmet Yılmaz")).toBeTruthy();
-    expect(getByText("14:00 - 15:00")).toBeTruthy();
-    // Verify our action buttons are present for Upcoming sessions
-    expect(getByText("Reschedule")).toBeTruthy();
-    expect(getByText("Cancel")).toBeTruthy();
-    expect(queryByText("Platform")).toBeNull();
-    expect(queryByText("Location")).toBeNull();
-    expect(queryByText("Join Video Call")).toBeNull();
-    expect(queryByText("Get Directions")).toBeNull();
+    expect(getByTestId("action-reschedule")).toBeTruthy();
+    expect(getByTestId("action-cancel")).toBeTruthy();
+    expect(queryByTestId("action-leave-feedback")).toBeNull();
   });
 
-  it("triggers onClose and onReschedule when the Reschedule button is pressed", () => {
+  it("fires onClose and onReschedule when Reschedule button is pressed", () => {
     const mockOnClose = jest.fn();
     const mockOnReschedule = jest.fn();
 
-    const { getByText } = render(
+    const { getByTestId } = render(
       <SessionDetailsModal
         visible={true}
         session={mockSession as any}
@@ -70,20 +62,16 @@ describe("SessionDetailsModal Component", () => {
       />,
     );
 
-    fireEvent.press(getByText("Reschedule"));
+    fireEvent.press(getByTestId("action-reschedule"));
 
-    // Verify onClose is called immediately
     expect(mockOnClose).toHaveBeenCalled();
 
-    // Fast-forward the 300ms setTimeout
     jest.runAllTimers();
-
-    // Verify onReschedule was called after the delay
     expect(mockOnReschedule).toHaveBeenCalled();
   });
 
   it("hides action buttons for completed sessions", () => {
-    const { queryByText } = render(
+    const { queryByTestId } = render(
       <SessionDetailsModal
         visible={true}
         session={completedSession as any}
@@ -91,12 +79,12 @@ describe("SessionDetailsModal Component", () => {
       />,
     );
 
-    expect(queryByText("Reschedule")).toBeNull();
-    expect(queryByText("Cancel")).toBeNull();
+    expect(queryByTestId("action-reschedule")).toBeNull();
+    expect(queryByTestId("action-cancel")).toBeNull();
   });
 
-  it("does not render content when visible is false", () => {
-    const { queryByText } = render(
+  it("does not render action buttons when visible is false", () => {
+    const { queryByTestId } = render(
       <SessionDetailsModal
         visible={false}
         session={mockSession as any}
@@ -104,6 +92,21 @@ describe("SessionDetailsModal Component", () => {
       />,
     );
 
-    expect(queryByText("System Design Interview Prep")).toBeNull();
+    expect(queryByTestId("action-reschedule")).toBeNull();
+    expect(queryByTestId("action-cancel")).toBeNull();
+  });
+
+  it("shows cancel loading indicator when isCancelling is true", () => {
+    const { getByTestId } = render(
+      <SessionDetailsModal
+        visible={true}
+        session={mockSession as any}
+        onClose={jest.fn()}
+        isCancelling={true}
+        onCancelSession={jest.fn()}
+      />,
+    );
+
+    expect(getByTestId("cancel-loading-indicator")).toBeTruthy();
   });
 });

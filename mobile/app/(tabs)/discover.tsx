@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DiscoverFilterModal } from "@/components/discover/DiscoverFilterModal";
 import { DiscoverSearchBar } from "@/components/discover/DiscoverSearchBar";
 import { MentorCard } from "@/components/discover/MentorCard";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import {
   DEMO_DISCOVER_PROFILES,
@@ -227,7 +228,7 @@ export default function DiscoverScreen() {
 
   if (loadingProfiles && page === 1) {
     bodyContent = (
-      <View className="py-10 items-center">
+      <View testID="loading-state" className="py-10 items-center">
         <ActivityIndicator size="large" color={theme.primary} />
         <Text className="text-on-surface-soft dark:text-on-surface-soft-dark mt-3">
           Loading mentors...
@@ -236,11 +237,13 @@ export default function DiscoverScreen() {
     );
   } else if (errorText) {
     bodyContent = (
-      <ErrorBanner message={errorText} />
+      <View testID="error-state">
+        <ErrorBanner message={errorText} />
+      </View>
     );
   } else if (profiles.length === 0) {
     bodyContent = (
-      <View>
+      <View testID="empty-state">
         <View className="bg-surface-active dark:bg-surface-active-dark border border-divider dark:border-divider-dark rounded-xl p-3 mb-3">
           <Text className="text-on-surface-soft dark:text-on-surface-soft-dark text-sm mt-1">
             No matches found. Try adjusting your search or filter criteria to
@@ -269,6 +272,7 @@ export default function DiscoverScreen() {
 
         {hasMore && (
           <TouchableOpacity
+            testID="load-more-button"
             activeOpacity={1}
             onPress={() => setPage((prev) => prev + 1)}
             disabled={loadingProfiles}
@@ -290,9 +294,12 @@ export default function DiscoverScreen() {
         style={{ paddingTop: insets.top }}
       >
         <View className="px-4 pb-3 pt-2">
-          <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark mb-3">
-            Discover
-          </Text>
+          <View className="mb-3 flex-row items-center justify-between">
+            <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
+              Discover
+            </Text>
+            <NotificationBell />
+          </View>
 
           <View className="flex-row items-center gap-2">
             <View className="flex-1">

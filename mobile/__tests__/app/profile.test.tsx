@@ -1,6 +1,7 @@
 import ProfileScreen from "@/app/(tabs)/profile";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
+import { Alert } from "react-native";
 
 const mockMatchesQuery = jest.fn();
 const mockAvailabilityQuery = jest.fn();
@@ -10,6 +11,9 @@ let mockAuthUser = {
 };
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+jest.mock("@/components/notifications/NotificationBell", () => ({
+  NotificationBell: () => null,
+}));
 
 jest.mock("@/lib/queries/mentorship", () => {
   const actual = jest.requireActual<Record<string, unknown>>(
@@ -72,12 +76,15 @@ jest.mock("@/lib/queries/profile", () => ({
   }),
 }));
 
-// We must mock expo-router because the Settings icon uses router.push()
+const mockRouterPush = jest.fn();
+
 jest.mock("expo-router", () => ({
   useRouter: () => ({
-    push: jest.fn(),
+    push: mockRouterPush,
   }),
 }));
+
+jest.spyOn(Alert, "alert");
 
 describe("ProfileScreen Layout", () => {
   beforeEach(() => {
@@ -87,16 +94,10 @@ describe("ProfileScreen Layout", () => {
     };
     mockAvailabilityQuery.mockReturnValue({ data: undefined });
     mockMatchesQuery.mockReturnValue({ data: [] });
-    globalThis.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        full_name: "Ali Aydin",
-        bio: "Profile bio",
-        skills: ["React", "Testing"],
-      }),
-    }) as unknown as typeof fetch;
+    mockRouterPush.mockClear();
+    (Alert.alert as jest.Mock).mockClear?.();
 
-    (globalThis.fetch as jest.Mock)
+    (globalThis.fetch as jest.Mock) = jest.fn()
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -111,46 +112,29 @@ describe("ProfileScreen Layout", () => {
       });
   });
 
-  it("renders the user profile data and section headers", async () => {
-    const { getByText } = render(<ProfileScreen />);
+  it("renders the user profile name", async () => {
+    const { getByTestId } = render(<ProfileScreen />);
 
     await waitFor(() => {
-      expect(getByText("Profile")).toBeTruthy();
-      expect(getByText("Ali Aydin")).toBeTruthy();
+      expect(getByTestId("profile-name")).toBeTruthy();
     });
   });
 
-  it("shows mentee count from active unique matches", async () => {
+  it("shows mentees section for mentor with active unique matches", async () => {
     mockMatchesQuery.mockReturnValue({
       data: [
-        {
-          id: "m-1",
-          is_active: true,
-          mentee: { username: "mentee-1" },
-        },
-        {
-          id: "m-2",
-          is_active: true,
-          mentee: { username: "mentee-1" },
-        },
-        {
-          id: "m-3",
-          is_active: true,
-          mentee: { username: "mentee-2" },
-        },
-        {
-          id: "m-4",
-          is_active: false,
-          mentee: { username: "mentee-3" },
-        },
+        { id: "m-1", is_active: true, mentee: { username: "mentee-1" } },
+        { id: "m-2", is_active: true, mentee: { username: "mentee-1" } },
+        { id: "m-3", is_active: true, mentee: { username: "mentee-2" } },
+        { id: "m-4", is_active: false, mentee: { username: "mentee-3" } },
       ],
     });
 
-    const { getByText } = render(<ProfileScreen />);
+    const { getByTestId } = render(<ProfileScreen />);
 
     await waitFor(() => {
-      expect(getByText("2")).toBeTruthy();
-      expect(getByText("Mentees")).toBeTruthy();
+      expect(getByTestId("mentees-section")).toBeTruthy();
+      expect(getByTestId("mentees-count").props.children).toBe(2);
     });
   });
 
@@ -166,7 +150,7 @@ describe("ProfileScreen Layout", () => {
     });
   });
 
-  it("hides mentor-only profile sections for mentee accounts", async () => {
+  it("hides mentor-only sections for mentee accounts", async () => {
     mockAuthUser = {
       username: "Ece Yilmaz",
       app_usage_mode: "MENTEE",
@@ -186,13 +170,65 @@ describe("ProfileScreen Layout", () => {
         json: async () => [{ name: "React" }, { name: "Testing" }],
       });
 
-    const { getByText, queryByText } = render(<ProfileScreen />);
+    const { queryByTestId } = render(<ProfileScreen />);
 
     await waitFor(() => {
       expect(getByText("Ece Yilmaz")).toBeTruthy();
       expect(queryByText("Availability")).toBeNull();
       expect(queryByText("Mentees")).toBeNull();
       expect(queryByText("Anonymous mentee")).toBeNull();
+    });
+  });
+
+  it("navigates to settings screen when the settings icon is pressed", async () => {
+    const { getByTestId } = render(<ProfileScreen />);
+
+    await waitFor(() => {
+      expect(getByTestId("settings-button")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("settings-button"));
+    expect(mockRouterPush).toHaveBeenCalledWith("/settings");
+  });
+
+  it("does not crash when profile fetch fails", async () => {
+    (globalThis.fetch as jest.Mock) = jest.fn()
+      .mockRejectedValueOnce(new Error("Network error"))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ name: "React" }],
+      });
+
+    const { getByTestId } = render(<ProfileScreen />);
+
+    await waitFor(() => {
+      expect(getByTestId("profile-name")).toBeTruthy();
+    });
+  });
+
+  it("shows zero mentees count when matches data is empty", async () => {
+    mockMatchesQuery.mockReturnValue({ data: [] });
+
+    const { getByTestId } = render(<ProfileScreen />);
+
+    await waitFor(() => {
+      expect(getByTestId("mentees-count").props.children).toBe(0);
+    });
+  });
+
+  it("counts only active matches for unique mentees", async () => {
+    mockMatchesQuery.mockReturnValue({
+      data: [
+        { id: "m-1", is_active: true, mentee: { username: "mentee-a" } },
+        { id: "m-2", is_active: false, mentee: { username: "mentee-b" } },
+        { id: "m-3", is_active: true, mentee: { username: "mentee-a" } },
+      ],
+    });
+
+    const { getByTestId } = render(<ProfileScreen />);
+
+    await waitFor(() => {
+      expect(getByTestId("mentees-count").props.children).toBe(1);
     });
   });
 });

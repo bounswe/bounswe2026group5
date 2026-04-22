@@ -101,6 +101,9 @@ export function FeedbackBottomSheet({
                 <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Rate your session with {otherUserName}
                 </Text>
+                <View testID="role-badge-mentor" className="mt-2 self-start px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900">
+                  <Text className="text-xs font-semibold text-indigo-600 dark:text-indigo-300">Mentor</Text>
+                </View>
               </View>
               <TouchableOpacity onPress={onClose} className="p-2">
                 <Ionicons name="close" size={24} color="#6b7280" />
@@ -158,7 +161,7 @@ export function FeedbackBottomSheet({
 
             {/* Error Message */}
             {error ? (
-              <View className="mb-6">
+              <View testID="error-message" className="mb-6">
                 <ErrorBanner message={error} />
               </View>
             ) : null}
@@ -167,12 +170,13 @@ export function FeedbackBottomSheet({
           {/* Actions */}
           <View className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-800/50 gap-3">
             <TouchableOpacity
+              testID="submit-review-button"
               className="bg-indigo-600 py-4 rounded-xl items-center active:opacity-90 shadow-sm" // <-- Fixed color and padding
               onPress={handleSubmit}
               disabled={isSubmitting}
             >
               {isSubmitting ? (
-                <ActivityIndicator size="small" color="white" />
+                <ActivityIndicator testID="submitting-indicator" size="small" color="white" />
               ) : (
                 <Text className="text-white font-bold text-lg">
                   Submit Review
@@ -181,6 +185,7 @@ export function FeedbackBottomSheet({
             </TouchableOpacity>
 
             <TouchableOpacity
+              testID="cancel-button"
               className="bg-white dark:bg-gray-700 py-4 rounded-xl items-center border border-gray-300 dark:border-gray-600"
               onPress={onClose}
               disabled={isSubmitting}

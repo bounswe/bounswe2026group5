@@ -1,5 +1,6 @@
 // lib/queries/auth.ts
 import { queryClient, router } from "#/router.tsx"
+import { throwApiError } from "#/lib/apiError.ts"
 import { queryOptions, useMutation } from "@tanstack/react-query"
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -111,7 +112,7 @@ export async function loginFn(credentials: { email: string; password: string }) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
     })
-    if (!res.ok) throw new Error('Invalid credentials')
+    if (!res.ok) await throwApiError(res)
     return res.json() as Promise<AuthResponse>
 }
 
@@ -121,7 +122,7 @@ export async function registerFn(credentials: { email: string; password: string;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
     })
-    if (!res.ok) throw new Error('Registration failed')
+    if (!res.ok) await throwApiError(res)
     return res.json() as Promise<AuthResponse>
 }
 
@@ -135,7 +136,7 @@ export async function updateAppUsageModeFn({ app_usage_mode }: {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ app_usage_mode }),
     })
-    if (!res.ok) throw new Error('Failed to update usage mode')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 

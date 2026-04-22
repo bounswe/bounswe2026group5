@@ -95,7 +95,7 @@ export function ProfileHeader({
 
       {/* 3. Name */}
       <View className="px-4 mt-2 items-start">
-        <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
+        <Text testID="profile-name" className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
           {name}
         </Text>
       </View>
@@ -131,8 +131,8 @@ export function ProfileHeader({
           </View>
 
           {showMenteesHelped ? (
-            <View className="items-center flex-1 border-r border-divider dark:border-divider-dark">
-              <Text className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-0.5">
+            <View testID="mentees-section" className="items-center flex-1 border-r border-divider dark:border-divider-dark">
+              <Text testID="mentees-count" className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-0.5">
                 {menteesHelped}
               </Text>
               <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">

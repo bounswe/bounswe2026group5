@@ -102,6 +102,7 @@ export function AvailabilityPreview({
         <Text className="text-lg font-bold text-gray-900">Availability</Text>
         {onEdit ? (
           <TouchableOpacity
+            testID="edit-availability-button"
             onPress={onEdit}
             className="p-1.5 bg-gray-50 rounded-md border border-gray-200"
           >
@@ -122,6 +123,7 @@ export function AvailabilityPreview({
 
             return (
               <TouchableOpacity
+                testID={`day-${day}`}
                 key={day}
                 onPress={() => handleDayPress(day)}
                 activeOpacity={0.7}
@@ -157,7 +159,7 @@ export function AvailabilityPreview({
       {expandedDay !== null && (
         <View className="bg-gray-50 p-4 rounded-2xl border border-gray-100 mt-4 min-h-[120px] justify-center animate-fade-in">
           {currentSlots.length === 0 ? (
-            <View className="items-center py-4">
+            <View testID="empty-day-state" className="items-center py-4">
               <Ionicons
                 name="calendar-clear-outline"
                 size={32}
@@ -203,6 +205,7 @@ export function AvailabilityPreview({
 
                 return (
                   <TouchableOpacity
+                    testID={slotId ? `slot-${slotId}` : `slot-time-${time}`}
                     key={`${expandedDay}-${slotId ?? time}`}
                     onPress={() =>
                       expandedDay &&

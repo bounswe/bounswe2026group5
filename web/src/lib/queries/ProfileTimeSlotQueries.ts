@@ -1,3 +1,4 @@
+import { throwApiError } from "#/lib/apiError.ts"
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -15,7 +16,7 @@ export interface AvailabilitySlot {
     sessionId: string | null
     created_at: string
     updated_at: string
-    status?: 'SCHEDULED' | 'RESCHEDULED' | 'CANCELED' | 'COMPLETED'
+    status: 'AVAILABLE' | 'PENDING' | 'BOOKED'
 }
 
 export interface CreateSlotBody {
@@ -33,7 +34,7 @@ async function bookSlot(username: string, slotId: string, message?: string): Pro
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ message }),
     })
-    if (!res.ok) throw new Error('Booking failed')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -44,7 +45,7 @@ async function createSlot(body: CreateSlotBody): Promise<AvailabilitySlot> {
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(body),
     })
-    if (!res.ok) throw new Error('Failed to create slot')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -54,7 +55,7 @@ async function deleteSlot(slotId: string): Promise<void> {
         method: 'DELETE',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-    if (!res.ok) throw new Error('Failed to delete slot')
+    if (!res.ok) await throwApiError(res)
 }
 
 // ---- Hooks ----
@@ -87,7 +88,7 @@ export const availabilitySlotsQueryOptions = (username: string) =>
             const res = await fetch(`${API_BASE_URL}/profiles/${username}/availability-slots/`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             })
-            if (!res.ok) throw new Error(`${res.status}`)
+            if (!res.ok) await throwApiError(res)
             return res.json() as Promise<AvailabilitySlot[]>
         },
         staleTime: 60 * 1000,

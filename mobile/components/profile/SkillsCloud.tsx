@@ -33,15 +33,16 @@ export function SkillsCloud({
   let emptyStateContent: React.ReactNode = null;
   if (onEdit) {
     emptyStateContent = (
-      <TouchableOpacity 
-        onPress={onEdit} 
+      <TouchableOpacity
+        testID="empty-state"
+        onPress={onEdit}
         className="py-2 px-4 border border-dashed border-gray-300 rounded-full"
       >
         <Text className="text-gray-500 font-medium">{emptyPrompt}</Text>
       </TouchableOpacity>
     );
   } else {
-    emptyStateContent = <Text className="text-gray-500 font-medium">No skills listed.</Text>;
+    emptyStateContent = <Text testID="empty-state" className="text-gray-500 font-medium">No skills listed.</Text>;
   }
 
   return (
@@ -79,6 +80,7 @@ export function SkillsCloud({
             {/* Render the "+X more" pill if there are hidden skills */}
             {hiddenCount > 0 && (
               <TouchableOpacity
+                testID="view-all-button"
                 onPress={onViewAll}
                 className="px-3 py-1.5 rounded-full border bg-gray-200 border-gray-300"
               >

@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
@@ -10,11 +9,10 @@ import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal"
 import { RescheduleBottomSheet } from "@/components/dashboard/RescheduleBottomSheet";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
 
-import { Colors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   mapMeetingSessionsToDashboard,
@@ -32,8 +30,6 @@ import {
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? "light";
-  const theme = Colors[colorScheme];
 
   const currentUsername = useAuthStore((state) => state.user?.username);
 
@@ -179,11 +175,7 @@ export default function DashboardScreen() {
           <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Dashboard
           </Text>
-          <Ionicons
-            name="notifications-outline"
-            size={24}
-            color={theme.textSoft}
-          />
+          <NotificationBell />
         </View>
       </View>
 

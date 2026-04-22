@@ -118,6 +118,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.TimezoneMiddleware",
 ]
 
 ROOT_URLCONF = "core.urls"
@@ -189,3 +190,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Feedback & rating
 RATING_UPDATE_THRESHOLD = int(os.getenv("RATING_UPDATE_THRESHOLD", "5"))
+
+# Notifications
+NOTIFICATIONS_HISTORY_LIMIT = int(os.getenv("NOTIFICATIONS_HISTORY_LIMIT", "100"))

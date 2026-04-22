@@ -22,6 +22,7 @@ export function RequestCard({
 
   return (
     <TouchableOpacity
+      testID="request-card"
       activeOpacity={0.7}
       onPress={onPress}
       className={`p-4 rounded-xl shadow-sm border mb-3 ${isReschedule ? "bg-amber-50/30 border-amber-200" : "bg-white border-gray-100"}`}
@@ -40,7 +41,7 @@ export function RequestCard({
         </View>
 
         {isReschedule && (
-          <View className="bg-amber-100 px-2 py-1 rounded-md">
+          <View testID="reschedule-badge" className="bg-amber-100 px-2 py-1 rounded-md">
             <Text className="text-xs font-bold uppercase tracking-wider text-amber-700">
               Reschedule
             </Text>
@@ -71,6 +72,7 @@ export function RequestCard({
       <View className="flex-row justify-between items-center mt-1">
         {onShowProfile ? (
           <TouchableOpacity
+            testID="show-profile-button"
             activeOpacity={0.8}
             onPress={onShowProfile}
             className="bg-white px-3 py-2 rounded-lg border border-gray-200"
@@ -84,13 +86,13 @@ export function RequestCard({
         )}
 
         {isIncoming ? (
-          <View className="bg-indigo-50 px-4 py-2 rounded-lg border border-indigo-100">
+          <View testID="type-badge-incoming" className="bg-indigo-50 px-4 py-2 rounded-lg border border-indigo-100">
             <Text className="text-indigo-700 text-sm font-semibold">
               Open to respond
             </Text>
           </View>
         ) : (
-          <View className="bg-gray-100 px-4 py-2 rounded-lg border border-gray-200">
+          <View testID="type-badge-outgoing" className="bg-gray-100 px-4 py-2 rounded-lg border border-gray-200">
             <Text className="text-gray-500 text-sm font-medium">
               Request Pending...
             </Text>

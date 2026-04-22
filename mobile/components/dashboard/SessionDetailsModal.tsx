@@ -104,6 +104,7 @@ export function SessionDetailsModal({
               {/* RESCHEDULE BUTTON: Only for Mentees */}
               {session.myRole === "Mentee" && (
                 <TouchableOpacity
+                  testID="action-reschedule"
                   className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
                   disabled={isCancelling}
                   onPress={() => {
@@ -121,12 +122,13 @@ export function SessionDetailsModal({
 
               {/* CANCEL BUTTON */}
               <TouchableOpacity
+                testID="action-cancel"
                 className="flex-1 bg-white py-3 rounded-xl items-center border border-gray-300"
                 disabled={isCancelling}
                 onPress={() => setShowCancelConfirmation(true)}
               >
                 {isCancelling ? (
-                  <ActivityIndicator size="small" color="#dc2626" />
+                  <ActivityIndicator testID="cancel-loading-indicator" size="small" color="#dc2626" />
                 ) : (
                   <Text className="font-bold text-base text-red-600">
                     Cancel
