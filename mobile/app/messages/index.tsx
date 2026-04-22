@@ -106,6 +106,7 @@ function ConversationItem({
 
   return (
     <TouchableOpacity
+      testID={`conversation-item-${conversation.id}`}
       activeOpacity={0.7}
       onPress={onPress}
       className="flex-row items-center p-4 bg-surface-card rounded-xl mb-3"
@@ -157,7 +158,7 @@ function ConversationItem({
 
 function EmptyState({ hasSearch }: { hasSearch: boolean }) {
   return (
-    <View className="items-center justify-center pt-20 px-8">
+    <View testID={hasSearch ? "messages-empty-search" : "messages-empty"} className="items-center justify-center pt-20 px-8">
       <View
         className="bg-surface-active items-center justify-center mb-4"
         style={{ width: 72, height: 72, borderRadius: 36 }}
@@ -227,6 +228,7 @@ export default function MessagesScreen() {
         >
           <Ionicons name="search-outline" size={18} color="#8a8172" />
           <TextInput
+            testID="messages-search"
             value={search}
             onChangeText={setSearch}
             placeholder="Search mentors, connections..."
@@ -244,16 +246,17 @@ export default function MessagesScreen() {
 
       {/* Content */}
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
+        <View testID="messages-loading" className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#4a7c6f" />
         </View>
       ) : isError ? (
-        <View className="flex-1 items-center justify-center px-8">
+        <View testID="messages-error" className="flex-1 items-center justify-center px-8">
           <Ionicons name="alert-circle-outline" size={40} color="#ba1a1a" />
           <Text className="text-[15px] font-semibold text-on-surface text-center mt-3 mb-2">
             Failed to load conversations
           </Text>
           <TouchableOpacity
+            testID="messages-retry"
             onPress={() => refetch()}
             activeOpacity={0.7}
             className="bg-primary px-6 py-2.5 rounded-xl mt-1"

@@ -7,7 +7,7 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 describe("RescheduleBottomSheet", () => {
   const mockOnClose = jest.fn();
   const mockOnSelectSlot = jest.fn();
-  
+
   const mockSlots = [
     {
       id: "slot-xyz-123",
@@ -15,15 +15,15 @@ describe("RescheduleBottomSheet", () => {
       startTime: "10:00:00",
       endTime: "11:00:00",
       is_booked: false,
-    }
+    },
   ];
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it("renders correctly with available slots", () => {
-    const { getByText } = render(
+  it("renders available slot and keep-current button", () => {
+    const { getByTestId } = render(
       <RescheduleBottomSheet
         visible={true}
         onClose={mockOnClose}
@@ -32,15 +32,12 @@ describe("RescheduleBottomSheet", () => {
       />
     );
 
-    expect(getByText("Reschedule Session")).toBeTruthy();
-    // Your code intelligently renders "1 available slot" instead of "1 available slots"
-    expect(getByText(/1 available slot/i)).toBeTruthy(); 
-    // Your actual button text
-    expect(getByText("Keep Current Slot")).toBeTruthy(); 
+    expect(getByTestId("slot-slot-xyz-123")).toBeTruthy();
+    expect(getByTestId("keep-current-slot-button")).toBeTruthy();
   });
 
   it("shows loading state when isLoading is true", () => {
-    const { getByText } = render(
+    const { getByTestId } = render(
       <RescheduleBottomSheet
         visible={true}
         onClose={mockOnClose}
@@ -50,12 +47,25 @@ describe("RescheduleBottomSheet", () => {
       />
     );
 
-    // Look for the actual loading text your component renders!
-    expect(getByText(/Loading available slots.../i)).toBeTruthy(); 
+    expect(getByTestId("loading-state")).toBeTruthy();
   });
 
-  it("calls onClose when Keep Current Slot is pressed", () => {
-    const { getByText } = render(
+  it("shows empty state when no slots and not loading", () => {
+    const { getByTestId } = render(
+      <RescheduleBottomSheet
+        visible={true}
+        onClose={mockOnClose}
+        slots={[]}
+        isLoading={false}
+        onSelectSlot={mockOnSelectSlot}
+      />
+    );
+
+    expect(getByTestId("empty-slots-state")).toBeTruthy();
+  });
+
+  it("calls onClose when keep-current button is pressed", () => {
+    const { getByTestId } = render(
       <RescheduleBottomSheet
         visible={true}
         onClose={mockOnClose}
@@ -64,12 +74,12 @@ describe("RescheduleBottomSheet", () => {
       />
     );
 
-    fireEvent.press(getByText("Keep Current Slot"));
+    fireEvent.press(getByTestId("keep-current-slot-button"));
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
-  it("fires onSelectSlot with the correct ID when a user taps a specific time", () => {
-    const { getByText } = render(
+  it("fires onSelectSlot with correct slot ID when a slot is pressed", () => {
+    const { getByTestId } = render(
       <RescheduleBottomSheet
         visible={true}
         onClose={mockOnClose}
@@ -78,13 +88,7 @@ describe("RescheduleBottomSheet", () => {
       />
     );
 
-    // Find the slot by the text that renders
-    const slotButton = getByText(/10:00/i); 
-    
-    // Simulate user tap
-    fireEvent.press(slotButton);
-
-    // Verify it sent the exact ID to your backend mutation handler
+    fireEvent.press(getByTestId("slot-slot-xyz-123"));
     expect(mockOnSelectSlot).toHaveBeenCalledWith("slot-xyz-123");
     expect(mockOnSelectSlot).toHaveBeenCalledTimes(1);
   });

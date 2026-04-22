@@ -39,6 +39,7 @@ export function SessionCard({
   // 3. UI: Render the interactive card
   return (
     <TouchableOpacity
+      testID={`session-card-${status}`}
       activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityState={{ disabled: !onPress }}
@@ -66,7 +67,7 @@ export function SessionCard({
       </View>
 
       {/* Status Badge Right Column */}
-      <View className={`px-2 py-1 rounded-md ${statusStyles.bg}`}>
+      <View testID="status-badge" className={`px-2 py-1 rounded-md ${statusStyles.bg}`}>
         <Text className={`text-xs font-semibold ${statusStyles.text}`}>
           {status}
         </Text>

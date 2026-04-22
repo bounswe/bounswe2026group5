@@ -306,6 +306,7 @@ export default function ProfileScreen() {
           <View className="flex-row items-center gap-4">
             <NotificationBell />
             <TouchableOpacity
+              testID="settings-button"
               onPress={() => router.push("/settings" as any)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >

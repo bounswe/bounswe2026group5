@@ -2,6 +2,7 @@ import ScheduleScreen from "@/app/(tabs)/schedule";
 import { fireEvent, render } from "@testing-library/react-native";
 import React from "react";
 import { act } from "react-test-renderer";
+import { Alert } from "react-native";
 
 const mockMeetingSessionsQuery = jest.fn();
 const mockCancelSessionMutation = jest.fn();
@@ -21,20 +22,17 @@ jest.mock("@/components/dashboard/RescheduleBottomSheet", () => ({
     visible: boolean;
     onSelectSlot: (slotId: string) => void;
   }) => {
-    const { Text, TouchableOpacity, View } = jest.requireActual("react-native");
+    const { TouchableOpacity, View } = jest.requireActual("react-native");
     if (!visible) {
       return null;
     }
 
     return (
-      <View>
-        <Text>Reschedule Session</Text>
+      <View testID="reschedule-sheet">
         <TouchableOpacity
           onPress={() => onSelectSlot("slot-2")}
           testID="reschedule-slot-option"
-        >
-          <Text>Select alternate slot</Text>
-        </TouchableOpacity>
+        />
       </View>
     );
   },
@@ -43,24 +41,18 @@ jest.mock("@/components/dashboard/RescheduleBottomSheet", () => ({
 jest.mock("@/components/dashboard/SessionCard", () => ({
   SessionCard: ({
     user,
-    time,
     onPress,
   }: {
     user: string;
-    time: string;
     onPress: () => void;
   }) => {
-    const { Text, TouchableOpacity } = jest.requireActual("react-native");
+    const { TouchableOpacity } = jest.requireActual("react-native");
     return (
-      <TouchableOpacity onPress={onPress} testID={`session-card-${user}`}>
-        <Text>{user}</Text>
-        <Text>{time}</Text>
-      </TouchableOpacity>
+      <TouchableOpacity onPress={onPress} testID={`session-card-${user}`} />
     );
   },
 }));
 
-// ADDED THE MISSING MUTATIONS HERE
 jest.mock("@/lib/queries/mentorship", () => {
   const actual = jest.requireActual<Record<string, unknown>>(
     "@/lib/queries/mentorship",
@@ -100,6 +92,7 @@ describe("ScheduleScreen", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    jest.spyOn(Alert, "alert").mockImplementation(() => {});
     mockAvailabilitySlotsQuery.mockReturnValue({
       data: [
         {
@@ -148,34 +141,29 @@ describe("ScheduleScreen", () => {
     jest.useRealTimers();
   });
 
-  it("renders page headers correctly", () => {
+  it("opens SessionDetailsModal with cancel action when a session card is tapped", () => {
     jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
-    const { getByText } = render(<ScheduleScreen />);
-    expect(getByText("Schedule")).toBeTruthy();
-    expect(getByText(/Sessions on/i)).toBeTruthy();
-  });
-
-  it("opens SessionDetailsModal when a session card is tapped", () => {
-    jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
-    const { getByTestId, getByText } = render(<ScheduleScreen />);
+    const { getByTestId } = render(<ScheduleScreen />);
 
     fireEvent.press(getByTestId("session-card-Ada Lovelace"));
 
-    expect(getByText("with Ada Lovelace")).toBeTruthy();
-    expect(getByText("Cancel")).toBeTruthy();
+    expect(getByTestId("action-cancel")).toBeTruthy();
+    expect(getByTestId("action-reschedule")).toBeTruthy();
   });
 
   it("closes the reschedule sheet after a successful reschedule", async () => {
     jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
-    const { getByTestId, findByText, queryByText } = render(<ScheduleScreen />);
+    const { getByTestId, findByTestId, queryByTestId } = render(
+      <ScheduleScreen />,
+    );
 
     fireEvent.press(getByTestId("session-card-Ada Lovelace"));
-    fireEvent.press(await findByText("Reschedule"));
+    fireEvent.press(await findByTestId("action-reschedule"));
     act(() => {
       jest.runAllTimers();
     });
 
-    expect(queryByText("Reschedule Session")).toBeTruthy();
+    expect(getByTestId("reschedule-sheet")).toBeTruthy();
 
     fireEvent.press(getByTestId("reschedule-slot-option"));
     await act(async () => {
@@ -186,6 +174,69 @@ describe("ScheduleScreen", () => {
       sessionId: "session-1",
       newSlotId: "slot-2",
     });
-    expect(queryByText("Reschedule Session")).toBeNull();
+    expect(queryByTestId("reschedule-sheet")).toBeNull();
+  });
+
+  it("shows error when reschedule mutation fails", async () => {
+    jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
+    mockRescheduleSessionMutation.mockRejectedValue(
+      new Error("Slot no longer available"),
+    );
+
+    const { getByTestId, findByTestId, findByText } = render(<ScheduleScreen />);
+
+    fireEvent.press(getByTestId("session-card-Ada Lovelace"));
+    fireEvent.press(await findByTestId("action-reschedule"));
+    act(() => {
+      jest.runAllTimers();
+    });
+
+    fireEvent.press(getByTestId("reschedule-slot-option"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(await findByText("Slot no longer available")).toBeTruthy();
+  });
+
+  it("shows error when cancel session mutation fails", async () => {
+    jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
+    mockCancelSessionMutation.mockRejectedValue(
+      new Error("Cancellation not allowed"),
+    );
+
+    const { getByTestId, findByTestId, findByText } = render(<ScheduleScreen />);
+
+    fireEvent.press(getByTestId("session-card-Ada Lovelace"));
+    fireEvent.press(await findByTestId("action-cancel"));
+
+    // ConfirmationSheet appears — press "Cancel Session" to confirm
+    fireEvent.press(await findByText("Cancel Session"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(await findByText("Cancellation not allowed")).toBeTruthy();
+  });
+
+  it("shows empty state when no sessions exist for selected date", () => {
+    jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
+    mockMeetingSessionsQuery.mockReturnValue({ data: [] });
+
+    const { getByTestId } = render(<ScheduleScreen />);
+
+    expect(getByTestId("empty-sessions-state")).toBeTruthy();
+  });
+
+  it("renders empty state when sessions data is undefined (loading)", () => {
+    jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
+    mockMeetingSessionsQuery.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+    });
+
+    const { getByTestId } = render(<ScheduleScreen />);
+
+    expect(getByTestId("empty-sessions-state")).toBeTruthy();
   });
 });

@@ -37,6 +37,7 @@ export function PendingRequestCard({
 
   return (
     <TouchableOpacity
+      testID="pending-request-card"
       activeOpacity={0.85}
       onPress={onPress}
       className="bg-gray-100 p-5 rounded-xl mb-3 flex-row flex-wrap gap-4 items-start"
@@ -68,7 +69,7 @@ export function PendingRequestCard({
             )}
           </View>
           {isNew && (
-            <View className="bg-orange-100 px-2 py-1 rounded ml-2">
+            <View testID="pending-new-badge" className="bg-orange-100 px-2 py-1 rounded ml-2">
               <Text className="text-[10px] font-black text-orange-700 uppercase">
                 New
               </Text>
@@ -87,6 +88,7 @@ export function PendingRequestCard({
         {/* Action Buttons */}
         <View className="flex-row gap-2.5 mt-1">
           <TouchableOpacity
+            testID="pending-decline-button"
             activeOpacity={0.8}
             onPress={onDecline}
             disabled={disabled}
@@ -96,6 +98,7 @@ export function PendingRequestCard({
           </TouchableOpacity>
 
           <TouchableOpacity
+            testID="pending-accept-button"
             activeOpacity={0.85}
             onPress={onAccept}
             disabled={disabled}

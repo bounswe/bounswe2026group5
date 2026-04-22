@@ -228,7 +228,7 @@ export default function DiscoverScreen() {
 
   if (loadingProfiles && page === 1) {
     bodyContent = (
-      <View className="py-10 items-center">
+      <View testID="loading-state" className="py-10 items-center">
         <ActivityIndicator size="large" color={theme.primary} />
         <Text className="text-on-surface-soft dark:text-on-surface-soft-dark mt-3">
           Loading mentors...
@@ -237,11 +237,13 @@ export default function DiscoverScreen() {
     );
   } else if (errorText) {
     bodyContent = (
-      <ErrorBanner message={errorText} />
+      <View testID="error-state">
+        <ErrorBanner message={errorText} />
+      </View>
     );
   } else if (profiles.length === 0) {
     bodyContent = (
-      <View>
+      <View testID="empty-state">
         <View className="bg-surface-active dark:bg-surface-active-dark border border-divider dark:border-divider-dark rounded-xl p-3 mb-3">
           <Text className="text-on-surface-soft dark:text-on-surface-soft-dark text-sm mt-1">
             No matches found. Try adjusting your search or filter criteria to
@@ -270,6 +272,7 @@ export default function DiscoverScreen() {
 
         {hasMore && (
           <TouchableOpacity
+            testID="load-more-button"
             activeOpacity={1}
             onPress={() => setPage((prev) => prev + 1)}
             disabled={loadingProfiles}

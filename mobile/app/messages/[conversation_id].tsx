@@ -324,6 +324,7 @@ export default function ConversationScreen() {
       >
         <View className="flex-row items-center flex-1 min-w-0">
           <TouchableOpacity
+            testID="back-button"
             onPress={() => router.back()}
             activeOpacity={0.7}
             className="w-10 h-10 items-center justify-center rounded-full mr-1"
@@ -382,11 +383,11 @@ export default function ConversationScreen() {
       >
         {/* Messages */}
         {messagesLoading ? (
-          <View className="flex-1 items-center justify-center">
+          <View testID="messages-loading" className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color="#4a7c6f" />
           </View>
         ) : messagesError ? (
-          <View className="flex-1 items-center justify-center px-8">
+          <View testID="messages-error" className="flex-1 items-center justify-center px-8">
             <Ionicons name="alert-circle-outline" size={40} color="#ba1a1a" />
             <Text className="text-[15px] font-semibold text-on-surface text-center mt-3">
               Failed to load messages
@@ -422,6 +423,7 @@ export default function ConversationScreen() {
               style={{ minHeight: 48 }}
             >
               <TextInput
+                testID="message-input"
                 value={text}
                 onChangeText={setText}
                 placeholder={
@@ -439,6 +441,7 @@ export default function ConversationScreen() {
             </View>
 
             <TouchableOpacity
+              testID="send-button"
               onPress={handleSend}
               activeOpacity={0.8}
               disabled={!text.trim() || sendMessage.isPending}

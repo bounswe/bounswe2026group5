@@ -65,7 +65,7 @@ export function RescheduleBottomSheet({
   let content: React.ReactNode;
   if (isLoading) {
     content = (
-      <View className="py-12 items-center justify-center">
+      <View testID="loading-state" className="py-12 items-center justify-center">
         <ActivityIndicator size="large" color="#6366f1" />
         <Text className="text-gray-500 dark:text-gray-400 mt-3 text-sm">
           Loading available slots...
@@ -74,7 +74,7 @@ export function RescheduleBottomSheet({
     );
   } else if (availableSlots.length === 0) {
     content = (
-      <View className="py-12 items-center justify-center px-6">
+      <View testID="empty-slots-state" className="py-12 items-center justify-center px-6">
         <Ionicons name="calendar-clear" size={32} color="#9ca3af" />
         <Text className="text-gray-600 dark:text-gray-400 mt-3 font-medium text-center">
           No Available Slots
@@ -100,6 +100,7 @@ export function RescheduleBottomSheet({
         ListFooterComponent={<View className="h-6" />}
         renderItem={({ item: slot }) => (
           <TouchableOpacity
+            testID={`slot-${slot.id}`}
             className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-3 border border-gray-200 dark:border-gray-700 active:bg-gray-100 dark:active:bg-gray-700"
             onPress={() => handleSelectSlot(slot.id)}
           >
@@ -152,6 +153,7 @@ export function RescheduleBottomSheet({
           {/* Action Button */}
           <View className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-800/50">
             <TouchableOpacity
+              testID="keep-current-slot-button"
               className="bg-white dark:bg-gray-700 py-3 rounded-xl items-center border border-gray-300 dark:border-gray-600"
               onPress={onClose}
             >
