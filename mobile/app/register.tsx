@@ -19,6 +19,7 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
+import { ApiValidationError } from "@/lib/api/client";
 import {
   fetchSkillsFn,
   registerFn,
@@ -96,6 +97,7 @@ export default function RegisterScreen() {
   const [terms, setTerms] = useState(false);
   const [termsError, setTermsError] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [usernameError, setUsernameError] = useState("");
   const [profileSetupVisible, setProfileSetupVisible] = useState(false);
 
   const {
@@ -150,6 +152,11 @@ export default function RegisterScreen() {
       router.replace("/(tabs)");
     },
     onError: (error: Error) => {
+      if (error instanceof ApiValidationError && error.fieldErrors.username) {
+        setUsernameError(error.fieldErrors.username);
+        setSubmitError("");
+        return;
+      }
       setSubmitError(error.message);
     },
   });
@@ -536,12 +543,15 @@ export default function RegisterScreen() {
         isSubmitting={completeRegistration.isPending}
         submitError={submitError}
         username={buildUsernamePreview(email)}
+        usernameError={usernameError}
         onClose={() => {
           setProfileSetupVisible(false);
           setSubmitError("");
+          setUsernameError("");
         }}
         onSubmit={(values) => {
           setSubmitError("");
+          setUsernameError("");
           completeRegistration.mutate(values);
         }}
       />

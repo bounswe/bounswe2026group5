@@ -15,6 +15,18 @@ export class ApiError extends Error {
 }
 
 /**
+ * Error type thrown when an API request fails with field-specific validation errors (400 Bad Request).
+ */
+export class ApiValidationError extends ApiError {
+  fieldErrors: Record<string, string>;
+
+  constructor(status: number, message: string, fieldErrors: Record<string, string>) {
+    super(status, message);
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+/**
  * Perform a typed GET request against the backend API.
  * Uses the access token from auth store.
  *

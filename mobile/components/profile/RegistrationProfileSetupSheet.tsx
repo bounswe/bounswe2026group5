@@ -25,6 +25,7 @@ interface RegistrationProfileSetupSheetProps {
   isLoadingSkills: boolean;
   isSubmitting: boolean;
   submitError: string;
+  usernameError?: string;
   onClose: () => void;
   onSubmit: (values: {
     displayName: string;
@@ -64,6 +65,7 @@ export function RegistrationProfileSetupSheet({
   isLoadingSkills,
   isSubmitting,
   submitError,
+  usernameError,
   onClose,
   onSubmit,
 }: Readonly<RegistrationProfileSetupSheetProps>) {
@@ -236,6 +238,9 @@ export function RegistrationProfileSetupSheet({
               <Text className="mt-2 text-lg font-semibold text-on-surface dark:text-on-surface-dark">
                 {formatUsername(username)}
               </Text>
+              {usernameError ? (
+                <Text className="text-xs text-red-500 mt-1">{usernameError}</Text>
+              ) : null}
             </View>
 
             <View className="gap-1.5">

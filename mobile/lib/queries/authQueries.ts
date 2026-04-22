@@ -1,3 +1,4 @@
+import { ApiValidationError } from "../api/client";
 import { API_BASE_URL } from "../api/config";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -61,7 +62,20 @@ export async function registerFn(credentials: {
   });
 
   if (!res.ok) {
-    const message = await extractErrorMessage(res, "Registration failed.");
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 400 && typeof body === "object") {
+      const fieldErrors: Record<string, string> = {};
+      for (const [key, value] of Object.entries(body)) {
+        if (Array.isArray(value) && typeof value[0] === "string") {
+          fieldErrors[key] = value[0];
+        } else if (typeof value === "string") {
+          fieldErrors[key] = value;
+        }
+      }
+      const message = fieldErrors.detail || fieldErrors.non_field_errors || "Registration failed.";
+      throw new ApiValidationError(res.status, message, fieldErrors);
+    }
+    const message = body.detail || body.non_field_errors?.[0] || "Registration failed.";
     throw new Error(message);
   }
 
