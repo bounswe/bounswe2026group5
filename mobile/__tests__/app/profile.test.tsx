@@ -136,11 +136,14 @@ describe("ProfileScreen Layout", () => {
       app_usage_mode: "MENTEE",
     };
 
-    const { queryByTestId } = render(<ProfileScreen />);
+    const { queryByTestId, getByText, queryByText } = render(<ProfileScreen />);
 
     await waitFor(() => {
+      expect(getByText("Ece Yilmaz")).toBeTruthy();
       expect(queryByTestId("mentees-section")).toBeNull();
+      expect(queryByText("Mentees")).toBeNull();
       expect(queryByTestId("edit-availability-button")).toBeNull();
+      expect(queryByText("Availability")).toBeNull();
     });
   });
 
