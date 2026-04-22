@@ -34,10 +34,10 @@ function toSessionManagementData(session: MeetingSession) {
       role: 'mentor' as const,
     },
     attendee: {
-      id: session.mentee.username,
-      username: session.mentee.username,
-      fullName: session.mentee.display_name,
-      avatarUrl: session.mentee.picture_url,
+      id: session.mentee?.username ?? '',
+      username: session.mentee?.username ?? '',
+      fullName: session.mentee?.display_name ?? '',
+      avatarUrl: session.mentee?.picture_url ?? '',
       role: 'mentee' as const,
     },
   }
