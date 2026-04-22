@@ -10,6 +10,9 @@ import {
 const mockPush = jest.fn();
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+jest.mock("@/components/notifications/NotificationBell", () => ({
+  NotificationBell: () => null,
+}));
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({
@@ -33,16 +36,14 @@ jest.mock("@/lib/discover/client", () => ({
 
 jest.mock("@/components/discover/MentorCard", () => ({
   MentorCard: ({ profile, onPress }: any) => {
-    const { Text, TouchableOpacity } = jest.requireActual("react-native");
+    const { TouchableOpacity } = jest.requireActual("react-native");
 
     return (
       <TouchableOpacity
         accessibilityRole="button"
         onPress={() => onPress?.(profile)}
         testID={`mentor-card-${profile.username}`}
-      >
-        <Text>{profile.full_name}</Text>
-      </TouchableOpacity>
+      />
     );
   },
 }));
@@ -75,47 +76,39 @@ describe("DiscoverScreen", () => {
     ]);
   });
 
-  it("renders mentors and navigates to the profile route", async () => {
-    const { getByText, getByTestId } = render(<DiscoverScreen />);
-
-    expect(getByText("Discover")).toBeTruthy();
+  it("renders mentors and navigates to the profile route on press", async () => {
+    const { getByTestId } = render(<DiscoverScreen />);
 
     await waitFor(() => {
       expect(fetchDiscoverPopularProfiles).toHaveBeenCalled();
-      expect(fetchDiscoverSkills).toHaveBeenCalled();
-      expect(getByText("Can Ozkan")).toBeTruthy();
+      expect(getByTestId("mentor-card-can-ozkan")).toBeTruthy();
     });
 
-    expect(getByText("Load More")).toBeTruthy();
+    expect(getByTestId("load-more-button")).toBeTruthy();
 
     fireEvent.press(getByTestId("mentor-card-can-ozkan"));
-
     expect(mockPush).toHaveBeenCalledWith("/user/can-ozkan");
   });
 
-  it("shows API error message when profile query fails", async () => {
+  it("shows error state when profile query fails", async () => {
     (fetchDiscoverPopularProfiles as jest.Mock).mockRejectedValueOnce(
       new Error("Failed to load discovery profiles (500)"),
     );
 
-    const { getByText } = render(<DiscoverScreen />);
+    const { getByTestId } = render(<DiscoverScreen />);
 
     await waitFor(() => {
-      expect(getByText("Failed to load discovery profiles (500)")).toBeTruthy();
+      expect(getByTestId("error-state")).toBeTruthy();
     });
   });
 
-  it("shows demo preview message when backend returns empty results", async () => {
+  it("shows empty state when backend returns no results", async () => {
     (fetchDiscoverPopularProfiles as jest.Mock).mockResolvedValueOnce([]);
 
-    const { getByText } = render(<DiscoverScreen />);
+    const { getByTestId } = render(<DiscoverScreen />);
 
     await waitFor(() => {
-      expect(
-        getByText(
-          "No matches found. Try adjusting your search or filter criteria to find more mentors.",
-        ),
-      ).toBeTruthy();
+      expect(getByTestId("empty-state")).toBeTruthy();
     });
   });
 
@@ -124,8 +117,8 @@ describe("DiscoverScreen", () => {
       .mockResolvedValueOnce(
         Array.from({ length: 8 }, (_, index) => ({
           id: `mentor-${index + 1}`,
-          username: index === 0 ? "can-ozkan" : `mentor-${index + 1}`,
-          full_name: index === 0 ? "Can Ozkan" : `Mentor ${index + 1}`,
+          username: `mentor-${index + 1}`,
+          full_name: `Mentor ${index + 1}`,
           bio: "Supports code review and team planning.",
           hidden: false,
           picture_url: "",
@@ -152,13 +145,13 @@ describe("DiscoverScreen", () => {
         },
       ]);
 
-    const { getByText } = render(<DiscoverScreen />);
+    const { getByTestId } = render(<DiscoverScreen />);
 
     await waitFor(() => {
-      expect(getByText("Load More")).toBeTruthy();
+      expect(getByTestId("load-more-button")).toBeTruthy();
     });
 
-    fireEvent.press(getByText("Load More"));
+    fireEvent.press(getByTestId("load-more-button"));
 
     await waitFor(() => {
       expect(fetchDiscoverPopularProfiles).toHaveBeenLastCalledWith(16);

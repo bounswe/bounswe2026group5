@@ -1,6 +1,7 @@
 """Serializers for mentorship request and match API endpoints."""
 
 from django.utils import timezone
+from core.utils.timezone import to_local_time
 from rest_framework import serializers
 
 from accounts.models import AppUsageMode
@@ -46,25 +47,25 @@ class MentorshipRequestSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_slot_date(self, obj: MentorshipRequest) -> str | None:
-        """Return selected slot date in local timezone."""
+        """Return selected slot date in project local timezone."""
         slot_start_at = obj.slot.start_at if obj.slot is not None else obj.initial_session_start_at
         if slot_start_at is None:
             return None
-        return timezone.localtime(slot_start_at).date().isoformat()
+        return to_local_time(slot_start_at).date().isoformat()
 
     def get_slot_start_time(self, obj: MentorshipRequest) -> str | None:
-        """Return selected slot start time in local timezone."""
+        """Return selected slot start time in project local timezone."""
         slot_start_at = obj.slot.start_at if obj.slot is not None else obj.initial_session_start_at
         if slot_start_at is None:
             return None
-        return timezone.localtime(slot_start_at).time().replace(microsecond=0).isoformat()
+        return to_local_time(slot_start_at).time().replace(microsecond=0).isoformat()
 
     def get_slot_end_time(self, obj: MentorshipRequest) -> str | None:
-        """Return selected slot end time in local timezone."""
+        """Return selected slot end time in project local timezone."""
         slot_end_at = obj.slot.end_at if obj.slot is not None else obj.initial_session_end_at
         if slot_end_at is None:
             return None
-        return timezone.localtime(slot_end_at).time().replace(microsecond=0).isoformat()
+        return to_local_time(slot_end_at).time().replace(microsecond=0).isoformat()
 
 
 class MentorshipRequestCreateSerializer(serializers.Serializer):
@@ -109,20 +110,15 @@ class MentorshipRequestCreateSerializer(serializers.Serializer):
                 {"slot_id": "Selected slot does not belong to the requested mentor."}
             )
 
-        if selected_slot.is_booked:
-            raise serializers.ValidationError({"slot_id": "Selected slot is already booked."})
-
-        if selected_slot.start_at <= timezone.now():
-            raise serializers.ValidationError({"slot_id": "Selected slot is in the past."})
-
-        has_pending_for_slot = MentorshipRequest.objects.filter(
-            slot=selected_slot,
-            status=MentorshipRequest.Status.PENDING,
-        ).exists()
-        if has_pending_for_slot:
+        if selected_slot.status != AvailabilitySlot.Status.AVAILABLE:
+            if selected_slot.status == AvailabilitySlot.Status.BOOKED:
+                raise serializers.ValidationError({"slot_id": "Selected slot is already booked."})
             raise serializers.ValidationError(
                 {"slot_id": "Selected slot already has a pending mentorship request."}
             )
+
+        if selected_slot.start_at <= timezone.now():
+            raise serializers.ValidationError({"slot_id": "Selected slot is in the past."})
 
         return attrs
 
@@ -133,12 +129,14 @@ class MentorshipRequestCreateSerializer(serializers.Serializer):
         selected_slot: AvailabilitySlot = validated_data["slot_id"]
         cover_letter: str = validated_data.get("cover_letter", "")
 
-        return MentorshipRequest.objects.create(
+        request_obj = MentorshipRequest.objects.create(
             mentor=mentor_profile,
             mentee=mentee_profile,
             slot=selected_slot,
             cover_letter=cover_letter,
         )
+        selected_slot.mark_pending()
+        return request_obj
 
 
 class RespondToRequestSerializer(serializers.Serializer):
@@ -190,16 +188,16 @@ class UpcomingMenteeSessionSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_slot_date(self, obj: AvailabilitySlot) -> str:
-        """Return session date in local timezone."""
-        return timezone.localtime(obj.start_at).date().isoformat()
+        """Return session date in project local timezone."""
+        return to_local_time(obj.start_at).date().isoformat()
 
     def get_slot_start_time(self, obj: AvailabilitySlot) -> str:
-        """Return session start time in local timezone."""
-        return timezone.localtime(obj.start_at).time().replace(microsecond=0).isoformat()
+        """Return session start time in project local timezone."""
+        return to_local_time(obj.start_at).time().replace(microsecond=0).isoformat()
 
     def get_slot_end_time(self, obj: AvailabilitySlot) -> str:
-        """Return session end time in local timezone."""
-        return timezone.localtime(obj.end_at).time().replace(microsecond=0).isoformat()
+        """Return session end time in project local timezone."""
+        return to_local_time(obj.end_at).time().replace(microsecond=0).isoformat()
 
 
 class UpcomingMentorSessionSerializer(serializers.ModelSerializer):
@@ -233,16 +231,16 @@ class UpcomingMentorSessionSerializer(serializers.ModelSerializer):
             return None
 
     def get_slot_date(self, obj: AvailabilitySlot) -> str:
-        """Return session date in local timezone."""
-        return timezone.localtime(obj.start_at).date().isoformat()
+        """Return session date in project local timezone."""
+        return to_local_time(obj.start_at).date().isoformat()
 
     def get_slot_start_time(self, obj: AvailabilitySlot) -> str:
-        """Return session start time in local timezone."""
-        return timezone.localtime(obj.start_at).time().replace(microsecond=0).isoformat()
+        """Return session start time in project local timezone."""
+        return to_local_time(obj.start_at).time().replace(microsecond=0).isoformat()
 
     def get_slot_end_time(self, obj: AvailabilitySlot) -> str:
-        """Return session end time in local timezone."""
-        return timezone.localtime(obj.end_at).time().replace(microsecond=0).isoformat()
+        """Return session end time in project local timezone."""
+        return to_local_time(obj.end_at).time().replace(microsecond=0).isoformat()
 
 
 class MeetingSessionSerializer(serializers.ModelSerializer):
@@ -281,12 +279,12 @@ class MeetingSessionSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_scheduled_start_at(self, obj: MeetingSession) -> str:
-        """Return session start time in local timezone."""
-        return timezone.localtime(obj.scheduled_start_at_utc).isoformat()
+        """Return session start time in project local timezone."""
+        return to_local_time(obj.scheduled_start_at_utc).isoformat()
 
     def get_scheduled_end_at(self, obj: MeetingSession) -> str:
-        """Return session end time in local timezone."""
-        return timezone.localtime(obj.scheduled_end_at_utc).isoformat()
+        """Return session end time in project local timezone."""
+        return to_local_time(obj.scheduled_end_at_utc).isoformat()
 
     def get_my_role(self, obj: MeetingSession) -> str:
         """Return the authenticated caller role for this session."""

@@ -40,6 +40,7 @@ export function DeclineConfirmModal({ visible, onCancel, onConfirm, isLoading = 
             {/* Action Buttons */}
             <View className="flex-row gap-3 w-full">
               <TouchableOpacity
+                testID="decline-modal-cancel"
                 activeOpacity={0.8}
                 onPress={onCancel}
                 disabled={isLoading}
@@ -49,6 +50,7 @@ export function DeclineConfirmModal({ visible, onCancel, onConfirm, isLoading = 
               </TouchableOpacity>
 
               <TouchableOpacity
+                testID="decline-modal-confirm"
                 activeOpacity={0.85}
                 onPress={onConfirm}
                 disabled={isLoading}

@@ -10,6 +10,7 @@ interface DiscoverSearchBarProps {
   onChangeText: (value: string) => void;
   className?: string;
   placeholder?: string;
+  testID?: string;
 }
 
 export function DiscoverSearchBar({
@@ -17,6 +18,7 @@ export function DiscoverSearchBar({
   onChangeText,
   className,
   placeholder = "Search mentors, skills, topics...",
+  testID,
 }: Readonly<DiscoverSearchBarProps>) {
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
@@ -27,6 +29,7 @@ export function DiscoverSearchBar({
     >
       <Ionicons name="search" size={18} color={theme.textMuted} />
       <TextInput
+        testID={testID}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}

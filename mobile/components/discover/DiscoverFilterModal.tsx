@@ -83,6 +83,7 @@ export function DiscoverFilterModal({
             </View>
 
             <DiscoverSearchBar
+              testID="skill-search-input"
               value={skillQuery}
               onChangeText={setSkillQuery}
               placeholder="Search skills..."
@@ -107,6 +108,7 @@ export function DiscoverFilterModal({
 
                   return (
                     <TouchableOpacity
+                      testID={`skill-${skill}`}
                       activeOpacity={1}
                       key={skill}
                       onPress={() => onToggleSkill(skill)}
@@ -130,7 +132,7 @@ export function DiscoverFilterModal({
                 })}
               </View>
               {filteredSkills.length === 0 && (
-                <View className="py-6 items-center">
+                <View testID="no-results-state" className="py-6 items-center">
                   <Text className="text-on-surface-soft dark:text-on-surface-soft-dark text-sm">
                     No matching skills found.
                   </Text>
@@ -140,6 +142,7 @@ export function DiscoverFilterModal({
 
             <View className="flex-row gap-2 mt-5">
               <TouchableOpacity
+                testID="clear-button"
                 onPress={onClear}
                 className="flex-1 py-3 rounded-xl border border-divider dark:border-divider-dark items-center"
               >
@@ -148,6 +151,7 @@ export function DiscoverFilterModal({
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID="apply-button"
                 onPress={onClose}
                 className="flex-1 py-3 rounded-xl bg-primary items-center"
               >

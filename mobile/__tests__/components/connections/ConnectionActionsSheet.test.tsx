@@ -1,0 +1,32 @@
+import React from "react";
+import { fireEvent, render } from "@testing-library/react-native";
+
+import { ConnectionActionsSheet } from "@/components/connections/ConnectionActionsSheet";
+
+jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+
+describe("ConnectionActionsSheet", () => {
+  it("opens the themed remove confirmation and confirms removal", () => {
+    const onRemoveConnection = jest.fn();
+    const { getByText } = render(
+      <ConnectionActionsSheet
+        visible={true}
+        name="Jane Doe"
+        onClose={jest.fn()}
+        onViewProfile={jest.fn()}
+        onRemoveConnection={onRemoveConnection}
+      />,
+    );
+
+    fireEvent.press(getByText("Remove Connection"));
+
+    expect(getByText("Remove Jane Doe?")).toBeTruthy();
+    expect(
+      getByText("This will end the active mentorship connection."),
+    ).toBeTruthy();
+
+    fireEvent.press(getByText("Remove"));
+
+    expect(onRemoveConnection).toHaveBeenCalledTimes(1);
+  });
+});

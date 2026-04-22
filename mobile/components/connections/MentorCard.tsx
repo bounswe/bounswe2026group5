@@ -52,6 +52,7 @@ export function MentorCard({
       {/* Action Buttons */}
       <View className="flex-row gap-2.5 mt-4">
         <TouchableOpacity
+          testID="mentor-profile-button"
           activeOpacity={0.85}
           onPress={onPress}
           className="flex-1 flex-row items-center justify-center gap-1.5 bg-gray-100 py-2.5 rounded-lg"
@@ -61,6 +62,7 @@ export function MentorCard({
         </TouchableOpacity>
 
         <TouchableOpacity
+          testID="mentor-message-button"
           activeOpacity={0.85}
           onPress={onMessage}
           className="flex-1 flex-row items-center justify-center gap-1.5 bg-primary py-2.5 rounded-lg"
@@ -70,6 +72,7 @@ export function MentorCard({
         </TouchableOpacity>
 
         <TouchableOpacity
+          testID="mentor-more-button"
           activeOpacity={0.8}
           onPress={onMore}
           className="w-11 h-10 rounded-lg bg-gray-100 items-center justify-center"

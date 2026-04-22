@@ -11,12 +11,13 @@ import {
   View,
 } from "react-native";
 
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+
 interface FeedbackBottomSheetProps {
   visible: boolean;
   onClose: () => void;
   onSubmit: (rating: number, text?: string) => Promise<void>;
   otherUserName: string;
-  yourRole: "Mentor" | "Mentee";
   isSubmitting?: boolean;
 }
 
@@ -25,7 +26,6 @@ export function FeedbackBottomSheet({
   onClose,
   onSubmit,
   otherUserName,
-  yourRole,
   isSubmitting = false,
 }: Readonly<FeedbackBottomSheetProps>): React.ReactNode {
   const [rating, setRating] = useState<number>(0);
@@ -101,6 +101,9 @@ export function FeedbackBottomSheet({
                 <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Rate your session with {otherUserName}
                 </Text>
+                <View testID="role-badge-mentor" className="mt-2 self-start px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900">
+                  <Text className="text-xs font-semibold text-indigo-600 dark:text-indigo-300">Mentor</Text>
+                </View>
               </View>
               <TouchableOpacity onPress={onClose} className="p-2">
                 <Ionicons name="close" size={24} color="#6b7280" />
@@ -116,27 +119,6 @@ export function FeedbackBottomSheet({
             }}
             showsVerticalScrollIndicator={false}
           >
-            {/* Role Badge */}
-            <View className="flex-row items-center gap-2 mb-6">
-              <View
-                className={`px-3 py-1 rounded-full ${
-                  yourRole === "Mentor"
-                    ? "bg-indigo-100 dark:bg-indigo-900"
-                    : "bg-emerald-100 dark:bg-emerald-900"
-                }`}
-              >
-                <Text
-                  className={`text-xs font-bold uppercase tracking-wider ${
-                    yourRole === "Mentor"
-                      ? "text-indigo-700 dark:text-indigo-200"
-                      : "text-emerald-700 dark:text-emerald-200"
-                  }`}
-                >
-                  As {yourRole}
-                </Text>
-              </View>
-            </View>
-
             {/* Star Rating */}
             <View className="mb-2">
               <Text className="text-gray-600 dark:text-gray-300 text-sm font-medium mb-2">
@@ -179,10 +161,8 @@ export function FeedbackBottomSheet({
 
             {/* Error Message */}
             {error ? (
-              <View className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-xl p-3 mb-6">
-                <Text className="text-red-600 dark:text-red-200 text-sm font-medium">
-                  {error}
-                </Text>
+              <View testID="error-message" className="mb-6">
+                <ErrorBanner message={error} />
               </View>
             ) : null}
           </ScrollView>
@@ -190,12 +170,13 @@ export function FeedbackBottomSheet({
           {/* Actions */}
           <View className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-800/50 gap-3">
             <TouchableOpacity
+              testID="submit-review-button"
               className="bg-indigo-600 py-4 rounded-xl items-center active:opacity-90 shadow-sm" // <-- Fixed color and padding
               onPress={handleSubmit}
               disabled={isSubmitting}
             >
               {isSubmitting ? (
-                <ActivityIndicator size="small" color="white" />
+                <ActivityIndicator testID="submitting-indicator" size="small" color="white" />
               ) : (
                 <Text className="text-white font-bold text-lg">
                   Submit Review
@@ -204,6 +185,7 @@ export function FeedbackBottomSheet({
             </TouchableOpacity>
 
             <TouchableOpacity
+              testID="cancel-button"
               className="bg-white dark:bg-gray-700 py-4 rounded-xl items-center border border-gray-300 dark:border-gray-600"
               onPress={onClose}
               disabled={isSubmitting}

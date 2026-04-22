@@ -6,11 +6,11 @@ import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
 describe("EditSkillsModal", () => {
-  it("adds and removes skills from available suggestions", () => {
+  it("adds a skill from suggestions and saves", () => {
     const onSave = jest.fn();
     const onClose = jest.fn();
 
-    const { getByPlaceholderText, getByText } = render(
+    const { getByTestId } = render(
       <EditSkillsModal
         visible
         onClose={onClose}
@@ -22,25 +22,39 @@ describe("EditSkillsModal", () => {
       />,
     );
 
-    fireEvent.changeText(getByPlaceholderText("Search for a skill..."), "type");
-    fireEvent.press(getByText("TypeScript"));
+    fireEvent.changeText(getByTestId("search-input"), "type");
+    expect(getByTestId("skill-suggestion-TypeScript")).toBeTruthy();
 
-    expect(getByText("TypeScript")).toBeTruthy();
+    fireEvent.press(getByTestId("skill-suggestion-TypeScript"));
 
-    fireEvent.changeText(
-      getByPlaceholderText("Search for a skill..."),
-      "react",
-    );
-    expect(getByText("No matching skills found.")).toBeTruthy();
-
-    fireEvent.press(getByText("Save Changes"));
-
+    fireEvent.press(getByTestId("save-changes-button"));
     expect(onSave).toHaveBeenCalledWith(["React", "TypeScript"]);
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("shows no-match state for unknown search", () => {
-    const { getByPlaceholderText, getByText } = render(
+  it("removes a skill using the remove button", () => {
+    const onSave = jest.fn();
+
+    const { getByTestId } = render(
+      <EditSkillsModal
+        visible
+        onClose={jest.fn()}
+        title="Expertise"
+        initialSkills={["React", "TypeScript"]}
+        variant="mentor"
+        availableSkills={["React", "TypeScript", "GraphQL"]}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.press(getByTestId("remove-skill-React"));
+
+    fireEvent.press(getByTestId("save-changes-button"));
+    expect(onSave).toHaveBeenCalledWith(["TypeScript"]);
+  });
+
+  it("shows no-results state when search yields no matches", () => {
+    const { getByTestId } = render(
       <EditSkillsModal
         visible
         onClose={jest.fn()}
@@ -52,8 +66,25 @@ describe("EditSkillsModal", () => {
       />,
     );
 
-    fireEvent.changeText(getByPlaceholderText("Search for a skill..."), "rust");
+    fireEvent.changeText(getByTestId("search-input"), "rust");
+    expect(getByTestId("no-results-state")).toBeTruthy();
+  });
 
-    expect(getByText("No matching skills found.")).toBeTruthy();
+  it("hides no-results state when there are matching suggestions", () => {
+    const { getByTestId, queryByTestId } = render(
+      <EditSkillsModal
+        visible
+        onClose={jest.fn()}
+        title="Expertise"
+        initialSkills={[]}
+        variant="mentor"
+        availableSkills={["React", "TypeScript"]}
+        onSave={jest.fn()}
+      />,
+    );
+
+    fireEvent.changeText(getByTestId("search-input"), "react");
+    expect(getByTestId("skill-suggestion-React")).toBeTruthy();
+    expect(queryByTestId("no-results-state")).toBeNull();
   });
 });

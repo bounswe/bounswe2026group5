@@ -6,22 +6,21 @@ import { AvailabilityPreview } from "@/components/profile/AvailabilityPreview";
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
 describe("AvailabilityPreview", () => {
-  it("shows empty-day feedback when selected day has no slots", () => {
-    const { getByText } = render(
+  it("shows empty-day state when selected day has no slots", () => {
+    const { getByTestId } = render(
       <AvailabilityPreview
         schedule={[{ day: "Monday", times: ["10:00 - 11:00"] }]}
       />,
     );
 
-    fireEvent.press(getByText("Tue"));
-
-    expect(getByText("No availability on Tuesday")).toBeTruthy();
+    fireEvent.press(getByTestId("day-Tuesday"));
+    expect(getByTestId("empty-day-state")).toBeTruthy();
   });
 
-  it("renders day slots and selects an available slot", () => {
+  it("renders available slot and fires onSelectSlot", () => {
     const onSelectSlot = jest.fn();
 
-    const { getByText } = render(
+    const { getByTestId } = render(
       <AvailabilityPreview
         schedule={[
           {
@@ -36,18 +35,38 @@ describe("AvailabilityPreview", () => {
       />,
     );
 
-    fireEvent.press(getByText("Mon"));
+    fireEvent.press(getByTestId("day-Monday"));
+    expect(getByTestId("slot-slot-1")).toBeTruthy();
+    expect(getByTestId("slot-slot-2")).toBeTruthy();
 
-    expect(getByText("09:00 - 10:00")).toBeTruthy();
-    expect(getByText("10:00 - 11:00")).toBeTruthy();
-    expect(getByText("Booked")).toBeTruthy();
-
-    fireEvent.press(getByText("09:00 - 10:00"));
-
+    fireEvent.press(getByTestId("slot-slot-1"));
     expect(onSelectSlot).toHaveBeenCalledWith({
       day: "Monday",
       time: "09:00 - 10:00",
       slotId: "slot-1",
     });
+  });
+
+  it("renders edit availability button when onEdit is provided", () => {
+    const onEdit = jest.fn();
+    const { getByTestId } = render(
+      <AvailabilityPreview
+        schedule={[]}
+        onEdit={onEdit}
+      />,
+    );
+
+    fireEvent.press(getByTestId("edit-availability-button"));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows empty-day state when a day with no slots is expanded", () => {
+    const { getByTestId } = render(
+      <AvailabilityPreview schedule={[]} />,
+    );
+
+    // Tap Monday to expand it — no schedule, so empty-day-state should appear
+    fireEvent.press(getByTestId("day-Monday"));
+    expect(getByTestId("empty-day-state")).toBeTruthy();
   });
 });

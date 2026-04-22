@@ -27,6 +27,7 @@ from .serializers import (
     MentorProfileResponseSerializer,
     ProfileResponseSerializer,
     ProfileUpdateSerializer,
+    ProfileUsernameUpdateSerializer,
     PublicMentorProfileSearchListResponseSerializer,
     PublicMentorProfileSearchResultSerializer,
     SkillSerializer,
@@ -165,6 +166,36 @@ class ProfileMeAPIView(ProfileLookupMixin, APIView):
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         serializer = ProfileUpdateSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
+
+
+class ProfileUsernameUpdateAPIView(ProfileLookupMixin, APIView):
+    """Canonical self-scoped username update endpoint."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=ProfileUsernameUpdateSerializer,
+        responses={
+            200: ProfileResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Account banned."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Update authenticated user's username using `/api/profiles/me/username/`.",
+        tags=["Profiles"],
+    )
+    def patch(self, request: Request) -> Response:
+        """Update authenticated user's username."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ProfileUsernameUpdateSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 

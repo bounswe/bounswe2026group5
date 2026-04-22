@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -14,6 +13,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { SuccessCard } from "@/components/ui/SuccessCard";
 import { Offering } from "./MentorshipOfferings";
 import type { AvailabilitySlot } from "./AvailabilityPreview";
 
@@ -141,6 +143,9 @@ export function BookingModal({
   );
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showDiscardConfirmation, setShowDiscardConfirmation] = useState(false);
   const [isCustomTime, setIsCustomTime] = useState(false);
   const [customStartTime, setCustomStartTime] = useState(DEFAULT_START_TIME);
   const [customEndTime, setCustomEndTime] = useState(DEFAULT_END_TIME);
@@ -154,6 +159,8 @@ export function BookingModal({
     setSelectedDateObj(null);
     setSelectedSlot(null);
     setCoverLetter("");
+    setErrorMessage(null);
+    setSuccessMessage(null);
     setIsCustomTime(false);
     setCustomStartTime(DEFAULT_START_TIME);
     setCustomEndTime(DEFAULT_END_TIME);
@@ -204,14 +211,7 @@ export function BookingModal({
       return;
     }
 
-    Alert.alert(
-      "Discard Request?",
-      "You have unsaved changes. Are you sure you want to discard this and go back?",
-      [
-        { text: "Keep Editing", style: "cancel" },
-        { text: "Discard", style: "destructive", onPress: onClose },
-      ],
-    );
+    setShowDiscardConfirmation(true);
   };
 
   const getProposedTime = (): string | null => {
@@ -248,8 +248,7 @@ export function BookingModal({
 
   const submit = async () => {
     if (isFirstBooking && coverLetter.trim().length < 10) {
-      Alert.alert(
-        "Cover Letter too short",
+      setErrorMessage(
         "Please provide a bit more detail about what you want to discuss.",
       );
       return;
@@ -264,6 +263,8 @@ export function BookingModal({
 
     if (onSubmit) {
       try {
+        setErrorMessage(null);
+        setSuccessMessage(null);
         await onSubmit({
           date: selectedDateObj.date,
           rawDate: selectedDateObj.rawDate,
@@ -274,8 +275,7 @@ export function BookingModal({
         onClose();
       } catch (error) {
         setIsLoading(false);
-        Alert.alert(
-          "Booking Failed",
+        setErrorMessage(
           error instanceof Error ? error.message : "Please try again.",
         );
       }
@@ -284,12 +284,10 @@ export function BookingModal({
 
     setTimeout(() => {
       setIsLoading(false);
-      Alert.alert(
-        isFirstBooking ? "Request Sent!" : "Booking Confirmed!",
+      setSuccessMessage(
         isFirstBooking
           ? `Your request for ${offering.title} on ${selectedDateObj.date} at ${finalTime} has been sent.`
           : `Your booking for ${offering.title} on ${selectedDateObj.date} at ${finalTime} is confirmed.`,
-        [{ text: "Great", onPress: onClose }],
       );
     }, 1500);
   };
@@ -297,7 +295,7 @@ export function BookingModal({
   const handlePrimaryAction = async () => {
     const validationError = validateSelection();
     if (validationError) {
-      Alert.alert("Missing Information", validationError);
+      setErrorMessage(validationError);
       return;
     }
 
@@ -307,8 +305,7 @@ export function BookingModal({
         selectedDateObj.rawDate === existingSession.date &&
         finalTime === existingSession.time
       ) {
-        Alert.alert(
-          "No Change Detected",
+        setErrorMessage(
           "You selected the exact same date and time as your current session. Please select a new slot to reschedule.",
         );
         return;
@@ -382,6 +379,18 @@ export function BookingModal({
             className="flex-1 px-6"
             keyboardShouldPersistTaps="handled"
           >
+            {errorMessage ? (
+              <View className="mt-4">
+                <ErrorBanner message={errorMessage} />
+              </View>
+            ) : null}
+
+            {successMessage ? (
+              <View className="mt-4">
+                <SuccessCard message={successMessage} />
+              </View>
+            ) : null}
+
             <View className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 mb-8 mt-4">
               <View className="flex-row items-center mb-3">
                 <View className="w-10 h-10 bg-white rounded-full items-center justify-center shadow-sm mr-3">
@@ -426,10 +435,12 @@ export function BookingModal({
                       return (
                         <TouchableOpacity
                           key={dateObj.date}
+                          testID={`date-option-${dateObj.rawDate}`}
                           activeOpacity={0.9}
                           onPress={() => {
                             setSelectedDateObj(dateObj);
                             setSelectedSlot(null);
+                            setErrorMessage(null);
                           }}
                           className={
                             isSelected
@@ -471,10 +482,12 @@ export function BookingModal({
                           return (
                             <TouchableOpacity
                               key={slot}
+                              testID={`time-slot-${slot}`}
                               activeOpacity={0.9}
                               onPress={() => {
                                 setSelectedSlot(slot);
                                 setIsCustomTime(false);
+                                setErrorMessage(null);
                               }}
                               className={
                                 isSelected
@@ -506,6 +519,7 @@ export function BookingModal({
                       onPress={() => {
                         setIsCustomTime(true);
                         setSelectedSlot(null);
+                        setErrorMessage(null);
                       }}
                       className={
                         isCustomTime
@@ -569,6 +583,7 @@ export function BookingModal({
                   </Text>
                 </View>
                 <TextInput
+                  testID="cover-letter-input"
                   value={coverLetter}
                   onChangeText={setCoverLetter}
                   placeholder="Introduce yourself and explain what you'd like to achieve in this session..."
@@ -584,6 +599,7 @@ export function BookingModal({
 
         <View className="px-6 py-4 border-t border-gray-100">
           <TouchableOpacity
+            testID="primary-action-button"
             activeOpacity={0.9}
             onPress={() => {
               void handlePrimaryAction();
@@ -598,6 +614,20 @@ export function BookingModal({
           </TouchableOpacity>
         </View>
       </View>
+
+      <ConfirmationSheet
+        visible={showDiscardConfirmation}
+        title="Discard request?"
+        message="You have unsaved changes. If you leave now, your current selection and message will be lost."
+        confirmLabel="Discard"
+        cancelLabel="Keep Editing"
+        variant="destructive"
+        onCancel={() => setShowDiscardConfirmation(false)}
+        onConfirm={() => {
+          setShowDiscardConfirmation(false);
+          onClose();
+        }}
+      />
     </Modal>
   );
 }

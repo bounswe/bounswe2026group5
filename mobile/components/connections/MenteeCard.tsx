@@ -76,6 +76,7 @@ export function MenteeCard({
       {/* Message Button */}
       <View className="flex-row gap-2.5">
         <TouchableOpacity
+          testID="mentee-view-profile-button"
           activeOpacity={0.85}
           onPress={onPress}
           className="flex-1 items-center justify-center py-3 rounded-full bg-gray-100"
@@ -84,6 +85,7 @@ export function MenteeCard({
         </TouchableOpacity>
 
         <TouchableOpacity
+          testID="mentee-message-button"
           activeOpacity={0.85}
           onPress={onMessage}
           className="flex-1 flex-row items-center justify-center gap-2 bg-primary py-3 rounded-full"
@@ -93,6 +95,7 @@ export function MenteeCard({
         </TouchableOpacity>
 
         <TouchableOpacity
+          testID="mentee-more-button"
           activeOpacity={0.8}
           onPress={onMore}
           className="w-11 h-12 rounded-full bg-gray-100 items-center justify-center"

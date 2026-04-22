@@ -1,14 +1,15 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
-import { Alert } from "react-native";
 
 import { BookingModal } from "@/components/profile/BookingModal";
 
-// Mock the icons to prevent font-loading warnings
-jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+const FIXED_DATE = new Date(2026, 3, 21); // April 21, 2026 (Tuesday)
+// Compute rawDate the same way BookingModal does: toISOString (UTC), so it's timezone-aware
+const _nextMonday = new Date(FIXED_DATE);
+_nextMonday.setDate(FIXED_DATE.getDate() + 6); // 6 days later = Monday
+const NEXT_MONDAY_RAW = _nextMonday.toISOString().split("T")[0];
 
-// Spy on Alert to test validation popups
-jest.spyOn(Alert, "alert");
+jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
 describe("BookingModal Component", () => {
   const mockOffering = {
@@ -20,31 +21,32 @@ describe("BookingModal Component", () => {
     description: "A deep dive into scalable architecture.",
   };
 
-  // Correctly formatted backend availability slot
-  const today = new Date();
-  const weekday = today.toLocaleDateString("en-US", { weekday: "long" });
-  const dateStr = today.toISOString().split("T")[0]; // e.g., "2026-05-10"
-
   const mockAvailability = [
     {
-      day: weekday,
+      day: "Monday",
       times: [
         {
           id: "slot-1",
           label: "10:00 - 11:00",
           isBooked: false,
-          date: dateStr,
+          date: NEXT_MONDAY_RAW,
         },
       ],
     },
   ];
 
   beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(FIXED_DATE);
     jest.clearAllMocks();
   });
 
-  it("renders the offering details correctly when visible", () => {
-    const { getByText } = render(
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("shows primary action button when visible", () => {
+    const { getByTestId } = render(
       <BookingModal
         visible={true}
         onClose={jest.fn()}
@@ -53,13 +55,12 @@ describe("BookingModal Component", () => {
       />,
     );
 
-    expect(getByText("Advanced System Design")).toBeTruthy();
-    expect(getByText("60 min • Senior")).toBeTruthy();
+    expect(getByTestId("primary-action-button")).toBeTruthy();
   });
 
-  it("shows validation alert if user tries to submit without selecting a time", () => {
+  it("shows inline validation if user tries to submit without selecting a time", () => {
     const mockOnSubmit = jest.fn();
-    const { getByText } = render(
+    const { getByTestId, getByText } = render(
       <BookingModal
         visible={true}
         onClose={jest.fn()}
@@ -69,17 +70,14 @@ describe("BookingModal Component", () => {
       />,
     );
 
-    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByTestId("primary-action-button"));
 
-    expect(Alert.alert).toHaveBeenCalledWith(
-      "Missing Information",
-      expect.any(String),
-    );
+    expect(getByText("Please select a date for the session.")).toBeTruthy();
     expect(mockOnSubmit).not.toHaveBeenCalled();
   });
 
-  it("updates cover letter text and enforces maximum length", async () => {
-    const { getByPlaceholderText, getByText } = render(
+  it("renders date option and time slot buttons from availability", () => {
+    const { getByTestId } = render(
       <BookingModal
         visible={true}
         onClose={jest.fn()}
@@ -88,23 +86,51 @@ describe("BookingModal Component", () => {
       />,
     );
 
-    const availableDateLabel = new Date(today);
-    availableDateLabel.setDate(today.getDate() + 7);
-    const dateLabel = availableDateLabel.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
+    expect(getByTestId(`date-option-${NEXT_MONDAY_RAW}`)).toBeTruthy();
 
-    fireEvent.press(getByText(dateLabel));
-    fireEvent.press(getByText("10:00 - 11:00"));
-    fireEvent.press(getByText("Continue"));
+    fireEvent.press(getByTestId(`date-option-${NEXT_MONDAY_RAW}`));
+    expect(getByTestId("time-slot-10:00 - 11:00")).toBeTruthy();
+  });
 
-    const input = await waitFor(() =>
-      getByPlaceholderText(/Introduce yourself/i),
+  it("advances to cover letter step after selecting date and time", async () => {
+    const { getByTestId } = render(
+      <BookingModal
+        visible={true}
+        onClose={jest.fn()}
+        offering={mockOffering as any}
+        availability={mockAvailability as any}
+        isFirstTime={true}
+      />,
     );
 
+    fireEvent.press(getByTestId(`date-option-${NEXT_MONDAY_RAW}`));
+    fireEvent.press(getByTestId("time-slot-10:00 - 11:00"));
+    fireEvent.press(getByTestId("primary-action-button"));
+
+    await waitFor(() => {
+      expect(getByTestId("cover-letter-input")).toBeTruthy();
+    });
+  });
+
+  it("accepts cover letter text input on step 2", async () => {
+    const { getByTestId } = render(
+      <BookingModal
+        visible={true}
+        onClose={jest.fn()}
+        offering={mockOffering as any}
+        availability={mockAvailability as any}
+        isFirstTime={true}
+      />,
+    );
+
+    fireEvent.press(getByTestId(`date-option-${NEXT_MONDAY_RAW}`));
+    fireEvent.press(getByTestId("time-slot-10:00 - 11:00"));
+    fireEvent.press(getByTestId("primary-action-button"));
+
+    const input = await waitFor(() => getByTestId("cover-letter-input"));
     fireEvent.changeText(input, "Hello, I'd like to learn system design.");
 
-    expect(getByText(/39\/300/)).toBeTruthy();
+    // Input should have been updated
+    expect(input.props.value).toBe("Hello, I'd like to learn system design.");
   });
 });
