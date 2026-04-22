@@ -23,6 +23,13 @@ vi.mock('#/components/profile/EditProfileModal.tsx', () => ({
   ),
 }))
 
+vi.mock('#/lib/queries/ProfileQueries.ts', () => ({
+  useMentorReviews: () => ({
+    data: { count: 0, results: [] },
+    isLoading: false,
+  }),
+}))
+
 import { ProfilePageView } from '../ProfilePageView'
 
 describe('ProfilePageView', () => {
@@ -49,7 +56,7 @@ describe('ProfilePageView', () => {
           picture_url: '',
           title: 'Senior Mentor',
           skills: ['React'],
-          rating: 4.8,
+          average_rating: 4.8,
           total_mentee_count: 15,
         }}
         isOwner={false}
@@ -79,7 +86,7 @@ describe('ProfilePageView', () => {
           picture_url: '',
           title: 'Principal Engineer',
           skills: ['Systems Design', 'TypeScript'],
-          rating: 4.6,
+          average_rating: 4.6,
           total_mentee_count: 22,
         }}
         isOwner={true}

@@ -53,6 +53,23 @@ jest.mock("@/lib/queries/profile", () => ({
       review_count: 18,
     },
   }),
+  useProfileReviewsQuery: () => ({
+    data: {
+      count: 1,
+      page: 1,
+      pageSize: 6,
+      results: [
+        {
+          rating: 5,
+          text: "Very helpful mentor.",
+          created_at: "2026-04-21T12:00:00Z",
+        },
+      ],
+    },
+    isLoading: false,
+    isFetching: false,
+    error: null,
+  }),
   useUpdateOwnProfileMutation: () => ({
     mutateAsync: jest.fn(),
     isPending: false,
@@ -121,12 +138,15 @@ describe("ProfileScreen Layout", () => {
     });
   });
 
-  it("renders mentor-only sections for mentor accounts", async () => {
-    const { getByTestId } = render(<ProfileScreen />);
+  it("renders mentor-only profile sections for mentor accounts", async () => {
+    const { getByText, getAllByText } = render(<ProfileScreen />);
 
     await waitFor(() => {
-      expect(getByTestId("mentees-section")).toBeTruthy();
-      expect(getByTestId("edit-availability-button")).toBeTruthy();
+      expect(getByText("Ali Aydin")).toBeTruthy();
+      expect(getByText("Availability")).toBeTruthy();
+      expect(getByText("Mentees")).toBeTruthy();
+      expect(getAllByText("Reviews").length).toBeGreaterThan(0);
+      expect(getByText("Anonymous mentee")).toBeTruthy();
     });
   });
 
@@ -135,12 +155,28 @@ describe("ProfileScreen Layout", () => {
       username: "Ece Yilmaz",
       app_usage_mode: "MENTEE",
     };
+    globalThis.fetch = jest.fn() as unknown as typeof fetch;
+    (globalThis.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          full_name: "Ece Yilmaz",
+          bio: "Profile bio",
+          skills: ["React", "Testing"],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ name: "React" }, { name: "Testing" }],
+      });
 
-    const { queryByTestId } = render(<ProfileScreen />);
+    const { queryByTestId, getByText, queryByText } = render(<ProfileScreen />);
 
     await waitFor(() => {
-      expect(queryByTestId("mentees-section")).toBeNull();
-      expect(queryByTestId("edit-availability-button")).toBeNull();
+      expect(getByText("Ece Yilmaz")).toBeTruthy();
+      expect(queryByText("Availability")).toBeNull();
+      expect(queryByText("Mentees")).toBeNull();
+      expect(queryByText("Anonymous mentee")).toBeNull();
     });
   });
 

@@ -66,7 +66,7 @@ describe("DiscoverScreen", () => {
         title: "Mobile Engineer",
         show_initials_only: false,
         skills: ["Docker", "GraphQL"],
-        rating: 5,
+        average_rating: "5.00",
         total_mentee_count: 12,
       })),
     );
@@ -125,7 +125,7 @@ describe("DiscoverScreen", () => {
           title: "Mobile Engineer",
           show_initials_only: false,
           skills: ["Docker", "GraphQL"],
-          rating: 5,
+          average_rating: "5.00",
           total_mentee_count: 12,
         })),
       )
@@ -140,7 +140,7 @@ describe("DiscoverScreen", () => {
           title: "Frontend Engineer",
           show_initials_only: false,
           skills: ["React"],
-          rating: 4.8,
+          average_rating: "4.80",
           total_mentee_count: 9,
         },
       ]);

@@ -25,12 +25,29 @@ interface RegistrationProfileSetupSheetProps {
   isLoadingSkills: boolean;
   isSubmitting: boolean;
   submitError: string;
+  usernameError?: string;
+  onUsernameChange?: () => void;
   onClose: () => void;
   onSubmit: (values: {
+    username: string;
     displayName: string;
     bio: string;
     selectedSkills: string[];
   }) => void;
+}
+
+function validateUsername(value: string): string {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "Username is required.";
+  }
+
+  if (!/^[a-zA-Z0-9_]+$/.test(trimmedValue)) {
+    return "Use only letters, numbers, and underscores.";
+  }
+
+  return "";
 }
 
 function buildDisplayNameSuggestion(username: string): string {
@@ -64,6 +81,8 @@ export function RegistrationProfileSetupSheet({
   isLoadingSkills,
   isSubmitting,
   submitError,
+  usernameError,
+  onUsernameChange,
   onClose,
   onSubmit,
 }: Readonly<RegistrationProfileSetupSheetProps>) {
@@ -78,9 +97,11 @@ export function RegistrationProfileSetupSheet({
       : "Pick the topics you want to learn.";
 
   const [displayName, setDisplayName] = useState("");
+  const [editableUsername, setEditableUsername] = useState("");
   const [bio, setBio] = useState("");
   const [search, setSearch] = useState("");
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [localUsernameError, setLocalUsernameError] = useState("");
   const [displayNameError, setDisplayNameError] = useState("");
   const [skillsError, setSkillsError] = useState("");
 
@@ -94,13 +115,15 @@ export function RegistrationProfileSetupSheet({
       return;
     }
 
+    setEditableUsername(username);
     setDisplayName(suggestedDisplayName);
     setBio("");
     setSearch("");
     setSelectedSkills([]);
+    setLocalUsernameError("");
     setDisplayNameError("");
     setSkillsError("");
-  }, [visible, suggestedDisplayName]);
+  }, [username, visible, suggestedDisplayName]);
 
   const toggleSkill = (skill: string) => {
     setSelectedSkills((current) =>
@@ -161,23 +184,27 @@ export function RegistrationProfileSetupSheet({
   }
 
   const handleSubmit = () => {
+    const trimmedUsername = editableUsername.trim();
     const trimmedDisplayName = displayName.trim();
     const trimmedBio = bio.trim();
 
+    const nextUsernameError = validateUsername(trimmedUsername);
     const nextDisplayNameError = trimmedDisplayName
       ? ""
       : "Display name is required.";
     const nextSkillsError =
       selectedSkills.length === 0 ? "Please select at least one skill." : "";
 
+    setLocalUsernameError(nextUsernameError);
     setDisplayNameError(nextDisplayNameError);
     setSkillsError(nextSkillsError);
 
-    if (nextDisplayNameError || nextSkillsError) {
+    if (nextUsernameError || nextDisplayNameError || nextSkillsError) {
       return;
     }
 
     onSubmit({
+      username: trimmedUsername,
       displayName: trimmedDisplayName,
       bio: trimmedBio,
       selectedSkills,
@@ -229,13 +256,49 @@ export function RegistrationProfileSetupSheet({
           ) : null}
 
           <View className="gap-5">
-            <View className="rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 py-4">
-              <Text className="text-xs font-bold tracking-widest uppercase text-on-surface-soft dark:text-on-surface-soft-dark">
+            <View className="gap-1.5">
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
                 Username
               </Text>
-              <Text className="mt-2 text-lg font-semibold text-on-surface dark:text-on-surface-dark">
-                {formatUsername(username)}
+              <View className="flex-row items-center h-14 rounded-xl px-4 gap-2 bg-surface-input dark:bg-surface-input-dark">
+                <Ionicons
+                  name="at-outline"
+                  size={18}
+                  color={theme.textMuted}
+                />
+                <TextInput
+                  className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
+                  placeholder="your_username"
+                  placeholderTextColor={theme.textMuted}
+                  value={editableUsername}
+                  onChangeText={(text) => {
+                    setEditableUsername(text);
+                    onUsernameChange?.();
+                    if (localUsernameError) {
+                      setLocalUsernameError(validateUsername(text));
+                    }
+                  }}
+                  onBlur={() =>
+                    setLocalUsernameError(validateUsername(editableUsername))
+                  }
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  accessibilityLabel="Username"
+                />
+              </View>
+              <Text
+                className={`text-xs ml-1 ${localUsernameError || usernameError ? "text-red-500" : "text-on-surface-soft dark:text-on-surface-soft-dark"}`}
+              >
+                {localUsernameError ||
+                  usernameError ||
+                  `This will be your username: ${formatUsername(
+                    editableUsername || username,
+                  )}`}
               </Text>
+              {usernameError ? (
+                <Text className="text-xs text-red-500 mt-1">{usernameError}</Text>
+              ) : null}
             </View>
 
             <View className="gap-1.5">

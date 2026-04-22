@@ -19,10 +19,12 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
+import { ApiValidationError } from "@/lib/api/client";
 import {
   fetchSkillsFn,
   registerFn,
   updateProfileFn,
+  updateUsernameFn,
   updateUsageModeFn,
 } from "@/lib/queries/authQueries";
 
@@ -46,8 +48,8 @@ function validatePassword(value: string): string {
 
 function buildUsernamePreview(email: string): string {
   const localPart = email.trim().toLowerCase().split("@")[0] ?? "";
-  const sanitized = localPart.replace(/[^a-z0-9._-]/g, "");
-  return sanitized || "assigned during registration";
+  const sanitized = localPart.replace(/[^a-z0-9_]/g, "_");
+  return sanitized || "user";
 }
 
 function getRegistrationValidationErrors(params: {
@@ -96,6 +98,7 @@ export default function RegisterScreen() {
   const [terms, setTerms] = useState(false);
   const [termsError, setTermsError] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [usernameError, setUsernameError] = useState("");
   const [profileSetupVisible, setProfileSetupVisible] = useState(false);
 
   const {
@@ -114,6 +117,7 @@ export default function RegisterScreen() {
 
   const completeRegistration = useMutation({
     mutationFn: async (params: {
+      username: string;
       displayName: string;
       bio: string;
       selectedSkills: string[];
@@ -129,8 +133,19 @@ export default function RegisterScreen() {
         accessToken: registration.access_token,
       });
 
+      let finalizedUsername = registration.user.username;
+
+      if (params.username !== registration.user.username) {
+        const updatedUsername = await updateUsernameFn({
+          accessToken: registration.access_token,
+          username: params.username,
+        });
+        finalizedUsername = updatedUsername.username ?? params.username;
+      }
+
       const finalizedUser = {
         ...registration.user,
+        username: finalizedUsername,
         app_usage_mode: role.toUpperCase() as "MENTOR" | "MENTEE",
       };
 
@@ -150,6 +165,11 @@ export default function RegisterScreen() {
       router.replace("/(tabs)");
     },
     onError: (error: Error) => {
+      if (error instanceof ApiValidationError && error.fieldErrors.username) {
+        setUsernameError(error.fieldErrors.username);
+        setSubmitError("");
+        return;
+      }
       setSubmitError(error.message);
     },
   });
@@ -189,6 +209,7 @@ export default function RegisterScreen() {
     setConfirmPasswordError(cpErr);
     setTermsError(tErr);
     setSubmitError("");
+    setUsernameError("");
 
     const hasErrors = Boolean(eErr || pErr || cpErr || tErr);
     if (hasErrors) return;
@@ -535,13 +556,17 @@ export default function RegisterScreen() {
         isLoadingSkills={isLoadingSkills}
         isSubmitting={completeRegistration.isPending}
         submitError={submitError}
+        usernameError={usernameError}
         username={buildUsernamePreview(email)}
+        onUsernameChange={() => setUsernameError("")}
         onClose={() => {
           setProfileSetupVisible(false);
           setSubmitError("");
+          setUsernameError("");
         }}
         onSubmit={(values) => {
           setSubmitError("");
+          setUsernameError("");
           completeRegistration.mutate(values);
         }}
       />

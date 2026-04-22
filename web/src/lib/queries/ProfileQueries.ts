@@ -8,17 +8,6 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 
 // GET response types
-export interface AvailabilitySlot {
-    id: string
-    date: string
-    startTime: string
-    endTime: string
-    is_booked: boolean
-    bookedBy: string | null
-    bookedAt: string | null
-    created_at: string
-    updated_at: string
-}
 
 export interface MenteeProfile {
     id: string
@@ -38,7 +27,7 @@ export interface MentorProfile {
     picture_url: string
     title: string
     skills: string[] | null
-    rating: number
+    average_rating: number
     total_mentee_count: number
     app_usage_mode: "MENTOR" | "MENTEE"
 }
@@ -46,9 +35,8 @@ export interface MentorProfile {
 export type ProfileResponse = MenteeProfile | MentorProfile
 
 export function isMentorProfile(p: ProfileResponse): p is MentorProfile {
-    return 'rating' in p
+    return 'total_mentee_count' in p
 }
-
 // PATCH request body
 export interface UpdateProfileBody {
     display_name?: string
@@ -145,5 +133,36 @@ async function patchUsername(newUsername: string): Promise<void> {
 export function useUpdateUsername() {
     return useMutation({
         mutationFn: (newUsername: string) => patchUsername(newUsername),
+    })
+}
+
+// ---- Public mentor reviews ----
+
+export interface PublicReview {
+    rating: number
+    text: string
+    created_at: string
+}
+
+export interface PublicReviewsResponse {
+    count: number
+    page: number
+    pageSize: number
+    results: PublicReview[]
+}
+
+async function fetchMentorReviews(username: string, page: number, pageSize: number): Promise<PublicReviewsResponse> {
+    const res = await fetch(
+        `${API_BASE_URL}/profiles/${username}/reviews/?page=${page}&pageSize=${pageSize}`,
+    )
+    if (!res.ok) throw new Error('Failed to fetch reviews')
+    return res.json()
+}
+
+export function useMentorReviews(username: string, page = 1, pageSize = 6) {
+    return useQuery({
+        queryKey: ['profiles', username, 'reviews', page],
+        queryFn: () => fetchMentorReviews(username, page, pageSize),
+        staleTime: 5 * 60 * 1000,
     })
 }

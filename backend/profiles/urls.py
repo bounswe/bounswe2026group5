@@ -5,7 +5,7 @@ from django.urls import path
 from .views import (
     AvailabilitySlotBookAPIView,
     AvailabilitySlotListCreateAPIView,
-    MentorPublicRatingAPIView,
+    MentorPublicAverageRatingAPIView,
     MyAvailabilitySlotDetailAPIView,
     MyAvailabilitySlotListCreateAPIView,
     PopularMentorsListAPIView,
@@ -51,7 +51,7 @@ urlpatterns = [
     ),
     path(
         "<str:username>/rating/",
-        MentorPublicRatingAPIView.as_view(),
+        MentorPublicAverageRatingAPIView.as_view(),
         name="mentor-public-rating",
     ),
     path(
