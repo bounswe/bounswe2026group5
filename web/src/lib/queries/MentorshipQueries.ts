@@ -1,4 +1,5 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { throwApiError } from '#/lib/apiError.ts'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
