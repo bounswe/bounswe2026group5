@@ -66,7 +66,7 @@ function PublicProfileRoute() {
             picture_url: profile.picture_url,
             title: profile.title,
             skills: profile.skills ?? [],
-            average_rating: profile.average_rating,
+            average_rating: Number(profile.average_rating),
             total_mentee_count: profile.total_mentee_count,
             username: username,
         }
