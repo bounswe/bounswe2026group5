@@ -52,13 +52,13 @@ describe('DiscoverQueries fetchers', () => {
 
     await expect(
       fetchMentors({ page: 1, pageSize: 6 }),
-    ).rejects.toThrow('Failed to fetch mentors')
+    ).rejects.toThrow('Something went wrong. Please try again.')
   })
 
   it('throws on skills API failure', async () => {
     fetchSpy.mockResolvedValueOnce(new Response(null, { status: 500 }))
 
-    await expect(fetchAllSkills()).rejects.toThrow('Failed to fetch skills')
+    await expect(fetchAllSkills()).rejects.toThrow('Something went wrong. Please try again.')
   })
 
   it('returns popular and recent mentors lists from API results payload', async () => {
@@ -75,7 +75,7 @@ describe('DiscoverQueries fetchers', () => {
       .mockResolvedValueOnce(new Response(null, { status: 500 }))
       .mockResolvedValueOnce(new Response(null, { status: 500 }))
 
-    await expect(fetchPopularMentors()).rejects.toThrow('Failed to fetch popular mentors')
-    await expect(fetchRecentlyAddedMentors()).rejects.toThrow('Failed to fetch recently added mentors')
+    await expect(fetchPopularMentors()).rejects.toThrow('Something went wrong. Please try again.')
+    await expect(fetchRecentlyAddedMentors()).rejects.toThrow('Something went wrong. Please try again.')
   })
 })

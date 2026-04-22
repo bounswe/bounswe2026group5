@@ -1,3 +1,4 @@
+import { throwApiError } from '#/lib/apiError.ts'
 import { queryOptions, useMutation, useQuery } from '@tanstack/react-query'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -43,7 +44,7 @@ async function fetchConversations(): Promise<Conversation[]> {
     const res = await fetch(`${API_BASE_URL}/messages/conversations/`, {
         headers: authHeaders(),
     })
-    if (!res.ok) throw new Error('Failed to fetch conversations')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -52,7 +53,7 @@ async function fetchMessages(conversationId: string, page = 1, pageSize = 50): P
         `${API_BASE_URL}/messages/conversations/${conversationId}/?page=${page}&pageSize=${pageSize}`,
         { headers: authHeaders() },
     )
-    if (!res.ok) throw new Error('Failed to fetch messages')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -62,7 +63,7 @@ async function sendMessage(conversationId: string, body: string): Promise<Messag
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ body }),
     })
-    if (!res.ok) throw new Error('Failed to send message')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 

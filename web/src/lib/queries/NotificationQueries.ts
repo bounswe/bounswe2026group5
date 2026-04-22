@@ -1,3 +1,4 @@
+import { throwApiError } from '#/lib/apiError.ts'
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -36,7 +37,7 @@ async function fetchNotifications(): Promise<Notification[]> {
     const res = await fetch(`${API_BASE_URL}/notifications/`, {
         headers: authHeaders(),
     })
-    if (!res.ok) throw new Error(`${res.status}`)
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -45,7 +46,7 @@ async function markNotificationRead(id: string): Promise<void> {
         method: 'PUT',
         headers: authHeaders(),
     })
-    if (!res.ok) throw new Error(`${res.status}`)
+    if (!res.ok) await throwApiError(res)
 }
 
 export const notificationsQueryOptions = queryOptions({

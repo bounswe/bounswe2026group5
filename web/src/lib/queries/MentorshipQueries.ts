@@ -1,3 +1,4 @@
+import { throwApiError } from "#/lib/apiError.ts"
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query"
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -74,7 +75,7 @@ async function fetchMyMatches(): Promise<Match[]> {
     const res = await fetch(`${API_BASE_URL}/mentorship/matches/me/`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-    if (!res.ok) throw new Error('Failed to fetch matches')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -92,7 +93,7 @@ async function sendMentorshipRequest(body: {
         },
         body: JSON.stringify(body),
     })
-    if (!res.ok) throw new Error('Failed to send mentorship request')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -101,7 +102,7 @@ export async function fetchMyRequests(): Promise<MentorshipRequest[]> {
     const res = await fetch(`${API_BASE_URL}/mentorship/requests/me/`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-    if (!res.ok) throw new Error('Failed to fetch requests')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -114,7 +115,7 @@ async function respondToRequest(requestId: string, action: 'accept' | 'reject'):
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
     })
-    if (!res.ok) throw new Error('Failed to respond to request')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -139,7 +140,7 @@ async function fetchMeetingSessions(params: MeetingSessionQueryParams = {}): Pro
     const res = await fetch(url, {
         headers: withAuthHeaders(),
     })
-    if (!res.ok) throw new Error('Failed to fetch meeting sessions')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -148,7 +149,7 @@ async function cancelSession(sessionId: string): Promise<MentorshipRequest> {
         method: 'POST',
         headers: withAuthHeaders(),
     })
-    if (!res.ok) throw new Error('Failed to cancel session')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
