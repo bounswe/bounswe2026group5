@@ -84,6 +84,7 @@ export function DashboardHome() {
   // Marking as read happens immediately on arrival, separate from visibility.
   const [visibleNotifications, setVisibleNotifications] = useState<Notification[]>([])
   const seenIds = useRef<Set<string>>(new Set())
+  const isFirstRun = useRef(true)
 
   useEffect(() => {
     if (notifications.length === 0) return
@@ -98,8 +99,13 @@ export function DashboardHome() {
     const unreadIds = incoming.filter(n => n.type !== 'new_message' && !n.is_read).map(n => n.id)
     if (unreadIds.length > 0) markAllRead(unreadIds)
 
+    if (isFirstRun.current) {
+      isFirstRun.current = false
+      return
+    }
+
     const keysToInvalidate = new Set<string>()
-    for (const n of incoming) {
+    for (const n of toShow) {
       for (const key of NOTIFICATION_INVALIDATION_MAP[n.type]) {
         keysToInvalidate.add(JSON.stringify(key))
       }
