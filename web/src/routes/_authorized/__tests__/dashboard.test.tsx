@@ -359,12 +359,7 @@ describe('DashboardHome', () => {
 
     await user.click(screen.getByRole('button', { name: /Accept/i }))
 
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      'Failed to respond',
-      expect.objectContaining({
-        description: 'Server is unavailable',
-      }),
-    )
+    expect(toastErrorMock).toHaveBeenCalledWith('Server is unavailable')
   })
 
   it('shows the "View all requests" button when more than three pending requests exist', () => {

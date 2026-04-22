@@ -394,9 +394,7 @@ function MentorDashboardView() {
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'meeting-sessions', 'me'] })
           },
           onError: (err) => {
-            toast.error('Failed to respond', {
-              description: err.message,
-            })
+            toast.error(err.message)
           },
         }
     )

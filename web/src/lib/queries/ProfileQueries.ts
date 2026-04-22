@@ -1,3 +1,4 @@
+import { throwApiError } from "#/lib/apiError.ts"
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query"
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -67,7 +68,7 @@ async function fetchProfile(username: string): Promise<ProfileResponse> {
     const res = await fetch(`${API_BASE_URL}/profiles/${username}/`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-    if (!res.ok) throw new Error(`${res.status}`)
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -78,7 +79,7 @@ async function fetchOwnProfile(): Promise<OwnProfileResponse> {
     const res = await fetch(`${API_BASE_URL}/profiles/me/`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-    if (!res.ok) throw new Error(`${res.status}`)
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -92,7 +93,7 @@ async function patchProfile(body: UpdateProfileBody): Promise<void> {
         },
         body: JSON.stringify(body),
     })
-    if (!res.ok) throw new Error('Failed to update profile')
+    if (!res.ok) await throwApiError(res)
 }
 
 // ---- Query Options ----
@@ -138,7 +139,7 @@ async function patchUsername(newUsername: string): Promise<void> {
         },
         body: JSON.stringify({ username: newUsername }),
     })
-    if (!res.ok) throw new Error('Failed to update username')
+    if (!res.ok) await throwApiError(res)
 }
 
 export function useUpdateUsername() {
