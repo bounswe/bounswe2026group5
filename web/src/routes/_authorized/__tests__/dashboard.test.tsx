@@ -69,6 +69,14 @@ vi.mock('#/lib/queries/MentorshipQueries.ts', () => ({
     queryFn: async () => [],
     staleTime: Infinity,
   }),
+  useCancelSession: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+  useRescheduleSession: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
 }))
 
 vi.mock('#/lib/queries/AuthQueries.ts', () => ({
