@@ -70,7 +70,7 @@ function nextWeekday(dayOfWeek: number): string {
   return `${y}-${m}-${day}`
 }
 
-const futureDate = nextWeekday(3) // next Wednesday
+const futureDate = '2030-01-09' // Wednesday of the mocked week (2030-01-07 Monday)
 
 function makeSlot(overrides = {}) {
   return {
@@ -103,6 +103,8 @@ function renderCalendar(props = {}) {
 
 describe('AvailabilityCalendar — Pending Slot Display', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2030-01-07T00:00:00Z')) // fixed Monday far in the future
     vi.clearAllMocks()
 
     mockUseMyMatches.mockReturnValue({ data: [] })
@@ -112,6 +114,10 @@ describe('AvailabilityCalendar — Pending Slot Display', () => {
     mockUseBookSlot.mockReturnValue({ mutate: vi.fn(), isPending: false })
     mockUseCreateSlot.mockReturnValue({ mutate: vi.fn(), isPending: false })
     mockUseDeleteSlot.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('shows "Requested" label on a slot that has a pending request (mentee view)', () => {

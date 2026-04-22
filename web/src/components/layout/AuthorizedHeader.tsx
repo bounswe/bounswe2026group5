@@ -11,8 +11,8 @@ export function AuthorizedHeader() {
   const { data: profile } = useProfile(me?.username ?? '')
   const { data: notifications = [] } = useNotifications()
 
-  const hasUnread = notifications.length > 0
-  const hasMessageNotification = notifications.some(n => n.type === 'new_message')
+  const hasUnread = notifications.some(n => !n.is_read && n.type !== 'new_message')
+  const hasMessageNotification = notifications.some(n => n.type === 'new_message' && !n.is_read)
 
   const initials = profile?.full_name
       ? getInitials(profile.full_name)

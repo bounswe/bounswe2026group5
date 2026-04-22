@@ -71,13 +71,13 @@ export function useMarkAllNotificationsRead() {
 
 // Maps each notification type to the query keys that should be invalidated when it arrives.
 export const NOTIFICATION_INVALIDATION_MAP: Record<NotificationType, string[][]> = {
-    new_mentorship_request:      [['mentorship', 'requests']],
-    mentorship_request_rejected: [['mentorship', 'requests']],
+    new_mentorship_request:      [['mentorship', 'requests'], ['availability-slots']],
+    mentorship_request_rejected: [['mentorship', 'requests'], ['availability-slots']],
     new_match:                   [['mentorship', 'matches'], ['mentorship', 'requests']],
-    slot_booked:                 [['mentorship', 'meeting-sessions', 'me'], ['mentorship', 'requests']],
-    session_canceled:            [['mentorship', 'meeting-sessions', 'me']],
-    session_rescheduled:         [['mentorship', 'meeting-sessions', 'me']],
-    match_deactivated:           [['mentorship', 'matches']],
+    slot_booked:                 [['mentorship', 'meeting-sessions', 'me'], ['mentorship', 'requests'], ['availability-slots']],
+    session_canceled:            [['mentorship', 'meeting-sessions', 'me'], ['availability-slots']],
+    session_rescheduled:         [['mentorship', 'meeting-sessions', 'me'], ['availability-slots']],
+    match_deactivated:           [['mentorship', 'matches'], ['mentorship', 'requests']],
     new_message:                 [['messaging', 'conversations']],
     new_feedback_available:      [['profiles', 'me']],
 }
