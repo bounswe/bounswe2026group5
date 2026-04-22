@@ -49,7 +49,6 @@ class Profile(models.Model):
         blank=True,
         default=list,
     )
-    rating = models.PositiveIntegerField(default=0)
     total_mentee_count = models.PositiveIntegerField(default=0)
     average_rating = models.DecimalField(
         max_digits=3,
