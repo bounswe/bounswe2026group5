@@ -127,3 +127,22 @@ export function useUpdateProfile() {
         mutationFn: (body: UpdateProfileBody) => patchProfile(body),
     })
 }
+
+async function patchUsername(newUsername: string): Promise<void> {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`${API_BASE_URL}/profiles/me/username/`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ username: newUsername }),
+    })
+    if (!res.ok) throw new Error('Failed to update username')
+}
+
+export function useUpdateUsername() {
+    return useMutation({
+        mutationFn: (newUsername: string) => patchUsername(newUsername),
+    })
+}

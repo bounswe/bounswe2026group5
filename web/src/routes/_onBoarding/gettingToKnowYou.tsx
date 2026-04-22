@@ -4,7 +4,7 @@ import { Button } from "#/components/ui/button.tsx"
 import { Input } from "#/components/ui/input.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
 import { meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/AuthQueries.ts"
-import { useOwnProfile, useUpdateProfile } from "#/lib/queries/ProfileQueries.ts"
+import { useOwnProfile, useUpdateProfile, useUpdateUsername } from "#/lib/queries/ProfileQueries.ts"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -25,6 +25,7 @@ type UserAnswers = {
     bio: string
     learnSkills: string[]
     teachSkills: string[]
+    username: string
 }
 
 type Question = {
@@ -32,7 +33,7 @@ type Question = {
     question: string
     clarification: string
     mutedText?: string
-    type: 'text' | 'textarea' | 'choice' | 'skills'
+    type: 'text' | 'textarea' | 'choice' | 'skills' | 'username'
     skillsKey?: 'learnSkills' | 'teachSkills'
     validate: (answers: UserAnswers) => string | null
 }
@@ -100,9 +101,21 @@ const MENTOR_QUESTIONS: Question[] = [
     },
 ]
 
+const USERNAME_QUESTION: Question = {
+    key: 'username',
+    question: "Choose a username.",
+    clarification: "Your username is separate from your display name and identifies your public profile.",
+    type: 'username',
+    validate: ({ username }) => {
+        if (username.trim().length < 3) return "Username must be at least 3 characters."
+        if (!/^[a-zA-Z0-9_-]+$/.test(username)) return "Username can only contain letters, numbers, underscores, and hyphens."
+        return null
+    },
+}
+
 function getQuestions(primaryUsage: UserAnswers['primaryUsage']): Question[] {
-    if (primaryUsage === 'mentor') return [...BASE_QUESTIONS, ...MENTOR_QUESTIONS]
-    return [...BASE_QUESTIONS, ...MENTEE_QUESTIONS]
+    const skillsQuestions = primaryUsage === 'mentor' ? MENTOR_QUESTIONS : MENTEE_QUESTIONS
+    return [...BASE_QUESTIONS, ...skillsQuestions, USERNAME_QUESTION]
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +136,7 @@ function RouteComponent() {
         bio: '',
         learnSkills: [],
         teachSkills: [],
+        username: me?.email?.split('@')[0] ?? '',
     })
     const [error, setError] = useState<string | null>(null)
 
@@ -131,9 +145,10 @@ function RouteComponent() {
 
     const updateUsageMode = useUpdateAppUsageMode()
     const updateProfile = useUpdateProfile()
+    const updateUsername = useUpdateUsername()
 
-    const isSubmitting = updateUsageMode.isPending || updateProfile.isPending
-    const submitError = updateUsageMode.error?.message || updateProfile.error?.message
+    const isSubmitting = updateUsageMode.isPending || updateProfile.isPending || updateUsername.isPending
+    const submitError = updateUsageMode.error?.message || updateProfile.error?.message || updateUsername.error?.message
 
     const handleFinish = () => {
         if (!me?.username) return
@@ -156,8 +171,15 @@ function RouteComponent() {
                         },
                         {
                             onSuccess: () => {
-                                queryClient.invalidateQueries({ queryKey: ['me'] })
-                                router.navigate({ to: '/dashboard' })
+                                updateUsername.mutate(
+                                    answers.username,
+                                    {
+                                        onSuccess: () => {
+                                            queryClient.invalidateQueries({ queryKey: ['me'] })
+                                            router.navigate({ to: '/dashboard' })
+                                        },
+                                    }
+                                )
                             },
                         }
                     )
@@ -251,6 +273,26 @@ function RouteComponent() {
                                     {option}
                                 </button>
                             ))}
+                        </div>
+                    )}
+
+                    {current.type === 'username' && (
+                        <div className="flex flex-col gap-2">
+                            <Input
+                                className="bg-background"
+                                placeholder="username"
+                                value={answers.username}
+                                onChange={e =>
+                                    setAnswers(prev => ({ ...prev, username: e.target.value }))
+                                }
+                                onKeyDown={e => e.key === 'Enter' && handleNext()}
+                            />
+                            <div className="flex flex-col gap-0.5">
+                                <Muted className="text-xs">Your profile URL will be:</Muted>
+                                <Muted className="text-sm font-mono">
+                                    https://neighborship.app/profiles/{answers.username || '...'}
+                                </Muted>
+                            </div>
                         </div>
                     )}
 
