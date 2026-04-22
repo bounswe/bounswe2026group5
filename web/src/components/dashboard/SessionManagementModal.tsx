@@ -1,5 +1,5 @@
 // web/src/components/dashboard/SessionManagementModal.tsx
-import { useRescheduleSession } from '#/lib/queries/MentorshipQueries.ts'
+import { useCancelSession, useRescheduleSession } from '#/lib/queries/MentorshipQueries.ts'
 import { useAvailabilitySlots, type AvailabilitySlot } from '#/lib/queries/ProfileTimeSlotQueries.ts'
 import { Body, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
@@ -198,6 +198,8 @@ export function SessionManagementModal({ session }: Readonly<SessionManagementMo
   const [view, setView] = useState<'manage' | 'reschedule'>('manage')
   const [meetingLink, setMeetingLink] = useState('')
   const [isSaved, setIsSaved] = useState(false)
+  const queryClient = useQueryClient()
+  const cancelSession = useCancelSession()
 
   const handleClose = () => {
     setIsOpen(false)
@@ -214,8 +216,18 @@ export function SessionManagementModal({ session }: Readonly<SessionManagementMo
   }
 
   const handleCancelSession = () => {
-    // FUTURE: Trigger TanStack Query mutation to cancel the session on the backend
-    console.log('Cancel session placeholder for session:', session.id)
+    cancelSession.mutate(session.id, {
+      onSuccess: () => {
+        toast.success('Session cancelled', {
+          description: 'Your session has been cancelled.',
+        })
+        queryClient.invalidateQueries({ queryKey: ['mentorship', 'meeting-sessions', 'me'] })
+        handleClose()
+      },
+      onError: (err) => {
+        toast.error(err.message)
+      },
+    })
   }
 
   const handleReschedule = () => {
@@ -328,8 +340,9 @@ export function SessionManagementModal({ session }: Readonly<SessionManagementMo
                     size="sm"
                     className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 gap-1.5"
                     onClick={handleCancelSession}
+                    disabled={cancelSession.isPending}
                   >
-                    <XCircle className="w-4 h-4" />
+                    {cancelSession.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
                     Cancel Session
                   </Button>
                 </div>
