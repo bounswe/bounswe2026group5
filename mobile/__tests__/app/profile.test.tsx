@@ -170,7 +170,7 @@ describe("ProfileScreen Layout", () => {
         json: async () => [{ name: "React" }, { name: "Testing" }],
       });
 
-    const { queryByTestId } = render(<ProfileScreen />);
+    const { queryByTestId, getByText, queryByText } = render(<ProfileScreen />);
 
     await waitFor(() => {
       expect(getByText("Ece Yilmaz")).toBeTruthy();

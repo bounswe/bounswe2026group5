@@ -1,5 +1,5 @@
-import { throwApiError } from "#/lib/apiError.ts"
-import { queryOptions, useMutation, useQuery } from "@tanstack/react-query"
+import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { throwApiError } from '#/lib/apiError.ts'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -212,5 +212,70 @@ export function useMeetingSessions(params: MeetingSessionQueryParams = {}) {
 export function useCancelSession() {
     return useMutation({
         mutationFn: cancelSession,
+    })
+}
+
+// ---- Feedback ----
+
+export interface Feedback {
+    id: string
+    match: string
+    submitted_by: {
+        id: string
+        username: string
+        display_name: string
+        picture_url: string
+        title: string
+    }
+    rating: number
+    text: string
+    created_at: string
+}
+
+async function fetchMatchFeedback(matchId: string): Promise<Feedback[]> {
+    const res = await fetch(`${API_BASE_URL}/mentorship/matches/${matchId}/feedback/`, {
+        headers: withAuthHeaders(),
+    })
+    if (!res.ok) throw new Error('Failed to fetch feedback')
+    return res.json()
+}
+
+async function submitMatchFeedback(
+    matchId: string,
+    data: { rating: number; text: string },
+): Promise<Feedback> {
+    const res = await fetch(`${API_BASE_URL}/mentorship/matches/${matchId}/feedback/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...withAuthHeaders(),
+        },
+        body: JSON.stringify(data),
+    })
+    if (!res.ok) throw new Error('Failed to submit feedback')
+    return res.json()
+}
+
+export const matchFeedbackQueryOptions = (matchId: string) =>
+    queryOptions({
+        queryKey: ['mentorship', 'matches', matchId, 'feedback'],
+        queryFn: () => fetchMatchFeedback(matchId),
+        staleTime: 60 * 1000,
+        gcTime: Infinity,
+    })
+
+export function useMatchFeedback(matchId: string) {
+    return useQuery(matchFeedbackQueryOptions(matchId))
+}
+
+export function useSubmitFeedback() {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: ({ matchId, data }: { matchId: string; data: { rating: number; text: string } }) =>
+            submitMatchFeedback(matchId, data),
+        onSuccess: (_result, vars) => {
+            queryClient.invalidateQueries({ queryKey: ['mentorship', 'matches', vars.matchId, 'feedback'] })
+            queryClient.invalidateQueries({ queryKey: ['profiles'] })
+        },
     })
 }

@@ -22,7 +22,6 @@ from profiles.services import (
 )
 
 from .models import Feedback, Match, MeetingSession, MentorshipRequest
-import logging
 
 
 class MentorshipServiceError(Exception):
@@ -478,7 +477,7 @@ def deactivate_match(*, match: Match, actor_profile: Profile) -> Match:
     return match
 
 
-def _update_mentor_public_rating(*, mentor: Profile) -> None:
+def _update_mentor_public_average_rating(*, mentor: Profile) -> None:
     """Increment mentor review count and refresh average rating on threshold boundaries."""
     with transaction.atomic():
         Profile.objects.filter(pk=mentor.pk).update(review_count=F("review_count") + 1)
@@ -517,7 +516,7 @@ def create_match_feedback(
     )
 
     if submitted_by == match.mentee:
-        _update_mentor_public_rating(mentor=match.mentor)
+        _update_mentor_public_average_rating(mentor=match.mentor)
 
     feedback_recipient = match.mentor if submitted_by == match.mentee else match.mentee
     _create_notification(

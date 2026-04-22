@@ -64,6 +64,11 @@ vi.mock('#/lib/queries/MentorshipQueries.ts', () => ({
     mutate: mockMutate,
     isPending: false,
   }),
+  matchFeedbackQueryOptions: (matchId: string) => ({
+    queryKey: ['mentorship', 'matches', matchId, 'feedback'],
+    queryFn: async () => [],
+    staleTime: Infinity,
+  }),
 }))
 
 vi.mock('#/lib/queries/AuthQueries.ts', () => ({
@@ -117,6 +122,7 @@ describe('DashboardHome', () => {
           ? [
               {
                 session_id: 'session-1',
+                match_id: 'match-1',
                 mentor: {
                   username: 'mentor-rita',
                   display_name: 'Rita Mentor',

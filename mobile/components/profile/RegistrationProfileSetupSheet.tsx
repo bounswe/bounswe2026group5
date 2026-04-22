@@ -296,6 +296,9 @@ export function RegistrationProfileSetupSheet({
                     editableUsername || username,
                   )}`}
               </Text>
+              {usernameError ? (
+                <Text className="text-xs text-red-500 mt-1">{usernameError}</Text>
+              ) : null}
             </View>
 
             <View className="gap-1.5">

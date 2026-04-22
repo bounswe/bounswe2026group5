@@ -46,7 +46,7 @@ interface PublicProfileResponse {
   show_initials_only: boolean;
   app_usage_mode?: "MENTOR" | "MENTEE";
   skills?: string[];
-  rating: number;
+  average_rating: string;
   total_mentee_count: number;
 }
 
@@ -219,7 +219,7 @@ function renderBodyContent({
       <ProfileHeader
         name={profile.full_name}
         bio={profile.bio}
-        rating={liveRating ?? profile.rating ?? 0}
+        rating={liveRating ?? Number(profile.average_rating) ?? 0}
         reviewCount={liveReviewCount ?? 0}
         menteesHelped={isViewedMentor ? menteesHelpedCount : 0}
         showMenteesHelped={isViewedMentor}

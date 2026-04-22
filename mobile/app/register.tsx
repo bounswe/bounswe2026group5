@@ -19,6 +19,7 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
+import { ApiValidationError } from "@/lib/api/client";
 import {
   ApiValidationError,
   fetchSkillsFn,
@@ -170,7 +171,6 @@ export default function RegisterScreen() {
         setSubmitError("");
         return;
       }
-
       setSubmitError(error.message);
     },
   });
