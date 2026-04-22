@@ -173,7 +173,7 @@ describe('AuthQueries', () => {
 
     await expect(
       loginFn({ email: 'alex@example.com', password: 'bad-password' }),
-    ).rejects.toThrow('Invalid credentials')
+    ).rejects.toThrow('Something went wrong. Please try again.')
 
     await expect(
       registerFn({
@@ -181,7 +181,7 @@ describe('AuthQueries', () => {
         password: 'short',
         confirm_password: 'short',
       }),
-    ).rejects.toThrow('Registration failed')
+    ).rejects.toThrow('Something went wrong. Please try again.')
   })
 
   it('returns payload for successful login and register calls', async () => {
@@ -253,6 +253,6 @@ describe('AuthQueries', () => {
 
     await expect(
       updateAppUsageModeFn({ app_usage_mode: 'MENTEE' }),
-    ).rejects.toThrow('Failed to update usage mode')
+    ).rejects.toThrow('Something went wrong. Please try again.')
   })
 })

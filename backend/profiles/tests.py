@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Any, cast
 from unittest.mock import patch
 
@@ -289,7 +290,7 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertIn("title", payload)
         self.assertEqual(payload["title"], "Senior Backend Mentor")
         self.assertIn("skills", payload)
-        self.assertIn("rating", payload)
+        self.assertIn("average_rating", payload)
         self.assertIn("total_mentee_count", payload)
 
     def test_get_profile_public_access_without_authentication(self) -> None:
@@ -1758,7 +1759,7 @@ def _token_for_profile_tests(user: Any) -> str:
     return str(RefreshToken.for_user(user).access_token)
 
 
-class MentorPublicRatingAPITests(TestCase):
+class MentorPublicAverageRatingAPITests(TestCase):
     """Tests for GET /api/profiles/{username}/rating/."""
 
     def setUp(self) -> None:
@@ -1813,10 +1814,8 @@ class MentorPublicRatingAPITests(TestCase):
         response = self.api_client.get(self._url(self.mentor_profile.username))
         self.assertEqual(response.status_code, 200)
 
-    def test_rating_reflects_threshold_update(self) -> None:
-        """After manual threshold updates, endpoint returns current public rating values."""
-        from decimal import Decimal
-
+    def test_average_rating_reflects_threshold_update(self) -> None:
+        """After manual threshold updates, endpoint returns current public average rating values."""
         self.mentor_profile.review_count = 5
         self.mentor_profile.average_rating = Decimal("4.20")
         self.mentor_profile.save()
@@ -2044,7 +2043,7 @@ class RecentlyAddedMentorsAPITests(TestCase):
             user=self.mentor1_user,
             display_name="First Mentor",
             is_visible=True,
-            rating=3,
+            average_rating=Decimal("3.00"),
         )
 
         self.mentor2_user = User.objects.create_user(
@@ -2056,7 +2055,7 @@ class RecentlyAddedMentorsAPITests(TestCase):
             user=self.mentor2_user,
             display_name="Second Mentor",
             is_visible=True,
-            rating=5,
+            average_rating=Decimal("5.00"),
         )
 
         self.hidden_mentor_user = User.objects.create_user(
@@ -2158,7 +2157,7 @@ class PopularMentorsAPITests(TestCase):
             user=self.low_rated_user,
             display_name="Low Rated",
             is_visible=True,
-            rating=1,
+            average_rating=Decimal("1.00"),
             total_mentee_count=5,
         )
 
@@ -2171,7 +2170,7 @@ class PopularMentorsAPITests(TestCase):
             user=self.high_rated_user,
             display_name="High Rated",
             is_visible=True,
-            rating=5,
+            average_rating=Decimal("5.00"),
             total_mentee_count=10,
         )
 
@@ -2184,7 +2183,7 @@ class PopularMentorsAPITests(TestCase):
             user=self.hidden_user,
             display_name="Hidden Popular",
             is_visible=False,
-            rating=5,
+            average_rating=Decimal("5.00"),
         )
 
         self.mentee_user = User.objects.create_user(
@@ -2196,7 +2195,7 @@ class PopularMentorsAPITests(TestCase):
             user=self.mentee_user,
             display_name="Mentee Pop",
             is_visible=True,
-            rating=5,
+            average_rating=Decimal("5.00"),
         )
 
     def test_returns_200(self) -> None:
@@ -2213,7 +2212,7 @@ class PopularMentorsAPITests(TestCase):
         self.assertNotIn("Hidden Popular", names)
         self.assertNotIn("Mentee Pop", names)
 
-    def test_sorted_by_rating_descending(self) -> None:
+    def test_sorted_by_average_rating_descending(self) -> None:
         response = self.client.get("/api/profiles/popular/")
         results = response.json()["results"]
         self.assertGreaterEqual(len(results), 2)
@@ -2234,7 +2233,7 @@ class PopularMentorsAPITests(TestCase):
             user=tied_low_user,
             display_name="Tied Low Mentees",
             is_visible=True,
-            rating=3,
+            average_rating=Decimal("3.00"),
             total_mentee_count=2,
         )
         tied_high_user = User.objects.create_user(
@@ -2246,7 +2245,7 @@ class PopularMentorsAPITests(TestCase):
             user=tied_high_user,
             display_name="Tied High Mentees",
             is_visible=True,
-            rating=3,
+            average_rating=Decimal("3.00"),
             total_mentee_count=20,
         )
 

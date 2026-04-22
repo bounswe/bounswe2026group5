@@ -1,3 +1,4 @@
+import { throwApiError } from '#/lib/apiError.ts'
 import { queryOptions, infiniteQueryOptions } from '@tanstack/react-query'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -46,13 +47,13 @@ export async function fetchMentors(
     if (params.skills?.length) params.skills.forEach(s => url.searchParams.append('skill', s))
 
     const res = await fetch(url.toString())
-    if (!res.ok) throw new Error('Failed to fetch mentors')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
 export async function fetchAllSkills(): Promise<Skill[]> {
     const res = await fetch(`${API_BASE_URL}/profiles/skills/`)
-    if (!res.ok) throw new Error('Failed to fetch skills')
+    if (!res.ok) await throwApiError(res)
     return res.json()
 }
 
@@ -78,7 +79,7 @@ export async function fetchPopularMentors(limit = 6): Promise<PublicMentorProfil
     const url = new URL(`${API_BASE_URL}/profiles/popular/`, window.location.origin)
     url.searchParams.set('limit', String(limit))
     const res = await fetch(url.toString())
-    if (!res.ok) throw new Error('Failed to fetch popular mentors')
+    if (!res.ok) await throwApiError(res)
     const data = await res.json()
     return data.results
 }
@@ -87,7 +88,7 @@ export async function fetchRecentlyAddedMentors(limit = 6): Promise<PublicMentor
     const url = new URL(`${API_BASE_URL}/profiles/recently-added/`, window.location.origin)
     url.searchParams.set('limit', String(limit))
     const res = await fetch(url.toString())
-    if (!res.ok) throw new Error('Failed to fetch recently added mentors')
+    if (!res.ok) await throwApiError(res)
     const data = await res.json()
     return data.results
 }

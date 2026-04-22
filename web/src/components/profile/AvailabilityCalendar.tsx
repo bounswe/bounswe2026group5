@@ -96,9 +96,7 @@ function CancelModal({ slot, username, onClose, onSuccess }: CancelModalProps) {
                 onSuccess()
             },
             onError: (err) => {
-                toast.error('Could not cancel', {
-                    description: err.message,
-                })
+                toast.error(err.message)
             },
         })
     }
@@ -167,9 +165,7 @@ function BookingModal({ slot, mentorUsername, isFirstTime, onClose, onSuccess }:
                         onSuccess()
                     },
                     onError: (err) => {
-                        toast.error('Failed to send request', {
-                            description: err.message,
-                        })
+                        toast.error(err.message)
                     },
                 }
             )
@@ -184,9 +180,7 @@ function BookingModal({ slot, mentorUsername, isFirstTime, onClose, onSuccess }:
                         onSuccess()
                     },
                     onError: (err) => {
-                        toast.error('Booking failed', {
-                            description: err.message,
-                        })
+                        toast.error(err.message)
                     },
                 }
             )
@@ -317,9 +311,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                     setTogglingSlotKey(null)
                 },
                 onError: (err) => {
-                    toast.error('Failed to remove slot', {
-                        description: err.message,
-                    })
+                    toast.error(err.message)
                     setTogglingSlotKey(null)
                 },
             })
@@ -340,9 +332,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                         setTogglingSlotKey(null)
                     },
                     onError: (err) => {
-                        toast.error('Failed to add slot', {
-                            description: err.message,
-                        })
+                        toast.error(err.message)
                         setTogglingSlotKey(null)
                     },
                 }

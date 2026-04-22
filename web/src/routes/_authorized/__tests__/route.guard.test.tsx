@@ -30,6 +30,13 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 import { Route } from '../route'
 
+type RouteShape = {
+  beforeLoad: () => void
+  loader: (args: { context: { queryClient: { ensureQueryData: typeof ensureQueryDataMock } } }) => Promise<unknown>
+}
+
+const typedRoute = Route as unknown as RouteShape
+
 describe('Authorized route guard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -40,7 +47,7 @@ describe('Authorized route guard', () => {
 
     let thrown: unknown
     try {
-      ;(Route as unknown as { beforeLoad: () => void }).beforeLoad()
+      typedRoute.beforeLoad()
     } catch (error) {
       thrown = error
     }
@@ -51,18 +58,57 @@ describe('Authorized route guard', () => {
   it('allows navigation when stored user exists', () => {
     getStoredUserMock.mockReturnValue({ id: 'user-1' })
 
-    expect(() => (Route as unknown as { beforeLoad: () => void }).beforeLoad()).not.toThrow()
+    expect(() => typedRoute.beforeLoad()).not.toThrow()
   })
 
-  it('ensures current user query data in loader', async () => {
-    await (Route as unknown as { loader: (args: Record<string, unknown>) => Promise<void> }).loader({
-      context: {
-        queryClient: {
-          ensureQueryData: ensureQueryDataMock,
-        },
-      },
+  it('allows navigation when user has completed onboarding', async () => {
+    ensureQueryDataMock.mockResolvedValue({ id: 'user-1', app_usage_mode: 'MENTOR' })
+
+    const result = await typedRoute.loader({
+      context: { queryClient: { ensureQueryData: ensureQueryDataMock } },
     })
 
+    expect(result).toEqual({ id: 'user-1', app_usage_mode: 'MENTOR' })
     expect(ensureQueryDataMock).toHaveBeenCalledWith({ queryKey: ['me'] })
+  })
+
+  it('redirects to onboarding when app_usage_mode is empty', async () => {
+    ensureQueryDataMock.mockResolvedValue({ id: 'user-1', app_usage_mode: '' })
+
+    let thrown: unknown
+    try {
+      await typedRoute.loader({
+        context: { queryClient: { ensureQueryData: ensureQueryDataMock } },
+      })
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toEqual({ to: '/gettingToKnowYou', __redirect: true })
+  })
+
+  it('redirects to onboarding when app_usage_mode is undefined', async () => {
+    ensureQueryDataMock.mockResolvedValue({ id: 'user-1' })
+
+    let thrown: unknown
+    try {
+      await typedRoute.loader({
+        context: { queryClient: { ensureQueryData: ensureQueryDataMock } },
+      })
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toEqual({ to: '/gettingToKnowYou', __redirect: true })
+  })
+
+  it('does not redirect when user is null (not logged in)', async () => {
+    ensureQueryDataMock.mockResolvedValue(null)
+
+    const result = await typedRoute.loader({
+      context: { queryClient: { ensureQueryData: ensureQueryDataMock } },
+    })
+
+    expect(result).toBeNull()
   })
 })

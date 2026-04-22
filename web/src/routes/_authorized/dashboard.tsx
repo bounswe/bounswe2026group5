@@ -51,7 +51,7 @@ function StatusBadge({ status }: Readonly<{ status: string }>) {
 }
 
 function UserAvatar({ name }: Readonly<{ name: string }>) {
-  const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2)
+  const initials = (name || '?').split(' ').map(n => n[0]).join('').substring(0, 2)
   const colors = [
     'bg-blue-100 text-blue-700', 
     'bg-emerald-100 text-emerald-700', 
@@ -507,9 +507,7 @@ function MentorDashboardView() {
             queryClient.invalidateQueries({ queryKey: ['mentorship', 'meeting-sessions', 'me'] })
           },
           onError: (err) => {
-            toast.error('Failed to respond', {
-              description: err.message,
-            })
+            toast.error(err.message)
           },
         }
     )

@@ -58,7 +58,7 @@ describe('MentorshipQueries query options', () => {
   it('throws when fetching my requests fails', async () => {
     fetchSpy.mockResolvedValueOnce(new Response(null, { status: 500 }))
 
-    await expect(myRequestsQueryOptions.queryFn!({} as never)).rejects.toThrow('Failed to fetch requests')
+    await expect(myRequestsQueryOptions.queryFn!({} as never)).rejects.toThrow('Something went wrong. Please try again.')
   })
 
   it('requests my requests with bearer auth when token exists', async () => {
@@ -121,6 +121,6 @@ describe('MentorshipQueries query options', () => {
 
     await expect(
       meetingSessionsQueryOptions({ role: 'mentee', status: 'upcoming' }).queryFn!({} as never),
-    ).rejects.toThrow('Failed to fetch meeting sessions')
+    ).rejects.toThrow('Something went wrong. Please try again.')
   })
 })
