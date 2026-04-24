@@ -30,6 +30,7 @@ import {
   useBookAvailabilitySlotMutation,
   useCreateMentorshipRequestMutation,
   useMentorshipMatchesQuery,
+  useMentorshipRequestsQuery,
 } from "@/lib/queries/mentorship";
 import {
   type ProfileReview,
@@ -77,11 +78,18 @@ function groupSlotsByWeekday(
     startTime: string;
     endTime: string;
     is_booked: boolean;
+    is_pending?: boolean;
   }[],
 ): AvailabilitySlot[] {
   const grouped = new Map<
     string,
-    { id: string; label: string; isBooked?: boolean; date?: string }[]
+    {
+      id: string;
+      label: string;
+      isBooked?: boolean;
+      isPending?: boolean;
+      date?: string;
+    }[]
   >();
 
   slots.forEach((slot) => {
@@ -91,6 +99,7 @@ function groupSlotsByWeekday(
       id: slot.id,
       label: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
       isBooked: slot.is_booked,
+      isPending: slot.is_pending,
       date: slot.date,
     });
     grouped.set(day, dayTimes);
@@ -345,6 +354,7 @@ export default function MentorProfileScreen() {
 
   const createRequestMutation = useCreateMentorshipRequestMutation();
   const mentorshipMatchesQuery = useMentorshipMatchesQuery(currentUsername);
+  const mentorshipRequestsQuery = useMentorshipRequestsQuery(currentUsername);
   const bookSlotMutation = useBookAvailabilitySlotMutation(currentUsername);
   const availabilitySlotsQuery = useAvailabilitySlotsQuery(
     username ?? "",
@@ -460,6 +470,17 @@ export default function MentorProfileScreen() {
 
   const availability = useMemo(() => {
     const sourceSlots = availabilitySlotsQuery.data ?? [];
+    const pendingRequestedSlotIds = new Set(
+      (mentorshipRequestsQuery.data ?? [])
+        .filter(
+          (request) =>
+            request.status === "PENDING" &&
+            request.mentor.username === username &&
+            request.mentee.username === currentUsername &&
+            Boolean(request.slot_id),
+        )
+        .map((request) => request.slot_id as string),
+    );
 
     const normalized = sourceSlots
       .map((slot) => {
@@ -490,6 +511,7 @@ export default function MentorProfileScreen() {
           startTime,
           endTime,
           is_booked: slot.is_booked,
+          is_pending: pendingRequestedSlotIds.has(slot.id),
         };
       })
       .filter(
@@ -501,11 +523,17 @@ export default function MentorProfileScreen() {
           startTime: string;
           endTime: string;
           is_booked: boolean;
+          is_pending: boolean;
         } => Boolean(slot),
       );
 
     return groupSlotsByWeekday(normalized);
-  }, [availabilitySlotsQuery.data]);
+  }, [
+    availabilitySlotsQuery.data,
+    currentUsername,
+    mentorshipRequestsQuery.data,
+    username,
+  ]);
 
   const isViewedMentor = useMemo(() => {
     return profile?.app_usage_mode === "MENTOR";

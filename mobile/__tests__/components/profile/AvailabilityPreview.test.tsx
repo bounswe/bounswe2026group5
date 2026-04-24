@@ -47,6 +47,34 @@ describe("AvailabilityPreview", () => {
     });
   });
 
+  it("shows pending requested slots without allowing another selection", () => {
+    const onSelectSlot = jest.fn();
+
+    const { getByTestId, getByText } = render(
+      <AvailabilityPreview
+        schedule={[
+          {
+            day: "Monday",
+            times: [
+              {
+                id: "slot-pending",
+                label: "11:00 - 12:00",
+                isPending: true,
+              },
+            ],
+          },
+        ]}
+        onSelectSlot={onSelectSlot}
+      />,
+    );
+
+    fireEvent.press(getByTestId("day-Monday"));
+
+    expect(getByText("Pending")).toBeTruthy();
+    fireEvent.press(getByTestId("slot-slot-pending"));
+    expect(onSelectSlot).not.toHaveBeenCalled();
+  });
+
   it("renders edit availability button when onEdit is provided", () => {
     const onEdit = jest.fn();
     const { getByTestId } = render(
