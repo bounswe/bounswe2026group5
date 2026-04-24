@@ -744,18 +744,20 @@ export default function ConnectionsScreen() {
         className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
         style={{ paddingTop: insets.top }}
       >
-        <View className="flex-row justify-between items-center px-4 pb-3 pt-2">
+        <View className="flex-row items-center justify-between px-4 pb-3 pt-2">
           <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Connections
           </Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push("/messages" as Href)}
-            className="w-10 h-10 items-center justify-center rounded-full bg-surface-active dark:bg-surface-active-dark"
-          >
-            <Ionicons name="chatbubble-outline" size={20} color="#4a7c6f" />
-          </TouchableOpacity>
-          <NotificationBell />
+          <View className="flex-row items-center gap-3">
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.push("/messages" as Href)}
+              className="w-10 h-10 items-center justify-center rounded-full bg-surface-active dark:bg-surface-active-dark"
+            >
+              <Ionicons name="chatbubble-outline" size={20} color="#4a7c6f" />
+            </TouchableOpacity>
+            <NotificationBell />
+          </View>
         </View>
       </View>
 
