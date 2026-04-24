@@ -5,9 +5,14 @@ from django.urls import path
 from .views import (
     AvailabilitySlotBookAPIView,
     AvailabilitySlotListCreateAPIView,
+    CommunityTagDetailAPIView,
+    CommunityTagJoinAPIView,
+    CommunityTagLeaveAPIView,
+    CommunityTagListCreateAPIView,
     MentorPublicAverageRatingAPIView,
     MyAvailabilitySlotDetailAPIView,
     MyAvailabilitySlotListCreateAPIView,
+    MyTagsListAPIView,
     PopularMentorsListAPIView,
     ProfileByUsernameAPIView,
     ProfileReviewsByUsernameAPIView,
@@ -59,5 +64,24 @@ urlpatterns = [
         ProfileReviewsByUsernameAPIView.as_view(),
         name="profile-reviews",
     ),
+    # Community Tags
+    path("tags/", CommunityTagListCreateAPIView.as_view(), name="community-tag-list-create"),
+    path(
+        "tags/<uuid:tag_id>/",
+        CommunityTagDetailAPIView.as_view(),
+        name="community-tag-detail",
+    ),
+    path(
+        "tags/<uuid:tag_id>/join/",
+        CommunityTagJoinAPIView.as_view(),
+        name="community-tag-join",
+    ),
+    path(
+        "tags/<uuid:tag_id>/leave/",
+        CommunityTagLeaveAPIView.as_view(),
+        name="community-tag-leave",
+    ),
+    path("me/tags/", MyTagsListAPIView.as_view(), name="my-tags-list"),
+    # Catch-all username route (must stay last)
     path("<str:username>/", ProfileByUsernameAPIView.as_view(), name="profile-by-username"),
 ]
