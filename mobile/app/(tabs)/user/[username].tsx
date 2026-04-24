@@ -189,7 +189,7 @@ function renderBodyContent({
 }: BodyContentProps): React.ReactNode {
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center">
+      <View className="flex-1 items-center justify-center bg-surface dark:bg-surface-dark">
         <ActivityIndicator size="large" color="#4f46e5" />
         <Text className="text-gray-500 mt-3">Loading profile...</Text>
       </View>
@@ -198,7 +198,7 @@ function renderBodyContent({
 
   if (error) {
     return (
-      <View className="flex-1 items-center justify-center px-4">
+      <View className="flex-1 items-center justify-center px-4 bg-surface dark:bg-surface-dark">
         <ErrorBanner title="Unable to open profile" message={error} />
       </View>
     );
@@ -240,7 +240,7 @@ function renderBodyContent({
 
   return (
     <ScrollView
-      className="flex-1 bg-white"
+      className="flex-1 bg-surface dark:bg-surface-dark"
       contentContainerStyle={{ paddingBottom: 160 }}
     >
       <ProfileHeader
@@ -813,7 +813,7 @@ export default function MentorProfileScreen() {
   const screenTitle = isViewedMentor ? "Mentor Profile" : "Profile";
 
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-surface dark:bg-surface-dark">
       <View
         className="bg-white border-b border-gray-100"
         style={{ paddingTop: insets.top }}

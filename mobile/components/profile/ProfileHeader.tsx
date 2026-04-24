@@ -48,7 +48,7 @@ export function ProfileHeader({
   }, [isBioExpanded, shouldShowReadMore, trimmedBio]);
 
   return (
-    <View className="bg-surface-card dark:bg-surface-card-dark mb-6">
+    <View className="bg-surface dark:bg-surface-dark mb-6">
       {/* 1. Cover Photo Area */}
       <View className="h-32 bg-surface-active dark:bg-surface-active-dark w-full">
         {coverUrl ? (
