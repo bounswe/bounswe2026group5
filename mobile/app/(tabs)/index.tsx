@@ -4,8 +4,11 @@ import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Import the components for the dashboard
-import { RequestCard } from "@/components/dashboard/RequestCard";
-import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
+import {
+  PendingRequestCard,
+  PendingRequestCardProps,
+} from "@/components/connections/PendingRequestCard";
+import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
 import { RescheduleBottomSheet } from "@/components/dashboard/RescheduleBottomSheet";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
@@ -26,6 +29,25 @@ import {
   type DashboardRequestItem,
   type DashboardSessionItem,
 } from "@/lib/queries/mentorship";
+
+function mapDashboardRequestToCardProps(
+  request: DashboardRequestItem,
+): PendingRequestCardProps {
+  return {
+    id: request.requestId,
+    username:
+      request.type === "incoming"
+        ? request.menteeUsername
+        : request.mentorUsername,
+    name: request.user,
+    cover_letter: request.message ?? "",
+    slot_date: null,
+    slot_start_time: request.proposedDate ?? null,
+    slot_end_time: null,
+    requestType: request.type,
+    isReschedule: request.isReschedule,
+  };
+}
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
@@ -62,7 +84,7 @@ export default function DashboardScreen() {
 
   // State for Modals
   const [selectedRequest, setSelectedRequest] =
-    useState<DashboardRequestItem | null>(null);
+    useState<PendingRequestCardProps | null>(null);
   const [selectedSession, setSelectedSession] =
     useState<DashboardSessionItem | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
@@ -82,8 +104,11 @@ export default function DashboardScreen() {
     rescheduleSessionMentorUsername || "",
   );
 
-  const handleRespond = async (action: "accept" | "reject") => {
-    if (!selectedRequest) {
+  const handleRespond = async (
+    action: "accept" | "reject",
+    requestId = selectedRequest?.id,
+  ) => {
+    if (!requestId) {
       return;
     }
 
@@ -91,7 +116,7 @@ export default function DashboardScreen() {
       setActionError(null);
       setSuccessMessage(null);
       await respondMutation.mutateAsync({
-        requestId: selectedRequest.requestId,
+        requestId,
         action,
       });
       setSelectedRequest(null);
@@ -111,12 +136,7 @@ export default function DashboardScreen() {
     }
   };
 
-  const handleOpenRequestProfile = (request: DashboardRequestItem) => {
-    const targetUsername =
-      request.type === "incoming"
-        ? request.menteeUsername
-        : request.mentorUsername;
-
+  const handleOpenRequestProfile = (targetUsername?: string) => {
     if (!targetUsername) {
       return;
     }
@@ -228,16 +248,24 @@ export default function DashboardScreen() {
           </View>
 
           {/* Show the first 2 requests on the dashboard */}
-          {requests.slice(0, 2).map((req) => (
-            <RequestCard
-              key={req.id}
-              user={req.user}
-              topic={req.topic}
-              type={req.type}
-              onPress={() => setSelectedRequest(req)}
-              onShowProfile={() => handleOpenRequestProfile(req)}
-            />
-          ))}
+          {requests.slice(0, 2).map((request) => {
+            const cardProps = mapDashboardRequestToCardProps(request);
+            return (
+              <PendingRequestCard
+                key={request.id}
+                {...cardProps}
+                onPress={() => setSelectedRequest(cardProps)}
+                onShowProfile={() => handleOpenRequestProfile(cardProps.username)}
+                onAccept={() => {
+                  void handleRespond("accept", cardProps.id);
+                }}
+                onDecline={() => {
+                  void handleRespond("reject", cardProps.id);
+                }}
+                disabled={respondMutation.isPending}
+              />
+            );
+          })}
         </View>
 
         {/* Sessions Section */}
@@ -275,18 +303,14 @@ export default function DashboardScreen() {
       </ScrollView>
 
       {/* 3. MODALS */}
-      <RequestDetailsModal
-        visible={!!selectedRequest}
+      <RequestDetailSheet
+        visible={selectedRequest !== null}
         request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
-        onAccept={() => handleRespond("accept")}
-        onReject={() => handleRespond("reject")}
-        onCancelOutgoing={() => {
-          setActionError(
-            "Outgoing request cancellation is not available on the current API.",
-          );
-        }}
-        isSubmitting={respondMutation.isPending}
+        onAccept={() => void handleRespond("accept")}
+        onDecline={() => void handleRespond("reject")}
+        onShowProfile={handleOpenRequestProfile}
+        disabled={respondMutation.isPending}
       />
 
       <SessionDetailsModal

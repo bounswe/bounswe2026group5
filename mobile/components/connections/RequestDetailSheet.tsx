@@ -16,8 +16,9 @@ interface RequestDetailSheetProps {
   request: PendingRequestCardProps | null;
   visible: boolean;
   onClose: () => void;
-  onAccept: (id: string) => void;
-  onDecline: (id: string) => void;
+  onAccept?: (id: string) => void;
+  onDecline?: (id: string) => void;
+  onShowProfile?: (username?: string) => void;
   disabled?: boolean;
 }
 
@@ -27,17 +28,25 @@ export function RequestDetailSheet({
   onClose,
   onAccept,
   onDecline,
+  onShowProfile,
   disabled,
 }: Readonly<RequestDetailSheetProps>) {
   if (!request) return null;
 
+  const isIncoming = request.requestType !== "outgoing";
   const slotDate = request.slot_date;
   const slotStartTime = request.slot_start_time;
   const slotEndTime = request.slot_end_time;
+  const hasStructuredSlot = Boolean(slotDate && slotStartTime && slotEndTime);
+  const coverLetter =
+    request.cover_letter.trim() ||
+    (isIncoming
+      ? "Would like to connect for mentorship."
+      : "Your mentorship request is waiting for a response.");
 
   return (
     <Modal
-      animationType="slide"
+      animationType="fade"
       transparent={true}
       visible={visible}
       onRequestClose={onClose}
@@ -104,9 +113,21 @@ export function RequestDetailSheet({
 
               {/* Subtitle */}
               <Text className="text-[13px] text-on-surface-soft text-center mb-3">
-                Seeking mentorship
+                {isIncoming ? "Seeking mentorship" : "Request pending"}
               </Text>
 
+              {onShowProfile ? (
+                <TouchableOpacity
+                  testID="request-detail-profile-button"
+                  activeOpacity={0.8}
+                  onPress={() => onShowProfile(request.username)}
+                  className="px-4 py-2 rounded-full bg-surface-active border border-divider"
+                >
+                  <Text className="text-sm font-bold text-on-surface">
+                    Show Profile
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
 
             {/* Divider */}
@@ -119,7 +140,7 @@ export function RequestDetailSheet({
               </Text>
               <View className="bg-surface-active border border-divider p-5 rounded-xl">
                 <Text className="text-[14px] text-on-surface-soft leading-[22px] italic">
-                  &ldquo;{request.cover_letter}&rdquo;
+                  &ldquo;{coverLetter}&rdquo;
                 </Text>
               </View>
             </View>
@@ -136,7 +157,7 @@ export function RequestDetailSheet({
                     Date
                   </Text>
                   <Text className="text-[13px] font-bold text-on-surface text-center">
-                    {slotDate ?? "—"}
+                    {slotDate ?? slotStartTime ?? "—"}
                   </Text>
                 </View>
                 <View className="flex-1 p-4 bg-gray-50 border border-gray-100 rounded-xl items-center gap-1">
@@ -145,14 +166,18 @@ export function RequestDetailSheet({
                     Status
                   </Text>
                   <Text className="text-[13px] font-bold text-on-surface text-center">
-                    {request.isNew ? "New Request" : "Pending"}
+                    {request.isNew
+                      ? "New Request"
+                      : isIncoming
+                        ? "Pending"
+                        : "Awaiting Response"}
                   </Text>
                 </View>
               </View>
             </View>
 
             {/* Session Time */}
-            {slotDate && slotStartTime && slotEndTime && (
+            {slotStartTime && (
               <>
                 <View className="h-px bg-divider mx-6 mb-5" />
                 <View className="px-6 mb-2">
@@ -166,13 +191,15 @@ export function RequestDetailSheet({
                     <View className="flex-row items-center gap-2.5">
                       <View className="w-2 h-2 rounded-full bg-primary" />
                       <Text className="text-[13px] font-bold text-on-surface">
-                        {slotDate}
+                        {hasStructuredSlot ? slotDate : "Proposed Time"}
                       </Text>
                     </View>
                     <View className="flex-row items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg">
                       <Ionicons name="time-outline" size={12} color="#004ac6" />
                       <Text className="text-[12px] font-bold text-primary">
-                        {slotStartTime}–{slotEndTime}
+                        {hasStructuredSlot
+                          ? `${slotStartTime}–${slotEndTime}`
+                          : slotStartTime}
                       </Text>
                     </View>
                   </View>
@@ -183,33 +210,42 @@ export function RequestDetailSheet({
 
           {/* Footer Actions */}
           <View className="border-t border-divider px-6 pt-4 pb-8">
-            <View className="flex-row gap-3">
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => {
-                  onDecline(request.id);
-                  onClose();
-                }}
-                className="flex-1 py-3.5 rounded-full border-2 border-red-400 items-center justify-center"
-              >
-                <Text className="font-bold text-red-500 text-sm">Decline</Text>
-              </TouchableOpacity>
+            {isIncoming ? (
+              <View className="flex-row gap-3">
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    onDecline?.(request.id);
+                    onClose();
+                  }}
+                  disabled={disabled}
+                  className="flex-1 py-3.5 rounded-full border-2 border-red-400 items-center justify-center"
+                >
+                  <Text className="font-bold text-red-500 text-sm">Decline</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => {
-                  onAccept(request.id);
-                  onClose();
-                }}
-                disabled={disabled}
-                className={`flex-1 py-3.5 rounded-full items-center justify-center flex-row gap-2 ${disabled ? "bg-primary/50" : "bg-primary"}`}
-              >
-                <Ionicons name="checkmark-circle" size={16} color="#ffffff" />
-                <Text className="font-bold text-white text-sm">
-                  Accept Request
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    onAccept?.(request.id);
+                    onClose();
+                  }}
+                  disabled={disabled}
+                  className={`flex-1 py-3.5 rounded-full items-center justify-center flex-row gap-2 ${disabled ? "bg-primary/50" : "bg-primary"}`}
+                >
+                  <Ionicons name="checkmark-circle" size={16} color="#ffffff" />
+                  <Text className="font-bold text-white text-sm">
+                    Accept Request
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View className="py-3.5 rounded-full bg-surface-active border border-divider items-center">
+                <Text className="font-bold text-on-surface-soft text-sm">
+                  Request Pending...
                 </Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+            )}
           </View>
         </View>
       </View>

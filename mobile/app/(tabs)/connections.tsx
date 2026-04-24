@@ -15,16 +15,10 @@ import { DeclineConfirmModal } from "@/components/connections/DeclineConfirmModa
 import { FeedbackBottomSheet } from "@/components/connections/FeedbackBottomSheet";
 import { MenteeCard } from "@/components/connections/MenteeCard";
 import {
-  MessageCard,
-  MessageCardProps,
-} from "@/components/connections/MessageCard";
-import {
   PendingRequestCard,
   PendingRequestCardProps,
 } from "@/components/connections/PendingRequestCard";
 import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
-import { RequestCard } from "@/components/dashboard/RequestCard";
-import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
@@ -64,6 +58,25 @@ function mapRequestToCardProps(
     slot_end_time: req.slot_end_time,
     avatarUrl: req.mentee.picture_url || undefined,
     isNew: isWithin24h(req.created_at),
+  };
+}
+
+function mapDashboardRequestToCardProps(
+  request: DashboardRequestItem,
+): PendingRequestCardProps {
+  return {
+    id: request.requestId,
+    username:
+      request.type === "incoming"
+        ? request.menteeUsername
+        : request.mentorUsername,
+    name: request.user,
+    cover_letter: request.message ?? "",
+    slot_date: null,
+    slot_start_time: request.proposedDate ?? null,
+    slot_end_time: null,
+    requestType: request.type,
+    isReschedule: request.isReschedule,
   };
 }
 
@@ -431,7 +444,7 @@ function MenteeConnections({
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [showAllMentors, setShowAllMentors] = useState(false);
   const [selectedRequest, setSelectedRequest] =
-    useState<DashboardRequestItem | null>(null);
+    useState<PendingRequestCardProps | null>(null);
   const [managedMentor, setManagedMentor] = useState<{
     name: string;
     username: string;
@@ -540,11 +553,16 @@ function MenteeConnections({
 
   return (
     <>
-      <RequestDetailsModal
-        visible={!!selectedRequest}
+      <RequestDetailSheet
+        visible={selectedRequest !== null}
         request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
-        onCancelOutgoing={() => setSelectedRequest(null)}
+        onShowProfile={(targetUsername) => {
+          if (targetUsername) {
+            setSelectedRequest(null);
+            pushUserProfile(router, targetUsername);
+          }
+        }}
       />
 
       <ConnectionActionsSheet
@@ -610,24 +628,22 @@ function MenteeConnections({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingRight: 16 }}
           >
-            {pendingRequests.map((request) => (
-              <View key={request.id} style={{ width: 320, marginRight: 12 }}>
-                <RequestCard
-                  user={request.user}
-                  topic={request.topic}
-                  type={request.type}
-                  isReschedule={request.isReschedule}
-                  onPress={() => setSelectedRequest(request)}
-                  onShowProfile={() => {
-                    const targetUsername =
-                      request.type === "incoming"
-                        ? request.menteeUsername
-                        : request.mentorUsername;
-                    pushUserProfile(router, targetUsername);
-                  }}
-                />
-              </View>
-            ))}
+            {pendingRequests.map((request) => {
+              const cardProps = mapDashboardRequestToCardProps(request);
+              return (
+                <View key={request.id} style={{ width: 320, marginRight: 12 }}>
+                  <PendingRequestCard
+                    {...cardProps}
+                    onPress={() => setSelectedRequest(cardProps)}
+                    onShowProfile={() => {
+                      if (cardProps.username) {
+                        pushUserProfile(router, cardProps.username);
+                      }
+                    }}
+                  />
+                </View>
+              );
+            })}
           </ScrollView>
         )}
         {!requestsLoading && !requestsError && pendingRequests.length === 0 && (

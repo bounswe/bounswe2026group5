@@ -292,21 +292,6 @@ function renderBodyContent({
           />
         )}
 
-        {isViewedMentor && (
-          <View className="mt-6">
-            <Text className="mb-3 text-lg font-bold text-gray-900">Reviews</Text>
-            <ProfileReviews
-              reviews={reviews}
-              totalCount={reviewsTotalCount}
-              errorMessage={reviewsError}
-              isLoading={isReviewsLoading}
-              isLoadingMore={isReviewsLoadingMore}
-              onLoadMore={onLoadMoreReviews}
-              emptyMessage="No public reviews yet. Reviews appear once privacy thresholds are met."
-            />
-          </View>
-        )}
-
         {isViewedMentor && selectedSlot && canRequestMentorship && (
           <View className="mb-6 bg-gray-50 border border-gray-200 rounded-2xl p-4">
             <Text className="text-lg font-bold text-gray-900 mb-3">
@@ -351,6 +336,21 @@ function renderBodyContent({
                 {submitButtonLabel}
               </Text>
             </TouchableOpacity>
+          </View>
+        )}
+
+        {isViewedMentor && (
+          <View className="mt-6">
+            <Text className="mb-3 text-lg font-bold text-gray-900">Reviews</Text>
+            <ProfileReviews
+              reviews={reviews}
+              totalCount={reviewsTotalCount}
+              errorMessage={reviewsError}
+              isLoading={isReviewsLoading}
+              isLoadingMore={isReviewsLoadingMore}
+              onLoadMore={onLoadMoreReviews}
+              emptyMessage="No public reviews yet. Reviews appear once privacy thresholds are met."
+            />
           </View>
         )}
       </View>
