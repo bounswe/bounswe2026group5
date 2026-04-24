@@ -39,6 +39,7 @@ import {
 } from "@/lib/queries/profile";
 
 interface PublicProfileResponse {
+  username: string;
   full_name: string;
   bio: string;
   hidden: boolean;
@@ -69,6 +70,19 @@ function getUsernameParam(
 
 function normalizeUsernameIdentifier(value?: string): string {
   return (value ?? "").trim().toLowerCase().replace(/[-_.\s]+/g, "");
+}
+
+function isFutureOpenSlot(slot: {
+  date: string;
+  startTime: string;
+  is_booked: boolean;
+  is_pending?: boolean;
+}): boolean {
+  if (slot.is_booked || slot.is_pending) {
+    return false;
+  }
+
+  return new Date(`${slot.date}T${slot.startTime}`) > new Date();
 }
 
 function groupSlotsByWeekday(
@@ -114,6 +128,7 @@ type BodyContentProps = {
   profile: PublicProfileResponse | null;
   liveRating?: number;
   liveReviewCount?: number;
+  openSlotsCount: number;
   menteesHelpedCount: number;
   requestFeedback: string | null;
   requestFeedbackVariant?: "error" | "warning" | "info" | "success";
@@ -150,6 +165,7 @@ function renderBodyContent({
   profile,
   liveRating,
   liveReviewCount,
+  openSlotsCount,
   menteesHelpedCount,
   requestFeedback,
   requestFeedbackVariant = "info",
@@ -230,7 +246,9 @@ function renderBodyContent({
         bio={profile.bio}
         rating={liveRating ?? Number(profile.average_rating) ?? 0}
         reviewCount={liveReviewCount ?? 0}
+        openSlots={isViewedMentor ? openSlotsCount : 0}
         menteesHelped={isViewedMentor ? menteesHelpedCount : 0}
+        showStats={isViewedMentor}
         showMenteesHelped={isViewedMentor}
         imageUrl={profile.picture_url || undefined}
       />
@@ -265,7 +283,15 @@ function renderBodyContent({
         )}
 
         {isViewedMentor && (
-          <View className="mb-6">
+          <AvailabilityPreview
+            schedule={availability}
+            selectedSlot={selectedSlotPreview}
+            onSelectSlot={onSelectSlot}
+          />
+        )}
+
+        {isViewedMentor && (
+          <View className="mt-6">
             <Text className="mb-3 text-lg font-bold text-gray-900">Reviews</Text>
             <ProfileReviews
               reviews={reviews}
@@ -277,14 +303,6 @@ function renderBodyContent({
               emptyMessage="No public reviews yet. Reviews appear once privacy thresholds are met."
             />
           </View>
-        )}
-
-        {isViewedMentor && (
-          <AvailabilityPreview
-            schedule={availability}
-            selectedSlot={selectedSlotPreview}
-            onSelectSlot={onSelectSlot}
-          />
         )}
 
         {isViewedMentor && selectedSlot && canRequestMentorship && (
@@ -351,11 +369,18 @@ export default function MentorProfileScreen() {
   const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const selfScopedQueryUsername = currentUsername ?? profile?.username ?? username;
 
   const createRequestMutation = useCreateMentorshipRequestMutation();
-  const mentorshipMatchesQuery = useMentorshipMatchesQuery(currentUsername);
-  const mentorshipRequestsQuery = useMentorshipRequestsQuery(currentUsername);
-  const bookSlotMutation = useBookAvailabilitySlotMutation(currentUsername);
+  const mentorshipMatchesQuery = useMentorshipMatchesQuery(
+    selfScopedQueryUsername,
+  );
+  const mentorshipRequestsQuery = useMentorshipRequestsQuery(
+    selfScopedQueryUsername,
+  );
+  const bookSlotMutation = useBookAvailabilitySlotMutation(
+    selfScopedQueryUsername,
+  );
   const availabilitySlotsQuery = useAvailabilitySlotsQuery(
     username ?? "",
     profile?.app_usage_mode === "MENTOR",
@@ -534,6 +559,25 @@ export default function MentorProfileScreen() {
     mentorshipRequestsQuery.data,
     username,
   ]);
+  const openSlotsCount = useMemo(
+    () =>
+      availability
+        .flatMap((day) => day.times)
+        .filter((entry) => {
+          if (typeof entry === "string" || !entry.date) {
+            return false;
+          }
+
+          const startTime = entry.label.split(" - ")[0] ?? "00:00";
+          return isFutureOpenSlot({
+            date: entry.date,
+            startTime,
+            is_booked: Boolean(entry.isBooked),
+            is_pending: Boolean(entry.isPending),
+          });
+        }).length,
+    [availability],
+  );
 
   const isViewedMentor = useMemo(() => {
     return profile?.app_usage_mode === "MENTOR";
@@ -544,12 +588,34 @@ export default function MentorProfileScreen() {
       return 0;
     }
 
-    const normalizedViewedUsername = normalizeUsernameIdentifier(username);
+    const normalizedCurrentUsername = normalizeUsernameIdentifier(currentUsername);
+    const viewedIdentifiers = [
+      username,
+      profile?.username,
+      profile?.full_name,
+    ].map(normalizeUsernameIdentifier);
+    const activeMatches = (mentorshipMatchesQuery.data ?? []).filter(
+      (match) => match.is_active,
+    );
+
+    if (
+      normalizedCurrentUsername &&
+      viewedIdentifiers.includes(normalizedCurrentUsername)
+    ) {
+      const ownActiveMentees = new Set(
+        activeMatches.map((match) => match.mentee.username),
+      );
+
+      return Math.max(profile?.total_mentee_count ?? 0, ownActiveMentees.size);
+    }
+
+    const normalizedViewedUsername =
+      normalizeUsernameIdentifier(profile?.username) ||
+      normalizeUsernameIdentifier(username);
     const activeMenteesForViewedMentor = new Set(
-      (mentorshipMatchesQuery.data ?? [])
+      activeMatches
         .filter(
           (match) =>
-            match.is_active &&
             normalizeUsernameIdentifier(match.mentor.username) ===
               normalizedViewedUsername,
         )
@@ -562,16 +628,23 @@ export default function MentorProfileScreen() {
     );
   }, [
     isViewedMentor,
+    currentUsername,
     mentorshipMatchesQuery.data,
+    profile?.full_name,
     profile?.total_mentee_count,
+    profile?.username,
     username,
   ]);
 
   const hasExistingMentorConnection = useMemo(() => {
+    const normalizedViewedUsername = normalizeUsernameIdentifier(username);
     return (
       Boolean(username) &&
       (mentorshipMatchesQuery.data ?? []).some(
-        (match) => match.is_active && match.mentor.username === username,
+        (match) =>
+          match.is_active &&
+          normalizeUsernameIdentifier(match.mentor.username) ===
+            normalizedViewedUsername,
       )
     );
   }, [mentorshipMatchesQuery.data, username]);
@@ -704,6 +777,7 @@ export default function MentorProfileScreen() {
       ? Number(ratingQuery.data.average_rating)
       : undefined,
     liveReviewCount: ratingQuery.data?.review_count,
+    openSlotsCount,
     menteesHelpedCount,
     requestFeedback,
     requestFeedbackVariant,

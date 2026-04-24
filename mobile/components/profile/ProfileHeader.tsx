@@ -9,8 +9,9 @@ interface ProfileHeaderProps {
   bio: string;
   rating?: number;
   reviewCount?: number;
-  totalSessions?: number;
+  openSlots?: number;
   menteesHelped?: number;
+  showStats?: boolean;
   showMenteesHelped?: boolean;
   imageUrl?: string;
   coverUrl?: string;
@@ -22,8 +23,9 @@ export function ProfileHeader({
   bio,
   rating,
   reviewCount = 0,
-  totalSessions = 0,
+  openSlots = 0,
   menteesHelped = 0,
+  showStats = true,
   showMenteesHelped = true,
   imageUrl,
   coverUrl,
@@ -118,39 +120,40 @@ export function ProfileHeader({
         )}
       </View>
 
-      {/* Impact Stats Row */}
-      <View className="px-4 mt-6">
-        <View className="flex-row items-center justify-between bg-surface dark:bg-surface-dark p-4 rounded-2xl border border-divider dark:border-divider-dark">
-          <View className="items-center flex-1 border-r border-divider dark:border-divider-dark">
-            <Text className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mb-0.5">
-              {totalSessions}
-            </Text>
-            <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
-              Sessions
-            </Text>
-          </View>
-
-          {showMenteesHelped ? (
-            <View testID="mentees-section" className="items-center flex-1 border-r border-divider dark:border-divider-dark">
-              <Text testID="mentees-count" className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-0.5">
-                {menteesHelped}
+      {showStats ? (
+        <View className="px-4 mt-6">
+          <View className="flex-row items-center justify-between bg-surface dark:bg-surface-dark p-4 rounded-2xl border border-divider dark:border-divider-dark">
+            <View className="items-center flex-1 border-r border-divider dark:border-divider-dark">
+              <Text className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mb-0.5">
+                {openSlots}
               </Text>
               <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
-                Mentees
+                Open Slots
               </Text>
             </View>
-          ) : null}
 
-          <View className="items-center flex-1">
-            <Text className="text-xl font-extrabold text-on-surface dark:text-on-surface-dark mb-0.5">
-              {reviewCount}
-            </Text>
-            <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
-              Reviews
-            </Text>
+            {showMenteesHelped ? (
+              <View testID="mentees-section" className="items-center flex-1 border-r border-divider dark:border-divider-dark">
+                <Text testID="mentees-count" className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-0.5">
+                  {menteesHelped}
+                </Text>
+                <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
+                  Mentees
+                </Text>
+              </View>
+            ) : null}
+
+            <View className="items-center flex-1">
+              <Text className="text-xl font-extrabold text-on-surface dark:text-on-surface-dark mb-0.5">
+                {reviewCount}
+              </Text>
+              <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
+                Reviews
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
+      ) : null}
     </View>
   );
 }
