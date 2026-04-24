@@ -463,8 +463,18 @@ export default function MentorProfileScreen() {
 
     const normalized = sourceSlots
       .map((slot) => {
-        const legacyStart = "start_time" in slot ? slot.start_time : undefined;
-        const legacyEnd = "end_time" in slot ? slot.end_time : undefined;
+        const legacySlot = slot as {
+          start_time?: unknown;
+          end_time?: unknown;
+        };
+        const legacyStart =
+          typeof legacySlot.start_time === "string"
+            ? legacySlot.start_time
+            : undefined;
+        const legacyEnd =
+          typeof legacySlot.end_time === "string"
+            ? legacySlot.end_time
+            : undefined;
         const date = slot.date ?? legacyStart?.split("T")[0];
         const startTime =
           slot.startTime ?? legacyStart?.split("T")[1]?.slice(0, 8);

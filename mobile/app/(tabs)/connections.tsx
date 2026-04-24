@@ -113,6 +113,10 @@ function pushUserProfile(
   router.push(`/user/${encodeURIComponent(username)}` as Href);
 }
 
+function getQueryErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 // ---------------------------------------------------------------------------
 // Mentor View
 // ---------------------------------------------------------------------------
@@ -318,7 +322,12 @@ function MentorConnections({
 
         {requestsLoading && <ActivityIndicator className="mt-4" />}
         {requestsError && (
-          <ErrorBanner message="Failed to load requests." />
+          <ErrorBanner
+            message={getQueryErrorMessage(
+              requestsQuery.error,
+              "Failed to load requests.",
+            )}
+          />
         )}
         {pendingRequests.length > 0 && (
           <ScrollView
@@ -374,7 +383,12 @@ function MentorConnections({
 
         {matchesLoading && <ActivityIndicator className="mt-4" />}
         {matchesError && (
-          <ErrorBanner message="Failed to load mentees." />
+          <ErrorBanner
+            message={getQueryErrorMessage(
+              matchesQuery.error,
+              "Failed to load mentees.",
+            )}
+          />
         )}
         {displayedMentees.map((mentee) => (
           <MenteeCard
@@ -583,7 +597,12 @@ function MenteeConnections({
 
         {requestsLoading && <ActivityIndicator className="mt-4" />}
         {requestsError && (
-          <ErrorBanner message="Failed to load requests." />
+          <ErrorBanner
+            message={getQueryErrorMessage(
+              requestsQuery.error,
+              "Failed to load requests.",
+            )}
+          />
         )}
         {pendingRequests.length > 0 && (
           <ScrollView
@@ -643,7 +662,12 @@ function MenteeConnections({
 
         {matchesLoading && <ActivityIndicator className="mt-4" />}
         {matchesError && (
-          <ErrorBanner message="Failed to load mentors." />
+          <ErrorBanner
+            message={getQueryErrorMessage(
+              matchesQuery.error,
+              "Failed to load mentors.",
+            )}
+          />
         )}
         {displayedMentors.map((mentor) => (
           <MenteeCard

@@ -152,6 +152,37 @@ export async function apiPut<TResponse, TPayload = unknown>(
   return (await response.json()) as TResponse;
 }
 
+/**
+ * Perform a typed DELETE request against the backend API.
+ * Uses the access token from auth store.
+ *
+ * @param path Relative API path (e.g. /api/profiles/me/availability-slots/<id>/)
+ */
+export async function apiDelete<TResponse = void>(
+  path: string,
+): Promise<TResponse> {
+  const accessToken = useAuthStore.getState().accessToken;
+
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  if (response.status === 204) {
+    return undefined as TResponse;
+  }
+
+  return (await response.json()) as TResponse;
+}
+
 async function readErrorMessage(response: Response): Promise<string> {
   try {
     const payload = (await response.json()) as {
