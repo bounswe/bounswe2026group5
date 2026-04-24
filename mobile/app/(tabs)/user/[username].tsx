@@ -235,6 +235,8 @@ function renderBodyContent({
 
   const userSkills = profile.skills ?? [];
   const roleVariant = profile?.app_usage_mode === "MENTEE" ? "mentee" : "mentor";
+  const skillsTitle =
+    roleVariant === "mentor" ? "Expertise" : "Eager to Learn";
 
   return (
     <ScrollView
@@ -256,11 +258,11 @@ function renderBodyContent({
       <View className="px-4 mt-4">
         {userSkills.length > 0 && (
           <SkillsCloud
-            title="Skills"
+            title={skillsTitle}
             skills={userSkills}
             variant={roleVariant}
             onViewAll={() =>
-              onOpenSkillsModal("Skills", userSkills, roleVariant)
+              onOpenSkillsModal(skillsTitle, userSkills, roleVariant)
             }
           />
         )}

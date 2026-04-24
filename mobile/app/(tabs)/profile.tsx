@@ -116,6 +116,7 @@ export default function ProfileScreen() {
   const shouldShowSkills = isMentorMode ? showExpertise : showEagerToLearn;
   const shouldShowReviews =
     isMentorMode && isProfileHidden === false && Boolean(currentUsername);
+  const skillsTitle = isMentorMode ? "Expertise" : "Eager to Learn";
   const reviewsQuery = useProfileReviewsQuery(
     currentUsername,
     reviewsPage,
@@ -406,12 +407,12 @@ export default function ProfileScreen() {
           <View className="mb-6">
             {(isMentorMode || isMenteeMode) && shouldShowSkills && (
               <SkillsCloud
-                title="Skills"
+                title={skillsTitle}
                 skills={skillsData}
                 variant={isMentorMode ? "mentor" : "mentee"}
                 onEdit={() =>
                   openEditModal(
-                    "Skills",
+                    skillsTitle,
                     skillsData,
                     isMentorMode ? "mentor" : "mentee",
                     (newSkills) => {
@@ -420,7 +421,7 @@ export default function ProfileScreen() {
                   )
                 }
                 onViewAll={() =>
-                  openSkillsModal("Skills", skillsData, isMentorMode ? "mentor" : "mentee")
+                  openSkillsModal(skillsTitle, skillsData, isMentorMode ? "mentor" : "mentee")
                 }
               />
             )}
