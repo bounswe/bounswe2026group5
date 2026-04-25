@@ -6,6 +6,7 @@ from .views import (
     CancelSessionAPIView,
     CreateRequestAPIView,
     DeactivateMatchAPIView,
+    MatchJourneyAPIView,
     MatchFeedbackListCreateAPIView,
     MyMatchesListAPIView,
     MyMeetingSessionsListAPIView,
@@ -32,6 +33,11 @@ urlpatterns = [
         "matches/<uuid:match_id>/deactivate/",
         DeactivateMatchAPIView.as_view(),
         name="mentorship-match-deactivate",
+    ),
+    path(
+        "matches/<uuid:match_id>/journey/",
+        MatchJourneyAPIView.as_view(),
+        name="mentorship-match-journey",
     ),
     path(
         "matches/<uuid:match_id>/feedback/",
