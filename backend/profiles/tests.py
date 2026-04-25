@@ -3075,3 +3075,212 @@ class CommunityTagsAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["description"], "stays")
 
+
+class CommunityTagNotificationTests(TestCase):
+    """Tests for notification side effects of community tag events (#435)."""
+
+    def setUp(self) -> None:
+        from accounts.models import UserRole
+
+        self.client: Any = APIClient()
+
+        self.creator_user = User.objects.create_user(
+            email="creator@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.creator_profile = Profile.objects.create(
+            user=self.creator_user, display_name="Creator", is_visible=True
+        )
+        self.creator_token = str(RefreshToken.for_user(self.creator_user).access_token)
+
+        self.member_user = User.objects.create_user(
+            email="member@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.member_profile = Profile.objects.create(
+            user=self.member_user, display_name="Member", is_visible=True
+        )
+        self.member_token = str(RefreshToken.for_user(self.member_user).access_token)
+
+        self.admin_user = User.objects.create_user(
+            email="notif-admin@example.com",
+            password="SecurePass123",
+            role=UserRole.ADMIN,
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.admin_profile = Profile.objects.create(
+            user=self.admin_user, display_name="Admin", is_visible=True
+        )
+        self.admin_token = str(RefreshToken.for_user(self.admin_user).access_token)
+
+        from profiles.models import CommunityTag
+        CommunityTag.objects.all().delete()
+        from notifications.models import Notification
+        Notification.objects.all().delete()
+
+    def _auth(self, token: str) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    def _create_tag_via_api(self, name: str, description: str = "") -> str:
+        self._auth(self.creator_token)
+        resp = self.client.post(
+            "/api/profiles/tags/",
+            {"name": name, "description": description},
+            format="json",
+        )
+        return resp.json()["id"]
+
+    # ---- TAG_NEW_MEMBER ----
+
+    def test_new_member_notifies_tag_creator(self) -> None:
+        from notifications.models import Notification, NotificationType
+
+        tag_id = self._create_tag_via_api("Notif Tag")
+        Notification.objects.all().delete()  # clear interest-match noise
+
+        self._auth(self.member_token)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        notifs = Notification.objects.filter(
+            user=self.creator_user, type=NotificationType.TAG_NEW_MEMBER
+        )
+        self.assertEqual(notifs.count(), 1)
+        self.assertEqual(notifs.first().actor_id, self.member_profile.id)
+
+    def test_creator_self_join_does_not_notify(self) -> None:
+        from notifications.models import Notification, NotificationType
+
+        tag_id = self._create_tag_via_api("Self Join")
+        Notification.objects.all().delete()
+
+        self._auth(self.creator_token)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.creator_user, type=NotificationType.TAG_NEW_MEMBER
+            ).count(),
+            0,
+        )
+
+    # ---- TAG_DESCRIPTION_UPDATED ----
+
+    def test_description_update_notifies_members_excluding_actor(self) -> None:
+        from notifications.models import Notification, NotificationType
+
+        tag_id = self._create_tag_via_api("Desc Tag", "old")
+        # member joins
+        self._auth(self.member_token)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        Notification.objects.all().delete()
+
+        # creator edits the description (creator is the actor)
+        self._auth(self.creator_token)
+        resp = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {"description": "new"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        member_notifs = Notification.objects.filter(
+            user=self.member_user, type=NotificationType.TAG_DESCRIPTION_UPDATED
+        )
+        creator_notifs = Notification.objects.filter(
+            user=self.creator_user, type=NotificationType.TAG_DESCRIPTION_UPDATED
+        )
+        self.assertEqual(member_notifs.count(), 1)
+        self.assertEqual(creator_notifs.count(), 0)
+
+    def test_unchanged_description_patch_does_not_notify(self) -> None:
+        from notifications.models import Notification, NotificationType
+
+        tag_id = self._create_tag_via_api("Same Desc", "stays")
+        self._auth(self.member_token)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        Notification.objects.all().delete()
+
+        self._auth(self.creator_token)
+        self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {"description": "stays"},
+            format="json",
+        )
+
+        self.assertEqual(
+            Notification.objects.filter(type=NotificationType.TAG_DESCRIPTION_UPDATED).count(),
+            0,
+        )
+
+    # ---- TAG_DELETED ----
+
+    def test_tag_deletion_notifies_members_excluding_actor(self) -> None:
+        from profiles.models import CommunityTag, CommunityTagMembership
+        from notifications.models import Notification, NotificationType
+
+        # admin route lets us delete a tag that has members
+        tag_id = self._create_tag_via_api("Doomed Tag")
+        self._auth(self.member_token)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        Notification.objects.all().delete()
+
+        # admin deletes — admin is actor
+        self._auth(self.admin_token)
+        resp = self.client.delete(f"/api/profiles/tags/{tag_id}/")
+        self.assertEqual(resp.status_code, 204)
+
+        member_notifs = Notification.objects.filter(
+            user=self.member_user, type=NotificationType.TAG_DELETED
+        )
+        admin_notifs = Notification.objects.filter(
+            user=self.admin_user, type=NotificationType.TAG_DELETED
+        )
+        self.assertEqual(member_notifs.count(), 1)
+        self.assertEqual(admin_notifs.count(), 0)
+
+    # ---- TAG_MATCHES_INTEREST ----
+
+    def test_tag_creation_notifies_users_with_matching_skills(self) -> None:
+        from notifications.models import Notification, NotificationType
+
+        # member has the matching skill, creator does not
+        self.member_profile.skills = ["Python", "Django"]
+        self.member_profile.save(update_fields=["skills"])
+
+        self._create_tag_via_api("Python Devs")
+
+        notifs = Notification.objects.filter(
+            user=self.member_user, type=NotificationType.TAG_MATCHES_INTEREST
+        )
+        self.assertEqual(notifs.count(), 1)
+
+    def test_tag_creation_skips_creator_for_interest_match(self) -> None:
+        from notifications.models import Notification, NotificationType
+
+        self.creator_profile.skills = ["Python"]
+        self.creator_profile.save(update_fields=["skills"])
+
+        self._create_tag_via_api("Python Devs")
+
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.creator_user, type=NotificationType.TAG_MATCHES_INTEREST
+            ).count(),
+            0,
+        )
+
+    def test_tag_creation_does_not_notify_when_no_skills_match(self) -> None:
+        from notifications.models import Notification, NotificationType
+
+        self.member_profile.skills = ["Carpentry"]
+        self.member_profile.save(update_fields=["skills"])
+
+        self._create_tag_via_api("Astrophysics")
+
+        self.assertEqual(
+            Notification.objects.filter(type=NotificationType.TAG_MATCHES_INTEREST).count(),
+            0,
+        )
+
