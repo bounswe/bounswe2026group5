@@ -5,10 +5,10 @@ from typing import Any
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, F
+from django.db.models import Avg, Count, F
 from django.utils import timezone
-from core.utils.timezone import to_local_time
 
+from core.utils.timezone import to_local_time
 from notifications.models import Notification, NotificationType
 from profiles.models import AvailabilitySlot, Profile
 from profiles.services import (
@@ -184,12 +184,23 @@ def _resolve_session_window(*, mentorship_request: MentorshipRequest) -> tuple[A
     return mentorship_request.initial_session_start_at, mentorship_request.initial_session_end_at
 
 
+def _refresh_mentor_total_mentee_count(*, mentor: Profile) -> None:
+    """Refresh denormalized active mentee count for a mentor profile."""
+    active_mentee_count = (
+        Match.objects.filter(mentor=mentor, is_active=True).aggregate(
+            count=Count("mentee", distinct=True)
+        )["count"]
+        or 0
+    )
+    Profile.objects.filter(pk=mentor.pk).update(total_mentee_count=active_mentee_count)
+
+
 def ensure_match_and_initial_session(*, mentorship_request: MentorshipRequest) -> Match:
     """Ensure accepted requests have a canonical match and initial meeting session."""
     if mentorship_request.status != MentorshipRequest.Status.ACCEPTED:
         raise ValueError("Match/session materialization requires an accepted request.")
 
-    match, _ = Match.objects.get_or_create(
+    match, created = Match.objects.get_or_create(
         request=mentorship_request,
         defaults={
             "mentor": mentorship_request.mentor,
@@ -197,6 +208,9 @@ def ensure_match_and_initial_session(*, mentorship_request: MentorshipRequest) -
             "is_active": True,
         },
     )
+
+    if created:
+        _refresh_mentor_total_mentee_count(mentor=mentorship_request.mentor)
 
     if MeetingSession.objects.filter(match=match).exists():
         return match
@@ -455,6 +469,7 @@ def deactivate_match(*, match: Match, actor_profile: Profile) -> Match:
 
     Match.objects.filter(pk=match.pk).update(is_active=False)
     match.is_active = False
+    _refresh_mentor_total_mentee_count(mentor=match.mentor)
 
     for recipient in (match.mentor, match.mentee):
         _create_notification(
