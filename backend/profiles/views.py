@@ -28,6 +28,7 @@ from .serializers import (
     CommunityTagListResponseSerializer,
     CommunityTagListSerializer,
     CommunityTagMembershipSerializer,
+    CommunityTagUpdateSerializer,
     MenteeProfileResponseSerializer,
     MentorProfileResponseSerializer,
     ProfileResponseSerializer,
@@ -1034,7 +1035,7 @@ class CommunityTagDetailAPIView(APIView):
     """Retrieve or delete a community tag."""
 
     def get_permissions(self):
-        if self.request.method == "DELETE":
+        if self.request.method in ("DELETE", "PATCH"):
             return [IsUser()]
         return [AllowAny()]
 
@@ -1051,6 +1052,46 @@ class CommunityTagDetailAPIView(APIView):
         tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(
+            CommunityTagDetailSerializer(tag, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        operation_id="community_tags_update",
+        request=CommunityTagUpdateSerializer,
+        responses={
+            200: CommunityTagDetailSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Tag not found."),
+        },
+        description=(
+            "Update a community tag's description. Only the tag's creator and "
+            "admins can edit. The tag name and slug are immutable; any attempt "
+            "to change them is silently ignored to keep tag URLs stable."
+        ),
+        tags=["Community Tags"],
+    )
+    def patch(self, request: Request, tag_id: str) -> Response:
+        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        is_admin = request.user.role == UserRole.ADMIN
+        if not is_admin:
+            try:
+                profile = Profile.objects.get(user=request.user)
+            except Profile.DoesNotExist:
+                return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
+            if tag.created_by_id != profile.id:
+                return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = CommunityTagUpdateSerializer(tag, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
 
         return Response(
             CommunityTagDetailSerializer(tag, context={"request": request}).data,
