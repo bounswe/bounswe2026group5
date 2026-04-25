@@ -9,6 +9,7 @@ from .views import (
     CommunityTagJoinAPIView,
     CommunityTagLeaveAPIView,
     CommunityTagListCreateAPIView,
+    PopularTagsListAPIView,
     MentorPublicAverageRatingAPIView,
     MyAvailabilitySlotDetailAPIView,
     MyAvailabilitySlotListCreateAPIView,
@@ -66,6 +67,7 @@ urlpatterns = [
     ),
     # Community Tags
     path("tags/", CommunityTagListCreateAPIView.as_view(), name="community-tag-list-create"),
+    path("tags/popular/", PopularTagsListAPIView.as_view(), name="community-tag-popular"),
     path(
         "tags/<uuid:tag_id>/",
         CommunityTagDetailAPIView.as_view(),
