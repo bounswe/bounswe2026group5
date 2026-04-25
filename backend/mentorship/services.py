@@ -8,8 +8,8 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, F
 from django.utils import timezone
-from core.utils.timezone import to_local_time
 
+from core.utils.timezone import to_local_time
 from notifications.models import Notification, NotificationType
 from profiles.models import AvailabilitySlot, Profile
 from profiles.services import (

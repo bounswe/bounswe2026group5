@@ -44,8 +44,8 @@ from .services import (
     create_match_feedback,
     create_mentorship_request,
     deactivate_match,
-    list_match_journey_events,
     delete_match_feedback,
+    list_match_journey_events,
     reschedule_match_session,
     respond_to_mentorship_request,
 )
@@ -553,16 +553,28 @@ class MatchJourneyAPIView(APIView):
             404: OpenApiResponse(description="Match not found."),
         },
         description=(
-            "Return the journey timeline for a single match, merged server-side from "
-            "MentorshipRequest acceptance, MeetingSession lifecycle rows, and match "
-            "deactivation notification signals. Results are globally sorted newest-first. "
-            "Pagination uses offset/limit after merge ordering, so clients should call with "
-            "offset=N and limit=M to read additional pages without re-merging multiple endpoints. "
-            "Event types: request_accepted, session_scheduled, session_rescheduled, "
-            "session_canceled, session_completed, mentorship_ended. Payload notes: "
-            "request_accepted includes request_id and optional initial session snapshot; "
-            "session_* includes session_id and scheduled window, with cancel_reason on "
-            "session_canceled; mentorship_ended includes match_id and notification_id."
+            "Return the journey timeline for a single match. The feed is assembled "
+            "server-side by merging three source tables — MentorshipRequest, "
+            "MeetingSession, and Notification — so clients receive a single "
+            "chronological list instead of stitching several endpoints together.\n\n"
+            "**Ordering:** All events are sorted newest-first (descending by timestamp) "
+            "across all source types before pagination is applied.\n\n"
+            "**Pagination:** Use `offset` (zero-based start index, default 0) and `limit` "
+            "(page size, default 50, max 200). Slicing is applied after the global "
+            "merge-sort, so page boundaries are stable across calls.\n\n"
+            "**Event types and payloads:**\n"
+            "- `request_accepted` — emitted when the mentor accepts the request; "
+            "payload: `request_id`, `initial_session_start_at`, `initial_session_end_at`.\n"
+            "- `session_scheduled` — emitted when a MeetingSession is created in SCHEDULED; "
+            "payload: `session_id`, `scheduled_start_at_utc`, `scheduled_end_at_utc`.\n"
+            "- `session_rescheduled` — emitted when a session is moved to a new slot; "
+            "payload: `session_id`, `scheduled_start_at_utc`, `scheduled_end_at_utc`.\n"
+            "- `session_canceled` — emitted when a session is canceled; "
+            "payload adds `cancel_reason` to the standard session fields.\n"
+            "- `session_completed` — emitted when a session transitions to COMPLETED; "
+            "payload: `session_id`, `scheduled_start_at_utc`, `scheduled_end_at_utc`.\n"
+            "- `mentorship_ended` — emitted when the match is deactivated; "
+            "payload: `match_id`, `notification_id`."
         ),
         tags=["Mentorship"],
     )
