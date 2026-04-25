@@ -201,6 +201,12 @@ PASSWORD_RESET_TOKEN_LIFETIME_MINUTES = int(
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
 PASSWORD_RESET_URL_PATH = os.getenv("PASSWORD_RESET_URL_PATH", "/reset-password")
 
+# Email verification
+EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS = int(
+    os.getenv("EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS", "24")
+)
+EMAIL_VERIFICATION_URL_PATH = os.getenv("EMAIL_VERIFICATION_URL_PATH", "/verify-email")
+
 # Email
 EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND",

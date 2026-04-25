@@ -84,6 +84,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_banned = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    is_email_verified = models.BooleanField(default=False)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -173,5 +175,59 @@ class PasswordResetToken(models.Model):
             user=user,
             token_hash=cls.hash_token(raw_token),
             expires_at=timezone.now() + timedelta(minutes=lifetime_minutes),
+        )
+        return raw_token, instance
+
+
+class EmailVerificationToken(models.Model):
+    """Stores hashed email-verification tokens. Raw token is only delivered via email."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="email_verification_tokens",
+    )
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "email_verification_tokens"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "used_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"EmailVerificationToken(user={self.user_id}, used={self.used_at is not None})"
+
+    @staticmethod
+    def hash_token(raw_token: str) -> str:
+        return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+    def is_valid(self) -> bool:
+        return self.used_at is None and self.expires_at > timezone.now()
+
+    def mark_used(self) -> None:
+        self.used_at = timezone.now()
+        self.save(update_fields=["used_at"])
+
+    @classmethod
+    @transaction.atomic
+    def issue_for_user(cls, user: User) -> tuple[str, "EmailVerificationToken"]:
+        """Invalidate outstanding tokens for the user and issue a new one.
+
+        Returns (raw_token, instance). The raw token is never persisted.
+        """
+        cls.objects.filter(user=user, used_at__isnull=True).update(used_at=timezone.now())
+
+        raw_token = secrets.token_urlsafe(48)
+        lifetime_hours = getattr(settings, "EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS", 24)
+        instance = cls.objects.create(
+            user=user,
+            token_hash=cls.hash_token(raw_token),
+            expires_at=timezone.now() + timedelta(hours=lifetime_hours),
         )
         return raw_token, instance
