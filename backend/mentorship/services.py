@@ -200,42 +200,43 @@ def ensure_match_and_initial_session(*, mentorship_request: MentorshipRequest) -
     if mentorship_request.status != MentorshipRequest.Status.ACCEPTED:
         raise ValueError("Match/session materialization requires an accepted request.")
 
-    match, created = Match.objects.get_or_create(
-        request=mentorship_request,
-        defaults={
-            "mentor": mentorship_request.mentor,
-            "mentee": mentorship_request.mentee,
-            "is_active": True,
-        },
-    )
+    with transaction.atomic():
+        match, created = Match.objects.get_or_create(
+            request=mentorship_request,
+            defaults={
+                "mentor": mentorship_request.mentor,
+                "mentee": mentorship_request.mentee,
+                "is_active": True,
+            },
+        )
 
-    if created:
-        _refresh_mentor_total_mentee_count(mentor=mentorship_request.mentor)
+        if created:
+            _refresh_mentor_total_mentee_count(mentor=mentorship_request.mentor)
 
-    if MeetingSession.objects.filter(match=match).exists():
+        if MeetingSession.objects.filter(match=match).exists():
+            return match
+
+        session_start_at, session_end_at = _resolve_session_window(
+            mentorship_request=mentorship_request
+        )
+        if session_start_at is None or session_end_at is None:
+            return match
+
+        session_status = (
+            MeetingSession.Status.COMPLETED
+            if session_end_at <= timezone.now()
+            else MeetingSession.Status.SCHEDULED
+        )
+        MeetingSession.objects.create(
+            match=match,
+            mentor=mentorship_request.mentor,
+            mentee=mentorship_request.mentee,
+            source_slot=mentorship_request.slot,
+            scheduled_start_at_utc=session_start_at,
+            scheduled_end_at_utc=session_end_at,
+            status=session_status,
+        )
         return match
-
-    session_start_at, session_end_at = _resolve_session_window(
-        mentorship_request=mentorship_request
-    )
-    if session_start_at is None or session_end_at is None:
-        return match
-
-    session_status = (
-        MeetingSession.Status.COMPLETED
-        if session_end_at <= timezone.now()
-        else MeetingSession.Status.SCHEDULED
-    )
-    MeetingSession.objects.create(
-        match=match,
-        mentor=mentorship_request.mentor,
-        mentee=mentorship_request.mentee,
-        source_slot=mentorship_request.slot,
-        scheduled_start_at_utc=session_start_at,
-        scheduled_end_at_utc=session_end_at,
-        status=session_status,
-    )
-    return match
 
 
 def book_match_session(*, mentor_profile: Profile, slot_id: Any, actor: Any) -> AvailabilitySlot:
@@ -467,9 +468,10 @@ def deactivate_match(*, match: Match, actor_profile: Profile) -> Match:
     if not match.is_active:
         return match
 
-    Match.objects.filter(pk=match.pk).update(is_active=False)
-    match.is_active = False
-    _refresh_mentor_total_mentee_count(mentor=match.mentor)
+    with transaction.atomic():
+        Match.objects.filter(pk=match.pk).update(is_active=False)
+        match.is_active = False
+        _refresh_mentor_total_mentee_count(mentor=match.mentor)
 
     for recipient in (match.mentor, match.mentee):
         _create_notification(
