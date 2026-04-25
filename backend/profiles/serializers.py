@@ -10,7 +10,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import AvailabilitySlot, Profile, Skill
+from .models import AvailabilitySlot, CommunityTag, Profile, Skill
 from core.utils.timezone import get_project_timezone, to_local_time
 
 if TYPE_CHECKING:
@@ -466,7 +466,7 @@ class CommunityTagListSerializer(serializers.ModelSerializer):
     """Read serializer for community tag list items."""
 
     class Meta:
-        model = None  # deferred – set below after import
+        model = CommunityTag
         fields = ("id", "name", "slug", "description", "member_count", "created_at")
         read_only_fields = fields
 
@@ -478,7 +478,7 @@ class CommunityTagDetailSerializer(serializers.ModelSerializer):
     is_member = serializers.SerializerMethodField()
 
     class Meta:
-        model = None  # deferred
+        model = CommunityTag
         fields = (
             "id",
             "name",
@@ -515,8 +515,6 @@ class CommunityTagCreateSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, default="", allow_blank=True)
 
     def validate_name(self, value: str) -> str:
-        from .models import CommunityTag
-
         name = value.strip()
         if not name:
             raise serializers.ValidationError("Tag name must not be empty.")
@@ -527,8 +525,6 @@ class CommunityTagCreateSerializer(serializers.Serializer):
         return name
 
     def create(self, validated_data: dict) -> "CommunityTag":
-        from .models import CommunityTag
-
         profile = self.context.get("profile")
         return CommunityTag.objects.create(
             name=validated_data["name"],
@@ -553,14 +549,3 @@ class CommunityTagListResponseSerializer(serializers.Serializer):
     page = serializers.IntegerField()
     pageSize = serializers.IntegerField()
     results = CommunityTagListSerializer(many=True)
-
-
-# Wire up deferred model references
-def _wire_community_tag_serializers():
-    from .models import CommunityTag
-
-    CommunityTagListSerializer.Meta.model = CommunityTag
-    CommunityTagDetailSerializer.Meta.model = CommunityTag
-
-
-_wire_community_tag_serializers()

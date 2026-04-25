@@ -15,11 +15,11 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.models import AppUsageMode
+from accounts.models import AppUsageMode, UserRole
 from accounts.permissions import IsUser
 from mentorship.models import Feedback
 
-from .models import AvailabilitySlot, Profile, Skill
+from .models import AvailabilitySlot, CommunityTag, CommunityTagMembership, Profile, Skill
 from .serializers import (
     AvailabilitySlotSerializer,
     AvailabilitySlotWriteSerializer,
@@ -800,11 +800,9 @@ class PublicMentorProfilesSearchListAPIView(APIView):
             point = Point(lng, lat, srid=4326)
             qs = qs.filter(location__distance_lte=(point, D(km=distance_km)))
 
-        # Community tag filtering
+        # Community tag filtering (matches profiles in ANY of the given tags)
         tag_terms = self._parse_terms(request, keys=["tag", "tags"])
         if tag_terms:
-            from .models import CommunityTagMembership
-
             tagged_profile_ids = CommunityTagMembership.objects.filter(
                 Q(tag__slug__in=tag_terms) | Q(tag__name__in=tag_terms)
             ).values_list("profile_id", flat=True)
@@ -962,8 +960,6 @@ class CommunityTagListCreateAPIView(APIView):
     )
     def get(self, request: Request) -> Response:
         """Return paginated list of community tags with optional search."""
-        from .models import CommunityTag
-
         q = (request.query_params.get("q") or "").strip()
 
         try:
@@ -1052,8 +1048,6 @@ class CommunityTagDetailAPIView(APIView):
         tags=["Community Tags"],
     )
     def get(self, request: Request, tag_id: str) -> Response:
-        from .models import CommunityTag
-
         tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
@@ -1078,9 +1072,6 @@ class CommunityTagDetailAPIView(APIView):
         tags=["Community Tags"],
     )
     def delete(self, request: Request, tag_id: str) -> Response:
-        from accounts.models import UserRole
-        from .models import CommunityTag
-
         tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
@@ -1128,8 +1119,6 @@ class CommunityTagJoinAPIView(APIView):
         tags=["Community Tags"],
     )
     def post(self, request: Request, tag_id: str) -> Response:
-        from .models import CommunityTag, CommunityTagMembership
-
         tag = CommunityTag.objects.filter(id=tag_id).first()
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
@@ -1139,22 +1128,19 @@ class CommunityTagJoinAPIView(APIView):
         except Profile.DoesNotExist:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
-        _, created = CommunityTagMembership.objects.get_or_create(
-            profile=profile,
-            tag=tag,
-        )
-
-        if not created:
-            return Response(
-                {"detail": "You are already a member of this tag."},
-                status=status.HTTP_400_BAD_REQUEST,
+        with transaction.atomic():
+            _, created = CommunityTagMembership.objects.get_or_create(
+                profile=profile,
+                tag=tag,
             )
-
-        # Update denormalized count
-        CommunityTag.objects.filter(id=tag.id).update(
-            member_count=models.F("member_count") + 1
-        )
-        tag.refresh_from_db()
+            if not created:
+                return Response(
+                    {"detail": "You are already a member of this tag."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            CommunityTag.objects.filter(id=tag.id).update(
+                member_count=models.F("member_count") + 1
+            )
 
         return Response(
             CommunityTagMembershipSerializer({
@@ -1184,8 +1170,6 @@ class CommunityTagLeaveAPIView(APIView):
         tags=["Community Tags"],
     )
     def delete(self, request: Request, tag_id: str) -> Response:
-        from .models import CommunityTag, CommunityTagMembership
-
         tag = CommunityTag.objects.filter(id=tag_id).first()
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
@@ -1195,21 +1179,19 @@ class CommunityTagLeaveAPIView(APIView):
         except Profile.DoesNotExist:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
-        deleted_count, _ = CommunityTagMembership.objects.filter(
-            profile=profile,
-            tag=tag,
-        ).delete()
-
-        if deleted_count == 0:
-            return Response(
-                {"detail": "You are not a member of this tag."},
-                status=status.HTTP_400_BAD_REQUEST,
+        with transaction.atomic():
+            deleted_count, _ = CommunityTagMembership.objects.filter(
+                profile=profile,
+                tag=tag,
+            ).delete()
+            if deleted_count == 0:
+                return Response(
+                    {"detail": "You are not a member of this tag."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            CommunityTag.objects.filter(id=tag.id).update(
+                member_count=models.F("member_count") - 1
             )
-
-        # Update denormalized count
-        CommunityTag.objects.filter(id=tag.id).update(
-            member_count=models.F("member_count") - 1
-        )
 
         return Response(
             CommunityTagMembershipSerializer({
@@ -1238,8 +1220,6 @@ class MyTagsListAPIView(ProfileLookupMixin, APIView):
         tags=["Community Tags"],
     )
     def get(self, request: Request) -> Response:
-        from .models import CommunityTag
-
         profile = self._get_request_profile_or_404(request)
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)

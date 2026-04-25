@@ -1,6 +1,5 @@
 """Seed a handful of starter community tags so discover is not empty."""
 
-import uuid
 from django.db import migrations
 from django.utils.text import slugify
 
@@ -20,10 +19,8 @@ def seed_tags(apps, schema_editor):
         CommunityTag.objects.get_or_create(
             name=name,
             defaults={
-                "id": uuid.uuid4(),
                 "slug": slugify(name),
                 "description": description,
-                "member_count": 0,
             },
         )
 
