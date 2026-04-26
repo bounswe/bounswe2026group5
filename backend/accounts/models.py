@@ -1,10 +1,15 @@
+import hashlib
 import re
+import secrets
 import uuid
+from datetime import timedelta
 from typing import Any
 
+from django.conf import settings
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
-from django.db import models
+from django.db import models, transaction
+from django.utils import timezone
 
 
 class UserRole(models.TextChoices):
@@ -116,3 +121,57 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+
+
+class PasswordResetToken(models.Model):
+    """Stores hashed password-reset tokens. Raw token is only delivered via email."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="password_reset_tokens",
+    )
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "password_reset_tokens"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "used_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"PasswordResetToken(user={self.user_id}, used={self.used_at is not None})"
+
+    @staticmethod
+    def hash_token(raw_token: str) -> str:
+        return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+    def is_valid(self) -> bool:
+        return self.used_at is None and self.expires_at > timezone.now()
+
+    def mark_used(self) -> None:
+        self.used_at = timezone.now()
+        self.save(update_fields=["used_at"])
+
+    @classmethod
+    @transaction.atomic
+    def issue_for_user(cls, user: User) -> tuple[str, "PasswordResetToken"]:
+        """Invalidate outstanding tokens for the user and issue a new one.
+
+        Returns (raw_token, instance). The raw token is never persisted.
+        """
+        cls.objects.filter(user=user, used_at__isnull=True).update(used_at=timezone.now())
+
+        raw_token = secrets.token_urlsafe(48)
+        lifetime_minutes = getattr(settings, "PASSWORD_RESET_TOKEN_LIFETIME_MINUTES", 30)
+        instance = cls.objects.create(
+            user=user,
+            token_hash=cls.hash_token(raw_token),
+            expires_at=timezone.now() + timedelta(minutes=lifetime_minutes),
+        )
+        return raw_token, instance

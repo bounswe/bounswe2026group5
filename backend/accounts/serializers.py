@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import Profile
 
-from .models import AppUsageMode, AuthProvider, User, UserRole
+from .models import AppUsageMode, AuthProvider, PasswordResetToken, User, UserRole
 
 
 class UserResponseSerializer(serializers.ModelSerializer):
@@ -145,6 +145,57 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid email or password.")
 
         attrs["user"] = user_obj
+        return attrs
+
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value: str) -> str:
+        return value.lower()
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    token = serializers.CharField(trim_whitespace=False, write_only=True)
+    new_password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        trim_whitespace=False,
+    )
+    confirm_password = serializers.CharField(
+        write_only=True,
+        trim_whitespace=False,
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        new_password = attrs.get("new_password")
+        confirm_password = attrs.get("confirm_password")
+
+        if new_password != confirm_password:
+            raise serializers.ValidationError(
+                {"confirm_password": "Password and confirm password must match."}
+            )
+
+        raw_token = attrs.get("token", "")
+        token_hash = PasswordResetToken.hash_token(raw_token)
+        try:
+            reset_token = PasswordResetToken.objects.select_related("user").get(
+                token_hash=token_hash
+            )
+        except PasswordResetToken.DoesNotExist:
+            raise serializers.ValidationError({"token": "Invalid or expired token."})
+
+        if not reset_token.is_valid():
+            raise serializers.ValidationError({"token": "Invalid or expired token."})
+
+        user = reset_token.user
+        if not user.is_active or user.is_banned:
+            raise serializers.ValidationError({"token": "Invalid or expired token."})
+
+        password_validation.validate_password(new_password, user=user)
+
+        attrs["reset_token"] = reset_token
+        attrs["user"] = user
         return attrs
 
 
