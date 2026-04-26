@@ -184,3 +184,76 @@ class AvailabilitySlot(models.Model):
         self.booked_by = None
         self.booked_at = None
         self.save(update_fields=["status", "is_booked", "booked_by", "booked_at", "updated_at"])
+
+
+class CommunityTag(models.Model):
+    """A public community tag that users can join for shared-interest grouping."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=120, unique=True)
+    slug = models.SlugField(max_length=130, unique=True)
+    description = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        "profiles.Profile",
+        on_delete=models.SET_NULL,
+        related_name="created_tags",
+        null=True,
+        blank=True,
+    )
+    members = models.ManyToManyField(
+        "profiles.Profile",
+        through="CommunityTagMembership",
+        related_name="community_tags",
+        blank=True,
+    )
+    member_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "community_tags"
+        ordering = ["name"]
+        indexes = [
+            models.Index(fields=["slug"]),
+            models.Index(fields=["-member_count", "name"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        """Auto-generate slug from name and enforce case-insensitive uniqueness."""
+        from django.utils.text import slugify
+
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+
+class CommunityTagMembership(models.Model):
+    """Through table recording a profile's membership in a community tag."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile = models.ForeignKey(
+        "profiles.Profile",
+        on_delete=models.CASCADE,
+        related_name="tag_memberships",
+    )
+    tag = models.ForeignKey(
+        CommunityTag,
+        on_delete=models.CASCADE,
+        related_name="memberships",
+    )
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "community_tag_memberships"
+        ordering = ["-joined_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["profile", "tag"],
+                name="uniq_membership_per_profile_tag",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.profile.display_name} @ {self.tag.name}"
