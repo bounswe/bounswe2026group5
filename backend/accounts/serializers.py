@@ -24,6 +24,7 @@ class UserResponseSerializer(serializers.ModelSerializer):
             "auth_provider",
             "app_usage_mode",
             "is_active",
+            "is_email_verified",
             "created_at",
         )
         read_only_fields = fields
@@ -197,6 +198,10 @@ class ResetPasswordSerializer(serializers.Serializer):
         attrs["reset_token"] = reset_token
         attrs["user"] = user
         return attrs
+
+
+class VerifyEmailSerializer(serializers.Serializer):
+    token = serializers.CharField(trim_whitespace=False)
 
 
 class BannedAwareTokenRefreshSerializer(TokenRefreshSerializer):
