@@ -2959,3 +2959,154 @@ class CommunityTagsAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["is_member"])
 
+    # ---- Members List Tests (#432) ----
+
+    def test_members_list_public_access(self) -> None:
+        """Anyone can list a tag's members without authentication."""
+        create_resp = self._create_tag("Members Public")
+        tag_id = create_resp.json()["id"]
+
+        # creator joins
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        # another user joins
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 2)
+        self.assertEqual(len(data["results"]), 2)
+
+    def test_members_list_orders_by_recent_join(self) -> None:
+        """Members are listed with most recently joined first."""
+        create_resp = self._create_tag("Order Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        ids = [r["id"] for r in response.json()["results"]]
+        self.assertEqual(ids[0], str(self.profile2.id))
+        self.assertEqual(ids[1], str(self.profile.id))
+
+    def test_members_list_pagination(self) -> None:
+        """Pagination respects pageSize and reports total count."""
+        from accounts.models import AppUsageMode
+
+        create_resp = self._create_tag("Pagination Tag")
+        tag_id = create_resp.json()["id"]
+
+        # add three members
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        user3 = User.objects.create_user(
+            email="tag-user3@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        Profile.objects.create(user=user3, display_name="Tag User 3", is_visible=True)
+        token3 = str(RefreshToken.for_user(user3).access_token)
+        self._auth(token3)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(
+            f"/api/profiles/tags/{tag_id}/members/",
+            {"page": 1, "pageSize": 2},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 3)
+        self.assertEqual(len(data["results"]), 2)
+        self.assertEqual(data["page"], 1)
+        self.assertEqual(data["pageSize"], 2)
+
+    def test_members_list_excludes_hidden_profiles(self) -> None:
+        """Profiles with is_visible=False are not included in the response."""
+        create_resp = self._create_tag("Hidden Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        # hide profile2
+        self.profile2.is_visible = False
+        self.profile2.save(update_fields=["is_visible"])
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        ids = [r["id"] for r in data["results"]]
+        self.assertIn(str(self.profile.id), ids)
+        self.assertNotIn(str(self.profile2.id), ids)
+
+    def test_members_list_honors_show_initials_only(self) -> None:
+        """When a member has show_initials_only, the response shows initials."""
+        create_resp = self._create_tag("Initials Tag")
+        tag_id = create_resp.json()["id"]
+
+        self.profile.show_initials_only = True
+        self.profile.save(update_fields=["show_initials_only"])
+
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(r for r in response.json()["results"] if r["id"] == str(self.profile.id))
+        # display_name "Tag User" → initials "TU"
+        self.assertNotEqual(result["full_name"], "Tag User")
+
+    def test_members_list_empty_tag(self) -> None:
+        """An empty tag returns an empty results array with count zero."""
+        create_resp = self._create_tag("Empty Tag")
+        tag_id = create_resp.json()["id"]
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 0)
+        self.assertEqual(data["results"], [])
+
+    def test_members_list_nonexistent_tag_returns_404(self) -> None:
+        """Requesting members of a nonexistent tag returns 404."""
+        fake_id = uuid.uuid4()
+        response = self.client.get(f"/api/profiles/tags/{fake_id}/members/")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_members_list_invalid_pagination_returns_400(self) -> None:
+        """Non-integer page/pageSize returns 400."""
+        create_resp = self._create_tag("Bad Pagination")
+        tag_id = create_resp.json()["id"]
+
+        response = self.client.get(
+            f"/api/profiles/tags/{tag_id}/members/",
+            {"page": "abc"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
