@@ -17,6 +17,7 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
 
 import { useAuthStore } from "@/lib/auth/store";
+import { useResendEmailVerificationMutation } from "@/lib/queries/auth";
 import {
   mapMeetingSessionsToDashboard,
   mapRequestsToDashboard,
@@ -54,6 +55,9 @@ export default function DashboardScreen() {
   const router = useRouter();
 
   const currentUsername = useAuthStore((state) => state.user?.username);
+  const isEmailVerified = useAuthStore(
+    (state) => state.user?.is_email_verified,
+  );
 
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const meetingSessionsQuery = useMentorshipMeetingSessionsQuery(
@@ -64,6 +68,7 @@ export default function DashboardScreen() {
   const cancelSessionMutation = useCancelSessionMutation(currentUsername);
   const rescheduleSessionMutation =
     useRescheduleSessionMutation(currentUsername);
+  const resendVerificationMutation = useResendEmailVerificationMutation();
 
   // Debug logging
   const requests = useMemo<DashboardRequestItem[]>(() => {
@@ -144,6 +149,21 @@ export default function DashboardScreen() {
     router.push(`/user/${encodeURIComponent(targetUsername)}`);
   };
 
+  const handleResendVerification = async () => {
+    try {
+      setActionError(null);
+      setSuccessMessage(null);
+      const response = await resendVerificationMutation.mutateAsync();
+      setSuccessMessage(response.detail);
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Could not send verification email.",
+      );
+    }
+  };
+
   const handleCancelSession = async () => {
     if (!selectedSession?.sessionId) {
       return;
@@ -208,6 +228,31 @@ export default function DashboardScreen() {
         {queryError ? (
           <View className="mb-4">
             <ErrorBanner message={queryError} />
+          </View>
+        ) : null}
+
+        {isEmailVerified === false ? (
+          <View className="mb-4" testID="email-verification-warning">
+            <ErrorBanner
+              variant="warning"
+              title="Verify your email"
+              message="Verify your email to access mentorship requests and all account features."
+            />
+            <TouchableOpacity
+              testID="resend-verification-button"
+              activeOpacity={0.85}
+              disabled={resendVerificationMutation.isPending}
+              onPress={() => {
+                void handleResendVerification();
+              }}
+              className="self-start mt-2 px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-900/60"
+            >
+              <Text className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                {resendVerificationMutation.isPending
+                  ? "Sending..."
+                  : "Resend Verification Email"}
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : null}
 

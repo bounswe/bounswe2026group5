@@ -5,6 +5,8 @@ import React from "react";
 const mockPush = jest.fn();
 const mockRequestsRefetch = jest.fn();
 const mockSessionsRefetch = jest.fn();
+const mockResendMutateAsync = jest.fn();
+let mockIsEmailVerified: boolean | undefined = true;
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({
@@ -45,8 +47,16 @@ jest.mock("@/lib/auth/store", () => ({
       user: {
         username: "student",
         app_usage_mode: "MENTEE",
+        is_email_verified: mockIsEmailVerified,
       },
     }),
+}));
+
+jest.mock("@/lib/queries/auth", () => ({
+  useResendEmailVerificationMutation: () => ({
+    mutateAsync: mockResendMutateAsync,
+    isPending: false,
+  }),
 }));
 
 jest.mock("@/lib/queries/mentorship", () => {
@@ -113,6 +123,10 @@ jest.mock("@/lib/queries/mentorship", () => {
 describe("DashboardScreen session navigation", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsEmailVerified = true;
+    mockResendMutateAsync.mockResolvedValue({
+      detail: "If your email is unverified, a new verification link has been sent.",
+    });
   });
 
   it("opens the hidden schedule tab route from Your Sessions View All", () => {
@@ -121,5 +135,21 @@ describe("DashboardScreen session navigation", () => {
     fireEvent.press(getByText("View All (1)"));
 
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/schedule");
+  });
+
+  it("warns unverified users and resends verification email on request", async () => {
+    mockIsEmailVerified = false;
+    const { findByText, getByTestId } = render(<DashboardScreen />);
+
+    expect(await findByText("Verify your email")).toBeTruthy();
+
+    fireEvent.press(getByTestId("resend-verification-button"));
+
+    expect(mockResendMutateAsync).toHaveBeenCalledTimes(1);
+    expect(
+      await findByText(
+        "If your email is unverified, a new verification link has been sent.",
+      ),
+    ).toBeTruthy();
   });
 });

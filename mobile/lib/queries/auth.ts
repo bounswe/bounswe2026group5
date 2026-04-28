@@ -10,6 +10,7 @@ import {
   RegisterCredentials,
 } from "../auth/types";
 import { useAuthStore } from "../auth/store";
+import { apiPost } from "@/lib/api/client";
 import { API_BASE_URL } from "@/lib/api/config";
 import { fetchWithTimeout } from "@/lib/api/fetchWithTimeout";
 
@@ -174,5 +175,15 @@ export function useLogoutMutation() {
     onError: (error: Error) => {
       console.error("Logout failed:", error);
     },
+  });
+}
+
+export function resendEmailVerification(): Promise<{ detail: string }> {
+  return apiPost<{ detail: string }>("/api/auth/resend-verification/");
+}
+
+export function useResendEmailVerificationMutation() {
+  return useMutation({
+    mutationFn: resendEmailVerification,
   });
 }
