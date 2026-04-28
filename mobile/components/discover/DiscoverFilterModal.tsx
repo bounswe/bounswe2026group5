@@ -13,12 +13,16 @@ import {
 
 import { DiscoverSearchBar } from "@/components/discover/DiscoverSearchBar";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
+import { type CommunityTag } from "@/lib/queries/communityTags";
 
 interface DiscoverFilterModalProps {
   visible: boolean;
   allSkills: string[];
+  communityTags: CommunityTag[];
   selectedSkills: Set<string>;
+  selectedCommunityTags: Set<string>;
   onToggleSkill: (skill: string) => void;
+  onToggleCommunityTag: (tagSlug: string) => void;
   onClear: () => void;
   onClose: () => void;
 }
@@ -26,8 +30,11 @@ interface DiscoverFilterModalProps {
 export function DiscoverFilterModal({
   visible,
   allSkills,
+  communityTags,
   selectedSkills,
+  selectedCommunityTags,
   onToggleSkill,
+  onToggleCommunityTag,
   onClear,
   onClose,
 }: Readonly<DiscoverFilterModalProps>) {
@@ -72,7 +79,7 @@ export function DiscoverFilterModal({
           >
             <View className="flex-row items-center justify-between mb-4">
               <Text className="text-xl font-bold text-on-surface dark:text-on-surface-dark">
-                Filter Skills
+                Filter Mentors
               </Text>
               <TouchableOpacity
                 onPress={onClose}
@@ -102,6 +109,46 @@ export function DiscoverFilterModal({
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
+              {communityTags.length > 0 ? (
+                <View className="mb-5">
+                  <Text className="mb-2 text-xs font-bold uppercase tracking-wider text-on-surface-muted dark:text-on-surface-muted-dark">
+                    Communities
+                  </Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {communityTags.map((tag) => {
+                      const selected = selectedCommunityTags.has(tag.slug);
+
+                      return (
+                        <TouchableOpacity
+                          testID={`community-filter-${tag.slug}`}
+                          activeOpacity={1}
+                          key={tag.id}
+                          onPress={() => onToggleCommunityTag(tag.slug)}
+                          className={`px-3 py-2 rounded-full border ${
+                            selected
+                              ? "bg-primary border-primary"
+                              : "bg-surface-card dark:bg-surface-card-dark border-divider dark:border-divider-dark"
+                          }`}
+                        >
+                          <Text
+                            className={`text-sm font-semibold ${
+                              selected
+                                ? "text-white"
+                                : "text-on-surface dark:text-on-surface-dark"
+                            }`}
+                          >
+                            {tag.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
+
+              <Text className="mb-2 text-xs font-bold uppercase tracking-wider text-on-surface-muted dark:text-on-surface-muted-dark">
+                Skills
+              </Text>
               <View className="flex-row flex-wrap gap-2">
                 {filteredSkills.map((skill) => {
                   const selected = selectedSkills.has(skill);

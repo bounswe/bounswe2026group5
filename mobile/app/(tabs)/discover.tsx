@@ -212,9 +212,15 @@ export default function DiscoverScreen() {
 
   const [profiles, setProfiles] = useState<DiscoverMentorProfile[]>([]);
   const [communityTags, setCommunityTags] = useState<CommunityTag[]>([]);
+  const [communityFilterTags, setCommunityFilterTags] = useState<CommunityTag[]>(
+    [],
+  );
   const [communityTotalCount, setCommunityTotalCount] = useState(0);
   const [skills, setSkills] = useState<string[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
+  const [selectedCommunityTags, setSelectedCommunityTags] = useState<Set<string>>(
+    new Set(),
+  );
 
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [loadingSkills, setLoadingSkills] = useState(false);
@@ -235,6 +241,7 @@ export default function DiscoverScreen() {
 
   const resetDiscoverFilters = useCallback(() => {
     setSelectedSkills(new Set());
+    setSelectedCommunityTags(new Set());
     setPage(1);
     setProfiles([]);
     setCommunityTags([]);
@@ -298,8 +305,14 @@ export default function DiscoverScreen() {
     () => Array.from(selectedSkills),
     [selectedSkills],
   );
+  const selectedCommunityTagList = useMemo(
+    () => Array.from(selectedCommunityTags),
+    [selectedCommunityTags],
+  );
   const hasMentorSearchFilters =
-    debouncedQuery.length > 0 || selectedSkillList.length > 0;
+    debouncedQuery.length > 0 ||
+    selectedSkillList.length > 0 ||
+    selectedCommunityTagList.length > 0;
   const hasCommunitySearchFilters = debouncedQuery.length > 0;
 
   useEffect(() => {
@@ -318,6 +331,7 @@ export default function DiscoverScreen() {
         pageSize: PAGE_SIZE,
         query: debouncedQuery,
         skills: selectedSkillList,
+        tags: selectedCommunityTagList,
       }).then((payload) => ({
         count: payload.count,
         results: payload.results,
@@ -376,6 +390,7 @@ export default function DiscoverScreen() {
     page,
     debouncedQuery,
     selectedSkillList,
+    selectedCommunityTagList,
     hasMentorSearchFilters,
     feedMode,
     activeTab,
@@ -479,7 +494,8 @@ export default function DiscoverScreen() {
     !errorText &&
     page === 1 &&
     debouncedQuery.length === 0 &&
-    selectedSkillList.length === 0;
+    selectedSkillList.length === 0 &&
+    selectedCommunityTagList.length === 0;
 
   const visibleProfiles = showDemoContent ? DEMO_DISCOVER_PROFILES : profiles;
   const visibleSkills = skills.length > 0 ? skills : DEMO_DISCOVER_SKILLS;
@@ -503,9 +519,33 @@ export default function DiscoverScreen() {
     });
   };
 
+  const toggleCommunityTag = (tagSlug: string) => {
+    setPage(1);
+    setSelectedCommunityTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(tagSlug)) {
+        next.delete(tagSlug);
+      } else {
+        next.add(tagSlug);
+      }
+      return next;
+    });
+  };
+
   const clearSkills = () => {
     setPage(1);
     setSelectedSkills(new Set());
+    setSelectedCommunityTags(new Set());
+  };
+
+  const openFilterModal = () => {
+    setFilterModalOpen(true);
+    if (communityFilterTags.length > 0) {
+      return;
+    }
+    fetchPopularCommunityTags({ limit: 20 })
+      .then((tags) => setCommunityFilterTags(tags))
+      .catch(() => setCommunityFilterTags([]));
   };
 
   const handleOpenMentorProfile = (profile: DiscoverMentorProfile) => {
@@ -687,7 +727,7 @@ export default function DiscoverScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               testID="filter-button"
-              onPress={() => setFilterModalOpen(true)}
+              onPress={openFilterModal}
               disabled={activeTab !== "mentors"}
               className={`relative h-12 w-12 rounded-xl justify-center items-center ${
                 activeTab === "mentors"
@@ -700,10 +740,10 @@ export default function DiscoverScreen() {
                 size={17}
                 color={activeTab === "mentors" ? "#ffffff" : theme.textMuted}
               />
-              {selectedSkills.size > 0 && (
+              {selectedSkills.size + selectedCommunityTags.size > 0 && (
                 <View className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-surface-card dark:bg-surface-card-dark items-center justify-center border border-primary">
                   <Text className="text-[10px] font-bold text-primary dark:text-primary-dim">
-                    {selectedSkills.size}
+                    {selectedSkills.size + selectedCommunityTags.size}
                   </Text>
                 </View>
               )}
@@ -751,8 +791,11 @@ export default function DiscoverScreen() {
       <DiscoverFilterModal
         visible={isFilterModalOpen}
         allSkills={visibleSkills}
+        communityTags={communityFilterTags}
         selectedSkills={selectedSkills}
+        selectedCommunityTags={selectedCommunityTags}
         onToggleSkill={toggleSkill}
+        onToggleCommunityTag={toggleCommunityTag}
         onClear={clearSkills}
         onClose={() => setFilterModalOpen(false)}
       />

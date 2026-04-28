@@ -3,6 +3,7 @@ import React from "react";
 
 import DiscoverScreen from "@/app/(tabs)/discover";
 import {
+  fetchDiscoverProfiles,
   fetchDiscoverPopularProfiles,
   fetchDiscoverRecentlyAddedProfiles,
   fetchDiscoverSkills,
@@ -60,7 +61,40 @@ jest.mock("@/components/discover/MentorCard", () => ({
 }));
 
 jest.mock("@/components/discover/DiscoverFilterModal", () => ({
-  DiscoverFilterModal: () => null,
+  DiscoverFilterModal: ({
+    visible,
+    communityTags,
+    selectedCommunityTags,
+    onToggleCommunityTag,
+    onClear,
+    onClose,
+  }: any) => {
+    const React = require("react");
+    const { Text, TouchableOpacity, View } = jest.requireActual("react-native");
+
+    if (!visible) {
+      return null;
+    }
+
+    return (
+      <View testID="discover-filter-modal">
+        {communityTags.map((tag: any) => (
+          <TouchableOpacity
+            key={tag.id}
+            testID={`community-filter-${tag.slug}`}
+            onPress={() => onToggleCommunityTag(tag.slug)}
+          >
+            <Text>
+              {selectedCommunityTags.has(tag.slug) ? "Selected " : ""}
+              {tag.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity testID="filter-clear-button" onPress={onClear} />
+        <TouchableOpacity testID="filter-apply-button" onPress={onClose} />
+      </View>
+    );
+  },
 }));
 
 describe("DiscoverScreen", () => {
@@ -83,6 +117,26 @@ describe("DiscoverScreen", () => {
       })),
     );
     (fetchDiscoverRecentlyAddedProfiles as jest.Mock).mockResolvedValue([]);
+    (fetchDiscoverProfiles as jest.Mock).mockResolvedValue({
+      count: 1,
+      page: 1,
+      pageSize: 8,
+      results: [
+        {
+          id: "mentor-filtered",
+          username: "filtered-mentor",
+          full_name: "Filtered Mentor",
+          bio: "Supports backend communities.",
+          hidden: false,
+          picture_url: "",
+          title: "Backend Mentor",
+          show_initials_only: false,
+          skills: ["Django"],
+          average_rating: "5.00",
+          total_mentee_count: 4,
+        },
+      ],
+    });
     (fetchCommunityTags as jest.Mock).mockResolvedValue({
       count: 1,
       page: 1,
@@ -149,6 +203,40 @@ describe("DiscoverScreen", () => {
     fireEvent.press(getByTestId("sort-button"));
     fireEvent.press(getByTestId("sort-clear-button"));
     fireEvent.press(getByTestId("sort-apply-button"));
+
+    await waitFor(() => {
+      expect(fetchDiscoverPopularProfiles).toHaveBeenLastCalledWith(8);
+    });
+  });
+
+  it("filters mentors by selected community tags", async () => {
+    const { getByTestId } = render(<DiscoverScreen />);
+
+    await waitFor(() => {
+      expect(fetchDiscoverPopularProfiles).toHaveBeenCalledWith(8);
+    });
+
+    fireEvent.press(getByTestId("filter-button"));
+
+    await waitFor(() => {
+      expect(fetchPopularCommunityTags).toHaveBeenCalledWith({ limit: 20 });
+      expect(getByTestId("community-filter-backend-guild")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("community-filter-backend-guild"));
+
+    await waitFor(() => {
+      expect(fetchDiscoverProfiles).toHaveBeenCalledWith({
+        page: 1,
+        pageSize: 8,
+        query: "",
+        skills: [],
+        tags: ["backend-guild"],
+      });
+      expect(getByTestId("mentor-card-filtered-mentor")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("filter-clear-button"));
 
     await waitFor(() => {
       expect(fetchDiscoverPopularProfiles).toHaveBeenLastCalledWith(8);

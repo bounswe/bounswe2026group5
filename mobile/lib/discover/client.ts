@@ -11,6 +11,7 @@ interface DiscoverProfilesParams {
   pageSize: number;
   query?: string;
   skills?: string[];
+  tags?: string[];
 }
 
 interface DiscoverResultsResponse {
@@ -58,6 +59,12 @@ export async function fetchDiscoverProfiles(
   (params.skills || []).forEach((skill) => {
     if (skill.trim()) {
       url.searchParams.append("skill", skill.trim());
+    }
+  });
+
+  (params.tags || []).forEach((tag) => {
+    if (tag.trim()) {
+      url.searchParams.append("tag", tag.trim());
     }
   });
 

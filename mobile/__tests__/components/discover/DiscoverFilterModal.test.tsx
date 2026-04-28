@@ -5,6 +5,17 @@ import { DiscoverFilterModal } from "@/components/discover/DiscoverFilterModal";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
+const communityTags = [
+  {
+    id: "tag-1",
+    name: "Backend Guild",
+    slug: "backend-guild",
+    description: "",
+    member_count: 4,
+    created_at: "2026-04-20T00:00:00Z",
+  },
+];
+
 describe("DiscoverFilterModal", () => {
   it("filters skills by search text and calls onToggleSkill", () => {
     const onToggleSkill = jest.fn();
@@ -15,8 +26,11 @@ describe("DiscoverFilterModal", () => {
       <DiscoverFilterModal
         visible
         allSkills={["Docker", "GraphQL", "React Native"]}
+        communityTags={communityTags}
         selectedSkills={new Set(["GraphQL"])}
+        selectedCommunityTags={new Set()}
         onToggleSkill={onToggleSkill}
+        onToggleCommunityTag={jest.fn()}
         onClear={onClear}
         onClose={onClose}
       />,
@@ -36,6 +50,27 @@ describe("DiscoverFilterModal", () => {
     expect(onToggleSkill).toHaveBeenCalledWith("Docker");
   });
 
+  it("calls onToggleCommunityTag when a community chip is pressed", () => {
+    const onToggleCommunityTag = jest.fn();
+
+    const { getByTestId } = render(
+      <DiscoverFilterModal
+        visible
+        allSkills={["Docker"]}
+        communityTags={communityTags}
+        selectedSkills={new Set()}
+        selectedCommunityTags={new Set(["backend-guild"])}
+        onToggleSkill={jest.fn()}
+        onToggleCommunityTag={onToggleCommunityTag}
+        onClear={jest.fn()}
+        onClose={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(getByTestId("community-filter-backend-guild"));
+    expect(onToggleCommunityTag).toHaveBeenCalledWith("backend-guild");
+  });
+
   it("calls onClear when clear button is pressed", () => {
     const onClear = jest.fn();
 
@@ -43,8 +78,11 @@ describe("DiscoverFilterModal", () => {
       <DiscoverFilterModal
         visible
         allSkills={["Docker"]}
+        communityTags={[]}
         selectedSkills={new Set()}
+        selectedCommunityTags={new Set()}
         onToggleSkill={jest.fn()}
+        onToggleCommunityTag={jest.fn()}
         onClear={onClear}
         onClose={jest.fn()}
       />,
@@ -61,8 +99,11 @@ describe("DiscoverFilterModal", () => {
       <DiscoverFilterModal
         visible
         allSkills={["Docker"]}
+        communityTags={[]}
         selectedSkills={new Set()}
+        selectedCommunityTags={new Set()}
         onToggleSkill={jest.fn()}
+        onToggleCommunityTag={jest.fn()}
         onClear={jest.fn()}
         onClose={onClose}
       />,
@@ -77,8 +118,11 @@ describe("DiscoverFilterModal", () => {
       <DiscoverFilterModal
         visible
         allSkills={["Docker", "GraphQL"]}
+        communityTags={[]}
         selectedSkills={new Set()}
+        selectedCommunityTags={new Set()}
         onToggleSkill={jest.fn()}
+        onToggleCommunityTag={jest.fn()}
         onClear={jest.fn()}
         onClose={jest.fn()}
       />,
@@ -93,8 +137,11 @@ describe("DiscoverFilterModal", () => {
       <DiscoverFilterModal
         visible
         allSkills={["Docker", "GraphQL"]}
+        communityTags={[]}
         selectedSkills={new Set()}
+        selectedCommunityTags={new Set()}
         onToggleSkill={jest.fn()}
+        onToggleCommunityTag={jest.fn()}
         onClear={jest.fn()}
         onClose={jest.fn()}
       />,
