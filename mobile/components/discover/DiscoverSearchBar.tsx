@@ -25,7 +25,7 @@ export function DiscoverSearchBar({
 
   return (
     <View
-      className={`h-12 flex-row items-center bg-surface-input dark:bg-surface-input-dark border border-divider dark:border-divider-dark rounded-xl px-3 py-2 ${className ?? ""}`}
+      className={`h-12 flex-row items-center bg-surface-input dark:bg-surface-input-dark border border-divider dark:border-divider-dark rounded-xl px-3 ${className ?? ""}`}
     >
       <Ionicons name="search" size={18} color={theme.textMuted} />
       <TextInput
@@ -34,7 +34,12 @@ export function DiscoverSearchBar({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={theme.textMuted}
-        className="flex-1 ml-2 text-on-surface dark:text-on-surface-dark"
+        className="h-full flex-1 ml-2 text-[14px] text-on-surface dark:text-on-surface-dark"
+        style={{
+          includeFontPadding: false,
+          paddingVertical: 0,
+          textAlignVertical: "center",
+        }}
         autoCorrect={false}
         autoCapitalize="none"
       />
