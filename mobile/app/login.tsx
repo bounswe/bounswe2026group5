@@ -87,9 +87,9 @@ export default function LoginScreen() {
         >
           {/* ── Brand Header ── */}
           <View className="flex-row items-center gap-2 mb-12">
-            <Ionicons name="leaf" size={28} color={theme.primary} />
+            <Ionicons name="people-circle-outline" size={28} color={theme.primary} />
             <Text className="text-2xl font-black tracking-tight text-primary dark:text-primary-dim">
-              Mentorship
+              Neighborship
             </Text>
           </View>
 
