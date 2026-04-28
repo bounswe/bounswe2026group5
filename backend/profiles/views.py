@@ -1,15 +1,16 @@
 """Views for profile self-service API endpoints."""
 
+from datetime import timedelta
+
 from django.conf import settings
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.db import IntegrityError, models, transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import status
-from rest_framework import serializers
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -1230,6 +1231,75 @@ class MyTagsListAPIView(ProfileLookupMixin, APIView):
 
         return Response(
             CommunityTagListSerializer(tags, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+POPULAR_TAGS_WINDOWS = {"all": None, "7d": 7, "30d": 30}
+POPULAR_TAGS_DEFAULT_LIMIT = 10
+POPULAR_TAGS_MAX_LIMIT = 50
+
+
+class PopularTagsListAPIView(APIView):
+    """List the most popular community tags by member count."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id="community_tags_popular",
+        responses={
+            200: CommunityTagListSerializer(many=True),
+            400: OpenApiResponse(description="Invalid limit or window value."),
+        },
+        description=(
+            "List the top community tags by member count. "
+            "Supports `limit` (default 10, capped at 50) and `window` "
+            "(`all`, `7d`, `30d`; defaults to `all`). Ties break on most recent creation."
+        ),
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request) -> Response:
+        try:
+            limit = int(request.query_params.get("limit", POPULAR_TAGS_DEFAULT_LIMIT))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "`limit` must be an integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        limit = max(1, min(limit, POPULAR_TAGS_MAX_LIMIT))
+
+        window = (request.query_params.get("window") or "all").strip().lower()
+        if window not in POPULAR_TAGS_WINDOWS:
+            allowed = ", ".join(sorted(POPULAR_TAGS_WINDOWS.keys()))
+            return Response(
+                {"detail": f"`window` must be one of: {allowed}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        days = POPULAR_TAGS_WINDOWS[window]
+        if days is None:
+            qs = (
+                CommunityTag.objects
+                .filter(member_count__gt=0)
+                .order_by("-member_count", "-created_at")
+            )
+        else:
+            cutoff = timezone.now() - timedelta(days=days)
+            qs = (
+                CommunityTag.objects
+                .annotate(
+                    window_count=Count(
+                        "memberships",
+                        filter=Q(memberships__joined_at__gte=cutoff),
+                    )
+                )
+                .filter(window_count__gt=0)
+                .order_by("-window_count", "-created_at")
+            )
+
+        items = list(qs[:limit])
+        return Response(
+            CommunityTagListSerializer(items, many=True).data,
             status=status.HTTP_200_OK,
         )
 

@@ -2959,6 +2959,143 @@ class CommunityTagsAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["is_member"])
 
+    # ---- Popular Tags Tests (#433) ----
+
+    def _seed_tag_with_members(
+        self,
+        name: str,
+        member_count: int,
+        joined_at=None,
+    ) -> "CommunityTag":  # type: ignore[name-defined]
+        """Create a tag and synthesize its memberships, optionally setting joined_at."""
+        from accounts.models import AppUsageMode
+        from profiles.models import CommunityTag, CommunityTagMembership
+        from django.utils.text import slugify
+
+        tag = CommunityTag.objects.create(name=name, slug=slugify(name))
+        for i in range(member_count):
+            user = User.objects.create_user(
+                email=f"popular-{slugify(name)}-{i}@example.com",
+                password="SecurePass123",
+                app_usage_mode=AppUsageMode.MENTOR,
+            )
+            profile = Profile.objects.create(
+                user=user, display_name=f"PM {name} {i}", is_visible=True
+            )
+            membership = CommunityTagMembership.objects.create(profile=profile, tag=tag)
+            if joined_at is not None:
+                CommunityTagMembership.objects.filter(id=membership.id).update(
+                    joined_at=joined_at
+                )
+        CommunityTag.objects.filter(id=tag.id).update(member_count=member_count)
+        tag.refresh_from_db()
+        return tag
+
+    def test_popular_all_time_orders_by_member_count(self) -> None:
+        """All-time popular returns tags ordered by member_count desc."""
+        self._seed_tag_with_members("Big", 5)
+        self._seed_tag_with_members("Medium", 3)
+        self._seed_tag_with_members("Small", 1)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/")
+
+        self.assertEqual(response.status_code, 200)
+        names = [t["name"] for t in response.json()]
+        self.assertEqual(names, ["Big", "Medium", "Small"])
+
+    def test_popular_excludes_zero_member_tags(self) -> None:
+        """Tags with no members are not included in the popular list."""
+        self._seed_tag_with_members("Has Members", 2)
+        self._create_tag("Empty Tag")  # zero members
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/")
+
+        self.assertEqual(response.status_code, 200)
+        names = [t["name"] for t in response.json()]
+        self.assertIn("Has Members", names)
+        self.assertNotIn("Empty Tag", names)
+
+    def test_popular_tie_breaker_on_creation(self) -> None:
+        """When member counts tie, more recently created tag wins."""
+        from profiles.models import CommunityTag
+
+        old_tag = self._seed_tag_with_members("Older", 2)
+        # force older creation timestamp
+        CommunityTag.objects.filter(id=old_tag.id).update(
+            created_at=timezone.now() - timedelta(days=10)
+        )
+        self._seed_tag_with_members("Newer", 2)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/")
+
+        self.assertEqual(response.status_code, 200)
+        names = [t["name"] for t in response.json()]
+        self.assertEqual(names.index("Newer"), 0)
+        self.assertEqual(names.index("Older"), 1)
+
+    def test_popular_limit_respected(self) -> None:
+        """The `limit` query param caps the number of returned tags."""
+        for i in range(5):
+            self._seed_tag_with_members(f"PT {i}", i + 1)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/", {"limit": 3})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 3)
+
+    def test_popular_limit_capped_at_max(self) -> None:
+        """`limit` values above the cap are clamped to the maximum."""
+        # cap is 50; passing 9999 should still return at most 50.
+        for i in range(3):
+            self._seed_tag_with_members(f"Cap {i}", 1)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/", {"limit": 9999})
+
+        self.assertEqual(response.status_code, 200)
+        # only 3 tags exist, so we get 3 — the test ensures no error from huge limit
+        self.assertLessEqual(len(response.json()), 50)
+
+    def test_popular_invalid_limit_returns_400(self) -> None:
+        """Non-integer limit returns 400."""
+        response = self.client.get("/api/profiles/tags/popular/", {"limit": "abc"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_popular_invalid_window_returns_400(self) -> None:
+        """Unknown window value returns 400."""
+        response = self.client.get("/api/profiles/tags/popular/", {"window": "1y"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_popular_window_filters_by_join_time(self) -> None:
+        """7d window only counts memberships joined in the last 7 days."""
+        old_cutoff = timezone.now() - timedelta(days=30)
+        # this tag's members all joined long ago — should be excluded from 7d
+        self._seed_tag_with_members("Old Joins", 5, joined_at=old_cutoff)
+        # this tag's members joined recently
+        self._seed_tag_with_members("Fresh Joins", 2)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/", {"window": "7d"})
+
+        self.assertEqual(response.status_code, 200)
+        names = [t["name"] for t in response.json()]
+        self.assertIn("Fresh Joins", names)
+        self.assertNotIn("Old Joins", names)
+
+    def test_popular_empty_when_no_tags(self) -> None:
+        """Empty result when no tags have members."""
+        from profiles.models import CommunityTag
+        CommunityTag.objects.all().delete()
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
     # ---- Members List Tests (#432) ----
 
     def test_members_list_public_access(self) -> None:
