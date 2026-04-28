@@ -533,6 +533,22 @@ class CommunityTagCreateSerializer(serializers.Serializer):
         )
 
 
+class CommunityTagUpdateSerializer(serializers.Serializer):
+    """Write serializer for updating an existing community tag.
+
+    Only `description` is writable. Any other fields in the payload
+    (e.g. `name`, `slug`) are silently ignored to keep tag URLs stable.
+    """
+
+    description = serializers.CharField(required=False, allow_blank=True)
+
+    def update(self, instance: "CommunityTag", validated_data: dict) -> "CommunityTag":
+        if "description" in validated_data:
+            instance.description = validated_data["description"]
+            instance.save(update_fields=["description"])
+        return instance
+
+
 class CommunityTagMembershipSerializer(serializers.Serializer):
     """Response serializer for join/leave operations."""
 

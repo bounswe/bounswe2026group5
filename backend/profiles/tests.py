@@ -2959,6 +2959,121 @@ class CommunityTagsAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["is_member"])
 
+    # ---- Tag Update (PATCH) Tests (#434) ----
+
+    def test_update_tag_creator_can_edit_description(self) -> None:
+        """The tag creator can update their own tag's description."""
+        create_resp = self._create_tag("Editable Tag", "old description")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        response = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {"description": "new description"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["description"], "new description")
+
+    def test_update_tag_admin_can_edit_any_tag(self) -> None:
+        """An admin can edit a tag they did not create."""
+        create_resp = self._create_tag("Admin Editable", "before")
+        tag_id = create_resp.json()["id"]
+
+        self._auth(self.admin_access_token)
+        response = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {"description": "after"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["description"], "after")
+
+    def test_update_tag_other_user_returns_403(self) -> None:
+        """A non-creator non-admin user gets 403."""
+        create_resp = self._create_tag("Forbidden Edit", "x")
+        tag_id = create_resp.json()["id"]
+
+        self._auth(self.access_token2)
+        response = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {"description": "hacked"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_tag_unauthenticated_returns_401(self) -> None:
+        """Anonymous PATCH is rejected."""
+        create_resp = self._create_tag("Anon Edit", "x")
+        tag_id = create_resp.json()["id"]
+
+        self.client.credentials()
+        response = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {"description": "no auth"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_tag_nonexistent_returns_404(self) -> None:
+        """PATCH on a missing tag returns 404."""
+        fake_id = uuid.uuid4()
+        self._auth()
+        response = self.client.patch(
+            f"/api/profiles/tags/{fake_id}/",
+            {"description": "ghost"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_tag_name_and_slug_are_immutable(self) -> None:
+        """Attempts to change name or slug are silently ignored."""
+        from profiles.models import CommunityTag
+
+        create_resp = self._create_tag("Original Name", "desc")
+        tag_id = create_resp.json()["id"]
+        original_slug = create_resp.json()["slug"]
+
+        self._auth()
+        response = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {
+                "name": "Hijacked Name",
+                "slug": "hijacked-slug",
+                "description": "still updates",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["name"], "Original Name")
+        self.assertEqual(body["slug"], original_slug)
+        self.assertEqual(body["description"], "still updates")
+
+        tag = CommunityTag.objects.get(id=tag_id)
+        self.assertEqual(tag.name, "Original Name")
+        self.assertEqual(tag.slug, original_slug)
+
+    def test_update_tag_empty_payload_is_noop(self) -> None:
+        """An empty PATCH does not raise and leaves the tag unchanged."""
+        create_resp = self._create_tag("Stable Tag", "stays")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        response = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["description"], "stays")
     # ---- Popular Tags Tests (#433) ----
 
     def _seed_tag_with_members(
