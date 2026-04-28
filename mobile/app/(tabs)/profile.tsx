@@ -22,6 +22,10 @@ import { API_BASE_URL } from "@/constants/api";
 import { useAuthStore } from "@/lib/auth/store";
 import { useProfileVisibilityStore } from "@/lib/profile/preferences";
 import {
+  type CommunityTag,
+  useMyCommunityTagsQuery,
+} from "@/lib/queries/communityTags";
+import {
   mapAvailabilityToSchedule,
   useAvailabilitySlotsQuery,
   useMentorshipMatchesQuery,
@@ -75,6 +79,7 @@ export default function ProfileScreen() {
   );
   const updateProfileMutation = useUpdateOwnProfileMutation();
   const profileRatingQuery = useProfileRatingQuery(currentUsername);
+  const myCommunitiesQuery = useMyCommunityTagsQuery(currentUsername);
 
   const showExpertise = useProfileVisibilityStore(
     (state) => state.showExpertise,
@@ -343,6 +348,10 @@ export default function ProfileScreen() {
     }
   };
 
+  const openCommunity = (tag: CommunityTag) => {
+    router.push(`/(tabs)/community/${encodeURIComponent(tag.id)}?from=community`);
+  };
+
   const openSkillsModal = (
     title: string,
     skills: string[],
@@ -426,6 +435,32 @@ export default function ProfileScreen() {
               />
             )}
           </View>
+
+          {myCommunitiesQuery.data?.length ? (
+            <View className="mb-6">
+              <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
+                Communities
+              </Text>
+              <View
+                testID="profile-community-tags"
+                className="flex-row flex-wrap gap-2"
+              >
+                {myCommunitiesQuery.data.map((tag) => (
+                  <TouchableOpacity
+                    key={tag.id}
+                    testID={`profile-community-${tag.slug}`}
+                    activeOpacity={0.78}
+                    onPress={() => openCommunity(tag)}
+                    className="px-3 py-2 rounded-full border border-primary/60 bg-surface-active dark:bg-surface-active-dark"
+                  >
+                    <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
+                      {tag.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ) : null}
 
           {isMentorMode && showAvailability && (
             <AvailabilityPreview
