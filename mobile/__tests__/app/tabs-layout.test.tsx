@@ -69,8 +69,10 @@ describe("TabLayout", () => {
   });
 
   it("keeps profile detail as a hidden tab route", () => {
-    const { getByTestId } = render(<TabLayout />);
+    const { getByTestId, queryByTestId } = render(<TabLayout />);
 
     expect(getByTestId("tab-screen-user/[username]")).toBeTruthy();
+    expect(getByTestId("tab-screen-community/[tagId]")).toBeTruthy();
+    expect(queryByTestId("visible-tab-community/[tagId]")).toBeNull();
   });
 });

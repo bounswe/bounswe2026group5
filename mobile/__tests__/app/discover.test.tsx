@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 
 import DiscoverScreen from "@/app/(tabs)/discover";
@@ -7,9 +7,13 @@ import {
   fetchDiscoverRecentlyAddedProfiles,
   fetchDiscoverSkills,
 } from "@/lib/discover/client";
-import { fetchPopularCommunityTags } from "@/lib/queries/communityTags";
+import {
+  fetchCommunityTags,
+  fetchPopularCommunityTags,
+} from "@/lib/queries/communityTags";
 
 const mockPush = jest.fn();
+const mockAddListener: jest.Mock = jest.fn(() => jest.fn());
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 jest.mock("@/components/notifications/NotificationBell", () => ({
@@ -25,7 +29,7 @@ jest.mock("expo-router", () => ({
 jest.mock("@react-navigation/native", () => ({
   ...jest.requireActual("@react-navigation/native"),
   useNavigation: () => ({
-    addListener: jest.fn(() => jest.fn()),
+    addListener: mockAddListener,
   }),
 }));
 
@@ -61,7 +65,8 @@ jest.mock("@/components/discover/DiscoverFilterModal", () => ({
 
 describe("DiscoverScreen", () => {
   beforeEach(() => {
-    mockPush.mockClear();
+    jest.clearAllMocks();
+    mockAddListener.mockReturnValue(jest.fn());
     (fetchDiscoverPopularProfiles as jest.Mock).mockResolvedValue(
       Array.from({ length: 8 }, (_, index) => ({
         id: `mentor-${index + 1}`,
@@ -78,6 +83,21 @@ describe("DiscoverScreen", () => {
       })),
     );
     (fetchDiscoverRecentlyAddedProfiles as jest.Mock).mockResolvedValue([]);
+    (fetchCommunityTags as jest.Mock).mockResolvedValue({
+      count: 1,
+      page: 1,
+      pageSize: 8,
+      results: [
+        {
+          id: "tag-1",
+          name: "Backend Guild",
+          slug: "backend-guild",
+          description: "API design and Django patterns",
+          member_count: 0,
+          created_at: "2026-04-20T00:00:00Z",
+        },
+      ],
+    });
     (fetchPopularCommunityTags as jest.Mock).mockResolvedValue([
       {
         id: "tag-1",
@@ -141,13 +161,65 @@ describe("DiscoverScreen", () => {
     fireEvent.press(getByTestId("communities-tab"));
 
     await waitFor(() => {
-      expect(fetchPopularCommunityTags).toHaveBeenCalledWith({ limit: 8 });
+      expect(fetchCommunityTags).toHaveBeenCalledWith({
+        page: 1,
+        pageSize: 8,
+        query: "",
+      });
       expect(getByTestId("community-result-backend-guild")).toBeTruthy();
     });
 
     expect(getByTestId("filter-button").props.accessibilityState?.disabled).toBe(true);
     fireEvent.press(getByTestId("sort-button"));
-    expect(getByTestId("sort-option-popular")).toBeTruthy();
+    expect(getByTestId("sort-option-all")).toBeTruthy();
+
+    fireEvent.press(getByTestId("community-result-backend-guild"));
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1?from=discover",
+    );
+  });
+
+  it("only loads popular communities after applying the Popular community sort", async () => {
+    const { getByTestId } = render(<DiscoverScreen />);
+
+    fireEvent.press(getByTestId("communities-tab"));
+
+    await waitFor(() => {
+      expect(fetchCommunityTags).toHaveBeenCalled();
+    });
+    expect(fetchPopularCommunityTags).not.toHaveBeenCalled();
+
+    fireEvent.press(getByTestId("sort-button"));
+    fireEvent.press(getByTestId("sort-option-popular"));
+    fireEvent.press(getByTestId("sort-apply-button"));
+
+    await waitFor(() => {
+      expect(fetchPopularCommunityTags).toHaveBeenCalledWith({ limit: 8 });
+    });
+  });
+
+  it("refetches communities when returning to Discover while Communities tab is active", async () => {
+    let tabPressHandler: (() => void) | undefined;
+    mockAddListener.mockImplementation((_event: string, handler: () => void) => {
+      tabPressHandler = handler;
+      return jest.fn();
+    });
+
+    const { getByTestId } = render(<DiscoverScreen />);
+
+    fireEvent.press(getByTestId("communities-tab"));
+
+    await waitFor(() => {
+      expect(fetchCommunityTags).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      tabPressHandler?.();
+    });
+
+    await waitFor(() => {
+      expect(fetchCommunityTags).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("shows error state when profile query fails", async () => {

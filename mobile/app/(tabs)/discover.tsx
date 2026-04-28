@@ -41,6 +41,7 @@ const PAGE_SIZE = 8;
 type DiscoverFeedMode = "popular" | "recent";
 type DiscoverTab = "mentors" | "communities";
 type SortMode = "popular" | "recent";
+type CommunitySortMode = "all" | "popular" | "recent";
 
 function formatMemberCount(count: number) {
   if (count === 1) {
@@ -49,9 +50,14 @@ function formatMemberCount(count: number) {
   return `${count} members`;
 }
 
-function CommunityResultCard({ tag }: Readonly<{ tag: CommunityTag }>) {
+function CommunityResultCard({
+  tag,
+  onPress,
+}: Readonly<{ tag: CommunityTag; onPress: (tag: CommunityTag) => void }>) {
   return (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => onPress(tag)}
       testID={`community-result-${tag.slug}`}
       className="bg-surface-card dark:bg-surface-card-dark p-4 rounded-xl border border-divider dark:border-divider-dark mb-3"
     >
@@ -70,13 +76,13 @@ function CommunityResultCard({ tag }: Readonly<{ tag: CommunityTag }>) {
           {formatMemberCount(tag.member_count)}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 function DiscoverSortSheet({
   visible,
-  activeMode,
+  activeTab,
   draftMode,
   onSelect,
   onClear,
@@ -84,17 +90,24 @@ function DiscoverSortSheet({
   onClose,
 }: Readonly<{
   visible: boolean;
-  activeMode: SortMode;
-  draftMode: SortMode;
-  onSelect: (mode: SortMode) => void;
+  activeTab: DiscoverTab;
+  draftMode: SortMode | CommunitySortMode;
+  onSelect: (mode: SortMode | CommunitySortMode) => void;
   onClear: () => void;
   onApply: () => void;
   onClose: () => void;
 }>) {
-  const options: { label: string; value: SortMode }[] = [
-    { label: "Popular", value: "popular" },
-    { label: "Recently Added", value: "recent" },
-  ];
+  const options: { label: string; value: SortMode | CommunitySortMode }[] =
+    activeTab === "communities"
+      ? [
+          { label: "All Communities", value: "all" },
+          { label: "Popular", value: "popular" },
+          { label: "Recently Added", value: "recent" },
+        ]
+      : [
+          { label: "Popular", value: "popular" },
+          { label: "Recently Added", value: "recent" },
+        ];
 
   return (
     <Modal
@@ -188,8 +201,13 @@ export default function DiscoverScreen() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [feedMode, setFeedMode] = useState<DiscoverFeedMode>("popular");
   const [draftFeedMode, setDraftFeedMode] = useState<SortMode>("popular");
+  const [communitySortMode, setCommunitySortMode] =
+    useState<CommunitySortMode>("all");
+  const [draftCommunitySortMode, setDraftCommunitySortMode] =
+    useState<CommunitySortMode>("all");
   const [activeTab, setActiveTab] = useState<DiscoverTab>("mentors");
 
   const [profiles, setProfiles] = useState<DiscoverMentorProfile[]>([]);
@@ -207,9 +225,13 @@ export default function DiscoverScreen() {
 
   useEffect(() => {
     if (isSortSheetOpen) {
-      setDraftFeedMode(feedMode);
+      if (activeTab === "communities") {
+        setDraftCommunitySortMode(communitySortMode);
+      } else {
+        setDraftFeedMode(feedMode);
+      }
     }
-  }, [feedMode, isSortSheetOpen]);
+  }, [activeTab, communitySortMode, feedMode, isSortSheetOpen]);
 
   const resetDiscoverFilters = useCallback(() => {
     setSelectedSkills(new Set());
@@ -221,6 +243,7 @@ export default function DiscoverScreen() {
     setErrorText(null);
     setFilterModalOpen(false);
     setSortSheetOpen(false);
+    setRefreshVersion((version) => version + 1);
   }, []);
 
   useEffect(() => {
@@ -356,6 +379,7 @@ export default function DiscoverScreen() {
     hasMentorSearchFilters,
     feedMode,
     activeTab,
+    refreshVersion,
   ]);
 
   useEffect(() => {
@@ -367,21 +391,35 @@ export default function DiscoverScreen() {
     setLoadingProfiles(true);
     setErrorText(null);
 
-    const request = hasCommunitySearchFilters
-      ? fetchCommunityTags({
-          page,
-          pageSize: PAGE_SIZE,
-          query: debouncedQuery,
-        }).then((payload) => ({
-          count: payload.count,
-          results: payload.results,
-        }))
-      : fetchPopularCommunityTags({ limit: PAGE_SIZE * page }).then(
-          (results) => ({
-            count: results.length,
-            results,
-          }),
-        );
+    let request: Promise<{ count: number; results: CommunityTag[] }>;
+    if (hasCommunitySearchFilters || communitySortMode === "all") {
+      request = fetchCommunityTags({
+        page,
+        pageSize: PAGE_SIZE,
+        query: debouncedQuery,
+      }).then((payload) => ({
+        count: payload.count,
+        results: payload.results,
+      }));
+    } else if (communitySortMode === "popular") {
+      request = fetchPopularCommunityTags({ limit: PAGE_SIZE * page }).then(
+        (results) => ({
+          count: results.length,
+          results,
+        }),
+      );
+    } else {
+      request = fetchCommunityTags({
+        page,
+        pageSize: PAGE_SIZE,
+      }).then((payload) => ({
+        count: payload.count,
+        results: [...payload.results].sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        ),
+      }));
+    }
 
     request
       .then((payload) => {
@@ -417,7 +455,14 @@ export default function DiscoverScreen() {
     return () => {
       mounted = false;
     };
-  }, [activeTab, page, debouncedQuery, hasCommunitySearchFilters]);
+  }, [
+    activeTab,
+    page,
+    debouncedQuery,
+    hasCommunitySearchFilters,
+    communitySortMode,
+    refreshVersion,
+  ]);
 
   const hasMore =
     activeTab === "mentors"
@@ -467,17 +512,37 @@ export default function DiscoverScreen() {
     router.push(`/user/${encodeURIComponent(profile.username)}`);
   };
 
+  const handleOpenCommunity = (tag: CommunityTag) => {
+    router.push(`/(tabs)/community/${encodeURIComponent(tag.id)}?from=discover`);
+  };
+
   const selectDraftFeedMode = (mode: SortMode) => {
     setDraftFeedMode(mode);
   };
 
+  const selectDraftSortMode = (mode: SortMode | CommunitySortMode) => {
+    if (activeTab === "communities") {
+      setDraftCommunitySortMode(mode as CommunitySortMode);
+      return;
+    }
+    selectDraftFeedMode(mode as SortMode);
+  };
+
   const clearFeedMode = () => {
+    if (activeTab === "communities") {
+      setDraftCommunitySortMode("all");
+      return;
+    }
     setDraftFeedMode("popular");
   };
 
   const applyFeedMode = () => {
     setPage(1);
-    setFeedMode(draftFeedMode);
+    if (activeTab === "communities") {
+      setCommunitySortMode(draftCommunitySortMode);
+    } else {
+      setFeedMode(draftFeedMode);
+    }
     setSortSheetOpen(false);
   };
 
@@ -511,7 +576,11 @@ export default function DiscoverScreen() {
       bodyContent = (
         <>
           {communityTags.map((tag) => (
-            <CommunityResultCard key={tag.id} tag={tag} />
+            <CommunityResultCard
+              key={tag.id}
+              tag={tag}
+              onPress={handleOpenCommunity}
+            />
           ))}
 
           {hasMore && (
@@ -599,7 +668,8 @@ export default function DiscoverScreen() {
               accessibilityLabel="Sort by"
               onPress={() => setSortSheetOpen(true)}
               className={`h-12 w-12 rounded-xl justify-center items-center ${
-                feedMode !== "popular"
+                (activeTab === "communities" && communitySortMode !== "all") ||
+                (activeTab === "mentors" && feedMode !== "popular")
                   ? "bg-primary"
                   : "bg-surface-card dark:bg-surface-card-dark border border-divider dark:border-divider-dark"
               }`}
@@ -607,7 +677,12 @@ export default function DiscoverScreen() {
               <Ionicons
                 name="swap-vertical-outline"
                 size={18}
-                color={feedMode !== "popular" ? "#ffffff" : theme.primary}
+                color={
+                  (activeTab === "communities" && communitySortMode !== "all") ||
+                  (activeTab === "mentors" && feedMode !== "popular")
+                    ? "#ffffff"
+                    : theme.primary
+                }
               />
             </TouchableOpacity>
             <TouchableOpacity
@@ -684,9 +759,11 @@ export default function DiscoverScreen() {
 
       <DiscoverSortSheet
         visible={isSortSheetOpen}
-        activeMode={feedMode}
-        draftMode={draftFeedMode}
-        onSelect={selectDraftFeedMode}
+        activeTab={activeTab}
+        draftMode={
+          activeTab === "communities" ? draftCommunitySortMode : draftFeedMode
+        }
+        onSelect={selectDraftSortMode}
         onClear={clearFeedMode}
         onApply={applyFeedMode}
         onClose={() => setSortSheetOpen(false)}

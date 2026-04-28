@@ -119,6 +119,11 @@ describe("CommunityScreen", () => {
       getByText("Posts from your communities will appear here"),
     ).toBeTruthy();
     expect(queryByTestId("community-empty-state")).toBeNull();
+
+    fireEvent.press(getByTestId("community-card-backend-guild"));
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1?from=community",
+    );
   });
 
   it("still renders the empty state when the user is not restored yet", () => {

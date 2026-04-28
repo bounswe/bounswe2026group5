@@ -72,6 +72,14 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="community/[tagId]"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
         name="discover"
         options={{
           title: "Discover",

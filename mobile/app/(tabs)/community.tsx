@@ -28,11 +28,16 @@ function formatMemberCount(count: number) {
   return `${count} members`;
 }
 
-function CommunityCard({ tag }: Readonly<{ tag: CommunityTag }>) {
+function CommunityCard({
+  tag,
+  onPress,
+}: Readonly<{ tag: CommunityTag; onPress: (tag: CommunityTag) => void }>) {
   return (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => onPress(tag)}
       testID={`community-card-${tag.slug}`}
-      className="bg-surface-card dark:bg-surface-card-dark p-4 rounded-xl border border-divider dark:border-divider-dark mb-3"
+      className="w-72 bg-surface-card dark:bg-surface-card-dark p-4 rounded-xl border border-divider dark:border-divider-dark mr-3"
     >
       <View className="flex-row items-start justify-between gap-3">
         <View className="flex-1">
@@ -49,7 +54,7 @@ function CommunityCard({ tag }: Readonly<{ tag: CommunityTag }>) {
           {formatMemberCount(tag.member_count)}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -60,6 +65,9 @@ export default function CommunityScreen() {
   const myCommunitiesQuery = useMyCommunityTagsQuery(currentUsername);
   const communities = myCommunitiesQuery.data ?? [];
   const hasCommunities = communities.length > 0;
+  const openCommunity = (tag: CommunityTag) => {
+    router.push(`/(tabs)/community/${encodeURIComponent(tag.id)}?from=community`);
+  };
 
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
@@ -110,7 +118,19 @@ export default function CommunityScreen() {
               message="Please try again in a moment."
             />
           ) : hasCommunities ? (
-            communities.map((tag) => <CommunityCard key={tag.id} tag={tag} />)
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: 16 }}
+            >
+              {communities.map((tag) => (
+                <CommunityCard
+                  key={tag.id}
+                  tag={tag}
+                  onPress={openCommunity}
+                />
+              ))}
+            </ScrollView>
           ) : (
             <View testID="community-empty-state" className="py-2 pr-4">
               <Text className="text-sm leading-5 text-on-surface-soft/80 dark:text-on-surface-soft-dark/80">
