@@ -88,6 +88,26 @@ describe("notifications query helpers", () => {
     ).toBe("/(tabs)/profile");
   });
 
+  it("routes community tag notifications to community detail", () => {
+    expect(
+      getNotificationTargetPath({
+        type: "tag_new_member",
+        resource_type: "community_tag",
+        resource_id: "tag/id",
+      }),
+    ).toBe("/(tabs)/community/tag%2Fid?from=community");
+
+    expect(
+      getNotificationTitle({
+        id: "notif-4",
+        type: "tag_matches_interest",
+        message: "A new community matches your interests.",
+        is_read: false,
+        created_at: "2026-04-20T11:45:00Z",
+      }),
+    ).toBe("New community match");
+  });
+
   it("uses extra metadata target path when provided", () => {
     expect(
       getNotificationTargetPath({
