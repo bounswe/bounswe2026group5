@@ -9,7 +9,6 @@ import { SuccessCard } from "@/components/ui/SuccessCard";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   useCommunityTagDetailQuery,
-  useCommunityTagMembersQuery,
   useJoinCommunityTagMutation,
   useLeaveCommunityTagMutation,
 } from "@/lib/queries/communityTags";
@@ -40,10 +39,6 @@ export default function CommunityDetailScreen() {
   const source = Array.isArray(params.from) ? params.from[0] : params.from;
   const currentUsername = useAuthStore((state) => state.user?.username);
   const detailQuery = useCommunityTagDetailQuery(tagId);
-  const membersQuery = useCommunityTagMembersQuery(
-    { tagId: tagId ?? "", page: 1, pageSize: 5 },
-    Boolean(tagId),
-  );
   const joinMutation = useJoinCommunityTagMutation(currentUsername);
   const leaveMutation = useLeaveCommunityTagMutation(currentUsername);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -51,11 +46,20 @@ export default function CommunityDetailScreen() {
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
 
   const tag = detailQuery.data;
-  const members = membersQuery.data?.results ?? [];
   const isMutating = joinMutation.isPending || leaveMutation.isPending;
 
   const goBackToSource = () => {
     router.replace(source === "discover" ? "/(tabs)/discover" : "/(tabs)/community");
+  };
+
+  const openMembers = () => {
+    if (!tagId) {
+      return;
+    }
+    const nextSource = source === "discover" ? "discover" : "community";
+    router.push(
+      `/(tabs)/community/${encodeURIComponent(tagId)}/members?from=${nextSource}`,
+    );
   };
 
   const updateMembership = async (action: "join" | "leave") => {
@@ -74,7 +78,6 @@ export default function CommunityDetailScreen() {
         setSuccessMessage(`You joined ${tag.name}.`);
       }
       detailQuery.refetch();
-      membersQuery.refetch();
     } catch (error) {
       setActionError(
         getErrorMessage(
@@ -158,9 +161,16 @@ export default function CommunityDetailScreen() {
               <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
                 {tag.name}
               </Text>
-              <Text className="mt-2 text-sm font-semibold text-primary dark:text-primary-dim">
-                {formatMemberCount(tag.member_count)}
-              </Text>
+              <TouchableOpacity
+                testID="community-members-link"
+                onPress={openMembers}
+                activeOpacity={0.75}
+                className="self-start mt-2"
+              >
+                <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
+                  {formatMemberCount(tag.member_count)}
+                </Text>
+              </TouchableOpacity>
               {tag.description.trim() ? (
                 <Text className="mt-4 text-base leading-6 text-on-surface-soft dark:text-on-surface-soft-dark">
                   {tag.description}
@@ -195,43 +205,6 @@ export default function CommunityDetailScreen() {
                       : "Join Community"}
                 </Text>
               </TouchableOpacity>
-            </View>
-
-            <View className="mb-6">
-              <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark mb-3">
-                Members
-              </Text>
-              {membersQuery.isLoading ? (
-                <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
-                  Loading members...
-                </Text>
-              ) : membersQuery.isError ? (
-                <ErrorBanner
-                  title="Could not load members"
-                  message="Members are temporarily unavailable."
-                />
-              ) : members.length > 0 ? (
-                members.map((member) => (
-                  <View
-                    key={member.id}
-                    testID={`community-member-${member.username}`}
-                    className="py-3 border-b border-divider dark:border-divider-dark"
-                  >
-                    <Text className="font-semibold text-on-surface dark:text-on-surface-dark">
-                      {member.full_name || member.username}
-                    </Text>
-                    {member.title ? (
-                      <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark mt-1">
-                        {member.title}
-                      </Text>
-                    ) : null}
-                  </View>
-                ))
-              ) : (
-                <Text className="text-sm text-on-surface-soft/80 dark:text-on-surface-soft-dark/80">
-                  No visible members yet.
-                </Text>
-              )}
             </View>
 
             <View>

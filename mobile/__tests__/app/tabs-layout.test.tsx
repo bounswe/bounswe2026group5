@@ -73,6 +73,8 @@ describe("TabLayout", () => {
 
     expect(getByTestId("tab-screen-user/[username]")).toBeTruthy();
     expect(getByTestId("tab-screen-community/[tagId]")).toBeTruthy();
+    expect(getByTestId("tab-screen-community/[tagId]/members")).toBeTruthy();
     expect(queryByTestId("visible-tab-community/[tagId]")).toBeNull();
+    expect(queryByTestId("visible-tab-community/[tagId]/members")).toBeNull();
   });
 });

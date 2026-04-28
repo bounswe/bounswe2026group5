@@ -1,15 +1,14 @@
-import CommunityDetailScreen from "@/app/(tabs)/community/[tagId]";
+import CommunityDetailScreen from "@/app/(tabs)/community/[tagId]/index";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 
 const mockBack = jest.fn();
+const mockPush = jest.fn();
 const mockReplace = jest.fn();
 let mockTagId: string | undefined = "tag-1";
 let mockFrom: string | undefined = undefined;
 const mockDetailRefetch = jest.fn();
-const mockMembersRefetch = jest.fn();
 const mockDetailQuery = jest.fn();
-const mockMembersQuery = jest.fn();
 const mockJoinMutation = jest.fn();
 const mockLeaveMutation = jest.fn();
 
@@ -19,6 +18,7 @@ jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ tagId: mockTagId, from: mockFrom }),
   useRouter: () => ({
     back: mockBack,
+    push: mockPush,
     replace: mockReplace,
   }),
 }));
@@ -34,8 +34,6 @@ jest.mock("@/lib/auth/store", () => ({
 
 jest.mock("@/lib/queries/communityTags", () => ({
   useCommunityTagDetailQuery: (tagId?: string) => mockDetailQuery(tagId),
-  useCommunityTagMembersQuery: (params: unknown, enabled?: boolean) =>
-    mockMembersQuery(params, enabled),
   useJoinCommunityTagMutation: (username?: string) => mockJoinMutation(username),
   useLeaveCommunityTagMutation: (username?: string) => mockLeaveMutation(username),
 }));
@@ -63,31 +61,6 @@ describe("CommunityDetailScreen", () => {
         created_at: "2026-04-20T00:00:00Z",
       },
     });
-    mockMembersQuery.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      refetch: mockMembersRefetch,
-      data: {
-        count: 1,
-        page: 1,
-        pageSize: 5,
-        results: [
-          {
-            id: "profile-1",
-            username: "ada",
-            full_name: "Ada Lovelace",
-            bio: "",
-            hidden: false,
-            picture_url: "",
-            title: "Backend Mentor",
-            show_initials_only: false,
-            skills: ["Django"],
-            average_rating: "5.00",
-            total_mentee_count: 3,
-          },
-        ],
-      },
-    });
     joinMutateAsync.mockResolvedValue({
       tag_id: "tag-1",
       tag_name: "Backend Guild",
@@ -110,17 +83,16 @@ describe("CommunityDetailScreen", () => {
     });
   });
 
-  it("loads detail and member preview for the route tag id", () => {
+  it("loads detail and links the member count to the member list", () => {
     const { getByText, getByTestId } = render(<CommunityDetailScreen />);
 
     expect(mockDetailQuery).toHaveBeenCalledWith("tag-1");
-    expect(mockMembersQuery).toHaveBeenCalledWith(
-      { tagId: "tag-1", page: 1, pageSize: 5 },
-      true,
-    );
     expect(getByText("Backend Guild")).toBeTruthy();
     expect(getByText("12 members")).toBeTruthy();
-    expect(getByTestId("community-member-ada")).toBeTruthy();
+    fireEvent.press(getByTestId("community-members-link"));
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1/members?from=community",
+    );
   });
 
   it("shows loading state while detail is loading", () => {
@@ -131,15 +103,24 @@ describe("CommunityDetailScreen", () => {
       data: undefined,
     });
 
-    const { getAllByText, getByTestId, getByText } = render(
-      <CommunityDetailScreen />,
-    );
+    const { getByTestId, getByText } = render(<CommunityDetailScreen />);
 
     expect(getByTestId("community-detail-loading")).toBeTruthy();
     expect(getByText("Loading community...")).toBeTruthy();
   });
 
-  it("joins a community and refreshes detail plus members", async () => {
+  it("preserves discovery origin when opening the member list", () => {
+    mockFrom = "discover";
+    const { getByTestId } = render(<CommunityDetailScreen />);
+
+    fireEvent.press(getByTestId("community-members-link"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1/members?from=discover",
+    );
+  });
+
+  it("joins a community and refreshes detail", async () => {
     const { getByTestId, findByText } = render(<CommunityDetailScreen />);
 
     fireEvent.press(getByTestId("community-membership-button"));
@@ -148,7 +129,6 @@ describe("CommunityDetailScreen", () => {
       expect(joinMutateAsync).toHaveBeenCalledWith("tag-1");
     });
     expect(mockDetailRefetch).toHaveBeenCalled();
-    expect(mockMembersRefetch).toHaveBeenCalled();
     expect(await findByText("You joined Backend Guild.")).toBeTruthy();
   });
 
