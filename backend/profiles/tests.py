@@ -3074,4 +3074,291 @@ class CommunityTagsAPITests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["description"], "stays")
+    # ---- Popular Tags Tests (#433) ----
+
+    def _seed_tag_with_members(
+        self,
+        name: str,
+        member_count: int,
+        joined_at=None,
+    ) -> "CommunityTag":  # type: ignore[name-defined]
+        """Create a tag and synthesize its memberships, optionally setting joined_at."""
+        from accounts.models import AppUsageMode
+        from profiles.models import CommunityTag, CommunityTagMembership
+        from django.utils.text import slugify
+
+        tag = CommunityTag.objects.create(name=name, slug=slugify(name))
+        for i in range(member_count):
+            user = User.objects.create_user(
+                email=f"popular-{slugify(name)}-{i}@example.com",
+                password="SecurePass123",
+                app_usage_mode=AppUsageMode.MENTOR,
+            )
+            profile = Profile.objects.create(
+                user=user, display_name=f"PM {name} {i}", is_visible=True
+            )
+            membership = CommunityTagMembership.objects.create(profile=profile, tag=tag)
+            if joined_at is not None:
+                CommunityTagMembership.objects.filter(id=membership.id).update(
+                    joined_at=joined_at
+                )
+        CommunityTag.objects.filter(id=tag.id).update(member_count=member_count)
+        tag.refresh_from_db()
+        return tag
+
+    def test_popular_all_time_orders_by_member_count(self) -> None:
+        """All-time popular returns tags ordered by member_count desc."""
+        self._seed_tag_with_members("Big", 5)
+        self._seed_tag_with_members("Medium", 3)
+        self._seed_tag_with_members("Small", 1)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/")
+
+        self.assertEqual(response.status_code, 200)
+        names = [t["name"] for t in response.json()]
+        self.assertEqual(names, ["Big", "Medium", "Small"])
+
+    def test_popular_excludes_zero_member_tags(self) -> None:
+        """Tags with no members are not included in the popular list."""
+        self._seed_tag_with_members("Has Members", 2)
+        self._create_tag("Empty Tag")  # zero members
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/")
+
+        self.assertEqual(response.status_code, 200)
+        names = [t["name"] for t in response.json()]
+        self.assertIn("Has Members", names)
+        self.assertNotIn("Empty Tag", names)
+
+    def test_popular_tie_breaker_on_creation(self) -> None:
+        """When member counts tie, more recently created tag wins."""
+        from profiles.models import CommunityTag
+
+        old_tag = self._seed_tag_with_members("Older", 2)
+        # force older creation timestamp
+        CommunityTag.objects.filter(id=old_tag.id).update(
+            created_at=timezone.now() - timedelta(days=10)
+        )
+        self._seed_tag_with_members("Newer", 2)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/")
+
+        self.assertEqual(response.status_code, 200)
+        names = [t["name"] for t in response.json()]
+        self.assertEqual(names.index("Newer"), 0)
+        self.assertEqual(names.index("Older"), 1)
+
+    def test_popular_limit_respected(self) -> None:
+        """The `limit` query param caps the number of returned tags."""
+        for i in range(5):
+            self._seed_tag_with_members(f"PT {i}", i + 1)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/", {"limit": 3})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 3)
+
+    def test_popular_limit_capped_at_max(self) -> None:
+        """`limit` values above the cap are clamped to the maximum."""
+        # cap is 50; passing 9999 should still return at most 50.
+        for i in range(3):
+            self._seed_tag_with_members(f"Cap {i}", 1)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/", {"limit": 9999})
+
+        self.assertEqual(response.status_code, 200)
+        # only 3 tags exist, so we get 3 — the test ensures no error from huge limit
+        self.assertLessEqual(len(response.json()), 50)
+
+    def test_popular_invalid_limit_returns_400(self) -> None:
+        """Non-integer limit returns 400."""
+        response = self.client.get("/api/profiles/tags/popular/", {"limit": "abc"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_popular_invalid_window_returns_400(self) -> None:
+        """Unknown window value returns 400."""
+        response = self.client.get("/api/profiles/tags/popular/", {"window": "1y"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_popular_window_filters_by_join_time(self) -> None:
+        """7d window only counts memberships joined in the last 7 days."""
+        old_cutoff = timezone.now() - timedelta(days=30)
+        # this tag's members all joined long ago — should be excluded from 7d
+        self._seed_tag_with_members("Old Joins", 5, joined_at=old_cutoff)
+        # this tag's members joined recently
+        self._seed_tag_with_members("Fresh Joins", 2)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/", {"window": "7d"})
+
+        self.assertEqual(response.status_code, 200)
+        names = [t["name"] for t in response.json()]
+        self.assertIn("Fresh Joins", names)
+        self.assertNotIn("Old Joins", names)
+
+    def test_popular_empty_when_no_tags(self) -> None:
+        """Empty result when no tags have members."""
+        from profiles.models import CommunityTag
+        CommunityTag.objects.all().delete()
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+    # ---- Members List Tests (#432) ----
+
+    def test_members_list_public_access(self) -> None:
+        """Anyone can list a tag's members without authentication."""
+        create_resp = self._create_tag("Members Public")
+        tag_id = create_resp.json()["id"]
+
+        # creator joins
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        # another user joins
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 2)
+        self.assertEqual(len(data["results"]), 2)
+
+    def test_members_list_orders_by_recent_join(self) -> None:
+        """Members are listed with most recently joined first."""
+        create_resp = self._create_tag("Order Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        ids = [r["id"] for r in response.json()["results"]]
+        self.assertEqual(ids[0], str(self.profile2.id))
+        self.assertEqual(ids[1], str(self.profile.id))
+
+    def test_members_list_pagination(self) -> None:
+        """Pagination respects pageSize and reports total count."""
+        from accounts.models import AppUsageMode
+
+        create_resp = self._create_tag("Pagination Tag")
+        tag_id = create_resp.json()["id"]
+
+        # add three members
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        user3 = User.objects.create_user(
+            email="tag-user3@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        Profile.objects.create(user=user3, display_name="Tag User 3", is_visible=True)
+        token3 = str(RefreshToken.for_user(user3).access_token)
+        self._auth(token3)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(
+            f"/api/profiles/tags/{tag_id}/members/",
+            {"page": 1, "pageSize": 2},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 3)
+        self.assertEqual(len(data["results"]), 2)
+        self.assertEqual(data["page"], 1)
+        self.assertEqual(data["pageSize"], 2)
+
+    def test_members_list_excludes_hidden_profiles(self) -> None:
+        """Profiles with is_visible=False are not included in the response."""
+        create_resp = self._create_tag("Hidden Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        # hide profile2
+        self.profile2.is_visible = False
+        self.profile2.save(update_fields=["is_visible"])
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        ids = [r["id"] for r in data["results"]]
+        self.assertIn(str(self.profile.id), ids)
+        self.assertNotIn(str(self.profile2.id), ids)
+
+    def test_members_list_honors_show_initials_only(self) -> None:
+        """When a member has show_initials_only, the response shows initials."""
+        create_resp = self._create_tag("Initials Tag")
+        tag_id = create_resp.json()["id"]
+
+        self.profile.show_initials_only = True
+        self.profile.save(update_fields=["show_initials_only"])
+
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(r for r in response.json()["results"] if r["id"] == str(self.profile.id))
+        # display_name "Tag User" → initials "TU"
+        self.assertNotEqual(result["full_name"], "Tag User")
+
+    def test_members_list_empty_tag(self) -> None:
+        """An empty tag returns an empty results array with count zero."""
+        create_resp = self._create_tag("Empty Tag")
+        tag_id = create_resp.json()["id"]
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 0)
+        self.assertEqual(data["results"], [])
+
+    def test_members_list_nonexistent_tag_returns_404(self) -> None:
+        """Requesting members of a nonexistent tag returns 404."""
+        fake_id = uuid.uuid4()
+        response = self.client.get(f"/api/profiles/tags/{fake_id}/members/")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_members_list_invalid_pagination_returns_400(self) -> None:
+        """Non-integer page/pageSize returns 400."""
+        create_resp = self._create_tag("Bad Pagination")
+        tag_id = create_resp.json()["id"]
+
+        response = self.client.get(
+            f"/api/profiles/tags/{tag_id}/members/",
+            {"page": "abc"},
+        )
+
+        self.assertEqual(response.status_code, 400)
 

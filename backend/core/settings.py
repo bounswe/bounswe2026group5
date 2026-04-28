@@ -193,3 +193,28 @@ RATING_UPDATE_THRESHOLD = int(os.getenv("RATING_UPDATE_THRESHOLD", "5"))
 
 # Notifications
 NOTIFICATIONS_HISTORY_LIMIT = int(os.getenv("NOTIFICATIONS_HISTORY_LIMIT", "100"))
+
+# Password reset
+PASSWORD_RESET_TOKEN_LIFETIME_MINUTES = int(
+    os.getenv("PASSWORD_RESET_TOKEN_LIFETIME_MINUTES", "30")
+)
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+PASSWORD_RESET_URL_PATH = os.getenv("PASSWORD_RESET_URL_PATH", "/reset-password")
+
+# Email verification
+EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS = int(
+    os.getenv("EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS", "24")
+)
+EMAIL_VERIFICATION_URL_PATH = os.getenv("EMAIL_VERIFICATION_URL_PATH", "/verify-email")
+
+# Email
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "25"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@neighborship.app")

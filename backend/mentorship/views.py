@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import AppUsageMode
-from accounts.permissions import IsUser
+from accounts.permissions import IsEmailVerified, IsUser
 from profiles.models import AvailabilitySlot, Profile
 from profiles.services import (
     BookingCancelNotAllowedError,
@@ -104,7 +104,7 @@ class MyRequestsListAPIView(APIView):
 class CreateRequestAPIView(APIView):
     """Send a mentorship request to a mentor."""
 
-    permission_classes = [IsUser]
+    permission_classes = [IsUser, IsEmailVerified]
 
     @extend_schema(
         request=MentorshipRequestCreateSerializer,
@@ -112,7 +112,12 @@ class CreateRequestAPIView(APIView):
             201: MentorshipRequestSerializer,
             400: OpenApiResponse(description="Validation error or duplicate pending request."),
             401: OpenApiResponse(description="Authentication required."),
-            403: OpenApiResponse(description="Caller's profile does not support the mentee role."),
+            403: OpenApiResponse(
+                description=(
+                    "Caller's profile does not support the mentee role, "
+                    "or the caller has not verified their email."
+                )
+            ),
             404: OpenApiResponse(description="Caller's profile not found."),
         },
         description=(
