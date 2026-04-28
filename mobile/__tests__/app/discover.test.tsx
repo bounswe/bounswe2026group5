@@ -4,8 +4,10 @@ import React from "react";
 import DiscoverScreen from "@/app/(tabs)/discover";
 import {
   fetchDiscoverPopularProfiles,
+  fetchDiscoverRecentlyAddedProfiles,
   fetchDiscoverSkills,
 } from "@/lib/discover/client";
+import { fetchPopularCommunityTags } from "@/lib/queries/communityTags";
 
 const mockPush = jest.fn();
 
@@ -32,6 +34,11 @@ jest.mock("@/lib/discover/client", () => ({
   fetchDiscoverPopularProfiles: jest.fn(),
   fetchDiscoverRecentlyAddedProfiles: jest.fn(),
   fetchDiscoverSkills: jest.fn(),
+}));
+
+jest.mock("@/lib/queries/communityTags", () => ({
+  fetchCommunityTags: jest.fn(),
+  fetchPopularCommunityTags: jest.fn(),
 }));
 
 jest.mock("@/components/discover/MentorCard", () => ({
@@ -70,6 +77,17 @@ describe("DiscoverScreen", () => {
         total_mentee_count: 12,
       })),
     );
+    (fetchDiscoverRecentlyAddedProfiles as jest.Mock).mockResolvedValue([]);
+    (fetchPopularCommunityTags as jest.Mock).mockResolvedValue([
+      {
+        id: "tag-1",
+        name: "Backend Guild",
+        slug: "backend-guild",
+        description: "API design and Django patterns",
+        member_count: 12,
+        created_at: "2026-04-20T00:00:00Z",
+      },
+    ]);
     (fetchDiscoverSkills as jest.Mock).mockResolvedValue([
       { id: "skill-1", name: "Docker" },
       { id: "skill-2", name: "GraphQL" },
@@ -88,6 +106,48 @@ describe("DiscoverScreen", () => {
 
     fireEvent.press(getByTestId("mentor-card-can-ozkan"));
     expect(mockPush).toHaveBeenCalledWith("/user/can-ozkan");
+  });
+
+  it("switches mentor sort through the sort bottom sheet and can clear it", async () => {
+    const { getByTestId, queryByText } = render(<DiscoverScreen />);
+
+    await waitFor(() => {
+      expect(fetchDiscoverPopularProfiles).toHaveBeenCalledWith(8);
+    });
+
+    fireEvent.press(getByTestId("sort-button"));
+    expect(queryByText("Search Mode")).toBeNull();
+    expect(getByTestId("sort-option-recent")).toBeTruthy();
+    fireEvent.press(getByTestId("sort-option-recent"));
+    expect(fetchDiscoverRecentlyAddedProfiles).not.toHaveBeenCalled();
+    fireEvent.press(getByTestId("sort-apply-button"));
+
+    await waitFor(() => {
+      expect(fetchDiscoverRecentlyAddedProfiles).toHaveBeenCalledWith(8);
+    });
+
+    fireEvent.press(getByTestId("sort-button"));
+    fireEvent.press(getByTestId("sort-clear-button"));
+    fireEvent.press(getByTestId("sort-apply-button"));
+
+    await waitFor(() => {
+      expect(fetchDiscoverPopularProfiles).toHaveBeenLastCalledWith(8);
+    });
+  });
+
+  it("loads community results from the Communities tab", async () => {
+    const { getByTestId } = render(<DiscoverScreen />);
+
+    fireEvent.press(getByTestId("communities-tab"));
+
+    await waitFor(() => {
+      expect(fetchPopularCommunityTags).toHaveBeenCalledWith({ limit: 8 });
+      expect(getByTestId("community-result-backend-guild")).toBeTruthy();
+    });
+
+    expect(getByTestId("filter-button").props.accessibilityState?.disabled).toBe(true);
+    fireEvent.press(getByTestId("sort-button"));
+    expect(getByTestId("sort-option-popular")).toBeTruthy();
   });
 
   it("shows error state when profile query fails", async () => {
