@@ -1082,14 +1082,16 @@ class CommunityTagDetailAPIView(APIView):
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         is_admin = request.user.role == UserRole.ADMIN
-        if not is_admin:
-            try:
-                profile = Profile.objects.get(user=request.user)
-            except Profile.DoesNotExist:
+        actor_profile_id = None
+        try:
+            actor_profile_id = Profile.objects.get(user=request.user).id
+        except Profile.DoesNotExist:
+            if not is_admin:
                 return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
-            if tag.created_by_id != profile.id:
-                return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
+        if not is_admin and tag.created_by_id != actor_profile_id:
+            return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
 
+        tag._actor_profile_id = actor_profile_id
         serializer = CommunityTagUpdateSerializer(tag, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -1119,18 +1121,17 @@ class CommunityTagDetailAPIView(APIView):
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         is_admin = request.user.role == UserRole.ADMIN
+        actor_profile_id = (
+            Profile.objects.filter(user=request.user).values_list("id", flat=True).first()
+        )
 
         if is_admin:
+            tag._actor_profile_id = actor_profile_id
             tag.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         # Non-admin: must be creator and tag must be empty
-        try:
-            profile = Profile.objects.get(user=request.user)
-        except Profile.DoesNotExist:
-            return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
-
-        if tag.created_by_id != profile.id:
+        if actor_profile_id is None or tag.created_by_id != actor_profile_id:
             return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
 
         if tag.member_count > 0:
@@ -1139,6 +1140,7 @@ class CommunityTagDetailAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        tag._actor_profile_id = actor_profile_id
         tag.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
