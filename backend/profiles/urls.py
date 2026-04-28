@@ -10,6 +10,7 @@ from .views import (
     CommunityTagLeaveAPIView,
     CommunityTagListCreateAPIView,
     PopularTagsListAPIView,
+    CommunityTagMembersListAPIView,
     MentorPublicAverageRatingAPIView,
     MyAvailabilitySlotDetailAPIView,
     MyAvailabilitySlotListCreateAPIView,
@@ -82,6 +83,11 @@ urlpatterns = [
         "tags/<uuid:tag_id>/leave/",
         CommunityTagLeaveAPIView.as_view(),
         name="community-tag-leave",
+    ),
+    path(
+        "tags/<uuid:tag_id>/members/",
+        CommunityTagMembersListAPIView.as_view(),
+        name="community-tag-members",
     ),
     path("me/tags/", MyTagsListAPIView.as_view(), name="my-tags-list"),
     # Catch-all username route (must stay last)
