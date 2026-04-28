@@ -67,7 +67,7 @@ jest.mock("@/components/discover/DiscoverFilterModal", () => ({
     selectedCommunityTags,
     onToggleCommunityTag,
     onClear,
-    onClose,
+    onApply,
   }: any) => {
     const React = require("react");
     const { Text, TouchableOpacity, View } = jest.requireActual("react-native");
@@ -91,7 +91,7 @@ jest.mock("@/components/discover/DiscoverFilterModal", () => ({
           </TouchableOpacity>
         ))}
         <TouchableOpacity testID="filter-clear-button" onPress={onClear} />
-        <TouchableOpacity testID="filter-apply-button" onPress={onClose} />
+        <TouchableOpacity testID="filter-apply-button" onPress={onApply} />
       </View>
     );
   },
@@ -224,6 +224,8 @@ describe("DiscoverScreen", () => {
     });
 
     fireEvent.press(getByTestId("community-filter-backend-guild"));
+    expect(fetchDiscoverProfiles).not.toHaveBeenCalled();
+    fireEvent.press(getByTestId("filter-apply-button"));
 
     await waitFor(() => {
       expect(fetchDiscoverProfiles).toHaveBeenCalledWith({
@@ -236,7 +238,10 @@ describe("DiscoverScreen", () => {
       expect(getByTestId("mentor-card-filtered-mentor")).toBeTruthy();
     });
 
+    fireEvent.press(getByTestId("filter-button"));
     fireEvent.press(getByTestId("filter-clear-button"));
+    expect(fetchDiscoverPopularProfiles).toHaveBeenCalledTimes(1);
+    fireEvent.press(getByTestId("filter-apply-button"));
 
     await waitFor(() => {
       expect(fetchDiscoverPopularProfiles).toHaveBeenLastCalledWith(8);

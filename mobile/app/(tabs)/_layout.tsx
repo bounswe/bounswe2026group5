@@ -72,7 +72,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="community/[tagId]"
+        name="community/[tagId]/index"
         options={{
           href: null,
           headerShown: false,

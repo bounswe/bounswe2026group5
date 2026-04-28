@@ -32,6 +32,7 @@ describe("DiscoverFilterModal", () => {
         onToggleSkill={onToggleSkill}
         onToggleCommunityTag={jest.fn()}
         onClear={onClear}
+        onApply={jest.fn()}
         onClose={onClose}
       />,
     );
@@ -40,7 +41,7 @@ describe("DiscoverFilterModal", () => {
     expect(getByTestId("skill-Docker")).toBeTruthy();
 
     // Filter to only Docker
-    fireEvent.changeText(getByTestId("skill-search-input"), "dock");
+    fireEvent.changeText(getByTestId("filter-search-input"), "dock");
 
     expect(getByTestId("skill-Docker")).toBeTruthy();
     expect(queryByTestId("skill-GraphQL")).toBeNull();
@@ -63,6 +64,7 @@ describe("DiscoverFilterModal", () => {
         onToggleSkill={jest.fn()}
         onToggleCommunityTag={onToggleCommunityTag}
         onClear={jest.fn()}
+        onApply={jest.fn()}
         onClose={jest.fn()}
       />,
     );
@@ -84,6 +86,7 @@ describe("DiscoverFilterModal", () => {
         onToggleSkill={jest.fn()}
         onToggleCommunityTag={jest.fn()}
         onClear={onClear}
+        onApply={jest.fn()}
         onClose={jest.fn()}
       />,
     );
@@ -92,8 +95,8 @@ describe("DiscoverFilterModal", () => {
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 
-  it("calls onClose when apply button is pressed", () => {
-    const onClose = jest.fn();
+  it("calls onApply when apply button is pressed", () => {
+    const onApply = jest.fn();
 
     const { getByTestId } = render(
       <DiscoverFilterModal
@@ -105,12 +108,40 @@ describe("DiscoverFilterModal", () => {
         onToggleSkill={jest.fn()}
         onToggleCommunityTag={jest.fn()}
         onClear={jest.fn()}
-        onClose={onClose}
+        onApply={onApply}
+        onClose={jest.fn()}
       />,
     );
 
     fireEvent.press(getByTestId("apply-button"));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onApply).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows selected skills and communities in one selected filters area", () => {
+    const onToggleSkill = jest.fn();
+    const onToggleCommunityTag = jest.fn();
+
+    const { getByTestId, getByText } = render(
+      <DiscoverFilterModal
+        visible
+        allSkills={["Docker", "GraphQL"]}
+        communityTags={communityTags}
+        selectedSkills={new Set(["Docker"])}
+        selectedCommunityTags={new Set(["backend-guild"])}
+        onToggleSkill={onToggleSkill}
+        onToggleCommunityTag={onToggleCommunityTag}
+        onClear={jest.fn()}
+        onApply={jest.fn()}
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(getByText("Selected Filters")).toBeTruthy();
+    fireEvent.press(getByTestId("selected-community-filter-backend-guild"));
+    fireEvent.press(getByTestId("selected-skill-Docker"));
+
+    expect(onToggleCommunityTag).toHaveBeenCalledWith("backend-guild");
+    expect(onToggleSkill).toHaveBeenCalledWith("Docker");
   });
 
   it("shows no-results state when search yields no matches", () => {
@@ -124,11 +155,12 @@ describe("DiscoverFilterModal", () => {
         onToggleSkill={jest.fn()}
         onToggleCommunityTag={jest.fn()}
         onClear={jest.fn()}
+        onApply={jest.fn()}
         onClose={jest.fn()}
       />,
     );
 
-    fireEvent.changeText(getByTestId("skill-search-input"), "rust");
+    fireEvent.changeText(getByTestId("filter-search-input"), "rust");
     expect(getByTestId("no-results-state")).toBeTruthy();
   });
 
@@ -143,11 +175,12 @@ describe("DiscoverFilterModal", () => {
         onToggleSkill={jest.fn()}
         onToggleCommunityTag={jest.fn()}
         onClear={jest.fn()}
+        onApply={jest.fn()}
         onClose={jest.fn()}
       />,
     );
 
-    fireEvent.changeText(getByTestId("skill-search-input"), "docker");
+    fireEvent.changeText(getByTestId("filter-search-input"), "docker");
     expect(getByTestId("skill-Docker")).toBeTruthy();
     expect(queryByTestId("no-results-state")).toBeNull();
   });

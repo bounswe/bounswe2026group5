@@ -221,6 +221,12 @@ export default function DiscoverScreen() {
   const [selectedCommunityTags, setSelectedCommunityTags] = useState<Set<string>>(
     new Set(),
   );
+  const [draftSelectedSkills, setDraftSelectedSkills] = useState<Set<string>>(
+    new Set(),
+  );
+  const [draftSelectedCommunityTags, setDraftSelectedCommunityTags] = useState<
+    Set<string>
+  >(new Set());
 
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [loadingSkills, setLoadingSkills] = useState(false);
@@ -242,6 +248,8 @@ export default function DiscoverScreen() {
   const resetDiscoverFilters = useCallback(() => {
     setSelectedSkills(new Set());
     setSelectedCommunityTags(new Set());
+    setDraftSelectedSkills(new Set());
+    setDraftSelectedCommunityTags(new Set());
     setPage(1);
     setProfiles([]);
     setCommunityTags([]);
@@ -506,9 +514,8 @@ export default function DiscoverScreen() {
     setErrorText(null);
   };
 
-  const toggleSkill = (skill: string) => {
-    setPage(1);
-    setSelectedSkills((prev) => {
+  const toggleDraftSkill = (skill: string) => {
+    setDraftSelectedSkills((prev) => {
       const next = new Set(prev);
       if (next.has(skill)) {
         next.delete(skill);
@@ -519,9 +526,8 @@ export default function DiscoverScreen() {
     });
   };
 
-  const toggleCommunityTag = (tagSlug: string) => {
-    setPage(1);
-    setSelectedCommunityTags((prev) => {
+  const toggleDraftCommunityTag = (tagSlug: string) => {
+    setDraftSelectedCommunityTags((prev) => {
       const next = new Set(prev);
       if (next.has(tagSlug)) {
         next.delete(tagSlug);
@@ -532,13 +538,21 @@ export default function DiscoverScreen() {
     });
   };
 
-  const clearSkills = () => {
+  const clearDraftFilters = () => {
+    setDraftSelectedSkills(new Set());
+    setDraftSelectedCommunityTags(new Set());
+  };
+
+  const applyFilters = () => {
     setPage(1);
-    setSelectedSkills(new Set());
-    setSelectedCommunityTags(new Set());
+    setSelectedSkills(new Set(draftSelectedSkills));
+    setSelectedCommunityTags(new Set(draftSelectedCommunityTags));
+    setFilterModalOpen(false);
   };
 
   const openFilterModal = () => {
+    setDraftSelectedSkills(new Set(selectedSkills));
+    setDraftSelectedCommunityTags(new Set(selectedCommunityTags));
     setFilterModalOpen(true);
     if (communityFilterTags.length > 0) {
       return;
@@ -792,11 +806,12 @@ export default function DiscoverScreen() {
         visible={isFilterModalOpen}
         allSkills={visibleSkills}
         communityTags={communityFilterTags}
-        selectedSkills={selectedSkills}
-        selectedCommunityTags={selectedCommunityTags}
-        onToggleSkill={toggleSkill}
-        onToggleCommunityTag={toggleCommunityTag}
-        onClear={clearSkills}
+        selectedSkills={draftSelectedSkills}
+        selectedCommunityTags={draftSelectedCommunityTags}
+        onToggleSkill={toggleDraftSkill}
+        onToggleCommunityTag={toggleDraftCommunityTag}
+        onClear={clearDraftFilters}
+        onApply={applyFilters}
         onClose={() => setFilterModalOpen(false)}
       />
 

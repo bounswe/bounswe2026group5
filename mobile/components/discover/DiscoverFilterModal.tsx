@@ -12,7 +12,6 @@ import {
 } from "react-native";
 
 import { DiscoverSearchBar } from "@/components/discover/DiscoverSearchBar";
-import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { type CommunityTag } from "@/lib/queries/communityTags";
 
 interface DiscoverFilterModalProps {
@@ -24,6 +23,7 @@ interface DiscoverFilterModalProps {
   onToggleSkill: (skill: string) => void;
   onToggleCommunityTag: (tagSlug: string) => void;
   onClear: () => void;
+  onApply: () => void;
   onClose: () => void;
 }
 
@@ -36,22 +36,43 @@ export function DiscoverFilterModal({
   onToggleSkill,
   onToggleCommunityTag,
   onClear,
+  onApply,
   onClose,
 }: Readonly<DiscoverFilterModalProps>) {
-  const [skillQuery, setSkillQuery] = useState("");
-  const selectedList = useMemo(
+  const [filterQuery, setFilterQuery] = useState("");
+  const selectedSkillList = useMemo(
     () => Array.from(selectedSkills).sort((a, b) => a.localeCompare(b)),
     [selectedSkills],
   );
+  const selectedCommunityList = useMemo(
+    () =>
+      communityTags
+        .filter((tag) => selectedCommunityTags.has(tag.slug))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [communityTags, selectedCommunityTags],
+  );
+  const hasSelectedFilters =
+    selectedSkillList.length > 0 || selectedCommunityList.length > 0;
 
   useEffect(() => {
     if (visible) {
-      setSkillQuery("");
+      setFilterQuery("");
     }
   }, [visible]);
 
+  const filteredCommunityTags = useMemo(() => {
+    const normalized = filterQuery.trim().toLowerCase();
+    if (!normalized) {
+      return communityTags;
+    }
+
+    return communityTags.filter((tag) =>
+      tag.name.toLowerCase().includes(normalized),
+    );
+  }, [communityTags, filterQuery]);
+
   const filteredSkills = useMemo(() => {
-    const normalized = skillQuery.trim().toLowerCase();
+    const normalized = filterQuery.trim().toLowerCase();
     if (!normalized) {
       return allSkills;
     }
@@ -59,7 +80,7 @@ export function DiscoverFilterModal({
     return allSkills.filter((skill) =>
       skill.toLowerCase().includes(normalized),
     );
-  }, [allSkills, skillQuery]);
+  }, [allSkills, filterQuery]);
 
   return (
     <Modal
@@ -90,32 +111,60 @@ export function DiscoverFilterModal({
             </View>
 
             <DiscoverSearchBar
-              testID="skill-search-input"
-              value={skillQuery}
-              onChangeText={setSkillQuery}
-              placeholder="Search skills..."
+              testID="filter-search-input"
+              value={filterQuery}
+              onChangeText={setFilterQuery}
+              placeholder="Search filters"
               className="h-10 mb-4"
             />
 
-            {selectedList.length > 0 && (
-              <SkillsCloud
-                title="Selected Skills"
-                skills={selectedList}
-                variant="mentor"
-              />
-            )}
+            {hasSelectedFilters ? (
+              <View className="mb-4">
+                <Text className="mb-2 text-xs font-bold uppercase tracking-wider text-on-surface-muted dark:text-on-surface-muted-dark">
+                  Selected Filters
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {selectedCommunityList.map((tag) => (
+                    <TouchableOpacity
+                      testID={`selected-community-filter-${tag.slug}`}
+                      key={tag.id}
+                      activeOpacity={1}
+                      onPress={() => onToggleCommunityTag(tag.slug)}
+                      className="px-3 py-2 rounded-full border bg-surface-active dark:bg-surface-active-dark border-primary"
+                    >
+                      <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
+                        {tag.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                  {selectedSkillList.map((skill) => (
+                    <TouchableOpacity
+                      testID={`selected-skill-${skill}`}
+                      key={skill}
+                      activeOpacity={1}
+                      onPress={() => onToggleSkill(skill)}
+                      className="px-3 py-2 rounded-full border bg-primary border-primary"
+                    >
+                      <Text className="text-sm font-semibold text-white">
+                        {skill}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ) : null}
 
             <ScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              {communityTags.length > 0 ? (
+              {filteredCommunityTags.length > 0 ? (
                 <View className="mb-5">
                   <Text className="mb-2 text-xs font-bold uppercase tracking-wider text-on-surface-muted dark:text-on-surface-muted-dark">
                     Communities
                   </Text>
                   <View className="flex-row flex-wrap gap-2">
-                    {communityTags.map((tag) => {
+                    {filteredCommunityTags.map((tag) => {
                       const selected = selectedCommunityTags.has(tag.slug);
 
                       return (
@@ -126,14 +175,14 @@ export function DiscoverFilterModal({
                           onPress={() => onToggleCommunityTag(tag.slug)}
                           className={`px-3 py-2 rounded-full border ${
                             selected
-                              ? "bg-primary border-primary"
+                              ? "bg-surface-active dark:bg-surface-active-dark border-primary"
                               : "bg-surface-card dark:bg-surface-card-dark border-divider dark:border-divider-dark"
                           }`}
                         >
                           <Text
                             className={`text-sm font-semibold ${
                               selected
-                                ? "text-white"
+                                ? "text-primary dark:text-primary-dim"
                                 : "text-on-surface dark:text-on-surface-dark"
                             }`}
                           >
@@ -199,7 +248,7 @@ export function DiscoverFilterModal({
               </TouchableOpacity>
               <TouchableOpacity
                 testID="apply-button"
-                onPress={onClose}
+                onPress={onApply}
                 className="flex-1 py-3 rounded-xl bg-primary items-center"
               >
                 <Text className="font-semibold text-white">Apply</Text>

@@ -72,9 +72,9 @@ describe("TabLayout", () => {
     const { getByTestId, queryByTestId } = render(<TabLayout />);
 
     expect(getByTestId("tab-screen-user/[username]")).toBeTruthy();
-    expect(getByTestId("tab-screen-community/[tagId]")).toBeTruthy();
+    expect(getByTestId("tab-screen-community/[tagId]/index")).toBeTruthy();
     expect(getByTestId("tab-screen-community/[tagId]/members")).toBeTruthy();
-    expect(queryByTestId("visible-tab-community/[tagId]")).toBeNull();
+    expect(queryByTestId("visible-tab-community/[tagId]/index")).toBeNull();
     expect(queryByTestId("visible-tab-community/[tagId]/members")).toBeNull();
   });
 });
