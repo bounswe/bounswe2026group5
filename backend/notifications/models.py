@@ -17,6 +17,10 @@ class NotificationType(models.TextChoices):
     MATCH_DEACTIVATED = "match_deactivated", "Match Deactivated"
     NEW_MESSAGE = "new_message", "New Message"
     NEW_FEEDBACK_AVAILABLE = "new_feedback_available", "New Feedback Available"
+    TAG_NEW_MEMBER = "tag_new_member", "Tag New Member"
+    TAG_DESCRIPTION_UPDATED = "tag_description_updated", "Tag Description Updated"
+    TAG_DELETED = "tag_deleted", "Tag Deleted"
+    TAG_MATCHES_INTEREST = "tag_matches_interest", "Tag Matches Interest"
 
 
 class Notification(models.Model):

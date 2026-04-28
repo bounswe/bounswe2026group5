@@ -1,6 +1,10 @@
+import logging
 from typing import Any, cast
 
 from django.conf import settings
+from django.core.mail import send_mail
+from django.db import transaction
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -8,20 +12,30 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from .models import User
+from .models import EmailVerificationToken, PasswordResetToken, User
 from .permissions import IsAdmin, IsNotBanned
 from .serializers import (
     AuthResponseSerializer,
     BannedAwareTokenRefreshSerializer,
+    ForgotPasswordSerializer,
     LoginSerializer,
     LogoutSerializer,
     RegisterSerializer,
+    ResetPasswordSerializer,
     UserAppUsageModeUpdateSerializer,
     UserResponseSerializer,
+    VerifyEmailSerializer,
 )
+
+logger = logging.getLogger(__name__)
+
+_GENERIC_FORGOT_PASSWORD_RESPONSE = {
+    "detail": "If an account exists for that email, a password reset link has been sent."
+}
 
 
 def build_auth_response(user: User, refresh: RefreshToken | None = None) -> dict[str, object]:
@@ -84,6 +98,12 @@ class RegisterAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         user = cast(User, serializer.save())
         refresh = RefreshToken.for_user(user)
+
+        try:
+            raw_token, _ = EmailVerificationToken.issue_for_user(user)
+            _send_email_verification_email(user, raw_token)
+        except Exception:
+            logger.exception("Failed to issue verification email for user %s", user.id)
 
         response = Response(
             AuthResponseSerializer(build_auth_response(user, refresh)).data,
@@ -256,6 +276,229 @@ class UserAppUsageModeMeAPIView(APIView):
 
         return Response(
             UserResponseSerializer(cast(User, request.user)).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+def _send_email_verification_email(user: User, raw_token: str) -> None:
+    verify_path = getattr(settings, "EMAIL_VERIFICATION_URL_PATH", "/verify-email")
+    base_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    verify_link = f"{base_url}{verify_path}?token={raw_token}"
+    lifetime_hours = getattr(settings, "EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS", 24)
+
+    subject = "Verify your Neighborship email address"
+    body = (
+        f"Welcome to Neighborship!\n\n"
+        f"Please confirm your email address by clicking the link below. "
+        f"This link will expire in {lifetime_hours} hours.\n\n"
+        f"{verify_link}\n\n"
+        f"If you did not create a Neighborship account, you can safely ignore this email.\n"
+    )
+
+    send_mail(
+        subject=subject,
+        message=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
+
+
+def _send_password_reset_email(user: User, raw_token: str) -> None:
+    reset_path = getattr(settings, "PASSWORD_RESET_URL_PATH", "/reset-password")
+    base_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    reset_link = f"{base_url}{reset_path}?token={raw_token}"
+    lifetime = getattr(settings, "PASSWORD_RESET_TOKEN_LIFETIME_MINUTES", 30)
+
+    subject = "Reset your Neighborship password"
+    body = (
+        f"Hi,\n\n"
+        f"We received a request to reset the password for your Neighborship account.\n"
+        f"Use the link below to choose a new password. "
+        f"This link will expire in {lifetime} minutes.\n\n"
+        f"{reset_link}\n\n"
+        f"If you did not request a password reset, you can safely ignore this email.\n"
+    )
+
+    send_mail(
+        subject=subject,
+        message=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
+
+
+def _blacklist_user_refresh_tokens(user: User) -> None:
+    """Blacklist all outstanding JWT refresh tokens for a user."""
+    outstanding = OutstandingToken.objects.filter(user=user)
+    for token_record in outstanding:
+        try:
+            RefreshToken(cast(Any, token_record.token)).blacklist()
+        except TokenError:
+            continue
+
+
+class ForgotPasswordAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=ForgotPasswordSerializer,
+        responses={
+            200: OpenApiResponse(description="Generic acknowledgement (no account enumeration)."),
+            400: OpenApiResponse(description="Validation error."),
+        },
+        description=(
+            "Request a password reset link. Always returns a generic success "
+            "response, regardless of whether the email matches an account, to "
+            "avoid user enumeration."
+        ),
+        tags=["Auth"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ForgotPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = cast(str, serializer.validated_data["email"])
+
+        user = User.objects.filter(email=email, is_active=True, is_banned=False).first()
+        if user is not None:
+            try:
+                raw_token, _ = PasswordResetToken.issue_for_user(user)
+                _send_password_reset_email(user, raw_token)
+            except Exception:
+                logger.exception("Failed to issue password reset email for user %s", user.id)
+
+        return Response(_GENERIC_FORGOT_PASSWORD_RESPONSE, status=status.HTTP_200_OK)
+
+
+class ResetPasswordAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=ResetPasswordSerializer,
+        responses={
+            200: OpenApiResponse(description="Password reset successful."),
+            400: OpenApiResponse(description="Invalid or expired token, or validation error."),
+        },
+        description=(
+            "Reset the user's password using a token delivered via email. "
+            "On success the token is invalidated and existing JWT refresh "
+            "tokens for the user are blacklisted."
+        ),
+        tags=["Auth"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict[str, Any], serializer.validated_data)
+        user = cast(User, validated_data["user"])
+        reset_token = cast(PasswordResetToken, validated_data["reset_token"])
+        new_password = cast(str, validated_data["new_password"])
+
+        with transaction.atomic():
+            user.set_password(new_password)
+            user.save(update_fields=["password", "updated_at"])
+            reset_token.mark_used()
+
+        _blacklist_user_refresh_tokens(user)
+
+        return Response(
+            {"detail": "Password has been reset successfully."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class VerifyEmailAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        parameters=[VerifyEmailSerializer],
+        responses={
+            200: OpenApiResponse(description="Email verification successful."),
+            400: OpenApiResponse(description="Invalid or expired token."),
+        },
+        description=(
+            "Verify a user's email address using a token delivered via email. "
+            "On success the user's `is_email_verified` flag is set and the "
+            "token is invalidated."
+        ),
+        tags=["Auth"],
+    )
+    def get(self, request: Request) -> Response:
+        raw_token = cast(str | None, request.query_params.get("token"))
+        if not raw_token:
+            return Response(
+                {"token": "This field is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        token_hash = EmailVerificationToken.hash_token(raw_token)
+        try:
+            verification = EmailVerificationToken.objects.select_related("user").get(
+                token_hash=token_hash
+            )
+        except EmailVerificationToken.DoesNotExist:
+            return Response(
+                {"token": "Invalid or expired token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not verification.is_valid():
+            return Response(
+                {"token": "Invalid or expired token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = verification.user
+        if not user.is_active or user.is_banned:
+            return Response(
+                {"token": "Invalid or expired token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            if not user.is_email_verified:
+                user.is_email_verified = True
+                user.email_verified_at = timezone.now()
+                user.save(update_fields=["is_email_verified", "email_verified_at", "updated_at"])
+            verification.mark_used()
+
+        return Response(
+            {"detail": "Email has been verified successfully."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class ResendVerificationAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsNotBanned]
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: OpenApiResponse(description="Verification email sent if the account is unverified."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Account banned."),
+        },
+        description=(
+            "Issue a new email-verification token for the authenticated user "
+            "and send the verification link. Returns a generic success response "
+            "even when the account is already verified, to avoid leaking state."
+        ),
+        tags=["Auth"],
+    )
+    def post(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        if not user.is_email_verified:
+            try:
+                raw_token, _ = EmailVerificationToken.issue_for_user(user)
+                _send_email_verification_email(user, raw_token)
+            except Exception:
+                logger.exception(
+                    "Failed to resend verification email for user %s", user.id
+                )
+
+        return Response(
+            {"detail": "If your email is unverified, a new verification link has been sent."},
             status=status.HTTP_200_OK,
         )
 

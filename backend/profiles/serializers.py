@@ -10,7 +10,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import AvailabilitySlot, Profile, Skill
+from .models import AvailabilitySlot, CommunityTag, Profile, Skill
 from core.utils.timezone import get_project_timezone, to_local_time
 
 if TYPE_CHECKING:
@@ -455,3 +455,113 @@ class PublicMentorProfileSearchListResponseSerializer(serializers.Serializer):
     page = serializers.IntegerField()
     pageSize = serializers.IntegerField()
     results = PublicMentorProfileSearchResultSerializer(many=True)
+
+
+# ---------------------------------------------------------------------------
+# Community Tags
+# ---------------------------------------------------------------------------
+
+
+class CommunityTagListSerializer(serializers.ModelSerializer):
+    """Read serializer for community tag list items."""
+
+    class Meta:
+        model = CommunityTag
+        fields = ("id", "name", "slug", "description", "member_count", "created_at")
+        read_only_fields = fields
+
+
+class CommunityTagDetailSerializer(serializers.ModelSerializer):
+    """Read serializer for community tag detail, includes creator info."""
+
+    created_by_username = serializers.SerializerMethodField()
+    is_member = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CommunityTag
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "description",
+            "member_count",
+            "created_by_username",
+            "is_member",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_created_by_username(self, obj) -> str | None:
+        if obj.created_by is not None:
+            return obj.created_by.username
+        return None
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_member(self, obj) -> bool:
+        request = self.context.get("request")
+        if request is None or not request.user.is_authenticated:
+            return False
+        profile = getattr(request.user, "profile", None)
+        if profile is None:
+            return False
+        return obj.memberships.filter(profile=profile).exists()
+
+
+class CommunityTagCreateSerializer(serializers.Serializer):
+    """Write serializer for creating a new community tag."""
+
+    name = serializers.CharField(max_length=120)
+    description = serializers.CharField(required=False, default="", allow_blank=True)
+
+    def validate_name(self, value: str) -> str:
+        name = value.strip()
+        if not name:
+            raise serializers.ValidationError("Tag name must not be empty.")
+        if CommunityTag.objects.filter(name__iexact=name).exists():
+            raise serializers.ValidationError(
+                "A community tag with this name already exists."
+            )
+        return name
+
+    def create(self, validated_data: dict) -> "CommunityTag":
+        profile = self.context.get("profile")
+        return CommunityTag.objects.create(
+            name=validated_data["name"],
+            description=validated_data.get("description", ""),
+            created_by=profile,
+        )
+
+
+class CommunityTagUpdateSerializer(serializers.Serializer):
+    """Write serializer for updating an existing community tag.
+
+    Only `description` is writable. Any other fields in the payload
+    (e.g. `name`, `slug`) are silently ignored to keep tag URLs stable.
+    """
+
+    description = serializers.CharField(required=False, allow_blank=True)
+
+    def update(self, instance: "CommunityTag", validated_data: dict) -> "CommunityTag":
+        if "description" in validated_data:
+            instance.description = validated_data["description"]
+            instance.save(update_fields=["description"])
+        return instance
+
+
+class CommunityTagMembershipSerializer(serializers.Serializer):
+    """Response serializer for join/leave operations."""
+
+    tag_id = serializers.UUIDField()
+    tag_name = serializers.CharField()
+    tag_slug = serializers.CharField()
+    joined = serializers.BooleanField()
+
+
+class CommunityTagListResponseSerializer(serializers.Serializer):
+    """Paginated response wrapper for community tag listing."""
+
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    pageSize = serializers.IntegerField()
+    results = CommunityTagListSerializer(many=True)

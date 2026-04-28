@@ -1,28 +1,35 @@
 """Views for profile self-service API endpoints."""
 
+from datetime import timedelta
+
 from django.conf import settings
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
-from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db import IntegrityError, models, transaction
+from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import status
-from rest_framework import serializers
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.models import AppUsageMode
+from accounts.models import AppUsageMode, UserRole
 from accounts.permissions import IsUser
 from mentorship.models import Feedback
 
-from .models import AvailabilitySlot, Profile, Skill
+from .models import AvailabilitySlot, CommunityTag, CommunityTagMembership, Profile, Skill
 from .serializers import (
     AvailabilitySlotSerializer,
     AvailabilitySlotWriteSerializer,
+    CommunityTagCreateSerializer,
+    CommunityTagDetailSerializer,
+    CommunityTagListResponseSerializer,
+    CommunityTagListSerializer,
+    CommunityTagMembershipSerializer,
+    CommunityTagUpdateSerializer,
     MenteeProfileResponseSerializer,
     MentorProfileResponseSerializer,
     ProfileResponseSerializer,
@@ -795,6 +802,14 @@ class PublicMentorProfilesSearchListAPIView(APIView):
             point = Point(lng, lat, srid=4326)
             qs = qs.filter(location__distance_lte=(point, D(km=distance_km)))
 
+        # Community tag filtering (matches profiles in ANY of the given tags)
+        tag_terms = self._parse_terms(request, keys=["tag", "tags"])
+        if tag_terms:
+            tagged_profile_ids = CommunityTagMembership.objects.filter(
+                Q(tag__slug__in=tag_terms) | Q(tag__name__in=tag_terms)
+            ).values_list("profile_id", flat=True)
+            qs = qs.filter(id__in=tagged_profile_ids)
+
         total = qs.count()
         offset = (page - 1) * page_size
         items = qs[offset : offset + page_size]
@@ -918,6 +933,474 @@ class ProfileReviewsByUsernameAPIView(ProfileLookupMixin, APIView):
                 "page": page,
                 "pageSize": page_size,
                 "results": PublicProfileReviewSerializer(items, many=True).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Community Tags Views
+# ---------------------------------------------------------------------------
+
+
+class CommunityTagListCreateAPIView(APIView):
+    """List all community tags (public) or create a new one (auth required)."""
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsUser()]
+        return [AllowAny()]
+
+    @extend_schema(
+        operation_id="community_tags_list",
+        responses={200: CommunityTagListResponseSerializer},
+        description=(
+            "List all community tags, ordered by name. "
+            "Supports search via `q` query param and pagination via `page`/`pageSize`."
+        ),
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return paginated list of community tags with optional search."""
+        q = (request.query_params.get("q") or "").strip()
+
+        try:
+            page = int(request.query_params.get("page", 1))
+            page_size = int(request.query_params.get("pageSize", 20))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "`page` and `pageSize` must be integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        page = max(page, 1)
+        page_size = max(1, min(page_size, 50))
+
+        qs = CommunityTag.objects.all()
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
+
+        total = qs.count()
+        offset = (page - 1) * page_size
+        items = qs[offset : offset + page_size]
+
+        serializer = CommunityTagListSerializer(items, many=True)
+        return Response(
+            {
+                "count": total,
+                "page": page,
+                "pageSize": page_size,
+                "results": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        operation_id="community_tags_create",
+        request=CommunityTagCreateSerializer,
+        responses={
+            201: CommunityTagDetailSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+        },
+        description="Create a new community tag. Tag names are unique (case-insensitive).",
+        tags=["Community Tags"],
+    )
+    def post(self, request: Request) -> Response:
+        """Create a new community tag."""
+        profile = self._get_profile(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = CommunityTagCreateSerializer(
+            data=request.data,
+            context={"profile": profile},
+        )
+        serializer.is_valid(raise_exception=True)
+        tag = serializer.save()
+
+        return Response(
+            CommunityTagDetailSerializer(tag, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @staticmethod
+    def _get_profile(request: Request):
+        try:
+            return Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return None
+
+
+class CommunityTagDetailAPIView(APIView):
+    """Retrieve or delete a community tag."""
+
+    def get_permissions(self):
+        if self.request.method in ("DELETE", "PATCH"):
+            return [IsUser()]
+        return [AllowAny()]
+
+    @extend_schema(
+        operation_id="community_tags_detail",
+        responses={
+            200: CommunityTagDetailSerializer,
+            404: OpenApiResponse(description="Tag not found."),
+        },
+        description="Retrieve a community tag by ID, including member count and creator info.",
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request, tag_id: str) -> Response:
+        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(
+            CommunityTagDetailSerializer(tag, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        operation_id="community_tags_update",
+        request=CommunityTagUpdateSerializer,
+        responses={
+            200: CommunityTagDetailSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Tag not found."),
+        },
+        description=(
+            "Update a community tag's description. Only the tag's creator and "
+            "admins can edit. The tag name and slug are immutable; any attempt "
+            "to change them is silently ignored to keep tag URLs stable."
+        ),
+        tags=["Community Tags"],
+    )
+    def patch(self, request: Request, tag_id: str) -> Response:
+        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        is_admin = request.user.role == UserRole.ADMIN
+        actor_profile_id = None
+        try:
+            actor_profile_id = Profile.objects.get(user=request.user).id
+        except Profile.DoesNotExist:
+            if not is_admin:
+                return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
+        if not is_admin and tag.created_by_id != actor_profile_id:
+            return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
+
+        tag._actor_profile_id = actor_profile_id
+        serializer = CommunityTagUpdateSerializer(tag, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            CommunityTagDetailSerializer(tag, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        operation_id="community_tags_delete",
+        responses={
+            204: OpenApiResponse(description="Tag deleted."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Permission denied."),
+            404: OpenApiResponse(description="Tag not found."),
+        },
+        description=(
+            "Delete a community tag. Admins can delete any tag. "
+            "Regular creators can only delete their own tag if it has no members."
+        ),
+        tags=["Community Tags"],
+    )
+    def delete(self, request: Request, tag_id: str) -> Response:
+        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        is_admin = request.user.role == UserRole.ADMIN
+        actor_profile_id = (
+            Profile.objects.filter(user=request.user).values_list("id", flat=True).first()
+        )
+
+        if is_admin:
+            tag._actor_profile_id = actor_profile_id
+            tag.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        # Non-admin: must be creator and tag must be empty
+        if actor_profile_id is None or tag.created_by_id != actor_profile_id:
+            return Response(PERMISSION_DENIED_DETAIL, status=status.HTTP_403_FORBIDDEN)
+
+        if tag.member_count > 0:
+            return Response(
+                {"detail": "Cannot delete a tag that still has members."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        tag._actor_profile_id = actor_profile_id
+        tag.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CommunityTagJoinAPIView(APIView):
+    """Join a community tag."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        operation_id="community_tags_join",
+        request=None,
+        responses={
+            200: CommunityTagMembershipSerializer,
+            400: OpenApiResponse(description="Already a member."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Tag not found."),
+        },
+        description="Join a community tag. Authenticated users only.",
+        tags=["Community Tags"],
+    )
+    def post(self, request: Request, tag_id: str) -> Response:
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        with transaction.atomic():
+            _, created = CommunityTagMembership.objects.get_or_create(
+                profile=profile,
+                tag=tag,
+            )
+            if not created:
+                return Response(
+                    {"detail": "You are already a member of this tag."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            CommunityTag.objects.filter(id=tag.id).update(
+                member_count=models.F("member_count") + 1
+            )
+
+        return Response(
+            CommunityTagMembershipSerializer({
+                "tag_id": tag.id,
+                "tag_name": tag.name,
+                "tag_slug": tag.slug,
+                "joined": True,
+            }).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class CommunityTagLeaveAPIView(APIView):
+    """Leave a community tag."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        operation_id="community_tags_leave",
+        responses={
+            200: CommunityTagMembershipSerializer,
+            400: OpenApiResponse(description="Not a member."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Tag not found."),
+        },
+        description="Leave a community tag. Authenticated users only.",
+        tags=["Community Tags"],
+    )
+    def delete(self, request: Request, tag_id: str) -> Response:
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        with transaction.atomic():
+            deleted_count, _ = CommunityTagMembership.objects.filter(
+                profile=profile,
+                tag=tag,
+            ).delete()
+            if deleted_count == 0:
+                return Response(
+                    {"detail": "You are not a member of this tag."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            CommunityTag.objects.filter(id=tag.id).update(
+                member_count=models.F("member_count") - 1
+            )
+
+        return Response(
+            CommunityTagMembershipSerializer({
+                "tag_id": tag.id,
+                "tag_name": tag.name,
+                "tag_slug": tag.slug,
+                "joined": False,
+            }).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class MyTagsListAPIView(ProfileLookupMixin, APIView):
+    """List community tags the authenticated user belongs to."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        operation_id="community_tags_my_list",
+        responses={
+            200: CommunityTagListSerializer(many=True),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="List community tags the authenticated user has joined.",
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request) -> Response:
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        tags = CommunityTag.objects.filter(
+            memberships__profile=profile,
+        ).order_by("name")
+
+        return Response(
+            CommunityTagListSerializer(tags, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+POPULAR_TAGS_WINDOWS = {"all": None, "7d": 7, "30d": 30}
+POPULAR_TAGS_DEFAULT_LIMIT = 10
+POPULAR_TAGS_MAX_LIMIT = 50
+
+
+class PopularTagsListAPIView(APIView):
+    """List the most popular community tags by member count."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id="community_tags_popular",
+        responses={
+            200: CommunityTagListSerializer(many=True),
+            400: OpenApiResponse(description="Invalid limit or window value."),
+        },
+        description=(
+            "List the top community tags by member count. "
+            "Supports `limit` (default 10, capped at 50) and `window` "
+            "(`all`, `7d`, `30d`; defaults to `all`). Ties break on most recent creation."
+        ),
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request) -> Response:
+        try:
+            limit = int(request.query_params.get("limit", POPULAR_TAGS_DEFAULT_LIMIT))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "`limit` must be an integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        limit = max(1, min(limit, POPULAR_TAGS_MAX_LIMIT))
+
+        window = (request.query_params.get("window") or "all").strip().lower()
+        if window not in POPULAR_TAGS_WINDOWS:
+            allowed = ", ".join(sorted(POPULAR_TAGS_WINDOWS.keys()))
+            return Response(
+                {"detail": f"`window` must be one of: {allowed}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        days = POPULAR_TAGS_WINDOWS[window]
+        if days is None:
+            qs = (
+                CommunityTag.objects
+                .filter(member_count__gt=0)
+                .order_by("-member_count", "-created_at")
+            )
+        else:
+            cutoff = timezone.now() - timedelta(days=days)
+            qs = (
+                CommunityTag.objects
+                .annotate(
+                    window_count=Count(
+                        "memberships",
+                        filter=Q(memberships__joined_at__gte=cutoff),
+                    )
+                )
+                .filter(window_count__gt=0)
+                .order_by("-window_count", "-created_at")
+            )
+
+        items = list(qs[:limit])
+        return Response(
+            CommunityTagListSerializer(items, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class CommunityTagMembersListAPIView(APIView):
+    """List the visible profiles enrolled in a community tag."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id="community_tags_members_list",
+        responses={
+            200: PublicMentorProfileSearchListResponseSerializer,
+            400: OpenApiResponse(description="Invalid pagination params."),
+            404: OpenApiResponse(description="Tag not found."),
+        },
+        description=(
+            "List the profiles that have joined a given community tag, ordered by "
+            "most recently joined first. Hidden profiles are excluded. Pagination via "
+            "`page` and `pageSize`."
+        ),
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request, tag_id: str) -> Response:
+        if not CommunityTag.objects.filter(id=tag_id).exists():
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            page = int(request.query_params.get("page", 1))
+            page_size = int(request.query_params.get("pageSize", 20))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "`page` and `pageSize` must be integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        page = max(page, 1)
+        page_size = max(1, min(page_size, 50))
+
+        memberships = (
+            CommunityTagMembership.objects
+            .filter(tag_id=tag_id, profile__is_visible=True)
+            .select_related("profile__user")
+            .order_by("-joined_at")
+        )
+
+        total = memberships.count()
+        offset = (page - 1) * page_size
+        page_items = memberships[offset : offset + page_size]
+        profiles = [m.profile for m in page_items]
+
+        serializer = PublicMentorProfileSearchResultSerializer(profiles, many=True)
+        return Response(
+            {
+                "count": total,
+                "page": page,
+                "pageSize": page_size,
+                "results": serializer.data,
             },
             status=status.HTTP_200_OK,
         )

@@ -256,16 +256,19 @@ class MentorshipRequestAPIBaseTestCase(TestCase):
             email="mentor.api@example.com",
             password="SecurePass123",
             app_usage_mode=AppUsageMode.MENTOR,
+            is_email_verified=True,
         )
         self.mentee_user = User.objects.create_user(
             email="mentee.api@example.com",
             password="SecurePass123",
             app_usage_mode=AppUsageMode.MENTEE,
+            is_email_verified=True,
         )
         self.other_user = User.objects.create_user(
             email="other.api@example.com",
             password="SecurePass123",
             app_usage_mode=AppUsageMode.MENTEE,
+            is_email_verified=True,
         )
 
         self.mentor_profile = Profile.objects.create(
@@ -392,6 +395,20 @@ class CreateRequestAPIViewTests(MentorshipRequestAPIBaseTestCase):
             },
         )
         self.assertEqual(response.status_code, 401)
+
+    def test_unverified_email_mentee_cannot_create_request(self) -> None:
+        """Issue #228: gated endpoints must reject users with unverified email."""
+        self.mentee_user.is_email_verified = False
+        self.mentee_user.save(update_fields=["is_email_verified"])
+
+        response = self.mentee_client.post(
+            self.REQUESTS_URL,
+            {
+                "mentor_username": self.mentor_profile.username,
+                "slot_id": str(self.mentor_slot.id),
+            },
+        )
+        self.assertEqual(response.status_code, 403)
 
     def test_mentee_creates_request_successfully(self) -> None:
         response = self.mentee_client.post(
@@ -1358,6 +1375,7 @@ class MentorshipProfileMissingAPIViewTests(MentorshipRequestAPIBaseTestCase):
             email="no.profile.api@example.com",
             password="SecurePass123",
             app_usage_mode=AppUsageMode.MENTEE,
+            is_email_verified=True,
         )
         self.no_profile_client = APIClient()
         self.no_profile_client.credentials(

@@ -1,18 +1,28 @@
+from datetime import timedelta
 from typing import Any, cast
 from unittest.mock import Mock, patch
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, Group
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, override_settings
+from django.utils import timezone
 from drf_spectacular.openapi import AutoSchema
 from rest_framework.test import APIClient, APIRequestFactory
-from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import Profile
 
-from .models import AppUsageMode, AuthProvider, User, UserRole
-from .permissions import IsRegularUser
+from .models import (
+    AppUsageMode,
+    AuthProvider,
+    EmailVerificationToken,
+    PasswordResetToken,
+    User,
+    UserRole,
+)
+from .permissions import IsEmailVerified, IsRegularUser
 from .schema import CookieOrHeaderJWTAuthenticationScheme
 from .views import build_auth_response
 
@@ -879,3 +889,528 @@ class RBACPermissionTests(TestCase):
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.user)}")
         response = self.api_client.patch(url, payload)
         self.assertEqual(response.status_code, 200)
+
+
+class PasswordResetTokenModelTests(TestCase):
+    """Unit tests for the PasswordResetToken model helpers."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            email="reset_model@example.com",
+            password="OldPass123!",
+        )
+
+    def test_hash_token_is_deterministic_and_hex(self) -> None:
+        h1 = PasswordResetToken.hash_token("abc")
+        h2 = PasswordResetToken.hash_token("abc")
+        self.assertEqual(h1, h2)
+        self.assertEqual(len(h1), 64)
+        self.assertNotEqual(h1, PasswordResetToken.hash_token("abcd"))
+
+    def test_issue_for_user_stores_hash_not_raw_token(self) -> None:
+        raw_token, instance = PasswordResetToken.issue_for_user(self.user)
+
+        self.assertNotEqual(raw_token, instance.token_hash)
+        self.assertEqual(instance.token_hash, PasswordResetToken.hash_token(raw_token))
+        self.assertEqual(instance.user, self.user)
+        self.assertIsNone(instance.used_at)
+        self.assertGreater(instance.expires_at, timezone.now())
+
+    def test_issue_for_user_invalidates_previous_active_tokens(self) -> None:
+        _, first = PasswordResetToken.issue_for_user(self.user)
+        self.assertIsNone(first.used_at)
+
+        _, second = PasswordResetToken.issue_for_user(self.user)
+
+        first.refresh_from_db()
+        self.assertIsNotNone(first.used_at)
+        self.assertIsNone(second.used_at)
+
+    def test_is_valid_false_when_expired(self) -> None:
+        _, instance = PasswordResetToken.issue_for_user(self.user)
+        instance.expires_at = timezone.now() - timedelta(seconds=1)
+        instance.save(update_fields=["expires_at"])
+
+        self.assertFalse(instance.is_valid())
+
+    def test_is_valid_false_when_used(self) -> None:
+        _, instance = PasswordResetToken.issue_for_user(self.user)
+        instance.mark_used()
+
+        self.assertFalse(instance.is_valid())
+        self.assertIsNotNone(instance.used_at)
+
+    def test_token_uses_configured_lifetime(self) -> None:
+        with override_settings(PASSWORD_RESET_TOKEN_LIFETIME_MINUTES=5):
+            before = timezone.now()
+            _, instance = PasswordResetToken.issue_for_user(self.user)
+            delta = instance.expires_at - before
+            # Allow small drift; the lifetime should be ~5 minutes.
+            self.assertGreaterEqual(delta, timedelta(minutes=4, seconds=59))
+            self.assertLessEqual(delta, timedelta(minutes=5, seconds=5))
+
+
+class ForgotPasswordAPIViewTests(TestCase):
+    """API tests for POST /api/auth/forgot-password/."""
+
+    URL = "/api/auth/forgot-password/"
+
+    def setUp(self) -> None:
+        self.api_client = APIClient()
+        self.user = User.objects.create_user(
+            email="forgot@example.com",
+            password="OldPass123!",
+        )
+        mail.outbox = []
+
+    def test_forgot_password_sends_email_for_existing_user(self) -> None:
+        response = self.api_client.post(self.URL, {"email": "forgot@example.com"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("detail", response.data)
+
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertIn(self.user.email, sent.to)
+        self.assertIn("reset-password?token=", sent.body)
+
+        # Token stored as hash only, exactly one active token.
+        tokens = PasswordResetToken.objects.filter(user=self.user, used_at__isnull=True)
+        self.assertEqual(tokens.count(), 1)
+        stored = tokens.first()
+        assert stored is not None
+        self.assertNotIn(stored.token_hash, sent.body)
+
+    def test_forgot_password_normalizes_email_case(self) -> None:
+        response = self.api_client.post(self.URL, {"email": "Forgot@Example.COM"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            PasswordResetToken.objects.filter(user=self.user).count(),
+            1,
+        )
+
+    def test_forgot_password_returns_generic_response_for_unknown_email(self) -> None:
+        response = self.api_client.post(self.URL, {"email": "ghost@example.com"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(PasswordResetToken.objects.count(), 0)
+
+    def test_forgot_password_skips_banned_users(self) -> None:
+        self.user.is_banned = True
+        self.user.save(update_fields=["is_banned"])
+
+        response = self.api_client.post(self.URL, {"email": self.user.email})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(PasswordResetToken.objects.count(), 0)
+
+    def test_forgot_password_skips_inactive_users(self) -> None:
+        self.user.is_active = False
+        self.user.save(update_fields=["is_active"])
+
+        response = self.api_client.post(self.URL, {"email": self.user.email})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_forgot_password_requires_valid_email_format(self) -> None:
+        response = self.api_client.post(self.URL, {"email": "not-an-email"})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("email", response.data)
+
+    def test_forgot_password_invalidates_previous_token_when_reissued(self) -> None:
+        self.api_client.post(self.URL, {"email": self.user.email})
+        first_token = PasswordResetToken.objects.get(user=self.user, used_at__isnull=True)
+
+        self.api_client.post(self.URL, {"email": self.user.email})
+
+        first_token.refresh_from_db()
+        self.assertIsNotNone(first_token.used_at)
+        self.assertEqual(
+            PasswordResetToken.objects.filter(user=self.user, used_at__isnull=True).count(),
+            1,
+        )
+
+
+class ResetPasswordAPIViewTests(TestCase):
+    """API tests for POST /api/auth/reset-password/."""
+
+    URL = "/api/auth/reset-password/"
+    NEW_PASSWORD = "BrandNewPass!234"
+
+    def setUp(self) -> None:
+        self.api_client = APIClient()
+        self.user = User.objects.create_user(
+            email="resetter@example.com",
+            password="OldPass123!",
+        )
+        self.raw_token, self.reset_token = PasswordResetToken.issue_for_user(self.user)
+
+    def _payload(self, **overrides: Any) -> dict[str, Any]:
+        payload = {
+            "token": self.raw_token,
+            "new_password": self.NEW_PASSWORD,
+            "confirm_password": self.NEW_PASSWORD,
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_reset_password_succeeds_with_valid_token(self) -> None:
+        response = self.api_client.post(self.URL, self._payload())
+
+        self.assertEqual(response.status_code, 200)
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(self.NEW_PASSWORD))
+        self.assertFalse(self.user.check_password("OldPass123!"))
+
+        self.reset_token.refresh_from_db()
+        self.assertIsNotNone(self.reset_token.used_at)
+
+    def test_reset_password_token_cannot_be_reused(self) -> None:
+        first = self.api_client.post(self.URL, self._payload())
+        self.assertEqual(first.status_code, 200)
+
+        second = self.api_client.post(
+            self.URL,
+            self._payload(new_password="YetAnother!234", confirm_password="YetAnother!234"),
+        )
+
+        self.assertEqual(second.status_code, 400)
+        self.assertIn("token", second.data)
+
+    def test_reset_password_rejects_expired_token(self) -> None:
+        self.reset_token.expires_at = timezone.now() - timedelta(minutes=1)
+        self.reset_token.save(update_fields=["expires_at"])
+
+        response = self.api_client.post(self.URL, self._payload())
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("token", response.data)
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("OldPass123!"))
+
+    def test_reset_password_rejects_invalid_token(self) -> None:
+        response = self.api_client.post(self.URL, self._payload(token="does-not-exist"))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("token", response.data)
+
+    def test_reset_password_rejects_mismatched_confirmation(self) -> None:
+        response = self.api_client.post(
+            self.URL,
+            self._payload(confirm_password="DoesNotMatch!234"),
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("confirm_password", response.data)
+
+    def test_reset_password_enforces_password_validation(self) -> None:
+        response = self.api_client.post(
+            self.URL,
+            self._payload(new_password="short", confirm_password="short"),
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("OldPass123!"))
+
+    def test_reset_password_rejects_token_for_banned_user(self) -> None:
+        self.user.is_banned = True
+        self.user.save(update_fields=["is_banned"])
+
+        response = self.api_client.post(self.URL, self._payload())
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("token", response.data)
+
+    def test_reset_password_blacklists_existing_refresh_tokens(self) -> None:
+        refresh = RefreshToken.for_user(self.user)
+        self.assertTrue(OutstandingToken.objects.filter(user=self.user).exists())
+        self.assertFalse(
+            BlacklistedToken.objects.filter(token__jti=refresh["jti"]).exists()
+        )
+
+        response = self.api_client.post(self.URL, self._payload())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            BlacklistedToken.objects.filter(token__jti=refresh["jti"]).exists()
+        )
+
+
+class EmailVerificationTokenModelTests(TestCase):
+    """Unit tests for the EmailVerificationToken model helpers."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            email="verify_model@example.com",
+            password="SomePass123!",
+        )
+
+    def test_hash_token_is_deterministic_and_hex(self) -> None:
+        h1 = EmailVerificationToken.hash_token("abc")
+        h2 = EmailVerificationToken.hash_token("abc")
+        self.assertEqual(h1, h2)
+        self.assertEqual(len(h1), 64)
+        self.assertNotEqual(h1, EmailVerificationToken.hash_token("abcd"))
+
+    def test_issue_for_user_stores_hash_not_raw_token(self) -> None:
+        raw_token, instance = EmailVerificationToken.issue_for_user(self.user)
+
+        self.assertNotEqual(raw_token, instance.token_hash)
+        self.assertEqual(instance.token_hash, EmailVerificationToken.hash_token(raw_token))
+        self.assertEqual(instance.user, self.user)
+        self.assertIsNone(instance.used_at)
+        self.assertGreater(instance.expires_at, timezone.now())
+
+    def test_issue_for_user_invalidates_previous_active_tokens(self) -> None:
+        _, first = EmailVerificationToken.issue_for_user(self.user)
+        self.assertIsNone(first.used_at)
+
+        _, second = EmailVerificationToken.issue_for_user(self.user)
+
+        first.refresh_from_db()
+        self.assertIsNotNone(first.used_at)
+        self.assertIsNone(second.used_at)
+
+    def test_is_valid_false_when_expired(self) -> None:
+        _, instance = EmailVerificationToken.issue_for_user(self.user)
+        instance.expires_at = timezone.now() - timedelta(seconds=1)
+        instance.save(update_fields=["expires_at"])
+
+        self.assertFalse(instance.is_valid())
+
+    def test_is_valid_false_when_used(self) -> None:
+        _, instance = EmailVerificationToken.issue_for_user(self.user)
+        instance.mark_used()
+
+        self.assertFalse(instance.is_valid())
+
+    def test_token_uses_configured_lifetime(self) -> None:
+        with override_settings(EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS=2):
+            before = timezone.now()
+            _, instance = EmailVerificationToken.issue_for_user(self.user)
+            delta = instance.expires_at - before
+            self.assertGreaterEqual(delta, timedelta(hours=1, minutes=59))
+            self.assertLessEqual(delta, timedelta(hours=2, minutes=1))
+
+
+class RegistrationIssuesVerificationTokenTests(TestCase):
+    """Ensures registration auto-issues an email verification token + sends email."""
+
+    def setUp(self) -> None:
+        self.api_client = APIClient()
+        Group.objects.get_or_create(name=UserRole.USER)
+        mail.outbox = []
+
+    def test_new_user_starts_unverified(self) -> None:
+        response = self.api_client.post(
+            "/api/auth/register/",
+            {
+                "email": "fresh@example.com",
+                "password": "SecurePass123",
+                "confirm_password": "SecurePass123",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(response.data["user"]["is_email_verified"])
+
+        user = User.objects.get(email="fresh@example.com")
+        self.assertFalse(user.is_email_verified)
+        self.assertIsNone(user.email_verified_at)
+
+    def test_registration_issues_verification_token_and_sends_email(self) -> None:
+        response = self.api_client.post(
+            "/api/auth/register/",
+            {
+                "email": "welcome@example.com",
+                "password": "SecurePass123",
+                "confirm_password": "SecurePass123",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+
+        user = User.objects.get(email="welcome@example.com")
+        tokens = EmailVerificationToken.objects.filter(user=user, used_at__isnull=True)
+        self.assertEqual(tokens.count(), 1)
+
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertIn("welcome@example.com", sent.to)
+        self.assertIn("verify-email?token=", sent.body)
+
+        stored = tokens.first()
+        assert stored is not None
+        self.assertNotIn(stored.token_hash, sent.body)
+
+
+class VerifyEmailAPIViewTests(TestCase):
+    """API tests for GET /api/auth/verify-email/."""
+
+    URL = "/api/auth/verify-email/"
+
+    def setUp(self) -> None:
+        self.api_client = APIClient()
+        self.user = User.objects.create_user(
+            email="unverified@example.com",
+            password="SomePass123!",
+        )
+        # Override the grandfathered default (set in create_user only for existing rows at migrate
+        # time). New users in tests are created after migration, so they start with the declared
+        # field default: False.
+        self.user.is_email_verified = False
+        self.user.email_verified_at = None
+        self.user.save(update_fields=["is_email_verified", "email_verified_at"])
+        self.raw_token, self.token_instance = EmailVerificationToken.issue_for_user(self.user)
+
+    def test_verify_with_valid_token_marks_user_verified(self) -> None:
+        response = self.api_client.get(self.URL, {"token": self.raw_token})
+
+        self.assertEqual(response.status_code, 200)
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_email_verified)
+        self.assertIsNotNone(self.user.email_verified_at)
+
+        self.token_instance.refresh_from_db()
+        self.assertIsNotNone(self.token_instance.used_at)
+
+    def test_verify_missing_token_returns_400(self) -> None:
+        response = self.api_client.get(self.URL)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("token", response.data)
+
+    def test_verify_invalid_token_returns_400(self) -> None:
+        response = self.api_client.get(self.URL, {"token": "nope"})
+        self.assertEqual(response.status_code, 400)
+
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_email_verified)
+
+    def test_verify_expired_token_returns_400(self) -> None:
+        self.token_instance.expires_at = timezone.now() - timedelta(minutes=1)
+        self.token_instance.save(update_fields=["expires_at"])
+
+        response = self.api_client.get(self.URL, {"token": self.raw_token})
+
+        self.assertEqual(response.status_code, 400)
+
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_email_verified)
+
+    def test_verify_token_cannot_be_reused(self) -> None:
+        first = self.api_client.get(self.URL, {"token": self.raw_token})
+        self.assertEqual(first.status_code, 200)
+
+        second = self.api_client.get(self.URL, {"token": self.raw_token})
+        self.assertEqual(second.status_code, 400)
+
+    def test_verify_rejected_for_banned_user(self) -> None:
+        self.user.is_banned = True
+        self.user.save(update_fields=["is_banned"])
+
+        response = self.api_client.get(self.URL, {"token": self.raw_token})
+        self.assertEqual(response.status_code, 400)
+
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_email_verified)
+
+
+class ResendVerificationAPIViewTests(TestCase):
+    """API tests for POST /api/auth/resend-verification/."""
+
+    URL = "/api/auth/resend-verification/"
+
+    def setUp(self) -> None:
+        self.api_client = APIClient()
+        self.user = User.objects.create_user(
+            email="resend@example.com",
+            password="SomePass123!",
+        )
+        self.user.is_email_verified = False
+        self.user.email_verified_at = None
+        self.user.save(update_fields=["is_email_verified", "email_verified_at"])
+        self.api_client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {RefreshToken.for_user(self.user).access_token}"
+        )
+        mail.outbox = []
+
+    def test_resend_sends_new_token_email_for_unverified_user(self) -> None:
+        response = self.api_client.post(self.URL)
+        self.assertEqual(response.status_code, 200)
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.user.email, mail.outbox[0].to)
+
+        self.assertEqual(
+            EmailVerificationToken.objects.filter(user=self.user, used_at__isnull=True).count(),
+            1,
+        )
+
+    def test_resend_invalidates_previous_token(self) -> None:
+        _, old = EmailVerificationToken.issue_for_user(self.user)
+
+        self.api_client.post(self.URL)
+
+        old.refresh_from_db()
+        self.assertIsNotNone(old.used_at)
+
+    def test_resend_is_noop_when_user_already_verified(self) -> None:
+        self.user.is_email_verified = True
+        self.user.save(update_fields=["is_email_verified"])
+
+        response = self.api_client.post(self.URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(
+            EmailVerificationToken.objects.filter(user=self.user).count(),
+            0,
+        )
+
+    def test_resend_requires_authentication(self) -> None:
+        self.api_client.credentials()
+        response = self.api_client.post(self.URL)
+        self.assertEqual(response.status_code, 401)
+
+    def test_resend_blocks_banned_user(self) -> None:
+        self.user.is_banned = True
+        self.user.save(update_fields=["is_banned"])
+
+        response = self.api_client.post(self.URL)
+        self.assertEqual(response.status_code, 403)
+
+
+class IsEmailVerifiedPermissionTests(TestCase):
+    """Direct unit tests for the IsEmailVerified permission class."""
+
+    def setUp(self) -> None:
+        self.factory = APIRequestFactory()
+        self.permission = IsEmailVerified()
+
+    def test_denies_anonymous_user(self) -> None:
+        request = self.factory.get("/")
+        request.user = AnonymousUser()  # type: ignore[attr-defined]
+        self.assertFalse(self.permission.has_permission(request, Mock()))
+
+    def test_denies_unverified_authenticated_user(self) -> None:
+        user = User.objects.create_user(email="u@example.com", password="P!aaabbbb")
+        user.is_email_verified = False
+        user.save(update_fields=["is_email_verified"])
+        request = self.factory.get("/")
+        request.user = user  # type: ignore[attr-defined]
+        self.assertFalse(self.permission.has_permission(request, Mock()))
+
+    def test_allows_verified_authenticated_user(self) -> None:
+        user = User.objects.create_user(email="v@example.com", password="P!aaabbbb")
+        user.is_email_verified = True
+        user.save(update_fields=["is_email_verified"])
+        request = self.factory.get("/")
+        request.user = user  # type: ignore[attr-defined]
+        self.assertTrue(self.permission.has_permission(request, Mock()))
