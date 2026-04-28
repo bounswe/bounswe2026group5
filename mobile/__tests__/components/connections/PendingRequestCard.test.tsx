@@ -33,6 +33,22 @@ describe("PendingRequestCard — rendering", () => {
     expect(getByTestId("pending-decline-button")).toBeTruthy();
     expect(getByTestId("pending-accept-button")).toBeTruthy();
   });
+
+  it("renders pending state without action buttons for outgoing requests", () => {
+    const { getByTestId, queryByTestId } = render(
+      <PendingRequestCard {...baseProps} requestType="outgoing" />,
+    );
+    expect(getByTestId("pending-outgoing-badge")).toBeTruthy();
+    expect(queryByTestId("pending-decline-button")).toBeNull();
+    expect(queryByTestId("pending-accept-button")).toBeNull();
+  });
+
+  it("renders reschedule badge when request is a reschedule", () => {
+    const { getByTestId } = render(
+      <PendingRequestCard {...baseProps} isReschedule />,
+    );
+    expect(getByTestId("pending-reschedule-badge")).toBeTruthy();
+  });
 });
 
 describe("PendingRequestCard — interactions", () => {
@@ -55,6 +71,15 @@ describe("PendingRequestCard — interactions", () => {
     const { getByTestId } = render(<PendingRequestCard {...baseProps} onAccept={onAccept} />);
     fireEvent.press(getByTestId("pending-accept-button"));
     expect(onAccept).toHaveBeenCalled();
+  });
+
+  it("calls onShowProfile when avatar is pressed", () => {
+    const onShowProfile = jest.fn();
+    const { getByTestId } = render(
+      <PendingRequestCard {...baseProps} onShowProfile={onShowProfile} />,
+    );
+    fireEvent.press(getByTestId("pending-profile-button"));
+    expect(onShowProfile).toHaveBeenCalled();
   });
 });
 

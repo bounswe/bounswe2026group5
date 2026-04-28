@@ -1,4 +1,3 @@
-import { ApiValidationError } from "@/lib/api/client";
 import {
   updateProfileFn,
   updateUsernameFn,
@@ -8,6 +7,29 @@ import { API_BASE_URL } from "@/lib/api/config";
 
 describe("authQueries", () => {
   const fetchMock = jest.fn();
+  function expectJsonRequest(
+    url: string,
+    options: {
+      method: string;
+      token?: string;
+      body?: unknown;
+    },
+  ) {
+    expect(fetchMock).toHaveBeenCalledWith(
+      url,
+      expect.objectContaining({
+        method: options.method,
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...(options.token
+            ? { Authorization: `Bearer ${options.token}` }
+            : {}),
+        },
+        ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+      }),
+    );
+  }
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -26,15 +48,12 @@ describe("authQueries", () => {
     });
 
     expect(result).toEqual({ username: "custom_user" });
-    expect(fetchMock).toHaveBeenCalledWith(
+    expectJsonRequest(
       `${API_BASE_URL}/api/profiles/me/username/`,
       {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer token-123",
-        },
-        body: JSON.stringify({ username: "custom_user" }),
+        token: "token-123",
+        body: { username: "custom_user" },
       },
     );
   });
@@ -50,7 +69,7 @@ describe("authQueries", () => {
         accessToken: "token-123",
         username: "taken_user",
       }),
-    ).rejects.toMatchObject<ApiValidationError>({
+    ).rejects.toMatchObject({
       message: "This username is already taken.",
       fieldErrors: { username: "This username is already taken." },
     });
@@ -69,19 +88,16 @@ describe("authQueries", () => {
       skills: ["Testing"],
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    expectJsonRequest(
       `${API_BASE_URL}/api/profiles/me/`,
       {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer token-123",
-        },
-        body: JSON.stringify({
+        token: "token-123",
+        body: {
           display_name: "Ada Lovelace",
           bio: "Builds systems.",
           skills: ["Testing"],
-        }),
+        },
       },
     );
   });
@@ -106,15 +122,12 @@ describe("authQueries", () => {
       accessToken: "token-123",
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    expectJsonRequest(
       `${API_BASE_URL}/api/auth/me/role/`,
       {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer token-123",
-        },
-        body: JSON.stringify({ app_usage_mode: "MENTOR" }),
+        token: "token-123",
+        body: { app_usage_mode: "MENTOR" },
       },
     );
   });

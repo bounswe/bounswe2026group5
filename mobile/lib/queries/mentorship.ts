@@ -1,8 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiGet, apiPost } from "@/lib/api/client";
-import { API_BASE_URL } from "@/lib/api/config";
-import { useAuthStore } from "@/lib/auth/store";
+import { apiDelete, apiGet, apiPost } from "@/lib/api/client";
 
 export interface DashboardRequestItem {
   id: string;
@@ -639,23 +637,10 @@ export function useDeleteAvailabilitySlotMutation(username: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (slotId: string) => {
-      const accessToken = useAuthStore.getState().accessToken;
-      const response = await fetch(
-        `${API_BASE_URL}/api/profiles/me/availability-slots/${slotId}/`,
-        {
-          method: "DELETE",
-          headers: {
-            Accept: "application/json",
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          },
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to delete availability slot.");
-      }
-    },
+    mutationFn: (slotId: string) =>
+      apiDelete(
+        `/api/profiles/me/availability-slots/${encodeURIComponent(slotId)}/`,
+      ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ["profiles", username, "availability-slots"],

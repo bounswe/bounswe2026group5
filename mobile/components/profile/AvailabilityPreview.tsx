@@ -6,7 +6,13 @@ export interface AvailabilitySlot {
   day: string;
   times: (
     | string
-    | { id: string; label: string; isBooked?: boolean; date?: string }
+    | {
+        id: string;
+        label: string;
+        isBooked?: boolean;
+        isPending?: boolean;
+        date?: string;
+      }
   )[];
 }
 
@@ -42,7 +48,15 @@ function extractStartTime(label: string): string {
 }
 
 function isPastSlotEntry(
-  entry: string | { id: string; label: string; isBooked?: boolean; date?: string },
+  entry:
+    | string
+    | {
+        id: string;
+        label: string;
+        isBooked?: boolean;
+        isPending?: boolean;
+        date?: string;
+      },
   now: Date,
 ): boolean {
   if (typeof entry === "string" || !entry.date) {
@@ -177,6 +191,8 @@ export function AvailabilityPreview({
                 const slotId = typeof entry === "string" ? undefined : entry.id;
                 const isBooked =
                   typeof entry === "string" ? false : Boolean(entry.isBooked);
+                const isPending =
+                  typeof entry === "string" ? false : Boolean(entry.isPending);
                 const isPast = isPastSlotEntry(entry, now);
                 const isSelected =
                   selectedSlot?.day === expandedDay &&
@@ -197,6 +213,11 @@ export function AvailabilityPreview({
                   slotTextClass = "text-gray-400";
                   badgeClass = "text-gray-400";
                   badgeText = "Booked";
+                } else if (isPending) {
+                  slotContainerClass = "bg-amber-50 border-amber-200";
+                  slotTextClass = "text-amber-900";
+                  badgeClass = "text-amber-700";
+                  badgeText = "Pending";
                 } else if (isSelected) {
                   slotContainerClass = "bg-indigo-600 border-indigo-600";
                   slotTextClass = "text-white";
@@ -215,8 +236,12 @@ export function AvailabilityPreview({
                         slotId,
                       })
                     }
-                    activeOpacity={onSelectSlot && !isBooked && !isPast ? 0.85 : 1}
-                    disabled={isBooked || isPast}
+                    activeOpacity={
+                      onSelectSlot && !isBooked && !isPending && !isPast
+                        ? 0.85
+                        : 1
+                    }
+                    disabled={isBooked || isPending || isPast}
                     className={`rounded-xl py-4 items-center justify-center shadow-sm border ${slotContainerClass}`}
                   >
                     <Text className={`text-base font-bold ${slotTextClass}`}>

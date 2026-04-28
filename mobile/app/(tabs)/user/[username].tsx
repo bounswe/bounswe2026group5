@@ -30,6 +30,7 @@ import {
   useBookAvailabilitySlotMutation,
   useCreateMentorshipRequestMutation,
   useMentorshipMatchesQuery,
+  useMentorshipRequestsQuery,
 } from "@/lib/queries/mentorship";
 import {
   type ProfileReview,
@@ -38,6 +39,7 @@ import {
 } from "@/lib/queries/profile";
 
 interface PublicProfileResponse {
+  username: string;
   full_name: string;
   bio: string;
   hidden: boolean;
@@ -70,6 +72,19 @@ function normalizeUsernameIdentifier(value?: string): string {
   return (value ?? "").trim().toLowerCase().replace(/[-_.\s]+/g, "");
 }
 
+function isFutureOpenSlot(slot: {
+  date: string;
+  startTime: string;
+  is_booked: boolean;
+  is_pending?: boolean;
+}): boolean {
+  if (slot.is_booked || slot.is_pending) {
+    return false;
+  }
+
+  return new Date(`${slot.date}T${slot.startTime}`) > new Date();
+}
+
 function groupSlotsByWeekday(
   slots: {
     id: string;
@@ -77,11 +92,18 @@ function groupSlotsByWeekday(
     startTime: string;
     endTime: string;
     is_booked: boolean;
+    is_pending?: boolean;
   }[],
 ): AvailabilitySlot[] {
   const grouped = new Map<
     string,
-    { id: string; label: string; isBooked?: boolean; date?: string }[]
+    {
+      id: string;
+      label: string;
+      isBooked?: boolean;
+      isPending?: boolean;
+      date?: string;
+    }[]
   >();
 
   slots.forEach((slot) => {
@@ -91,6 +113,7 @@ function groupSlotsByWeekday(
       id: slot.id,
       label: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
       isBooked: slot.is_booked,
+      isPending: slot.is_pending,
       date: slot.date,
     });
     grouped.set(day, dayTimes);
@@ -105,6 +128,7 @@ type BodyContentProps = {
   profile: PublicProfileResponse | null;
   liveRating?: number;
   liveReviewCount?: number;
+  openSlotsCount: number;
   menteesHelpedCount: number;
   requestFeedback: string | null;
   requestFeedbackVariant?: "error" | "warning" | "info" | "success";
@@ -141,6 +165,7 @@ function renderBodyContent({
   profile,
   liveRating,
   liveReviewCount,
+  openSlotsCount,
   menteesHelpedCount,
   requestFeedback,
   requestFeedbackVariant = "info",
@@ -164,7 +189,7 @@ function renderBodyContent({
 }: BodyContentProps): React.ReactNode {
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center">
+      <View className="flex-1 items-center justify-center bg-surface dark:bg-surface-dark">
         <ActivityIndicator size="large" color="#4f46e5" />
         <Text className="text-gray-500 mt-3">Loading profile...</Text>
       </View>
@@ -173,7 +198,7 @@ function renderBodyContent({
 
   if (error) {
     return (
-      <View className="flex-1 items-center justify-center px-4">
+      <View className="flex-1 items-center justify-center px-4 bg-surface dark:bg-surface-dark">
         <ErrorBanner title="Unable to open profile" message={error} />
       </View>
     );
@@ -210,10 +235,12 @@ function renderBodyContent({
 
   const userSkills = profile.skills ?? [];
   const roleVariant = profile?.app_usage_mode === "MENTEE" ? "mentee" : "mentor";
+  const skillsTitle =
+    roleVariant === "mentor" ? "Expertise" : "Eager to Learn";
 
   return (
     <ScrollView
-      className="flex-1 bg-white"
+      className="flex-1 bg-surface dark:bg-surface-dark"
       contentContainerStyle={{ paddingBottom: 160 }}
     >
       <ProfileHeader
@@ -221,7 +248,9 @@ function renderBodyContent({
         bio={profile.bio}
         rating={liveRating ?? Number(profile.average_rating) ?? 0}
         reviewCount={liveReviewCount ?? 0}
+        openSlots={isViewedMentor ? openSlotsCount : 0}
         menteesHelped={isViewedMentor ? menteesHelpedCount : 0}
+        showStats={isViewedMentor}
         showMenteesHelped={isViewedMentor}
         imageUrl={profile.picture_url || undefined}
       />
@@ -229,11 +258,11 @@ function renderBodyContent({
       <View className="px-4 mt-4">
         {userSkills.length > 0 && (
           <SkillsCloud
-            title="Skills"
+            title={skillsTitle}
             skills={userSkills}
             variant={roleVariant}
             onViewAll={() =>
-              onOpenSkillsModal("Skills", userSkills, roleVariant)
+              onOpenSkillsModal(skillsTitle, userSkills, roleVariant)
             }
           />
         )}
@@ -251,21 +280,6 @@ function renderBodyContent({
             <ErrorBanner
               message={requestFeedback}
               variant={requestFeedbackVariant}
-            />
-          </View>
-        )}
-
-        {isViewedMentor && (
-          <View className="mb-6">
-            <Text className="mb-3 text-lg font-bold text-gray-900">Reviews</Text>
-            <ProfileReviews
-              reviews={reviews}
-              totalCount={reviewsTotalCount}
-              errorMessage={reviewsError}
-              isLoading={isReviewsLoading}
-              isLoadingMore={isReviewsLoadingMore}
-              onLoadMore={onLoadMoreReviews}
-              emptyMessage="No public reviews yet. Reviews appear once privacy thresholds are met."
             />
           </View>
         )}
@@ -324,6 +338,21 @@ function renderBodyContent({
             </TouchableOpacity>
           </View>
         )}
+
+        {isViewedMentor && (
+          <View className="mt-6">
+            <Text className="mb-3 text-lg font-bold text-gray-900">Reviews</Text>
+            <ProfileReviews
+              reviews={reviews}
+              totalCount={reviewsTotalCount}
+              errorMessage={reviewsError}
+              isLoading={isReviewsLoading}
+              isLoadingMore={isReviewsLoadingMore}
+              onLoadMore={onLoadMoreReviews}
+              emptyMessage="No public reviews yet. Reviews appear once privacy thresholds are met."
+            />
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -342,10 +371,18 @@ export default function MentorProfileScreen() {
   const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const selfScopedQueryUsername = currentUsername ?? profile?.username ?? username;
 
   const createRequestMutation = useCreateMentorshipRequestMutation();
-  const mentorshipMatchesQuery = useMentorshipMatchesQuery(currentUsername);
-  const bookSlotMutation = useBookAvailabilitySlotMutation(currentUsername);
+  const mentorshipMatchesQuery = useMentorshipMatchesQuery(
+    selfScopedQueryUsername,
+  );
+  const mentorshipRequestsQuery = useMentorshipRequestsQuery(
+    selfScopedQueryUsername,
+  );
+  const bookSlotMutation = useBookAvailabilitySlotMutation(
+    selfScopedQueryUsername,
+  );
   const availabilitySlotsQuery = useAvailabilitySlotsQuery(
     username ?? "",
     profile?.app_usage_mode === "MENTOR",
@@ -460,11 +497,32 @@ export default function MentorProfileScreen() {
 
   const availability = useMemo(() => {
     const sourceSlots = availabilitySlotsQuery.data ?? [];
+    const pendingRequestedSlotIds = new Set(
+      (mentorshipRequestsQuery.data ?? [])
+        .filter(
+          (request) =>
+            request.status === "PENDING" &&
+            request.mentor.username === username &&
+            request.mentee.username === currentUsername &&
+            Boolean(request.slot_id),
+        )
+        .map((request) => request.slot_id as string),
+    );
 
     const normalized = sourceSlots
       .map((slot) => {
-        const legacyStart = "start_time" in slot ? slot.start_time : undefined;
-        const legacyEnd = "end_time" in slot ? slot.end_time : undefined;
+        const legacySlot = slot as {
+          start_time?: unknown;
+          end_time?: unknown;
+        };
+        const legacyStart =
+          typeof legacySlot.start_time === "string"
+            ? legacySlot.start_time
+            : undefined;
+        const legacyEnd =
+          typeof legacySlot.end_time === "string"
+            ? legacySlot.end_time
+            : undefined;
         const date = slot.date ?? legacyStart?.split("T")[0];
         const startTime =
           slot.startTime ?? legacyStart?.split("T")[1]?.slice(0, 8);
@@ -480,6 +538,7 @@ export default function MentorProfileScreen() {
           startTime,
           endTime,
           is_booked: slot.is_booked,
+          is_pending: pendingRequestedSlotIds.has(slot.id),
         };
       })
       .filter(
@@ -491,11 +550,36 @@ export default function MentorProfileScreen() {
           startTime: string;
           endTime: string;
           is_booked: boolean;
+          is_pending: boolean;
         } => Boolean(slot),
       );
 
     return groupSlotsByWeekday(normalized);
-  }, [availabilitySlotsQuery.data]);
+  }, [
+    availabilitySlotsQuery.data,
+    currentUsername,
+    mentorshipRequestsQuery.data,
+    username,
+  ]);
+  const openSlotsCount = useMemo(
+    () =>
+      availability
+        .flatMap((day) => day.times)
+        .filter((entry) => {
+          if (typeof entry === "string" || !entry.date) {
+            return false;
+          }
+
+          const startTime = entry.label.split(" - ")[0] ?? "00:00";
+          return isFutureOpenSlot({
+            date: entry.date,
+            startTime,
+            is_booked: Boolean(entry.isBooked),
+            is_pending: Boolean(entry.isPending),
+          });
+        }).length,
+    [availability],
+  );
 
   const isViewedMentor = useMemo(() => {
     return profile?.app_usage_mode === "MENTOR";
@@ -506,12 +590,34 @@ export default function MentorProfileScreen() {
       return 0;
     }
 
-    const normalizedViewedUsername = normalizeUsernameIdentifier(username);
+    const normalizedCurrentUsername = normalizeUsernameIdentifier(currentUsername);
+    const viewedIdentifiers = [
+      username,
+      profile?.username,
+      profile?.full_name,
+    ].map(normalizeUsernameIdentifier);
+    const activeMatches = (mentorshipMatchesQuery.data ?? []).filter(
+      (match) => match.is_active,
+    );
+
+    if (
+      normalizedCurrentUsername &&
+      viewedIdentifiers.includes(normalizedCurrentUsername)
+    ) {
+      const ownActiveMentees = new Set(
+        activeMatches.map((match) => match.mentee.username),
+      );
+
+      return Math.max(profile?.total_mentee_count ?? 0, ownActiveMentees.size);
+    }
+
+    const normalizedViewedUsername =
+      normalizeUsernameIdentifier(profile?.username) ||
+      normalizeUsernameIdentifier(username);
     const activeMenteesForViewedMentor = new Set(
-      (mentorshipMatchesQuery.data ?? [])
+      activeMatches
         .filter(
           (match) =>
-            match.is_active &&
             normalizeUsernameIdentifier(match.mentor.username) ===
               normalizedViewedUsername,
         )
@@ -524,16 +630,23 @@ export default function MentorProfileScreen() {
     );
   }, [
     isViewedMentor,
+    currentUsername,
     mentorshipMatchesQuery.data,
+    profile?.full_name,
     profile?.total_mentee_count,
+    profile?.username,
     username,
   ]);
 
   const hasExistingMentorConnection = useMemo(() => {
+    const normalizedViewedUsername = normalizeUsernameIdentifier(username);
     return (
       Boolean(username) &&
       (mentorshipMatchesQuery.data ?? []).some(
-        (match) => match.is_active && match.mentor.username === username,
+        (match) =>
+          match.is_active &&
+          normalizeUsernameIdentifier(match.mentor.username) ===
+            normalizedViewedUsername,
       )
     );
   }, [mentorshipMatchesQuery.data, username]);
@@ -666,6 +779,7 @@ export default function MentorProfileScreen() {
       ? Number(ratingQuery.data.average_rating)
       : undefined,
     liveReviewCount: ratingQuery.data?.review_count,
+    openSlotsCount,
     menteesHelpedCount,
     requestFeedback,
     requestFeedbackVariant,
@@ -699,7 +813,7 @@ export default function MentorProfileScreen() {
   const screenTitle = isViewedMentor ? "Mentor Profile" : "Profile";
 
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-surface dark:bg-surface-dark">
       <View
         className="bg-white border-b border-gray-100"
         style={{ paddingTop: insets.top }}

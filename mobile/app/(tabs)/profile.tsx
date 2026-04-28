@@ -48,6 +48,18 @@ interface OwnProfileResponse {
 
 const REVIEWS_PAGE_SIZE = 6;
 
+function isFutureOpenSlot(slot: {
+  date: string;
+  startTime: string;
+  is_booked: boolean;
+}): boolean {
+  if (slot.is_booked) {
+    return false;
+  }
+
+  return new Date(`${slot.date}T${slot.startTime}`) > new Date();
+}
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -104,6 +116,7 @@ export default function ProfileScreen() {
   const shouldShowSkills = isMentorMode ? showExpertise : showEagerToLearn;
   const shouldShowReviews =
     isMentorMode && isProfileHidden === false && Boolean(currentUsername);
+  const skillsTitle = isMentorMode ? "Expertise" : "Eager to Learn";
   const reviewsQuery = useProfileReviewsQuery(
     currentUsername,
     reviewsPage,
@@ -227,6 +240,10 @@ export default function ProfileScreen() {
 
   const availabilityData = useMemo(
     () => mapAvailabilityToSchedule(availabilityQuery.data ?? []),
+    [availabilityQuery.data],
+  );
+  const openSlotsCount = useMemo(
+    () => (availabilityQuery.data ?? []).filter(isFutureOpenSlot).length,
     [availabilityQuery.data],
   );
 
@@ -379,8 +396,9 @@ export default function ProfileScreen() {
           bio={userData.bio}
           reviewCount={reviewCount}
           rating={rating}
-          totalSessions={0}
+          openSlots={isMentorMode ? openSlotsCount : 0}
           menteesHelped={isMentorMode ? menteesCount : 0}
+          showStats={isMentorMode}
           showMenteesHelped={isMentorMode}
           onEdit={() => setEditProfileModalOpen(true)}
         />
@@ -389,12 +407,12 @@ export default function ProfileScreen() {
           <View className="mb-6">
             {(isMentorMode || isMenteeMode) && shouldShowSkills && (
               <SkillsCloud
-                title="Skills"
+                title={skillsTitle}
                 skills={skillsData}
                 variant={isMentorMode ? "mentor" : "mentee"}
                 onEdit={() =>
                   openEditModal(
-                    "Skills",
+                    skillsTitle,
                     skillsData,
                     isMentorMode ? "mentor" : "mentee",
                     (newSkills) => {
@@ -403,7 +421,7 @@ export default function ProfileScreen() {
                   )
                 }
                 onViewAll={() =>
-                  openSkillsModal("Skills", skillsData, isMentorMode ? "mentor" : "mentee")
+                  openSkillsModal(skillsTitle, skillsData, isMentorMode ? "mentor" : "mentee")
                 }
               />
             )}

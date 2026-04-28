@@ -9,10 +9,13 @@ export interface PendingRequestCardProps {
   slot_date: string | null;
   slot_start_time: string | null;
   slot_end_time: string | null;
+  requestType?: "incoming" | "outgoing";
+  isReschedule?: boolean;
   isNew?: boolean;
   avatarUrl?: string;
   disabled?: boolean;
   onPress?: () => void;
+  onShowProfile?: () => void;
   onAccept?: () => void;
   onDecline?: () => void;
 }
@@ -23,17 +26,26 @@ export function PendingRequestCard({
   slot_date,
   slot_start_time,
   slot_end_time,
+  requestType = "incoming",
+  isReschedule,
   isNew,
   avatarUrl,
   disabled,
   onPress,
+  onShowProfile,
   onAccept,
   onDecline,
 }: Readonly<PendingRequestCardProps>) {
+  const isIncoming = requestType === "incoming";
   const slotLabel =
     slot_date && slot_start_time && slot_end_time
       ? `${slot_date} · ${slot_start_time}–${slot_end_time}`
-      : null;
+      : slot_start_time;
+  const messagePreview =
+    cover_letter.trim() ||
+    (isIncoming
+      ? "Would like to connect for mentorship."
+      : "Your mentorship request is waiting for a response.");
 
   return (
     <TouchableOpacity
@@ -43,18 +55,25 @@ export function PendingRequestCard({
       className="bg-gray-100 p-5 rounded-xl mb-3 flex-row flex-wrap gap-4 items-start"
     >
       {/* Avatar */}
-      {avatarUrl ? (
-        <Image
-          source={{ uri: avatarUrl }}
-          className="w-[72px] h-[72px] rounded-full"
-        />
-      ) : (
-        <View className="w-[72px] h-[72px] rounded-full bg-surface-active items-center justify-center">
-          <Text className="text-[26px] font-bold text-primary">
-            {name.charAt(0)}
-          </Text>
-        </View>
-      )}
+      <TouchableOpacity
+        testID="pending-profile-button"
+        activeOpacity={onShowProfile ? 0.8 : 1}
+        onPress={onShowProfile}
+        disabled={!onShowProfile}
+      >
+        {avatarUrl ? (
+          <Image
+            source={{ uri: avatarUrl }}
+            className="w-[72px] h-[72px] rounded-full"
+          />
+        ) : (
+          <View className="w-[72px] h-[72px] rounded-full bg-surface-active items-center justify-center">
+            <Text className="text-[26px] font-bold text-primary">
+              {name.charAt(0)}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
 
       {/* Content */}
       <View className="flex-1 min-w-[180px] gap-1.5">
@@ -75,6 +94,13 @@ export function PendingRequestCard({
               </Text>
             </View>
           )}
+          {isReschedule && (
+            <View testID="pending-reschedule-badge" className="bg-amber-100 px-2 py-1 rounded ml-2">
+              <Text className="text-[10px] font-black text-amber-700 uppercase">
+                Reschedule
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Cover letter excerpt */}
@@ -82,31 +108,42 @@ export function PendingRequestCard({
           className="text-[13px] text-on-surface-soft leading-[18px] italic"
           numberOfLines={2}
         >
-          &ldquo;{cover_letter}&rdquo;
+          &ldquo;{messagePreview}&rdquo;
         </Text>
 
         {/* Action Buttons */}
-        <View className="flex-row gap-2.5 mt-1">
-          <TouchableOpacity
-            testID="pending-decline-button"
-            activeOpacity={0.8}
-            onPress={onDecline}
-            disabled={disabled}
-            className="flex-1 py-3 rounded-full border border-divider bg-white items-center"
-          >
-            <Text className="font-bold text-on-surface text-sm">Decline</Text>
-          </TouchableOpacity>
+        {isIncoming ? (
+          <View className="flex-row gap-2.5 mt-1">
+            <TouchableOpacity
+              testID="pending-decline-button"
+              activeOpacity={0.8}
+              onPress={onDecline}
+              disabled={disabled}
+              className="flex-1 py-3 rounded-full border border-divider bg-white items-center"
+            >
+              <Text className="font-bold text-on-surface text-sm">Decline</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            testID="pending-accept-button"
-            activeOpacity={0.85}
-            onPress={onAccept}
-            disabled={disabled}
-            className={`flex-[1.4] py-3 rounded-full items-center ${disabled ? "bg-primary/50" : "bg-primary"}`}
+            <TouchableOpacity
+              testID="pending-accept-button"
+              activeOpacity={0.85}
+              onPress={onAccept}
+              disabled={disabled}
+              className={`flex-[1.4] py-3 rounded-full items-center ${disabled ? "bg-primary/50" : "bg-primary"}`}
+            >
+              <Text className="font-bold text-white text-sm">Accept</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View
+            testID="pending-outgoing-badge"
+            className="self-start mt-1 px-4 py-2 rounded-full bg-white border border-divider"
           >
-            <Text className="font-bold text-white text-sm">Accept</Text>
-          </TouchableOpacity>
-        </View>
+            <Text className="text-sm font-bold text-on-surface-soft">
+              Request Pending...
+            </Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
