@@ -25,6 +25,7 @@ const MAPPING = {
   'calendar': 'calendar-month',
   'person.fill': 'person',
   'person.2.fill': 'group',
+  'bubble.left.and.bubble.right.fill': 'forum',
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],

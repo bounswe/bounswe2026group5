@@ -274,7 +274,7 @@ export default function DashboardScreen() {
             <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
               Your Sessions
             </Text>
-            <TouchableOpacity onPress={() => router.push("/schedule")}>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/schedule")}>
               <Text className="text-primary dark:text-primary-dim font-semibold text-sm">
                 View All {sessions.length > 0 ? `(${sessions.length})` : ""}
               </Text>

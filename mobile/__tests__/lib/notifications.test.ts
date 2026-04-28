@@ -58,7 +58,7 @@ describe("notifications query helpers", () => {
     ).toBe("Mentor Promoted");
   });
 
-  it("routes session-related notifications to the schedule tab", () => {
+  it("routes session-related notifications to the hidden schedule tab route", () => {
     expect(
       getNotificationTargetPath({
         type: "session_rescheduled",
