@@ -25,6 +25,7 @@ from mentorship.services import (
     MissingSelectedSlotError,
     _mark_meeting_session_canceled,
     book_match_session,
+    deactivate_match,
     ensure_match_and_initial_session,
     reschedule_match_session,
     respond_to_mentorship_request,
@@ -152,6 +153,37 @@ class MentorshipRequestModelTests(TestCase):
         ensure_match_and_initial_session(mentorship_request=request_obj)
 
         self.assertEqual(Match.objects.filter(request=request_obj).count(), 1)
+
+    def test_match_creation_refreshes_total_mentee_count(self) -> None:
+        """Creating a new accepted match refreshes mentor active mentee count."""
+        self.mentor_profile.total_mentee_count = 0
+        self.mentor_profile.save(update_fields=["total_mentee_count"])
+
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+
+        ensure_match_and_initial_session(mentorship_request=request_obj)
+        self.mentor_profile.refresh_from_db(fields=["total_mentee_count"])
+
+        self.assertEqual(self.mentor_profile.total_mentee_count, 1)
+
+    def test_repeated_sync_does_not_double_increment_total_mentee_count(self) -> None:
+        """Repeated sync for same request keeps mentee count stable."""
+        request_obj = _create_accepted_request(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+        )
+
+        self.mentor_profile.refresh_from_db(fields=["total_mentee_count"])
+        self.assertEqual(self.mentor_profile.total_mentee_count, 1)
+
+        ensure_match_and_initial_session(mentorship_request=request_obj)
+        self.mentor_profile.refresh_from_db(fields=["total_mentee_count"])
+
+        self.assertEqual(self.mentor_profile.total_mentee_count, 1)
 
     def test_responded_at_set_when_request_accepted(self) -> None:
         """responded_at is auto-populated when request becomes ACCEPTED."""
@@ -727,6 +759,26 @@ class DeactivateMatchAPIViewTests(FeedbackAPIBaseTestCase):
         response = self.mentor_client.get(self.MATCHES_ME_URL)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, [])
+
+    def test_deactivation_refreshes_total_mentee_count(self) -> None:
+        """Deactivation updates mentor active mentee count to exclude the match."""
+        self.mentor_profile.refresh_from_db(fields=["total_mentee_count"])
+        self.assertEqual(self.mentor_profile.total_mentee_count, 1)
+
+        deactivate_match(match=self.match, actor_profile=self.mentor_profile)
+
+        self.mentor_profile.refresh_from_db(fields=["total_mentee_count"])
+        self.assertEqual(self.mentor_profile.total_mentee_count, 0)
+
+    def test_idempotent_deactivation_keeps_total_mentee_count_stable(self) -> None:
+        """Second deactivation call remains a no-op for mentee count."""
+        deactivate_match(match=self.match, actor_profile=self.mentor_profile)
+        self.mentor_profile.refresh_from_db(fields=["total_mentee_count"])
+        self.assertEqual(self.mentor_profile.total_mentee_count, 0)
+
+        deactivate_match(match=self.match, actor_profile=self.mentor_profile)
+        self.mentor_profile.refresh_from_db(fields=["total_mentee_count"])
+        self.assertEqual(self.mentor_profile.total_mentee_count, 0)
 
 
 @override_settings(RATING_UPDATE_THRESHOLD=5)

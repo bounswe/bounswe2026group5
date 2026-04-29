@@ -18,6 +18,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode
 from mentorship.models import Feedback, Match, MentorshipRequest
+from mentorship.services import deactivate_match, ensure_match_and_initial_session
 from profiles.models import AvailabilitySlot, Profile, Skill
 from profiles.serializers import AvailabilitySlotSerializer, LocationField
 from profiles.services import (
@@ -232,6 +233,8 @@ class ProfileByUsernameAPIViewTests(TestCase):
 
         owner_refresh = RefreshToken.for_user(self.owner_user)
         self.owner_access_token = str(owner_refresh.access_token)
+        other_refresh = RefreshToken.for_user(self.other_user)
+        self.other_access_token = str(other_refresh.access_token)
 
         self.owner_url = f"/api/profiles/{self.owner_profile.username}/"
         self.other_url = f"/api/profiles/{self.other_profile.username}/"
@@ -292,6 +295,41 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertIn("skills", payload)
         self.assertIn("average_rating", payload)
         self.assertIn("total_mentee_count", payload)
+
+    def test_mentor_total_mentee_count_consistent_between_me_and_public(self) -> None:
+        """Mentor count remains consistent for /me and public username profile."""
+        self.other_profile.is_visible = True
+        self.other_profile.total_mentee_count = 0
+        self.other_profile.save(update_fields=["is_visible", "total_mentee_count"])
+
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.other_profile,
+            mentee=self.owner_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        match = ensure_match_and_initial_session(mentorship_request=request_obj)
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.other_access_token}")
+        me_response = self.api_client.get(self.me_url)
+        self.assertEqual(me_response.status_code, 200)
+        self.assertEqual(me_response.json().get("total_mentee_count"), 1)
+
+        self.api_client.credentials()
+        public_response = self.api_client.get(self.other_url)
+        self.assertEqual(public_response.status_code, 200)
+        self.assertEqual(public_response.json().get("total_mentee_count"), 1)
+
+        deactivate_match(match=match, actor_profile=self.other_profile)
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.other_access_token}")
+        me_after_deactivate = self.api_client.get(self.me_url)
+        self.assertEqual(me_after_deactivate.status_code, 200)
+        self.assertEqual(me_after_deactivate.json().get("total_mentee_count"), 0)
+
+        self.api_client.credentials()
+        public_after_deactivate = self.api_client.get(self.other_url)
+        self.assertEqual(public_after_deactivate.status_code, 200)
+        self.assertEqual(public_after_deactivate.json().get("total_mentee_count"), 0)
 
     def test_get_profile_public_access_without_authentication(self) -> None:
         """Public profile is accessible without authentication."""
