@@ -1,8 +1,10 @@
 import { render } from "@testing-library/react-native";
 import React from "react";
 
+let mockColorScheme: "light" | "dark" | undefined = "light";
+
 jest.mock("@/hooks/use-color-scheme", () => ({
-  useColorScheme: () => "light",
+  useColorScheme: () => mockColorScheme,
 }));
 
 jest.mock("@/components/haptic-tab", () => ({
@@ -53,6 +55,10 @@ jest.mock("expo-router", () => {
 import TabLayout from "@/app/(tabs)/_layout";
 
 describe("TabLayout", () => {
+  beforeEach(() => {
+    mockColorScheme = "light";
+  });
+
   it("shows Community in the bottom tabs and keeps Schedule as a hidden tab route", () => {
     const { getByTestId, queryByTestId } = render(<TabLayout />);
 
@@ -76,5 +82,13 @@ describe("TabLayout", () => {
     expect(getByTestId("tab-screen-community/[tagId]/members")).toBeTruthy();
     expect(queryByTestId("visible-tab-community/[tagId]/index")).toBeNull();
     expect(queryByTestId("visible-tab-community/[tagId]/members")).toBeNull();
+  });
+
+  it("falls back to light tab colors when the color scheme is unavailable", () => {
+    mockColorScheme = undefined;
+
+    const { getByTestId } = render(<TabLayout />);
+
+    expect(getByTestId("tabs-root")).toBeTruthy();
   });
 });

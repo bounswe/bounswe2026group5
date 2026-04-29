@@ -83,6 +83,15 @@ describe("VerifyEmailScreen", () => {
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
   });
 
+  it("uses the first token when the route receives repeated token params", async () => {
+    mockToken = ["first-token", "second-token"];
+
+    const { findByText } = render(<VerifyEmailScreen />);
+
+    expect(await findByText("Email verified")).toBeTruthy();
+    expect(mockVerifyMutateAsync).toHaveBeenCalledWith("first-token");
+  });
+
   it("patches local verification when user refresh fails after backend success", async () => {
     mockCurrentUserMutateAsync.mockRejectedValueOnce(new Error("Offline"));
 
@@ -116,6 +125,21 @@ describe("VerifyEmailScreen", () => {
     ).toBeTruthy();
   });
 
+  it("shows resend failures for authenticated users", async () => {
+    mockToken = undefined;
+    mockResendMutateAsync.mockRejectedValueOnce(
+      new Error("Could not reach mail service."),
+    );
+
+    const { findByText, getByTestId } = render(<VerifyEmailScreen />);
+
+    expect(await findByText("Verification failed")).toBeTruthy();
+
+    fireEvent.press(getByTestId("resend-verification-button"));
+
+    expect(await findByText("Could not reach mail service.")).toBeTruthy();
+  });
+
   it("shows invalid-token errors without requiring an authenticated user", async () => {
     mockIsAuthenticated = false;
     mockVerifyMutateAsync.mockRejectedValueOnce(
@@ -128,5 +152,15 @@ describe("VerifyEmailScreen", () => {
     expect(await findByText("Invalid or expired token.")).toBeTruthy();
     expect(mockCurrentUserMutateAsync).not.toHaveBeenCalled();
     expect(queryByTestId("resend-verification-button")).toBeNull();
+  });
+
+  it("uses a fallback invalid-link message for non-Error failures", async () => {
+    mockVerifyMutateAsync.mockRejectedValueOnce("bad token");
+
+    const { findByText } = render(<VerifyEmailScreen />);
+
+    expect(
+      await findByText("This verification link is invalid or expired."),
+    ).toBeTruthy();
   });
 });
