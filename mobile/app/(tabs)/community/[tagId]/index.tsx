@@ -1,5 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -12,7 +14,6 @@ import {
   useJoinCommunityTagMutation,
   useLeaveCommunityTagMutation,
 } from "@/lib/queries/communityTags";
-import { useState } from "react";
 
 function formatMemberCount(count: number) {
   if (count === 1) {
@@ -47,6 +48,17 @@ export default function CommunityDetailScreen() {
 
   const tag = detailQuery.data;
   const isMutating = joinMutation.isPending || leaveMutation.isPending;
+
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        setActionError(null);
+        setSuccessMessage(null);
+        setShowLeaveConfirmation(false);
+      },
+      [],
+    ),
+  );
 
   const goBackToSource = () => {
     router.replace(source === "discover" ? "/(tabs)/discover" : "/(tabs)/community");

@@ -1,5 +1,5 @@
 import CommunityDetailScreen from "@/app/(tabs)/community/[tagId]/index";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 
 const mockBack = jest.fn();
@@ -11,6 +11,7 @@ const mockDetailRefetch = jest.fn();
 const mockDetailQuery = jest.fn();
 const mockJoinMutation = jest.fn();
 const mockLeaveMutation = jest.fn();
+let focusCleanup: (() => void) | undefined;
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
@@ -21,6 +22,12 @@ jest.mock("expo-router", () => ({
     push: mockPush,
     replace: mockReplace,
   }),
+}));
+
+jest.mock("@react-navigation/native", () => ({
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    focusCleanup = effect() as (() => void) | undefined;
+  },
 }));
 
 jest.mock("@/lib/auth/store", () => ({
@@ -44,6 +51,7 @@ describe("CommunityDetailScreen", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    focusCleanup = undefined;
     mockTagId = "tag-1";
     mockFrom = undefined;
     mockDetailQuery.mockReturnValue({
@@ -130,6 +138,24 @@ describe("CommunityDetailScreen", () => {
     });
     expect(mockDetailRefetch).toHaveBeenCalled();
     expect(await findByText("You joined Backend Guild.")).toBeTruthy();
+  });
+
+  it("clears transient success banners when leaving the detail screen", async () => {
+    const { getByTestId, queryByText, findByText } = render(
+      <CommunityDetailScreen />,
+    );
+
+    fireEvent.press(getByTestId("community-membership-button"));
+
+    expect(await findByText("You joined Backend Guild.")).toBeTruthy();
+
+    act(() => {
+      focusCleanup?.();
+    });
+
+    await waitFor(() => {
+      expect(queryByText("You joined Backend Guild.")).toBeNull();
+    });
   });
 
   it("asks for confirmation before leaving a joined community", async () => {
