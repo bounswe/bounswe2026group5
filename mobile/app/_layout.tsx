@@ -55,6 +55,10 @@ export default function RootLayout() {
               name="notifications"
               options={{ headerShown: false }}
             />
+            <Stack.Screen
+              name="verify-email"
+              options={{ headerShown: false }}
+            />
             <Stack.Screen name="settings" options={{ headerShown: false }} />
             <Stack.Screen name="messages" options={{ headerShown: false }} />
           </Stack>
@@ -63,6 +67,10 @@ export default function RootLayout() {
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen name="register" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="verify-email"
+              options={{ headerShown: false }}
+            />
           </Stack>
         )}
         <StatusBar style="auto" />
