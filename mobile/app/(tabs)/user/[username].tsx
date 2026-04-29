@@ -26,6 +26,10 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { API_BASE_URL } from "@/constants/api";
 import { useAuthStore } from "@/lib/auth/store";
 import {
+  isEmailVerificationRequiredError,
+  useResendEmailVerificationMutation,
+} from "@/lib/queries/auth";
+import {
   useAvailabilitySlotsQuery,
   useBookAvailabilitySlotMutation,
   useCreateMentorshipRequestMutation,
@@ -132,6 +136,8 @@ type BodyContentProps = {
   menteesHelpedCount: number;
   requestFeedback: string | null;
   requestFeedbackVariant?: "error" | "warning" | "info" | "success";
+  showResendVerificationAction?: boolean;
+  isResendVerificationPending?: boolean;
   canRequestMentorship: boolean;
   isViewedMentor: boolean;
   reviews: ProfileReview[];
@@ -155,6 +161,7 @@ type BodyContentProps = {
     time: string;
     slotId?: string;
   }) => void;
+  onResendVerification?: () => void;
   onSubmit: () => void;
   isRequestPending: boolean;
 };
@@ -169,6 +176,8 @@ function renderBodyContent({
   menteesHelpedCount,
   requestFeedback,
   requestFeedbackVariant = "info",
+  showResendVerificationAction = false,
+  isResendVerificationPending = false,
   canRequestMentorship,
   isViewedMentor,
   reviews,
@@ -184,6 +193,7 @@ function renderBodyContent({
   setCoverLetter,
   onOpenSkillsModal,
   onSelectSlot,
+  onResendVerification,
   onSubmit,
   isRequestPending,
 }: BodyContentProps): React.ReactNode {
@@ -281,6 +291,21 @@ function renderBodyContent({
               message={requestFeedback}
               variant={requestFeedbackVariant}
             />
+            {showResendVerificationAction && onResendVerification ? (
+              <TouchableOpacity
+                testID="profile-resend-verification-button"
+                activeOpacity={0.85}
+                disabled={isResendVerificationPending}
+                onPress={onResendVerification}
+                className="self-start mt-2 px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-900/60"
+              >
+                <Text className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                  {isResendVerificationPending
+                    ? "Sending..."
+                    : "Resend Verification Email"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         )}
 
@@ -326,6 +351,7 @@ function renderBodyContent({
             )}
 
             <TouchableOpacity
+              testID="send-mentorship-request-button"
               disabled={isRequestPending}
               onPress={onSubmit}
               className={`mt-4 rounded-xl py-3 items-center ${
@@ -383,6 +409,7 @@ export default function MentorProfileScreen() {
   const bookSlotMutation = useBookAvailabilitySlotMutation(
     selfScopedQueryUsername,
   );
+  const resendVerificationMutation = useResendEmailVerificationMutation();
   const availabilitySlotsQuery = useAvailabilitySlotsQuery(
     username ?? "",
     profile?.app_usage_mode === "MENTOR",
@@ -401,6 +428,10 @@ export default function MentorProfileScreen() {
   const [requestFeedbackVariant, setRequestFeedbackVariant] = useState<
     "error" | "warning" | "info" | "success"
   >("info");
+  const [
+    showResendVerificationAction,
+    setShowResendVerificationAction,
+  ] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
   const [showBookingConfirmation, setShowBookingConfirmation] = useState(false);
@@ -678,6 +709,7 @@ export default function MentorProfileScreen() {
       day: payload.day,
       label: payload.time,
     });
+    setShowResendVerificationAction(false);
   };
 
   const handleCreateRequest = async (payload: {
@@ -690,6 +722,7 @@ export default function MentorProfileScreen() {
 
     setRequestFeedback(null);
     setRequestFeedbackVariant("info");
+    setShowResendVerificationAction(false);
     try {
       await createRequestMutation.mutateAsync({
         mentor_username: username,
@@ -709,11 +742,35 @@ export default function MentorProfileScreen() {
       setCoverLetter("");
       availabilitySlotsQuery.refetch();
     } catch (mutationError) {
+      if (isEmailVerificationRequiredError(mutationError)) {
+        setRequestFeedbackVariant("warning");
+        setShowResendVerificationAction(true);
+        setRequestFeedback(
+          "Verify your email before sending mentorship requests. You can resend the verification email from here.",
+        );
+      } else {
+        setRequestFeedbackVariant("error");
+        setRequestFeedback(
+          mutationError instanceof Error
+            ? mutationError.message
+            : "Failed to send mentorship request.",
+        );
+      }
+    }
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      const response = await resendVerificationMutation.mutateAsync();
+      setRequestFeedbackVariant("info");
+      setRequestFeedback(response.detail);
+      setShowResendVerificationAction(false);
+    } catch (resendError) {
       setRequestFeedbackVariant("error");
       setRequestFeedback(
-        mutationError instanceof Error
-          ? mutationError.message
-          : "Failed to send mentorship request.",
+        resendError instanceof Error
+          ? resendError.message
+          : "Could not send verification email.",
       );
     }
   };
@@ -783,6 +840,8 @@ export default function MentorProfileScreen() {
     menteesHelpedCount,
     requestFeedback,
     requestFeedbackVariant,
+    showResendVerificationAction,
+    isResendVerificationPending: resendVerificationMutation.isPending,
     canRequestMentorship,
     isViewedMentor,
     reviews,
@@ -805,6 +864,9 @@ export default function MentorProfileScreen() {
         variant,
       }),
     onSelectSlot: handleSelectSlot,
+    onResendVerification: () => {
+      void handleResendVerification();
+    },
     onSubmit: submitCoverLetter,
     isRequestPending:
       createRequestMutation.isPending || bookSlotMutation.isPending,
