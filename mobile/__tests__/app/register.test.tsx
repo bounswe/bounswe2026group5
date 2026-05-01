@@ -43,6 +43,15 @@ jest.mock("@/lib/queries/authQueries", () => ({
   updateUsernameFn: jest.fn(),
 }));
 
+jest.mock("@/lib/queries/googleAuth", () => ({
+  useGoogleLoginMutation: jest.fn(() => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+    data: null,
+    error: null,
+  })),
+}));
+
 jest.mock(
   "@/components/profile/RegistrationProfileSetupSheet",
   () => ({

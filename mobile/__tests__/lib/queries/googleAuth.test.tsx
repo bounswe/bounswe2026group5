@@ -1,17 +1,16 @@
+import React from "react";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { fetchWithTimeout } from "@/lib/api/fetchWithTimeout";
 import { useGoogleLoginMutation } from "@/lib/queries/googleAuth";
-import { useAuthStore } from "@/lib/auth/store";
 import { renderHook, waitFor } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock dependencies
-vi.mock("@react-native-google-signin/google-signin", () => ({
+jest.mock("@react-native-google-signin/google-signin", () => ({
   GoogleSignin: {
-    configure: vi.fn(),
-    hasPlayServices: vi.fn(() => Promise.resolve(true)),
-    signIn: vi.fn(() => Promise.resolve({
+    configure: jest.fn(),
+    hasPlayServices: jest.fn(() => Promise.resolve(true)),
+    signIn: jest.fn(() => Promise.resolve({
       data: { idToken: "fake-id-token" }
     })),
   },
@@ -20,8 +19,8 @@ vi.mock("@react-native-google-signin/google-signin", () => ({
   },
 }));
 
-vi.mock("@/lib/api/fetchWithTimeout", () => ({
-  fetchWithTimeout: vi.fn(),
+jest.mock("@/lib/api/fetchWithTimeout", () => ({
+  fetchWithTimeout: jest.fn(),
 }));
 
 // Setup React Query wrapper
@@ -34,7 +33,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 
 describe("useGoogleLoginMutation", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   it("successfully logs in with Google and updates auth store", async () => {
@@ -77,7 +76,9 @@ describe("useGoogleLoginMutation", () => {
       // expected
     }
 
-    expect(result.current.isError).toBe(true);
-    expect(result.current.error?.message).toBe("Google Login Failed");
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+      expect(result.current.error?.message).toBe("Google Login Failed");
+    });
   });
 });

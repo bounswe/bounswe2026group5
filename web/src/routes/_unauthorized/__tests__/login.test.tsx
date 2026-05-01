@@ -163,7 +163,7 @@ describe('LoginPage', () => {
     await user.click(googleBtn)
 
     await waitFor(() => {
-      expect(googleLoginFnMock).toHaveBeenCalledWith('fake-google-token')
+      expect(googleLoginFnMock).toHaveBeenCalledWith('fake-google-token', expect.anything())
     })
 
     expect(handleAuthSuccessMock).toHaveBeenCalledWith(authResponse)
