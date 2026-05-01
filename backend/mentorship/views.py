@@ -530,7 +530,7 @@ class DeactivateMatchAPIView(APIView):
 
 
 class MatchJourneyAPIView(APIView):
-    """Read-only timeline endpoint that merges match lifecycle events across source tables."""
+    """Read-only timeline endpoint that serves stored AGTE records for a match."""
 
     permission_classes = [IsUser]
 
@@ -566,8 +566,8 @@ class MatchJourneyAPIView(APIView):
             "**Ordering:** All events are sorted newest-first (descending by timestamp) "
             "before pagination is applied.\n\n"
             "**Pagination:** Use `offset` (zero-based start index, default 0) and `limit` "
-            "(page size, default 50, max 200). Slicing is applied after the global "
-            "merge-sort, so page boundaries are stable across calls.\n\n"
+            "(page size, default 50, max 200). Slicing is applied at the database level, "
+            "so page boundaries are stable across calls.\n\n"
             "**Visibility:** Journey events are private to the mentorship relationship "
             "and can only be accessed by the mentor or mentee of the match.\n\n"
             "**Event types and payloads:**\n"
