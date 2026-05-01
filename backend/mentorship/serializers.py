@@ -398,7 +398,7 @@ class MCTECreateSerializer(serializers.Serializer):
     """Write serializer for creating a manually-created timeline event."""
 
     event_type = serializers.ChoiceField(choices=_MCTE_EVENT_TYPE_CHOICES)
-    content = serializers.CharField(required=False, allow_blank=True, max_length=2000, default="")
+    content = serializers.CharField(required=True, max_length=2000)
     timestamp = serializers.DateTimeField(required=True)
     show_on_profile = serializers.BooleanField(required=False, default=False)
 

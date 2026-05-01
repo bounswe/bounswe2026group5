@@ -2356,6 +2356,17 @@ class MCTEAPITests(FeedbackAPIBaseTestCase):
         response = self._make_event(content="x" * 2001)
         self.assertEqual(response.status_code, 400)
 
+    def test_create_mcte_missing_content_returns_400(self) -> None:
+        response = self.mentor_client.post(
+            self.list_url,
+            {
+                "event_type": "achievement",
+                "timestamp": (timezone.now() - timedelta(hours=1)).isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_create_mcte_author_cannot_be_spoofed(self) -> None:
         """author field in request body is ignored; server always derives it."""
         response = self.mentor_client.post(
