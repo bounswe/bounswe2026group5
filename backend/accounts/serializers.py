@@ -219,3 +219,13 @@ class BannedAwareTokenRefreshSerializer(TokenRefreshSerializer):
             raise PermissionDenied("This account has been banned.")
 
         return super().validate(attrs)
+
+
+class OAuthLoginSerializer(serializers.Serializer):
+    """Write serializer for OAuth token exchange.
+
+    Provider selection is determined by the URL route, so the serializer
+    only validates the presence of the ``id_token`` field.
+    """
+
+    id_token = serializers.CharField(trim_whitespace=True)

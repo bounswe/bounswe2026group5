@@ -10,10 +10,11 @@ import {
     CardContent,
     CardFooter,
 } from "@/components/ui/card"
-import { Heading, Body, Display } from "@/components/Typography"
+import { Heading, Body, Display, Muted } from "@/components/Typography"
 import { User, Mail } from 'lucide-react'
 import {useMutation} from "@tanstack/react-query";
-import {handleAuthSuccess, registerFn} from "#/lib/queries/AuthQueries.ts";
+import {handleAuthSuccess, registerFn, googleLoginFn} from "#/lib/queries/AuthQueries.ts";
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google'
 
 
 
@@ -73,6 +74,23 @@ export function RegisterPage() {
             console.error('Register error:', error)
         },
     })
+
+    const googleLogin = useMutation({
+        mutationFn: googleLoginFn,
+        onSuccess: (data) => {
+            handleAuthSuccess(data)
+            router.navigate({ to: '/dashboard' })
+        },
+        onError: (error) => {
+            console.error('Google login error:', error)
+        },
+    })
+
+    const handleGoogleSuccess = (response: CredentialResponse) => {
+        if (response.credential) {
+            googleLogin.mutate(response.credential)
+        }
+    }
 
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -250,6 +268,29 @@ export function RegisterPage() {
                                 <p className="text-xs text-destructive text-center">{register.error.message}</p>
                             )}
 
+                            {googleLogin.isError && (
+                                <p className="text-xs text-destructive text-center">{googleLogin.error.message}</p>
+                            )}
+
+                            <div className="flex items-center gap-3 w-full mt-2">
+                                <div className="flex-1 h-px bg-(--color-brand-line)" />
+                                <Muted as="span" className="text-xs uppercase tracking-widest">or</Muted>
+                                <div className="flex-1 h-px bg-(--color-brand-line)" />
+                            </div>
+
+                            <div className="w-full flex justify-center">
+                                <GoogleLogin
+                                    onSuccess={handleGoogleSuccess}
+                                    onError={() => {
+                                        console.error('Google Login Failed')
+                                    }}
+                                    text="signup_with"
+                                    shape="rectangular"
+                                    width="400"
+                                    theme="outline"
+                                />
+                            </div>
+
                             <div className="mt-2 pt-2 border-t border-border/10 text-center w-full">
                                 <p className="text-primary/70">
                                     Already have an account?{" "}
@@ -268,3 +309,4 @@ export function RegisterPage() {
         </div>
     );
 }
+

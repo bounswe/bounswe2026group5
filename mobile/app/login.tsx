@@ -18,6 +18,7 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 import { useLoginMutation } from "@/lib/queries/auth";
+import { useGoogleLoginMutation } from "@/lib/queries/googleAuth";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -26,6 +27,7 @@ export default function LoginScreen() {
   const [localError, setLocalError] = useState<string | null>(null);
 
   const loginMutation = useLoginMutation();
+  const googleLoginMutation = useGoogleLoginMutation();
 
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
@@ -39,6 +41,15 @@ export default function LoginScreen() {
       router.replace("/(tabs)");
     }
   }, [loginMutation.data]);
+
+  /**
+   * Navigate to dashboard when Google login succeeds.
+   */
+  useEffect(() => {
+    if (googleLoginMutation.data) {
+      router.replace("/(tabs)");
+    }
+  }, [googleLoginMutation.data]);
 
   /**
    * Handle login button press.
@@ -65,7 +76,20 @@ export default function LoginScreen() {
     }
   };
 
+  /**
+   * Handle Google sign-in button press.
+   */
+  const handleGoogleLogin = async () => {
+    setLocalError(null);
+    try {
+      await googleLoginMutation.mutateAsync();
+    } catch (error) {
+      console.error("Google login error:", error);
+    }
+  };
+
   const isLoading = loginMutation.isPending;
+  const isGoogleLoading = googleLoginMutation.isPending;
 
   return (
     <SafeAreaView
@@ -109,8 +133,8 @@ export default function LoginScreen() {
           {/* ── Form ── */}
           <View className="gap-5">
             {/* Error Message */}
-            {(loginMutation.error || localError) && (
-              <ErrorBanner message={localError || loginMutation.error?.message || ""} />
+            {(loginMutation.error || googleLoginMutation.error || localError) && (
+              <ErrorBanner message={localError || loginMutation.error?.message || googleLoginMutation.error?.message || ""} />
             )}
 
             {/* Email / Username */}
@@ -231,22 +255,31 @@ export default function LoginScreen() {
 
           {/* ── Google Sign-In ── */}
           <TouchableOpacity
-            className="w-full h-14 rounded-full flex-row items-center justify-center gap-3 shadow-sm border bg-surface-card dark:bg-surface-card-dark border-divider/25 dark:border-divider-dark"
+            className={`w-full h-14 rounded-full flex-row items-center justify-center gap-3 shadow-sm border bg-surface-card dark:bg-surface-card-dark border-divider/25 dark:border-divider-dark ${
+              isGoogleLoading ? "opacity-60" : ""
+            }`}
             activeOpacity={0.8}
+            disabled={isGoogleLoading}
             accessibilityRole="button"
             accessibilityLabel="Log in with Google"
-            onPress={() => console.log("TODO: Implement Google OAuth sign-in")}
+            onPress={handleGoogleLogin}
           >
-            <Ionicons
-              name="logo-google"
-              size={20}
-              color={theme.textPrimary}
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-            />
-            <Text className="font-bold text-base text-on-surface dark:text-on-surface-dark">
-              Log In with Google
-            </Text>
+            {isGoogleLoading ? (
+              <ActivityIndicator size="small" color={theme.textPrimary} />
+            ) : (
+              <>
+                <Ionicons
+                  name="logo-google"
+                  size={20}
+                  color={theme.textPrimary}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                />
+                <Text className="font-bold text-base text-on-surface dark:text-on-surface-dark">
+                  Log In with Google
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
 
           {/* ── Sign Up Footer ── */}
@@ -268,3 +301,4 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
+

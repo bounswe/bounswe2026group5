@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { router, Stack } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -27,6 +28,7 @@ import {
   updateUsernameFn,
   updateUsageModeFn,
 } from "@/lib/queries/authQueries";
+import { useGoogleLoginMutation } from "@/lib/queries/googleAuth";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -85,6 +87,7 @@ export default function RegisterScreen() {
   const theme = Colors[colorScheme];
 
   const setAuthenticated = useAuthStore((state) => state.setAuthenticated);
+  const googleLoginMutation = useGoogleLoginMutation();
 
   const [role, setRole] = useState<"mentor" | "mentee">("mentor");
   const [email, setEmail] = useState("");
@@ -220,6 +223,29 @@ export default function RegisterScreen() {
       void refetchSkills();
     }
   };
+
+  /**
+   * Handle Google sign-in button press.
+   */
+  const handleGoogleLogin = async () => {
+    setSubmitError("");
+    try {
+      await googleLoginMutation.mutateAsync();
+    } catch (error) {
+      console.error("Google login error:", error);
+    }
+  };
+
+  /**
+   * Navigate to dashboard when Google login succeeds.
+   */
+  useEffect(() => {
+    if (googleLoginMutation.data) {
+      router.replace("/(tabs)");
+    }
+  }, [googleLoginMutation.data]);
+
+  const isGoogleLoading = googleLoginMutation.isPending;
 
   return (
     <SafeAreaView
@@ -506,9 +532,11 @@ export default function RegisterScreen() {
               ) : null}
             </View>
 
-            {/* CTA + Log In link */}
+            {/* CTA + Google + Log In link */}
             <View className="gap-5 pt-4">
-              {submitError ? <ErrorBanner message={submitError} /> : null}
+              {(submitError || googleLoginMutation.error) ? (
+                <ErrorBanner message={submitError || googleLoginMutation.error?.message || ""} />
+              ) : null}
               <TouchableOpacity
                 className="w-full h-16 rounded-xl items-center justify-center flex-row gap-3 bg-primary dark:bg-primary-dim"
                 activeOpacity={0.88}
@@ -529,6 +557,44 @@ export default function RegisterScreen() {
                     accessibilityElementsHidden
                     importantForAccessibility="no"
                   />
+                )}
+              </TouchableOpacity>
+
+              {/* ── Divider ── */}
+              <View className="flex-row items-center gap-4">
+                <View className="flex-1 h-px bg-divider/50 dark:bg-divider-dark" />
+                <Text className="text-xs font-bold uppercase tracking-widest text-on-surface-muted dark:text-on-surface-muted-dark">
+                  or
+                </Text>
+                <View className="flex-1 h-px bg-divider/50 dark:bg-divider-dark" />
+              </View>
+
+              {/* ── Google Sign-In ── */}
+              <TouchableOpacity
+                className={`w-full h-14 rounded-full flex-row items-center justify-center gap-3 shadow-sm border bg-surface-card dark:bg-surface-card-dark border-divider/25 dark:border-divider-dark ${
+                  isGoogleLoading ? "opacity-60" : ""
+                }`}
+                activeOpacity={0.8}
+                disabled={isGoogleLoading}
+                accessibilityRole="button"
+                accessibilityLabel="Sign up with Google"
+                onPress={handleGoogleLogin}
+              >
+                {isGoogleLoading ? (
+                  <ActivityIndicator size="small" color={theme.textPrimary} />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="logo-google"
+                      size={20}
+                      color={theme.textPrimary}
+                      accessibilityElementsHidden
+                      importantForAccessibility="no"
+                    />
+                    <Text className="font-bold text-base text-on-surface dark:text-on-surface-dark">
+                      Sign Up with Google
+                    </Text>
+                  </>
                 )}
               </TouchableOpacity>
 

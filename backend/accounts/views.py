@@ -16,7 +16,8 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from .models import EmailVerificationToken, PasswordResetToken, User
+from .models import AuthProvider, EmailVerificationToken, PasswordResetToken, User
+from .oauth import OAuthVerificationError, verify_google_id_token
 from .permissions import IsAdmin, IsNotBanned
 from .serializers import (
     AuthResponseSerializer,
@@ -24,6 +25,7 @@ from .serializers import (
     ForgotPasswordSerializer,
     LoginSerializer,
     LogoutSerializer,
+    OAuthLoginSerializer,
     RegisterSerializer,
     ResetPasswordSerializer,
     UserAppUsageModeUpdateSerializer,
@@ -475,7 +477,9 @@ class ResendVerificationAPIView(APIView):
     @extend_schema(
         request=None,
         responses={
-            200: OpenApiResponse(description="Verification email sent if the account is unverified."),
+            200: OpenApiResponse(
+                description="Verification email sent if the account is unverified."
+            ),
             401: OpenApiResponse(description="Authentication required."),
             403: OpenApiResponse(description="Account banned."),
         },
@@ -493,9 +497,7 @@ class ResendVerificationAPIView(APIView):
                 raw_token, _ = EmailVerificationToken.issue_for_user(user)
                 _send_email_verification_email(user, raw_token)
             except Exception:
-                logger.exception(
-                    "Failed to resend verification email for user %s", user.id
-                )
+                logger.exception("Failed to resend verification email for user %s", user.id)
 
         return Response(
             {"detail": "If your email is unverified, a new verification link has been sent."},
@@ -534,3 +536,123 @@ class AdminUsersListAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+# ---------------------------------------------------------------------------
+# OAuth2 login helpers & views
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def _get_or_create_oauth_user(
+    email: str,
+    provider: AuthProvider,
+    display_name: str = "",
+    picture_url: str = "",
+) -> User:
+    """Find an existing user by email or create a new OAuth user with Profile.
+
+    Account-linking policy:
+    - If a user with this email already exists (regardless of auth_provider),
+      log them in. We do NOT overwrite auth_provider so local-password
+      users keep their credentials intact.
+    - If no user exists, create one with ``set_unusable_password()``,
+      ``is_email_verified=True``, and a matching ``Profile``.
+    """
+    from django.contrib.auth.models import Group
+
+    from profiles.models import Profile
+
+    from .models import UserRole
+
+    existing_user = User.objects.filter(email=email).first()
+    if existing_user is not None:
+        if not existing_user.is_active:
+            raise OAuthVerificationError("This account is inactive.")
+        if existing_user.is_banned:
+            raise OAuthVerificationError("This account has been banned.")
+        return existing_user
+
+    # --- New user ---
+    user = User.objects.create_user(
+        email=email,
+        password=None,  # set_unusable_password
+        role=UserRole.USER,
+        auth_provider=provider,
+        is_active=True,
+        is_email_verified=True,
+    )
+    user.email_verified_at = timezone.now()
+    user.save(update_fields=["email_verified_at"])
+
+    profile_display_name = display_name or (
+        email.split("@", 1)[0].replace(".", " ").replace("_", " ").title()
+    )
+    Profile.objects.create(
+        user=user,
+        username=user.username,
+        display_name=profile_display_name,
+        picture_url=picture_url or "",
+    )
+
+    default_group, _ = Group.objects.get_or_create(name=UserRole.USER)
+    user.groups.add(default_group)
+
+    return user
+
+
+class GoogleOAuthLoginAPIView(APIView):
+    """Exchange a Google ID-token for local JWT tokens."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=OAuthLoginSerializer,
+        responses={
+            200: AuthResponseSerializer,
+            400: OpenApiResponse(description="Invalid or expired token."),
+        },
+        description=(
+            "Authenticate using a Google-issued ID token. "
+            "If no account exists for the token's email, a new user and "
+            "profile are created automatically. Returns JWT tokens."
+        ),
+        tags=["Auth"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = OAuthLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        raw_token = serializer.validated_data["id_token"]
+
+        try:
+            token_data = verify_google_id_token(raw_token)
+        except OAuthVerificationError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Build display name from Google's given/family names
+        parts = [token_data.get("given_name", ""), token_data.get("family_name", "")]
+        display_name = " ".join(p for p in parts if p).strip()
+
+        try:
+            user = _get_or_create_oauth_user(
+                email=token_data["email"],
+                provider=AuthProvider.GOOGLE,
+                display_name=display_name,
+                picture_url=token_data.get("picture", ""),
+            )
+        except OAuthVerificationError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        refresh = RefreshToken.for_user(user)
+        response = Response(
+            AuthResponseSerializer(build_auth_response(user, refresh)).data,
+            status=status.HTTP_200_OK,
+        )
+        _set_auth_cookies(response, refresh)
+        return response
