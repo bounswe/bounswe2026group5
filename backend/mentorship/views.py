@@ -539,7 +539,7 @@ class DeactivateMatchAPIView(APIView):
 
 
 class MatchJourneyAPIView(APIView):
-    """Read-only timeline endpoint that serves stored AGTE records for a match."""
+    """Read-only timeline endpoint that serves AGTE and MCTE records for a match."""
 
     permission_classes = [IsUser]
 
@@ -568,10 +568,12 @@ class MatchJourneyAPIView(APIView):
             404: OpenApiResponse(description="Match not found."),
         },
         description=(
-            "Return the journey timeline for a single match. The feed is read from "
-            "stored AGTE timeline records materialized from mentorship lifecycle "
-            "changes, so clients receive a single chronological list without "
-            "stitching multiple endpoints together.\n\n"
+            "Return the journey timeline for a single match. The feed combines two "
+            "categories of timeline event into one chronological list:\n\n"
+            "- **AGTE** (Auto-Generated Timeline Events) — materialized automatically "
+            "from mentorship lifecycle changes.\n"
+            "- **MCTE** (Manually-Created Timeline Events) — user-authored notes that "
+            "either participant can add to the shared journey log.\n\n"
             "**Ordering:** All events are sorted newest-first (descending by timestamp) "
             "before pagination is applied.\n\n"
             "**Pagination:** Use `offset` (zero-based start index, default 0) and `limit` "
@@ -579,7 +581,20 @@ class MatchJourneyAPIView(APIView):
             "so page boundaries are stable across calls.\n\n"
             "**Visibility:** Journey events are private to the mentorship relationship "
             "and can only be accessed by the mentor or mentee of the match.\n\n"
-            "**Event types and payloads:**\n"
+            "**Common response fields (all events):**\n"
+            '- `category` — `"AGTE"` or `"MCTE"`.\n'
+            "- `event_type` — discriminator string (see per-category lists below).\n"
+            "- `timestamp` — ISO 8601 UTC timestamp of the event.\n"
+            "- `is_editable` — `true` only for MCTE events authored by the requesting "
+            "user; `false` for all AGTE events and MCTE events owned by the other "
+            "participant.\n"
+            "- `content` — free-text body; always present for MCTE, empty string for "
+            "AGTE.\n"
+            "- `show_on_profile` — boolean; controls whether the event appears on the "
+            "author's public profile. Relevant for MCTE only.\n"
+            "- `author` — serialized profile summary (`id`, `full_name`, `avatar`) for "
+            "MCTE events; `null` for AGTE events.\n\n"
+            "**AGTE event types and payloads:**\n"
             "- `request_accepted` — emitted when the mentor accepts the request; "
             "payload: `request_id`, `initial_session_start_at`, `initial_session_end_at`.\n"
             "- `session_scheduled` — emitted when a MeetingSession is created in SCHEDULED; "
@@ -591,7 +606,13 @@ class MatchJourneyAPIView(APIView):
             "- `session_completed` — emitted when a session transitions to COMPLETED; "
             "payload: `session_id`, `scheduled_start_at_utc`, `scheduled_end_at_utc`.\n"
             "- `mentorship_ended` — emitted when the match is deactivated; "
-            "payload: `match_id`, `notification_id`."
+            "payload: `match_id`, `notification_id`.\n\n"
+            "**MCTE event types** (no structured payload; narrative is carried in "
+            "`content`):\n"
+            "- `achievement` — a milestone or accomplishment reached during the "
+            "mentorship.\n"
+            "- `social` — a social interaction or informal meeting between participants.\n"
+            "- `progress` — an incremental update on an ongoing goal or skill."
         ),
         tags=["Mentorship"],
     )
