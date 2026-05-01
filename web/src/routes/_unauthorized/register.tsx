@@ -14,7 +14,7 @@ import { Heading, Body, Display, Muted } from "@/components/Typography"
 import { User, Mail } from 'lucide-react'
 import {useMutation} from "@tanstack/react-query";
 import {handleAuthSuccess, registerFn, googleLoginFn} from "#/lib/queries/AuthQueries.ts";
-import { GoogleLogin, type CredentialResponse } from '@react-oauth/google'
+import { useGoogleLogin } from '@react-oauth/google'
 
 
 
@@ -86,11 +86,14 @@ export function RegisterPage() {
         },
     })
 
-    const handleGoogleSuccess = (response: CredentialResponse) => {
-        if (response.credential) {
-            googleLogin.mutate(response.credential)
-        }
-    }
+    const triggerGoogleLogin = useGoogleLogin({
+        onSuccess: (tokenResponse) => {
+            if (tokenResponse.access_token) {
+                googleLogin.mutate(tokenResponse.access_token)
+            }
+        },
+        onError: () => console.error('Google Login Failed'),
+    })
 
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -281,7 +284,7 @@ export function RegisterPage() {
                             <Button
                                 variant="outline"
                                 className="w-full gap-2 border-line py-4 rounded-xl"
-                                onClick={() => handleGoogleSuccess()}
+                                onClick={() => triggerGoogleLogin()}
                                 disabled={googleLogin.isPending}
                             >
                                 <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden>

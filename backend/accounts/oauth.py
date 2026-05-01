@@ -1,6 +1,7 @@
 """OAuth2 ID-token verification for Google."""
 
 import logging
+import requests
 
 from django.conf import settings
 from google.auth.transport.requests import Request as GoogleAuthRequest
@@ -26,14 +27,52 @@ def verify_google_id_token(raw_token: str) -> dict:
         raise OAuthVerificationError("Google OAuth is not configured on the server.")
 
     try:
-        payload = google_id_token.verify_oauth2_token(
-            raw_token,
-            GoogleAuthRequest(),
-            audience=client_id,
-        )
+        # 1. Try to verify as an ID Token (JWT)
+        # JWTs always have 3 segments separated by dots
+        if raw_token.count('.') == 2:
+            payload = google_id_token.verify_oauth2_token(
+                raw_token,
+                GoogleAuthRequest(),
+                audience=client_id,
+            )
+        else:
+            # 2. Fallback: Verify as an Access Token using Google's tokeninfo endpoint
+            response = requests.get(
+                f"https://oauth2.googleapis.com/tokeninfo?access_token={raw_token}",
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                raise OAuthVerificationError("Invalid or expired Google access token.")
+                
+            token_info = response.json()
+            
+            # Verify the audience (client_id) matches
+            aud = token_info.get("aud")
+            if aud != client_id:
+                raise OAuthVerificationError("Google Access Token audience mismatch.")
+                
+            # Access tokens don't contain user details, so we must fetch them from the userinfo endpoint
+            user_info_res = requests.get(
+                "https://openidconnect.googleapis.com/v1/userinfo",
+                headers={"Authorization": f"Bearer {raw_token}"},
+                timeout=10
+            )
+            
+            if user_info_res.status_code != 200:
+                raise OAuthVerificationError("Google UserInfo fetch failed.")
+                
+            payload = user_info_res.json()
+            # Normalize field for the logic below. Userinfo might return "true"/"false" as strings or booleans.
+            verified = payload.get("email_verified", True)
+            payload["email_verified"] = str(verified).lower() == "true"
+
     except ValueError as exc:
-        logger.warning("Google ID-token verification failed: %s", exc)
+        logger.warning("Google token verification failed: %s", exc)
         raise OAuthVerificationError("Invalid or expired Google token.") from exc
+    except Exception as exc:
+        logger.error("Unexpected error during Google token verification: %s", exc)
+        raise OAuthVerificationError("Google token verification failed.") from exc
 
     email = payload.get("email")
     if not email:
