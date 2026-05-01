@@ -14,6 +14,7 @@ export interface AuthUser {
   app_usage_mode?: "MENTOR" | "MENTEE" | "";
   auth_provider: string;
   is_active: boolean;
+  is_email_verified?: boolean;
   created_at: string;
 }
 

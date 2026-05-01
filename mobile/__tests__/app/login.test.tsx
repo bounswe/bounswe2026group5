@@ -23,14 +23,24 @@ jest.mock("@/lib/queries/auth", () => ({
 const mockMutateAsync = jest.fn();
 
 describe("LoginScreen", () => {
+  let logSpy: jest.SpyInstance;
+  let errorSpy: jest.SpyInstance;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
     (useLoginMutation as jest.Mock).mockReturnValue({
       mutateAsync: mockMutateAsync,
       isPending: false,
       data: undefined,
       error: null,
     });
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   it("renders the login form with all required fields", () => {
@@ -119,6 +129,50 @@ describe("LoginScreen", () => {
         password: "secret123",
       });
     });
+  });
+
+  it("logs failed login attempts after validation passes", async () => {
+    mockMutateAsync.mockRejectedValueOnce(new Error("Invalid credentials"));
+    const { getByLabelText } = render(<LoginScreen />);
+
+    fireEvent.changeText(getByLabelText("Email or username"), "user@example.com");
+    fireEvent.changeText(getByLabelText("Password"), "secret123");
+    fireEvent.press(getByLabelText("Log in"));
+
+    await waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Login error:",
+        expect.any(Error),
+      );
+    });
+  });
+
+  it("toggles password visibility from the password icon", () => {
+    const { getByLabelText } = render(<LoginScreen />);
+
+    expect(getByLabelText("Show password")).toBeTruthy();
+
+    fireEvent.press(getByLabelText("Show password"));
+
+    expect(getByLabelText("Hide password")).toBeTruthy();
+  });
+
+  it("logs the current forgot-password placeholder action", () => {
+    const { getByLabelText } = render(<LoginScreen />);
+
+    fireEvent.press(getByLabelText("Forgot password"));
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "TODO: Navigate to forgot-password screen",
+    );
+  });
+
+  it("logs the current Google sign-in placeholder action", () => {
+    const { getByLabelText } = render(<LoginScreen />);
+
+    fireEvent.press(getByLabelText("Log in with Google"));
+
+    expect(logSpy).toHaveBeenCalledWith("TODO: Implement Google OAuth sign-in");
   });
 
   it("navigates to the register screen when Sign Up is pressed", () => {

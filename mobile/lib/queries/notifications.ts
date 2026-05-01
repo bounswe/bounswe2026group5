@@ -80,6 +80,14 @@ export function getNotificationTitle(notification: BackendNotification): string 
     case "new_feedback_available":
     case "feedback_received":
       return "New feedback";
+    case "tag_new_member":
+      return "New community member";
+    case "tag_description_updated":
+      return "Community updated";
+    case "tag_deleted":
+      return "Community deleted";
+    case "tag_matches_interest":
+      return "New community match";
     default:
       return prettifyNotificationType(notification.type);
   }
@@ -88,7 +96,7 @@ export function getNotificationTitle(notification: BackendNotification): string 
 export function getNotificationTargetPath(
   notification: Pick<
     BackendNotification,
-    "type" | "resource_type" | "action_url" | "extra_metadata"
+    "type" | "resource_type" | "resource_id" | "action_url" | "extra_metadata"
   >,
 ): Href | undefined {
   const extraMetadata = notification.extra_metadata ?? {};
@@ -101,6 +109,17 @@ export function getNotificationTargetPath(
   }
 
   const normalizedResourceType = notification.resource_type?.toLowerCase();
+
+  if (
+    (normalizedResourceType === "community_tag" ||
+      normalizedResourceType === "community" ||
+      notification.type.startsWith("tag_")) &&
+    notification.resource_id
+  ) {
+    return `/(tabs)/community/${encodeURIComponent(
+      notification.resource_id,
+    )}?from=community` as Href;
+  }
 
   if (
     normalizedResourceType === "meeting_session" ||

@@ -18,8 +18,8 @@ let mockMessages: Array<{
 let mockConversations: Array<{
   id: string;
   updated_at: string;
-  mentor: { username: string; display_name: string; picture_url: null; title?: string };
-  mentee: { username: string; display_name: string; picture_url: null; title?: string };
+  mentor: { username: string; display_name: string; picture_url: string | null; title?: string };
+  mentee: { username: string; display_name: string; picture_url: string | null; title?: string };
 }> = [];
 let mockSendIsPending = false;
 
@@ -162,5 +162,114 @@ describe("ConversationScreen — message input", () => {
     await waitFor(() => {
       expect(getByTestId("message-input").props.value).toBe("Hello!");
     });
+  });
+
+  it("does not send while another send is pending", () => {
+    mockSendIsPending = true;
+    const { getByTestId } = renderScreen();
+
+    fireEvent.changeText(getByTestId("message-input"), "Hello!");
+    fireEvent.press(getByTestId("send-button"));
+
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("invalidates message and conversation queries after successful send", async () => {
+    mockMutateAsync.mockResolvedValueOnce(undefined);
+    const { getByTestId } = renderScreen();
+
+    fireEvent.changeText(getByTestId("message-input"), "Hello!");
+    fireEvent.press(getByTestId("send-button"));
+
+    await waitFor(() => {
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({
+        queryKey: ["messaging", "messages", "conv-1"],
+      });
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({
+        queryKey: ["messaging", "conversations"],
+      });
+    });
+  });
+});
+
+describe("ConversationScreen — message list", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-04-29T12:00:00Z"));
+    mockConversationId = "conv-1";
+    mockMessagesLoading = false;
+    mockMessagesError = false;
+    mockSendIsPending = false;
+    mockMutateAsync.mockReset();
+    mockInvalidateQueries.mockClear();
+    mockConversations = [
+      {
+        id: "conv-1",
+        updated_at: "2026-04-29T12:00:00Z",
+        mentor: {
+          username: "mentor_user",
+          display_name: "Mentor User",
+          picture_url: null,
+          title: "Mentor",
+        },
+        mentee: {
+          username: "mentee_user",
+          display_name: "Ada Mentee",
+          picture_url: "https://example.com/ada.png",
+          title: "Learner",
+        },
+      },
+    ];
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("renders conversation header, date separators, messages, and attachments", () => {
+    mockMessages = [
+      {
+        id: "m-1",
+        body: "Yesterday hello",
+        created_at: "2026-04-28T10:00:00Z",
+        sender: { username: "mentee_user" },
+      },
+      {
+        id: "m-2",
+        body: "Today reply",
+        created_at: "2026-04-29T10:05:00Z",
+        sender: { username: "mentor_user" },
+        attachment_url: "https://example.com/file.pdf",
+      },
+    ];
+
+    const { getByText, getByPlaceholderText } = renderScreen();
+
+    expect(getByText("Ada Mentee")).toBeTruthy();
+    expect(getByText("Learner")).toBeTruthy();
+    expect(getByText("Yesterday")).toBeTruthy();
+    expect(getByText("Today")).toBeTruthy();
+    expect(getByText("Yesterday hello")).toBeTruthy();
+    expect(getByText("Today reply")).toBeTruthy();
+    expect(getByText("Attachment")).toBeTruthy();
+    expect(getByPlaceholderText("Message Ada…")).toBeTruthy();
+  });
+
+  it("renders the empty conversation state", () => {
+    mockMessages = [];
+
+    const { getByText } = renderScreen();
+
+    expect(getByText("No messages yet")).toBeTruthy();
+    expect(getByText("Say hello to start the conversation!")).toBeTruthy();
+  });
+
+  it("renders a skeleton header when the conversation is not in cache", () => {
+    mockConversations = [];
+    mockMessages = [];
+
+    const { getByPlaceholderText } = renderScreen();
+
+    expect(getByPlaceholderText("Type a message…")).toBeTruthy();
   });
 });

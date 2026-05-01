@@ -12,6 +12,7 @@ export interface User {
   auth_provider: string;
   app_usage_mode: "MENTOR" | "MENTEE" | null;
   is_active: boolean;
+  is_email_verified?: boolean;
   created_at: string;
 }
 

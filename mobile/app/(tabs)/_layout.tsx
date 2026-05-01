@@ -14,8 +14,12 @@ const renderDiscoverIcon = ({ color }: { color: string }) => (
   <IconSymbol size={28} name="magnifyingglass" color={color} />
 );
 
-const renderScheduleIcon = ({ color }: { color: string }) => (
-  <IconSymbol size={28} name="calendar" color={color} />
+const renderCommunityIcon = ({ color }: { color: string }) => (
+  <IconSymbol
+    size={28}
+    name="bubble.left.and.bubble.right.fill"
+    color={color}
+  />
 );
 
 const renderProfileIcon = ({ color }: { color: string }) => (
@@ -54,8 +58,32 @@ export default function TabLayout() {
       <Tabs.Screen
         name="schedule"
         options={{
-          title: "Schedule",
-          tabBarIcon: renderScheduleIcon,
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: "Community",
+          tabBarIcon: renderCommunityIcon,
+        }}
+      />
+
+      <Tabs.Screen
+        name="community/[tagId]/index"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="community/[tagId]/members"
+        options={{
+          href: null,
+          headerShown: false,
         }}
       />
 

@@ -5,6 +5,7 @@ import { Alert } from "react-native";
 
 const mockMatchesQuery = jest.fn();
 const mockAvailabilityQuery = jest.fn();
+const mockMyCommunitiesQuery = jest.fn();
 let mockAuthUser = {
   username: "Ali Aydin",
   app_usage_mode: "MENTOR",
@@ -76,6 +77,10 @@ jest.mock("@/lib/queries/profile", () => ({
   }),
 }));
 
+jest.mock("@/lib/queries/communityTags", () => ({
+  useMyCommunityTagsQuery: (username?: string) => mockMyCommunitiesQuery(username),
+}));
+
 const mockRouterPush = jest.fn();
 
 jest.mock("expo-router", () => ({
@@ -94,6 +99,7 @@ describe("ProfileScreen Layout", () => {
     };
     mockAvailabilityQuery.mockReturnValue({ data: undefined });
     mockMatchesQuery.mockReturnValue({ data: [] });
+    mockMyCommunitiesQuery.mockReturnValue({ data: [] });
     mockRouterPush.mockClear();
     (Alert.alert as jest.Mock).mockClear?.();
 
@@ -148,6 +154,34 @@ describe("ProfileScreen Layout", () => {
       expect(getAllByText("Reviews").length).toBeGreaterThan(0);
       expect(getByText("Anonymous mentee")).toBeTruthy();
     });
+  });
+
+  it("renders joined communities separately from skills and opens detail", async () => {
+    mockMyCommunitiesQuery.mockReturnValue({
+      data: [
+        {
+          id: "tag-1",
+          name: "Backend Guild",
+          slug: "backend-guild",
+          description: "",
+          member_count: 4,
+          created_at: "2026-04-20T00:00:00Z",
+        },
+      ],
+    });
+
+    const { getByTestId, getByText } = render(<ProfileScreen />);
+
+    await waitFor(() => {
+      expect(mockMyCommunitiesQuery).toHaveBeenCalledWith("Ali Aydin");
+      expect(getByTestId("profile-community-tags")).toBeTruthy();
+      expect(getByText("Backend Guild")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("profile-community-backend-guild"));
+    expect(mockRouterPush).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1?from=community",
+    );
   });
 
   it("hides mentor-only sections for mentee accounts", async () => {

@@ -6,14 +6,18 @@
 import { useMutation } from "@tanstack/react-query";
 import {
   AuthResponse,
+  AuthUser,
   LoginCredentials,
   RegisterCredentials,
 } from "../auth/types";
 import { useAuthStore } from "../auth/store";
+import { ApiError, apiGet, apiPost } from "@/lib/api/client";
 import { API_BASE_URL } from "@/lib/api/config";
 import { fetchWithTimeout } from "@/lib/api/fetchWithTimeout";
 
 const AUTH_BASE_PATH = "/api/auth";
+export const EMAIL_VERIFICATION_REQUIRED_MESSAGE =
+  "Please verify your email address to perform this action.";
 
 function getAuthErrorMessage(
   errorData: {
@@ -175,4 +179,44 @@ export function useLogoutMutation() {
       console.error("Logout failed:", error);
     },
   });
+}
+
+export function verifyEmail(token: string): Promise<{ detail: string }> {
+  return apiGet<{ detail: string }>(
+    `/api/auth/verify-email/?token=${encodeURIComponent(token)}`,
+  );
+}
+
+export function useVerifyEmailMutation() {
+  return useMutation({
+    mutationFn: verifyEmail,
+  });
+}
+
+export function getCurrentUser(): Promise<AuthUser> {
+  return apiGet<AuthUser>("/api/auth/me/");
+}
+
+export function useCurrentUserMutation() {
+  return useMutation({
+    mutationFn: getCurrentUser,
+  });
+}
+
+export function resendEmailVerification(): Promise<{ detail: string }> {
+  return apiPost<{ detail: string }>("/api/auth/resend-verification/");
+}
+
+export function useResendEmailVerificationMutation() {
+  return useMutation({
+    mutationFn: resendEmailVerification,
+  });
+}
+
+export function isEmailVerificationRequiredError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    error.message.trim() === EMAIL_VERIFICATION_REQUIRED_MESSAGE
+  );
 }
