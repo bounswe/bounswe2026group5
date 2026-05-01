@@ -1,10 +1,10 @@
 """Serializers for mentorship request and match API endpoints."""
 
 from django.utils import timezone
-from core.utils.timezone import to_local_time
 from rest_framework import serializers
 
 from accounts.models import AppUsageMode
+from core.utils.timezone import to_local_time
 from profiles.models import AvailabilitySlot, Profile
 
 from .models import Feedback, Match, MeetingSession, MentorshipRequest
@@ -337,3 +337,30 @@ class FeedbackCreateSerializer(serializers.Serializer):
 
     rating = serializers.IntegerField(min_value=1, max_value=5)
     text = serializers.CharField(required=False, default="", allow_blank=True)
+
+
+class JourneyQueryParamsSerializer(serializers.Serializer):
+    """Validate offset/limit query parameters for match journey feed."""
+
+    offset = serializers.IntegerField(required=False, min_value=0, default=0)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=50)
+
+
+class JourneyEventSerializer(serializers.Serializer):
+    """Read serializer for a single match journey event item."""
+
+    id = serializers.CharField(read_only=True)
+    type = serializers.CharField(read_only=True)
+    timestamp = serializers.DateTimeField(read_only=True)
+    actor_role = serializers.CharField(read_only=True)
+    payload = serializers.JSONField(read_only=True)
+
+
+class JourneyFeedSerializer(serializers.Serializer):
+    """Read serializer for the paginated match journey feed envelope."""
+
+    ordering = serializers.ChoiceField(choices=["desc"], read_only=True)
+    count = serializers.IntegerField(read_only=True)
+    offset = serializers.IntegerField(read_only=True)
+    limit = serializers.IntegerField(read_only=True)
+    results = JourneyEventSerializer(many=True, read_only=True)

@@ -7,8 +7,9 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -779,6 +780,176 @@ class DeactivateMatchAPIViewTests(FeedbackAPIBaseTestCase):
         deactivate_match(match=self.match, actor_profile=self.mentor_profile)
         self.mentor_profile.refresh_from_db(fields=["total_mentee_count"])
         self.assertEqual(self.mentor_profile.total_mentee_count, 0)
+
+
+class MatchJourneyAPIViewTests(FeedbackAPIBaseTestCase):
+    """Tests for GET /api/mentorship/matches/<match_id>/journey/."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.journey_url = f"/api/mentorship/matches/{self.match.id}/journey/"
+
+    def _set_request_accepted_time(self, dt) -> None:
+        MentorshipRequest.objects.filter(id=self.mentorship_request.id).update(responded_at=dt)
+
+    def _create_session(
+        self,
+        *,
+        status: str,
+        start_offset_days: int,
+        event_time,
+        canceled_by_role: str = "",
+        cancel_reason: str = "",
+    ) -> MeetingSession:
+        start_at = timezone.now() + timedelta(days=start_offset_days)
+        session = MeetingSession.objects.create(
+            match=self.match,
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            scheduled_start_at_utc=start_at,
+            scheduled_end_at_utc=start_at + timedelta(hours=1),
+            status=status,
+            canceled_by_role=canceled_by_role,
+            cancel_reason=cancel_reason,
+        )
+        MeetingSession.objects.filter(id=session.id).update(
+            created_at=event_time,
+            updated_at=event_time,
+        )
+        session.refresh_from_db()
+        return session
+
+    def test_unauthenticated_returns_401(self) -> None:
+        response = self.anon_client.get(self.journey_url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_authenticated_outsider_can_access(self) -> None:
+        response = self.other_client.get(self.journey_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("results", response.data)
+
+    def test_fresh_match_with_only_request_returns_single_request_accepted(self) -> None:
+        response = self.mentor_client.get(self.journey_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["type"], "request_accepted")
+
+    def test_full_lifecycle_includes_all_scoped_event_types(self) -> None:
+        base_time = timezone.now() - timedelta(days=2)
+        self._set_request_accepted_time(base_time)
+
+        self._create_session(
+            status=MeetingSession.Status.SCHEDULED,
+            start_offset_days=1,
+            event_time=base_time + timedelta(hours=1),
+        )
+        self._create_session(
+            status=MeetingSession.Status.RESCHEDULED,
+            start_offset_days=2,
+            event_time=base_time + timedelta(hours=2),
+        )
+        self._create_session(
+            status=MeetingSession.Status.CANCELED,
+            start_offset_days=3,
+            event_time=base_time + timedelta(hours=3),
+            canceled_by_role=MeetingSession.CanceledByRole.MENTOR,
+            cancel_reason="Conflict",
+        )
+        self._create_session(
+            status=MeetingSession.Status.COMPLETED,
+            start_offset_days=-1,
+            event_time=base_time + timedelta(hours=4),
+        )
+        self.mentor_client.post(f"/api/mentorship/matches/{self.match.id}/deactivate/")
+
+        response = self.mentor_client.get(self.journey_url)
+        self.assertEqual(response.status_code, 200)
+        event_types = {item["type"] for item in response.data["results"]}
+
+        self.assertIn("request_accepted", event_types)
+        self.assertIn("session_scheduled", event_types)
+        self.assertIn("session_rescheduled", event_types)
+        self.assertIn("session_canceled", event_types)
+        self.assertIn("session_completed", event_types)
+        self.assertIn("mentorship_ended", event_types)
+        self.assertNotIn("request_created", event_types)
+
+    def test_cross_type_ordering_is_descending_by_timestamp(self) -> None:
+        base_time = timezone.now() - timedelta(days=1)
+        self._set_request_accepted_time(base_time)
+
+        self._create_session(
+            status=MeetingSession.Status.SCHEDULED,
+            start_offset_days=1,
+            event_time=base_time + timedelta(hours=1),
+        )
+        self._create_session(
+            status=MeetingSession.Status.COMPLETED,
+            start_offset_days=-1,
+            event_time=base_time + timedelta(hours=2),
+        )
+
+        response = self.mentor_client.get(self.journey_url)
+        self.assertEqual(response.status_code, 200)
+        timestamps = [item["timestamp"] for item in response.data["results"]]
+        self.assertEqual(timestamps, sorted(timestamps, reverse=True))
+
+    def test_offset_limit_slices_results(self) -> None:
+        base_time = timezone.now() - timedelta(days=1)
+        self._set_request_accepted_time(base_time)
+
+        self._create_session(
+            status=MeetingSession.Status.SCHEDULED,
+            start_offset_days=1,
+            event_time=base_time + timedelta(hours=1),
+        )
+        self._create_session(
+            status=MeetingSession.Status.COMPLETED,
+            start_offset_days=-1,
+            event_time=base_time + timedelta(hours=2),
+        )
+        self._create_session(
+            status=MeetingSession.Status.CANCELED,
+            start_offset_days=2,
+            event_time=base_time + timedelta(hours=3),
+            canceled_by_role=MeetingSession.CanceledByRole.MENTEE,
+            cancel_reason="No longer needed",
+        )
+
+        response = self.mentor_client.get(self.journey_url, {"offset": 1, "limit": 2})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["offset"], 1)
+        self.assertEqual(response.data["limit"], 2)
+        self.assertEqual(len(response.data["results"]), 2)
+
+    def test_invalid_offset_or_limit_returns_400(self) -> None:
+        offset_response = self.mentor_client.get(self.journey_url, {"offset": -1, "limit": 10})
+        self.assertEqual(offset_response.status_code, 400)
+
+        limit_response = self.mentor_client.get(self.journey_url, {"offset": 0, "limit": 0})
+        self.assertEqual(limit_response.status_code, 400)
+
+        cap_response = self.mentor_client.get(self.journey_url, {"offset": 0, "limit": 999})
+        self.assertEqual(cap_response.status_code, 400)
+
+    def test_query_count_stays_bounded_with_more_sessions(self) -> None:
+        with CaptureQueriesContext(connection) as baseline_ctx:
+            baseline_response = self.mentor_client.get(self.journey_url)
+        self.assertEqual(baseline_response.status_code, 200)
+
+        now = timezone.now()
+        for i in range(40):
+            self._create_session(
+                status=MeetingSession.Status.SCHEDULED,
+                start_offset_days=i + 1,
+                event_time=now + timedelta(minutes=i),
+            )
+
+        with CaptureQueriesContext(connection) as heavy_ctx:
+            heavy_response = self.mentor_client.get(self.journey_url)
+        self.assertEqual(heavy_response.status_code, 200)
+        self.assertEqual(len(heavy_ctx), len(baseline_ctx))
 
 
 @override_settings(RATING_UPDATE_THRESHOLD=5)

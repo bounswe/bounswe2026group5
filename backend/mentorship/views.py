@@ -6,7 +6,7 @@ from typing import Any, cast
 from django.db import IntegrityError
 from django.db.models import Q
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema
 from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -27,6 +27,8 @@ from .models import Feedback, Match, MeetingSession, MentorshipRequest
 from .serializers import (
     FeedbackCreateSerializer,
     FeedbackSerializer,
+    JourneyFeedSerializer,
+    JourneyQueryParamsSerializer,
     MatchSerializer,
     MeetingSessionSerializer,
     MentorshipRequestCreateSerializer,
@@ -43,6 +45,7 @@ from .services import (
     create_mentorship_request,
     deactivate_match,
     delete_match_feedback,
+    list_match_journey_events,
     reschedule_match_session,
     respond_to_mentorship_request,
 )
@@ -524,6 +527,79 @@ class DeactivateMatchAPIView(APIView):
         match = deactivate_match(match=match, actor_profile=profile)
 
         return Response(MatchSerializer(match).data, status=status.HTTP_200_OK)
+
+
+class MatchJourneyAPIView(APIView):
+    """Read-only timeline endpoint that merges match lifecycle events across source tables."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="offset",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Zero-based index of the first item to include. Default: 0.",
+            ),
+            OpenApiParameter(
+                name="limit",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Maximum number of items to return. Default: 50. Maximum: 200.",
+            ),
+        ],
+        responses={
+            200: JourneyFeedSerializer,
+            400: OpenApiResponse(description="Invalid offset/limit query params."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Match not found."),
+        },
+        description=(
+            "Return the journey timeline for a single match. The feed is assembled "
+            "server-side by merging three source tables — MentorshipRequest, "
+            "MeetingSession, and Notification — so clients receive a single "
+            "chronological list instead of stitching several endpoints together.\n\n"
+            "**Ordering:** All events are sorted newest-first (descending by timestamp) "
+            "across all source types before pagination is applied.\n\n"
+            "**Pagination:** Use `offset` (zero-based start index, default 0) and `limit` "
+            "(page size, default 50, max 200). Slicing is applied after the global "
+            "merge-sort, so page boundaries are stable across calls.\n\n"
+            "**Event types and payloads:**\n"
+            "- `request_accepted` — emitted when the mentor accepts the request; "
+            "payload: `request_id`, `initial_session_start_at`, `initial_session_end_at`.\n"
+            "- `session_scheduled` — emitted when a MeetingSession is created in SCHEDULED; "
+            "payload: `session_id`, `scheduled_start_at_utc`, `scheduled_end_at_utc`.\n"
+            "- `session_rescheduled` — emitted when a session is moved to a new slot; "
+            "payload: `session_id`, `scheduled_start_at_utc`, `scheduled_end_at_utc`.\n"
+            "- `session_canceled` — emitted when a session is canceled; "
+            "payload adds `cancel_reason` to the standard session fields.\n"
+            "- `session_completed` — emitted when a session transitions to COMPLETED; "
+            "payload: `session_id`, `scheduled_start_at_utc`, `scheduled_end_at_utc`.\n"
+            "- `mentorship_ended` — emitted when the match is deactivated; "
+            "payload: `match_id`, `notification_id`."
+        ),
+        tags=["Mentorship"],
+    )
+    def get(self, request: Request, match_id: str) -> Response:
+        """Return a paginated cross-source journey feed for the identified match."""
+        params_serializer = JourneyQueryParamsSerializer(data=request.query_params)
+        params_serializer.is_valid(raise_exception=True)
+        params = cast(dict[str, int], params_serializer.validated_data)
+
+        try:
+            match = Match.objects.select_related("mentor", "mentee", "request").get(id=match_id)
+        except Match.DoesNotExist:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        payload = list_match_journey_events(
+            match=match,
+            offset=params["offset"],
+            limit=params["limit"],
+        )
+        return Response(JourneyFeedSerializer(payload).data, status=status.HTTP_200_OK)
 
 
 class MatchFeedbackListCreateAPIView(APIView):
