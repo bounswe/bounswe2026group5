@@ -32,7 +32,7 @@ def noop_reverse(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("profiles", "0012_remove_profile_rating"),
+        ("profiles", "0014_seed_starter_community_tags"),
         (
             "mentorship",
             "0009_rename_meeting_ses_mentor__73f9cd_idx_meeting_ses_mentor__62e580_idx_and_more",
