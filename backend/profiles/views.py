@@ -18,7 +18,8 @@ from rest_framework.views import APIView
 
 from accounts.models import AppUsageMode, UserRole
 from accounts.permissions import IsUser
-from mentorship.models import Feedback
+from mentorship.models import Feedback, MentorshipRequest
+from mentorship.services import book_match_session
 
 from .models import AvailabilitySlot, CommunityTag, CommunityTagMembership, Profile, Skill
 from .serializers import (
@@ -444,7 +445,7 @@ class MyAvailabilitySlotDetailAPIView(ProfileLookupMixin, APIView):
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            from mentorship.models import MentorshipRequest
+                # MentorshipRequest moved to top level
 
             with transaction.atomic():
                 locked_slot = AvailabilitySlot.objects.select_for_update().get(id=slot.id)
@@ -521,7 +522,7 @@ class AvailabilitySlotBookAPIView(ProfileLookupMixin, APIView):
     )
     def post(self, request: Request, username: str, slot_id: str) -> Response:
         """Book a slot for requester when business rules permit."""
-        from mentorship.services import book_match_session
+        # book_match_session moved to top level
 
         profile = self._get_profile_or_404(username)
         if profile is None or not self._is_mentor_profile(profile):

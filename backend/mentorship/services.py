@@ -24,6 +24,9 @@ from profiles.services import (
 
 from .models import Feedback, Match, MeetingSession, MentorshipRequest
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 def _serialize_optional_datetime(value: Any) -> str | None:
     """Serialize optional timezone-aware datetimes to ISO 8601 strings."""
@@ -249,10 +252,6 @@ def _create_notification(
     persistence (e.g. IntegrityError) are logged but do not roll back the
     primary business transaction.
     """
-    import logging
-
-    logger = logging.getLogger(__name__)
-
     try:
         Notification.objects.create(
             user=user,

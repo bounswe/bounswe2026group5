@@ -1,5 +1,6 @@
 """Tests for mentorship domain models and API endpoints."""
 
+from decimal import Decimal
 import uuid
 from datetime import timedelta
 from typing import Any, cast
@@ -14,7 +15,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts.models import AppUsageMode
+from accounts.models import AppUsageMode, UserRole
 from mentorship.models import Feedback, Match, MeetingSession, MentorshipRequest
 from mentorship.serializers import (
     MeetingSessionSerializer,
@@ -26,6 +27,9 @@ from mentorship.services import (
     MissingSelectedSlotError,
     _mark_meeting_session_canceled,
     book_match_session,
+    cancel_match_session,
+    create_match_feedback,
+    create_mentorship_request,
     deactivate_match,
     ensure_match_and_initial_session,
     reschedule_match_session,
@@ -281,7 +285,7 @@ class MentorshipRequestAPIBaseTestCase(TestCase):
 
     def setUp(self) -> None:
         """Create mentor and mentee users with matching profiles."""
-        from accounts.models import UserRole
+        # UserRole moved to top level
 
         Group.objects.get_or_create(name=UserRole.USER)
 
@@ -1089,7 +1093,7 @@ class FeedbackSubmitAndListAPITests(FeedbackAPIBaseTestCase):
     @override_settings(RATING_UPDATE_THRESHOLD=2)
     def test_average_rating_updated_at_threshold(self) -> None:
         """After every 2 mentee reviews, the public average_rating is recalculated."""
-        from decimal import Decimal
+        # Decimal moved to top level
 
         # Use two different mentees to avoid duplicate feedback constraint.
         second_mentee_user = User.objects.create_user(
@@ -2064,7 +2068,7 @@ class MentorshipSerializerBranchTests(TestCase):
         self.assertEqual(completed_serialized["allowed_actions"], [])
 
     def test_create_mentorship_request_creates_notification(self) -> None:
-        from mentorship.services import create_mentorship_request
+        # Service import moved to top level
 
         slot = AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
@@ -2088,7 +2092,7 @@ class MentorshipSerializerBranchTests(TestCase):
         self.assertEqual(notification.resource_type, "mentorship_request")
 
     def test_respond_to_mentorship_request_accept_creates_notification(self) -> None:
-        from mentorship.services import respond_to_mentorship_request
+        # Service import moved to top level
 
         slot = AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
@@ -2113,7 +2117,7 @@ class MentorshipSerializerBranchTests(TestCase):
         self.assertEqual(notification.resource_type, "match")
 
     def test_respond_to_mentorship_request_reject_creates_notification(self) -> None:
-        from mentorship.services import respond_to_mentorship_request
+        # Service import moved to top level
 
         slot = AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
@@ -2138,7 +2142,7 @@ class MentorshipSerializerBranchTests(TestCase):
         self.assertEqual(notification.resource_type, "mentorship_request")
 
     def test_cancel_match_session_creates_notification(self) -> None:
-        from mentorship.services import cancel_match_session, respond_to_mentorship_request
+        # Service import moved to top level
 
         slot = AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
@@ -2175,7 +2179,7 @@ class MentorshipSerializerBranchTests(TestCase):
         self.assertEqual(mentor_notification.resource_type, "meeting_session")
 
     def test_reschedule_match_session_creates_notification(self) -> None:
-        from mentorship.services import reschedule_match_session, respond_to_mentorship_request
+        # Service import moved to top level
 
         slot = AvailabilitySlot.objects.create(
             profile=self.mentor_profile,
@@ -2211,7 +2215,7 @@ class MentorshipSerializerBranchTests(TestCase):
         self.assertEqual(mentor_notification.resource_type, "meeting_session")
 
     def test_deactivate_match_creates_notification(self) -> None:
-        from mentorship.services import deactivate_match
+        # Service import moved to top level
 
         req = _create_accepted_request(mentor=self.mentor_profile, mentee=self.mentee_profile)
         match = Match.objects.get(request=req)
@@ -2231,7 +2235,7 @@ class MentorshipSerializerBranchTests(TestCase):
         self.assertEqual(mentor_notification.resource_type, "match")
 
     def test_feedback_creation_creates_notification(self) -> None:
-        from mentorship.services import create_match_feedback
+        # Service import moved to top level
 
         req = _create_accepted_request(mentor=self.mentor_profile, mentee=self.mentee_profile)
         match = Match.objects.get(request=req)

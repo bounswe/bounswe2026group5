@@ -1,5 +1,6 @@
 from typing import Any, cast
 
+from django.conf import settings
 from django.contrib.auth import password_validation
 from django.contrib.auth.models import Group
 from django.db import transaction
@@ -92,8 +93,6 @@ class RegisterSerializer(serializers.Serializer):
 
     @transaction.atomic
     def create(self, validated_data: dict[str, Any]) -> User:
-        from django.conf import settings
-
         validated_data.pop("confirm_password", None)
         password = validated_data.pop("password")
         email = validated_data["email"]
