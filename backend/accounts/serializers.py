@@ -92,9 +92,13 @@ class RegisterSerializer(serializers.Serializer):
 
     @transaction.atomic
     def create(self, validated_data: dict[str, Any]) -> User:
+        from django.conf import settings
+
         validated_data.pop("confirm_password", None)
         password = validated_data.pop("password")
         email = validated_data["email"]
+
+        is_email_verified = not getattr(settings, "REQUIRE_EMAIL_VERIFICATION", True)
 
         user: User = cast(
             User,
@@ -104,6 +108,7 @@ class RegisterSerializer(serializers.Serializer):
                 role=UserRole.USER,
                 auth_provider=AuthProvider.LOCAL,
                 is_active=True,
+                is_email_verified=is_email_verified,
             ),
         )
 
