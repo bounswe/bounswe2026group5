@@ -477,9 +477,7 @@ class ResendVerificationAPIView(APIView):
     @extend_schema(
         request=None,
         responses={
-            200: OpenApiResponse(
-                description="Verification email sent if the account is unverified."
-            ),
+            200: OpenApiResponse(description="Verification email sent if the account is unverified."),
             401: OpenApiResponse(description="Authentication required."),
             403: OpenApiResponse(description="Account banned."),
         },
@@ -497,7 +495,9 @@ class ResendVerificationAPIView(APIView):
                 raw_token, _ = EmailVerificationToken.issue_for_user(user)
                 _send_email_verification_email(user, raw_token)
             except Exception:
-                logger.exception("Failed to resend verification email for user %s", user.id)
+                logger.exception(
+                    "Failed to resend verification email for user %s", user.id
+                )
 
         return Response(
             {"detail": "If your email is unverified, a new verification link has been sent."},
@@ -656,3 +656,5 @@ class GoogleOAuthLoginAPIView(APIView):
         )
         _set_auth_cookies(response, refresh)
         return response
+
+

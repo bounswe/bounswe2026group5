@@ -3,9 +3,10 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { navigateMock, loginFnMock, handleAuthSuccessMock } = vi.hoisted(() => ({
+const { navigateMock, loginFnMock, googleLoginFnMock, handleAuthSuccessMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   loginFnMock: vi.fn(),
+  googleLoginFnMock: vi.fn(),
   handleAuthSuccessMock: vi.fn(),
 }))
 
@@ -25,8 +26,19 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   }
 })
 
+vi.mock('@react-oauth/google', () => ({
+  useGoogleLogin: vi.fn((config) => {
+    // Return a function that triggers the onSuccess callback with a fake token
+    return () => {
+      config.onSuccess({ access_token: 'fake-google-token' })
+    }
+  }),
+  GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+
 vi.mock('#/lib/queries/AuthQueries.ts', () => ({
   loginFn: loginFnMock,
+  googleLoginFn: googleLoginFnMock,
   handleAuthSuccess: handleAuthSuccessMock,
 }))
 
@@ -128,5 +140,33 @@ describe('LoginPage', () => {
     await waitFor(() => {
       expect(handleAuthSuccessMock).toHaveBeenCalled()
     })
+  })
+
+  it('logs in successfully with Google', async () => {
+    const user = userEvent.setup()
+
+    const authResponse = {
+      access_token: 'access-1',
+      refresh_token: 'refresh-1',
+      user: {
+        id: 'user-1',
+        username: 'google.user',
+        email: 'google@example.com',
+      },
+    }
+
+    googleLoginFnMock.mockResolvedValue(authResponse)
+
+    renderLoginPage()
+
+    const googleBtn = screen.getByRole('button', { name: /Continue with Google/i })
+    await user.click(googleBtn)
+
+    await waitFor(() => {
+      expect(googleLoginFnMock).toHaveBeenCalledWith('fake-google-token')
+    })
+
+    expect(handleAuthSuccessMock).toHaveBeenCalledWith(authResponse)
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/dashboard' })
   })
 })
