@@ -1,5 +1,6 @@
 """Domain services for mentorship lifecycle operations."""
 
+import uuid
 from decimal import Decimal
 from typing import Any
 
@@ -26,10 +27,10 @@ from .models import Feedback, Match, MeetingSession, MentorshipRequest
 
 
 def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[str, Any]:
-    """Return a paginated journey timeline from stored AGTE timeline events."""
+    """Return a paginated journey timeline from stored AGTE and MCTE timeline events."""
     queryset = TimelineEvent.objects.filter(
         mentorship=match,
-        category=TimelineEvent.Category.AGTE,
+        category__in=[TimelineEvent.Category.AGTE, TimelineEvent.Category.MCTE],
         is_deleted=False,
     ).order_by("-timestamp", "-source_id")
 
@@ -38,9 +39,13 @@ def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[
         queryset[offset : offset + limit].values(
             "source_id",
             "event_type",
+            "category",
             "timestamp",
             "actor_role",
             "payload",
+            "content",
+            "show_on_profile",
+            "author_id",
         )
     )
 
@@ -48,9 +53,13 @@ def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[
         {
             "id": row["source_id"],
             "type": row["event_type"],
+            "category": row["category"],
             "timestamp": row["timestamp"],
             "actor_role": row["actor_role"],
             "payload": row["payload"] or {},
+            "content": row["content"],
+            "show_on_profile": row["show_on_profile"],
+            "author_id": row["author_id"],
         }
         for row in event_rows
     ]
@@ -62,6 +71,79 @@ def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[
         "limit": limit,
         "results": results,
     }
+
+
+class InvalidMCTEEventTypeError(Exception):
+    """Raised when an unsupported event_type is supplied for an MCTE record."""
+
+
+def create_mcte_event(
+    *,
+    match: Match,
+    author_profile: Profile,
+    event_type: str,
+    content: str = "",
+    timestamp: Any,
+    show_on_profile: bool = False,
+) -> TimelineEvent:
+    """Create and persist a manually-created timeline event for a match.
+
+    The author must be a participant (mentor or mentee) of the match.
+    ``timestamp`` must be a timezone-aware datetime; far-future dates
+    (more than 1 day ahead of now) are rejected at the serializer layer.
+    """
+    if event_type not in TimelineEvent.MCTEEventType.values:
+        raise InvalidMCTEEventTypeError(
+            f"Invalid MCTE event_type: '{event_type}'. "
+            f"Must be one of {TimelineEvent.MCTEEventType.values}."
+        )
+
+    actor_role = "mentor" if author_profile == match.mentor else "mentee"
+    source_id = f"mcte:{uuid.uuid4()}"
+
+    return TimelineEvent.objects.create(
+        source_id=source_id,
+        category=TimelineEvent.Category.MCTE,
+        event_type=event_type,
+        author=author_profile,
+        mentorship=match,
+        content=content,
+        actor_role=actor_role,
+        timestamp=timestamp,
+        show_on_profile=show_on_profile,
+    )
+
+
+def edit_mcte_event(
+    *,
+    event: TimelineEvent,
+    content: str | None = None,
+    show_on_profile: bool | None = None,
+) -> TimelineEvent:
+    """Partially update a manually-created timeline event.
+
+    Only ``content`` and ``show_on_profile`` may be edited.
+    ``last_edited`` is set to the current UTC time on every successful update.
+    """
+    update_fields: list[str] = ["last_edited"]
+
+    if content is not None:
+        event.content = content
+        update_fields.append("content")
+
+    if show_on_profile is not None:
+        event.show_on_profile = show_on_profile
+        update_fields.append("show_on_profile")
+
+    event.last_edited = timezone.now()
+    event.save(update_fields=update_fields)
+    return event
+
+
+def soft_delete_mcte_event(*, event: TimelineEvent) -> None:
+    """Soft-delete a manually-created timeline event by setting is_deleted=True."""
+    event.is_deleted = True
+    event.save(update_fields=["is_deleted"])
 
 
 class MentorshipServiceError(Exception):

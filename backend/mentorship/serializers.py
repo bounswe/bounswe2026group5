@@ -1,5 +1,8 @@
 """Serializers for mentorship request and match API endpoints."""
 
+from datetime import timedelta
+from typing import Any
+
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -351,9 +354,31 @@ class JourneyEventSerializer(serializers.Serializer):
 
     id = serializers.CharField(read_only=True)
     type = serializers.CharField(read_only=True)
+    category = serializers.CharField(read_only=True)
     timestamp = serializers.DateTimeField(read_only=True)
     actor_role = serializers.CharField(read_only=True)
     payload = serializers.JSONField(read_only=True)
+    content = serializers.CharField(read_only=True, default="")
+    show_on_profile = serializers.BooleanField(read_only=True, default=False)
+    author = serializers.SerializerMethodField()
+    is_editable = serializers.SerializerMethodField()
+
+    def get_author(self, obj: dict) -> dict | None:
+        """Return compact profile summary for the event author, or None for AGTE events."""
+        author_id = obj.get("author_id")
+        if not author_id:
+            return None
+        try:
+            profile = Profile.objects.get(id=author_id)
+        except Profile.DoesNotExist:
+            return None
+        return ProfileSummarySerializer(profile).data
+
+    def get_is_editable(self, obj: dict) -> bool:
+        """Return True only for MCTE events (soft-deleted ones are excluded from feed)."""
+        from timeline.models import TimelineEvent
+
+        return obj.get("category") == TimelineEvent.Category.MCTE
 
 
 class JourneyFeedSerializer(serializers.Serializer):
@@ -364,3 +389,76 @@ class JourneyFeedSerializer(serializers.Serializer):
     offset = serializers.IntegerField(read_only=True)
     limit = serializers.IntegerField(read_only=True)
     results = JourneyEventSerializer(many=True, read_only=True)
+
+
+_MCTE_EVENT_TYPE_CHOICES = ["achievement", "social", "progress"]
+
+
+class MCTECreateSerializer(serializers.Serializer):
+    """Write serializer for creating a manually-created timeline event."""
+
+    event_type = serializers.ChoiceField(choices=_MCTE_EVENT_TYPE_CHOICES)
+    content = serializers.CharField(required=False, allow_blank=True, max_length=2000, default="")
+    timestamp = serializers.DateTimeField(required=True)
+    show_on_profile = serializers.BooleanField(required=False, default=False)
+
+    def validate_timestamp(self, value: Any) -> Any:
+        """Reject timestamps more than 1 day in the future."""
+        if value > timezone.now() + timedelta(days=1):
+            raise serializers.ValidationError("Timestamp cannot be more than 1 day in the future.")
+        return value
+
+
+class MCTEUpdateSerializer(serializers.Serializer):
+    """Write serializer for partially updating a manually-created timeline event."""
+
+    content = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    show_on_profile = serializers.BooleanField(required=False)
+
+    def validate(self, attrs: dict) -> dict:
+        """Require at least one editable field to be provided."""
+        if not attrs:
+            raise serializers.ValidationError(
+                "At least one of 'content' or 'show_on_profile' must be provided."
+            )
+        return attrs
+
+
+class MCTEListQueryParamsSerializer(serializers.Serializer):
+    """Validate query parameters for the MCTE event list endpoint."""
+
+    event_type = serializers.ChoiceField(
+        choices=_MCTE_EVENT_TYPE_CHOICES, required=False, allow_null=True, default=None
+    )
+    offset = serializers.IntegerField(required=False, min_value=0, default=0)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=50)
+
+
+class MCTEEventSerializer(serializers.Serializer):
+    """Read serializer for a single MCTE event item."""
+
+    id = serializers.UUIDField(read_only=True)
+    source_id = serializers.CharField(read_only=True)
+    event_type = serializers.CharField(read_only=True)
+    content = serializers.CharField(read_only=True)
+    timestamp = serializers.DateTimeField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    last_edited = serializers.DateTimeField(read_only=True, allow_null=True)
+    show_on_profile = serializers.BooleanField(read_only=True)
+    actor_role = serializers.CharField(read_only=True)
+    author = serializers.SerializerMethodField()
+
+    def get_author(self, obj: Any) -> dict | None:
+        """Return compact profile summary for the event author."""
+        if obj.author is None:
+            return None
+        return ProfileSummarySerializer(obj.author).data
+
+
+class MCTEFeedSerializer(serializers.Serializer):
+    """Read serializer for the paginated MCTE event list envelope."""
+
+    count = serializers.IntegerField(read_only=True)
+    offset = serializers.IntegerField(read_only=True)
+    limit = serializers.IntegerField(read_only=True)
+    results = MCTEEventSerializer(many=True, read_only=True)

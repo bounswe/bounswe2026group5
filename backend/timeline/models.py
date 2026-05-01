@@ -19,6 +19,13 @@ class TimelineEvent(models.Model):
         PRP = "PrP", "Profile Post"
         COP = "CoP", "Community Post"
 
+    class MCTEEventType(models.TextChoices):
+        """Allowed event_type values for manually-created timeline events."""
+
+        ACHIEVEMENT = "achievement", "Achievement"
+        SOCIAL = "social", "Social"
+        PROGRESS = "progress", "Progress"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     source_id = models.CharField(max_length=128, unique=True)
     category = models.CharField(max_length=4, choices=Category.choices)
