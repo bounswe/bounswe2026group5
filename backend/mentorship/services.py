@@ -1,6 +1,5 @@
 """Domain services for mentorship lifecycle operations."""
 
-from collections.abc import Iterable
 from decimal import Decimal
 from typing import Any
 
@@ -21,198 +20,47 @@ from profiles.services import (
     book_availability_slot,
     cancel_availability_booking,
 )
+from timeline.models import TimelineEvent
 
 from .models import Feedback, Match, MeetingSession, MentorshipRequest
 
 
-def _serialize_optional_datetime(value: Any) -> str | None:
-    """Serialize optional timezone-aware datetimes to ISO 8601 strings."""
-    if value is None:
-        return None
-    return value.isoformat()
-
-
-def _actor_role_from_canceled_by(canceled_by_role: str) -> str:
-    """Normalize canceled-by role values to public actor role values."""
-    if canceled_by_role == MeetingSession.CanceledByRole.MENTOR:
-        return "mentor"
-    if canceled_by_role == MeetingSession.CanceledByRole.MENTEE:
-        return "mentee"
-    return "system"
-
-
-def _actor_role_for_deactivation(*, actor_id: Any, match: Match) -> str:
-    """Resolve match deactivation actor role from notification actor id."""
-    if actor_id == match.mentor_id:
-        return "mentor"
-    if actor_id == match.mentee_id:
-        return "mentee"
-    return "system"
-
-
-def _build_request_events(*, request_rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Build journey events from mentorship request rows."""
-    events: list[dict[str, Any]] = []
-    for row in request_rows:
-        if row["status"] != MentorshipRequest.Status.ACCEPTED or row["responded_at"] is None:
-            continue
-
-        events.append(
-            {
-                "id": f"request_accepted:{row['id']}",
-                "type": "request_accepted",
-                "timestamp": row["responded_at"],
-                "actor_role": "mentor",
-                "payload": {
-                    "request_id": str(row["id"]),
-                    "initial_session_start_at": _serialize_optional_datetime(
-                        row["initial_session_start_at"]
-                    ),
-                    "initial_session_end_at": _serialize_optional_datetime(
-                        row["initial_session_end_at"]
-                    ),
-                },
-            }
-        )
-    return events
-
-
-def _build_session_events(*, session_rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Build journey events from canonical meeting session rows."""
-    events: list[dict[str, Any]] = []
-    for row in session_rows:
-        payload = {
-            "session_id": str(row["id"]),
-            "scheduled_start_at_utc": row["scheduled_start_at_utc"].isoformat(),
-            "scheduled_end_at_utc": row["scheduled_end_at_utc"].isoformat(),
-        }
-
-        if row["status"] == MeetingSession.Status.SCHEDULED:
-            events.append(
-                {
-                    "id": f"session_scheduled:{row['id']}",
-                    "type": "session_scheduled",
-                    "timestamp": row["created_at"],
-                    "actor_role": "system",
-                    "payload": payload,
-                }
-            )
-            continue
-
-        if row["status"] == MeetingSession.Status.RESCHEDULED:
-            events.append(
-                {
-                    "id": f"session_rescheduled:{row['id']}",
-                    "type": "session_rescheduled",
-                    "timestamp": row["updated_at"],
-                    "actor_role": "mentee",
-                    "payload": payload,
-                }
-            )
-            continue
-
-        if row["status"] == MeetingSession.Status.CANCELED:
-            payload_with_cancel = {
-                **payload,
-                "cancel_reason": row["cancel_reason"],
-            }
-            events.append(
-                {
-                    "id": f"session_canceled:{row['id']}",
-                    "type": "session_canceled",
-                    "timestamp": row["updated_at"],
-                    "actor_role": _actor_role_from_canceled_by(row["canceled_by_role"]),
-                    "payload": payload_with_cancel,
-                }
-            )
-            continue
-
-        if row["status"] == MeetingSession.Status.COMPLETED:
-            events.append(
-                {
-                    "id": f"session_completed:{row['id']}",
-                    "type": "session_completed",
-                    "timestamp": row["updated_at"],
-                    "actor_role": "system",
-                    "payload": payload,
-                }
-            )
-
-    return events
-
-
-def _build_mentorship_ended_event(*, match: Match) -> list[dict[str, Any]]:
-    """Build the mentorship_ended event from existing deactivation notifications."""
-    if match.is_active:
-        return []
-
-    notification = (
-        Notification.objects.filter(
-            type=NotificationType.MATCH_DEACTIVATED,
-            resource_type="match",
-            resource_id=match.id,
-        )
-        .order_by("-created_at")
-        .values("id", "created_at", "actor_id")
-        .first()
-    )
-
-    if notification is None:
-        return []
-
-    return [
-        {
-            "id": f"mentorship_ended:{notification['id']}",
-            "type": "mentorship_ended",
-            "timestamp": notification["created_at"],
-            "actor_role": _actor_role_for_deactivation(
-                actor_id=notification["actor_id"],
-                match=match,
-            ),
-            "payload": {
-                "match_id": str(match.id),
-                "notification_id": str(notification["id"]),
-            },
-        }
-    ]
-
-
 def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[str, Any]:
-    """Return a paginated journey timeline merged from mentorship-domain source tables."""
-    request_rows = MentorshipRequest.objects.filter(id=match.request_id).values(
-        "id",
-        "status",
-        "responded_at",
-        "initial_session_start_at",
-        "initial_session_end_at",
-    )
-    session_rows = MeetingSession.objects.filter(match_id=match.id).values(
-        "id",
-        "status",
-        "scheduled_start_at_utc",
-        "scheduled_end_at_utc",
-        "canceled_by_role",
-        "cancel_reason",
-        "created_at",
-        "updated_at",
+    """Return a paginated journey timeline from stored AGTE timeline events."""
+    queryset = TimelineEvent.objects.filter(
+        mentorship=match,
+        category=TimelineEvent.Category.AGTE,
+        is_deleted=False,
+    ).order_by("-timestamp", "-source_id")
+
+    total_count = queryset.count()
+    event_rows = list(
+        queryset[offset : offset + limit].values(
+            "source_id",
+            "event_type",
+            "timestamp",
+            "actor_role",
+            "payload",
+        )
     )
 
-    all_events = [
-        *_build_request_events(request_rows=request_rows),
-        *_build_session_events(session_rows=session_rows),
-        *_build_mentorship_ended_event(match=match),
+    results = [
+        {
+            "id": row["source_id"],
+            "type": row["event_type"],
+            "timestamp": row["timestamp"],
+            "actor_role": row["actor_role"],
+            "payload": row["payload"] or {},
+        }
+        for row in event_rows
     ]
-    all_events.sort(key=lambda event: (event["timestamp"], event["id"]), reverse=True)
-
-    total_count = len(all_events)
-    end = offset + limit
 
     return {
         "ordering": "desc",
         "count": total_count,
         "offset": offset,
         "limit": limit,
-        "results": all_events[offset:end],
+        "results": results,
     }
 
 

@@ -555,18 +555,21 @@ class MatchJourneyAPIView(APIView):
             200: JourneyFeedSerializer,
             400: OpenApiResponse(description="Invalid offset/limit query params."),
             401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Only match participants can view journey events."),
             404: OpenApiResponse(description="Match not found."),
         },
         description=(
-            "Return the journey timeline for a single match. The feed is assembled "
-            "server-side by merging three source tables — MentorshipRequest, "
-            "MeetingSession, and Notification — so clients receive a single "
-            "chronological list instead of stitching several endpoints together.\n\n"
+            "Return the journey timeline for a single match. The feed is read from "
+            "stored AGTE timeline records materialized from mentorship lifecycle "
+            "changes, so clients receive a single chronological list without "
+            "stitching multiple endpoints together.\n\n"
             "**Ordering:** All events are sorted newest-first (descending by timestamp) "
-            "across all source types before pagination is applied.\n\n"
+            "before pagination is applied.\n\n"
             "**Pagination:** Use `offset` (zero-based start index, default 0) and `limit` "
             "(page size, default 50, max 200). Slicing is applied after the global "
             "merge-sort, so page boundaries are stable across calls.\n\n"
+            "**Visibility:** Journey events are private to the mentorship relationship "
+            "and can only be accessed by the mentor or mentee of the match.\n\n"
             "**Event types and payloads:**\n"
             "- `request_accepted` — emitted when the mentor accepts the request; "
             "payload: `request_id`, `initial_session_start_at`, `initial_session_end_at`.\n"
@@ -593,6 +596,14 @@ class MatchJourneyAPIView(APIView):
             match = Match.objects.select_related("mentor", "mentee", "request").get(id=match_id)
         except Match.DoesNotExist:
             return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+
+        if profile not in (match.mentor, match.mentee):
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
 
         payload = list_match_journey_events(
             match=match,
