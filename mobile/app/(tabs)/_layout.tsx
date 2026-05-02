@@ -16,8 +16,16 @@ const renderDiscoverIcon = ({ color }: { color: string }) => (
 
 const renderCommunityIcon = ({ color }: { color: string }) => (
   <IconSymbol
+    size={30}
+    name="person.3.fill"
+    color={color}
+  />
+);
+
+const renderConnectionsIcon = ({ color }: { color: string }) => (
+  <IconSymbol
     size={28}
-    name="bubble.left.and.bubble.right.fill"
+    name="point.3.connected.trianglepath.dotted"
     color={color}
   />
 );
@@ -49,9 +57,7 @@ export default function TabLayout() {
         name="connections"
         options={{
           title: "Connections",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="person.2.fill" color={color} />
-          ),
+          tabBarIcon: renderConnectionsIcon,
         }}
       />
 
