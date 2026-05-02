@@ -1202,6 +1202,7 @@ class EmailVerificationTokenModelTests(TestCase):
             self.assertLessEqual(delta, timedelta(hours=2, minutes=1))
 
 
+@override_settings(REQUIRE_EMAIL_VERIFICATION=True)
 class RegistrationIssuesVerificationTokenTests(TestCase):
     """Ensures registration auto-issues an email verification token + sends email."""
 

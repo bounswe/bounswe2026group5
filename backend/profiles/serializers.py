@@ -12,6 +12,7 @@ from rest_framework import serializers
 
 from .models import AvailabilitySlot, CommunityTag, Profile, Skill
 from core.utils.timezone import get_project_timezone, to_local_time
+from mentorship.models import MeetingSession
 
 if TYPE_CHECKING:
     from accounts.models import User as UserType
@@ -120,9 +121,6 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
         """Return the ID of an active MeetingSession associated with this slot."""
         if not obj.is_booked:
             return None
-
-        # Inline import to avoid circular dependency
-        from mentorship.models import MeetingSession
 
         session = MeetingSession.objects.filter(
             source_slot=obj,
