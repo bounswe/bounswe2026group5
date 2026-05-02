@@ -1415,3 +1415,169 @@ class IsEmailVerifiedPermissionTests(TestCase):
         request = self.factory.get("/")
         request.user = user  # type: ignore[attr-defined]
         self.assertTrue(self.permission.has_permission(request, Mock()))
+
+
+# ---------------------------------------------------------------------------
+# OAuth2 Login Tests
+# ---------------------------------------------------------------------------
+
+_GOOGLE_MOCK_PAYLOAD = {
+    "email": "oauth.google@example.com",
+    "given_name": "John",
+    "family_name": "Doe",
+    "name": "John Doe",
+    "picture": "https://lh3.googleusercontent.com/photo.jpg",
+}
+
+
+class GoogleOAuthLoginTests(TestCase):
+    """Integration tests for POST /api/auth/google/."""
+
+    def setUp(self) -> None:
+        self.client: Any = APIClient()
+        self.url = "/api/auth/google/"
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch("accounts.views.verify_google_id_token")
+    def test_google_login_creates_new_user(self, mock_verify: Mock) -> None:
+        """Valid Google token creates a new user with GOOGLE provider."""
+        mock_verify.return_value = _GOOGLE_MOCK_PAYLOAD.copy()
+
+        response = self.client.post(self.url, {"id_token": "valid-token"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("access_token", data)
+        self.assertIn("refresh_token", data)
+        self.assertIn("user", data)
+        self.assertEqual(data["user"]["email"], "oauth.google@example.com")
+        self.assertTrue(data["user"]["is_email_verified"])
+        self.assertEqual(data["user"]["auth_provider"], "GOOGLE")
+
+        # Verify Profile was created with Google-derived display name
+        user = User.objects.get(email="oauth.google@example.com")
+        self.assertTrue(hasattr(user, "profile"))
+        self.assertEqual(user.profile.display_name, "John Doe")
+        self.assertEqual(user.profile.picture_url, "https://lh3.googleusercontent.com/photo.jpg")
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch("accounts.views.verify_google_id_token")
+    def test_google_login_existing_local_user_logs_in(self, mock_verify: Mock) -> None:
+        """Existing LOCAL user logs in via Google without changing auth_provider."""
+        existing_user = User.objects.create_user(
+            email="oauth.google@example.com",
+            password="SecurePass123",
+            auth_provider=AuthProvider.LOCAL,
+        )
+        Profile.objects.create(
+            user=existing_user,
+            display_name="Existing User",
+        )
+
+        mock_verify.return_value = _GOOGLE_MOCK_PAYLOAD.copy()
+
+        response = self.client.post(self.url, {"id_token": "valid-token"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["user"]["email"], "oauth.google@example.com")
+        # auth_provider should NOT change — user keeps LOCAL credentials
+        self.assertEqual(data["user"]["auth_provider"], "LOCAL")
+
+        existing_user.refresh_from_db()
+        self.assertEqual(existing_user.auth_provider, AuthProvider.LOCAL)
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch("accounts.views.verify_google_id_token")
+    def test_google_login_existing_google_user_returns_tokens(self, mock_verify: Mock) -> None:
+        """Existing GOOGLE user returns tokens without creating a duplicate."""
+        existing_user = User.objects.create_user(
+            email="oauth.google@example.com",
+            auth_provider=AuthProvider.GOOGLE,
+            is_email_verified=True,
+        )
+        Profile.objects.create(
+            user=existing_user,
+            display_name="Google User",
+        )
+
+        mock_verify.return_value = _GOOGLE_MOCK_PAYLOAD.copy()
+
+        response = self.client.post(self.url, {"id_token": "valid-token"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["user"]["email"], "oauth.google@example.com")
+
+        # Should not create a second user
+        self.assertEqual(User.objects.filter(email="oauth.google@example.com").count(), 1)
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch("accounts.views.verify_google_id_token")
+    def test_google_login_banned_user_rejected(self, mock_verify: Mock) -> None:
+        """Banned user is rejected during OAuth login."""
+        banned_user = User.objects.create_user(
+            email="oauth.google@example.com",
+            auth_provider=AuthProvider.GOOGLE,
+            is_banned=True,
+        )
+        Profile.objects.create(user=banned_user, display_name="Banned")
+
+        mock_verify.return_value = _GOOGLE_MOCK_PAYLOAD.copy()
+
+        response = self.client.post(self.url, {"id_token": "valid-token"}, format="json")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("banned", response.json()["detail"].lower())
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch("accounts.views.verify_google_id_token")
+    def test_google_login_inactive_user_rejected(self, mock_verify: Mock) -> None:
+        """Inactive user is rejected during OAuth login."""
+        inactive_user = User.objects.create_user(
+            email="oauth.google@example.com",
+            auth_provider=AuthProvider.GOOGLE,
+            is_active=False,
+        )
+        Profile.objects.create(user=inactive_user, display_name="Inactive")
+
+        mock_verify.return_value = _GOOGLE_MOCK_PAYLOAD.copy()
+
+        response = self.client.post(self.url, {"id_token": "valid-token"}, format="json")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("inactive", response.json()["detail"].lower())
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch(
+        "accounts.views.verify_google_id_token",
+        side_effect=__import__("accounts.oauth", fromlist=["OAuthVerificationError"]).OAuthVerificationError(
+            "Invalid or expired Google token."
+        ),
+    )
+    def test_google_login_invalid_token_rejected(self, mock_verify: Mock) -> None:
+        """Invalid Google token returns 400."""
+        response = self.client.post(self.url, {"id_token": "bad-token"}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("detail", response.json())
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch("accounts.views.verify_google_id_token")
+    def test_google_login_sets_auth_cookies(self, mock_verify: Mock) -> None:
+        """Successful Google login sets HttpOnly auth cookies."""
+        mock_verify.return_value = _GOOGLE_MOCK_PAYLOAD.copy()
+
+        response = self.client.post(self.url, {"id_token": "valid-token"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(settings.AUTH_ACCESS_COOKIE_NAME, response.cookies)
+        self.assertIn(settings.AUTH_REFRESH_COOKIE_NAME, response.cookies)
+
+    def test_google_login_missing_id_token_rejected(self) -> None:
+        """Missing id_token field returns 400."""
+        response = self.client.post(self.url, {}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+
+

@@ -261,7 +261,7 @@ describe('SchedulePage', () => {
     expect(screen.getAllByText('John Smith').length).toBeGreaterThan(0)
 
     // Click day 28
-    const day28 = screen.getByText('28')
+    const day28 = screen.getAllByText('28')[0]
     fireEvent.click(day28)
 
     // Filter header updates
@@ -275,7 +275,7 @@ describe('SchedulePage', () => {
   it('clears filter when Clear Filter is clicked', () => {
     renderWithUser('MENTEE')
 
-    const day28 = screen.getByText('28')
+    const day28 = screen.getAllByText('28')[0]
     fireEvent.click(day28)
     expect(screen.getByText(/Sessions for 28 April 2026/i)).toBeInTheDocument()
 

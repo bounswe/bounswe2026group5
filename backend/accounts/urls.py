@@ -4,6 +4,7 @@ from .views import (
     AdminUsersListAPIView,
     AuthMeAPIView,
     ForgotPasswordAPIView,
+    GoogleOAuthLoginAPIView,
     LoginAPIView,
     LogoutAPIView,
     RegisterAPIView,
@@ -30,4 +31,7 @@ urlpatterns = [
     path("admin/users/", AdminUsersListAPIView.as_view(), name="admin-users-list"),
     path("me/", AuthMeAPIView.as_view(), name="auth-me"),
     path("me/role/", UserAppUsageModeMeAPIView.as_view(), name="auth-me-role"),
+    # OAuth2 providers
+    path("google/", GoogleOAuthLoginAPIView.as_view(), name="google-oauth-login"),
 ]
+

@@ -156,45 +156,42 @@ function RouteComponent() {
     const updateProfile = useUpdateProfile()
     const updateUsername = useUpdateUsername()
 
-    const isSubmitting = updateUsageMode.isPending || updateProfile.isPending || updateUsername.isPending
+    const [isProcessing, setIsProcessing] = useState(false)
+    const isSubmitting = isProcessing || updateUsageMode.isPending || updateProfile.isPending || updateUsername.isPending
     const submitError = updateUsageMode.error?.message || updateProfile.error?.message || updateUsername.error?.message
 
-    const handleFinish = () => {
-        if (!me?.username) return
+    const handleFinish = async () => {
+        if (!me) return
+        setIsProcessing(true)
 
         const skills = answers.primaryUsage === 'mentor'
             ? answers.teachSkills
             : answers.learnSkills
 
-        updateUsageMode.mutate(
-            {
+        try {
+            // 1. Update Usage Mode
+            await updateUsageMode.mutateAsync({
                 app_usage_mode: answers.primaryUsage.toUpperCase() as 'MENTEE' | 'MENTOR',
-            },
-            {
-                onSuccess: () => {
-                    updateProfile.mutate(
-                        {
-                            display_name: `${answers.firstName} ${answers.lastName}`.trim(),
-                            bio: answers.bio,
-                            skills: skills,
-                        },
-                        {
-                            onSuccess: () => {
-                                updateUsername.mutate(
-                                    answers.username,
-                                    {
-                                        onSuccess: () => {
-                                            queryClient.invalidateQueries({ queryKey: ['me'] })
-                                            router.navigate({ to: '/dashboard' })
-                                        },
-                                    }
-                                )
-                            },
-                        }
-                    )
-                },
-            }
-        )
+            })
+
+            // 2. Update Profile Details
+            await updateProfile.mutateAsync({
+                display_name: `${answers.firstName} ${answers.lastName}`.trim(),
+                bio: answers.bio,
+                skills: skills,
+            })
+
+            // 3. Update Username
+            await updateUsername.mutateAsync(answers.username)
+
+            // 4. Finalize
+            await queryClient.invalidateQueries({ queryKey: ['me'] })
+            router.navigate({ to: '/dashboard' })
+        } catch (err) {
+            console.error("Onboarding submission failed:", err)
+        } finally {
+            setIsProcessing(false)
+        }
     }
 
     const handleNext = () => {

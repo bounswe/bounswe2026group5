@@ -126,6 +126,16 @@ export async function registerFn(credentials: { email: string; password: string;
     return res.json() as Promise<AuthResponse>
 }
 
+export async function googleLoginFn(idToken: string) {
+    const res = await fetch(`${API_BASE_URL}/auth/google/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_token: idToken }),
+    })
+    if (!res.ok) await throwApiError(res)
+    return res.json() as Promise<AuthResponse>
+}
+
 export async function updateAppUsageModeFn({ app_usage_mode }: {
     userId?: string
     app_usage_mode: 'MENTEE' | 'MENTOR'

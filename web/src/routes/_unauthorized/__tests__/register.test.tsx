@@ -33,6 +33,15 @@ vi.mock('#/lib/demoAuth', () => ({
   setDemoAuthRole: vi.fn(),
 }))
 
+vi.mock('@react-oauth/google', () => ({
+  useGoogleLogin: vi.fn((config) => {
+    return () => {
+      config.onSuccess({ access_token: 'fake-google-token' })
+    }
+  }),
+  GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+
 const { mockRegisterFn, mockHandleAuthSuccess, createMutationMock } = vi.hoisted(() => ({
   mockRegisterFn: vi.fn(),
   mockHandleAuthSuccess: vi.fn(),
@@ -52,6 +61,7 @@ const { mockRegisterFn, mockHandleAuthSuccess, createMutationMock } = vi.hoisted
 
 vi.mock('#/lib/queries/AuthQueries.ts', () => ({
   registerFn: mockRegisterFn,
+  googleLoginFn: vi.fn(),
   handleAuthSuccess: mockHandleAuthSuccess,
   meQueryOptions: { queryKey: ['me'], queryFn: () => null },
 }))
@@ -366,8 +376,8 @@ describe('RegisterPage Component', () => {
       await user.type(screen.getByLabelText(/Confirm password/i), 'password123')
       await user.click(screen.getByRole('checkbox', { name: /Terms of Service/i }))
       await user.click(screen.getByRole('button', { name: /Create Account/i }))
-
-      expect(screen.getByText('Registration failed')).toBeInTheDocument()
+ 
+      expect(screen.getAllByText('Registration failed')[0]).toBeInTheDocument()
       expect(consoleSpy).toHaveBeenCalledWith('Register error:', expect.any(Error))
       
       consoleSpy.mockRestore()
