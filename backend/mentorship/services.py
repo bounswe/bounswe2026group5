@@ -25,6 +25,9 @@ from timeline.models import TimelineEvent
 
 from .models import Feedback, Match, MeetingSession, MentorshipRequest
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[str, Any]:
     """Return a paginated journey timeline from stored AGTE and MCTE timeline events."""
@@ -197,10 +200,6 @@ def _create_notification(
     persistence (e.g. IntegrityError) are logged but do not roll back the
     primary business transaction.
     """
-    import logging
-
-    logger = logging.getLogger(__name__)
-
     try:
         Notification.objects.create(
             user=user,

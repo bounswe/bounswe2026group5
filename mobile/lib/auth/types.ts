@@ -10,6 +10,8 @@ export interface AuthUser {
   id: string;
   email: string;
   username: string;
+  display_name?: string;
+  picture_url?: string;
   role: string;
   app_usage_mode?: "MENTOR" | "MENTEE" | "";
   auth_provider: string;

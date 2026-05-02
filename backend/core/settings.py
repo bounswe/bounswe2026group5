@@ -203,10 +203,14 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
 PASSWORD_RESET_URL_PATH = os.getenv("PASSWORD_RESET_URL_PATH", "/reset-password")
 
 # Email verification
+REQUIRE_EMAIL_VERIFICATION = env.bool("REQUIRE_EMAIL_VERIFICATION", default=True)
 EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS = int(
     os.getenv("EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS", "24")
 )
 EMAIL_VERIFICATION_URL_PATH = os.getenv("EMAIL_VERIFICATION_URL_PATH", "/verify-email")
+
+# OAuth2 providers
+GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 
 # Email
 EMAIL_BACKEND = os.getenv(

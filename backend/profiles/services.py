@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import AvailabilitySlot, Profile
+from mentorship.models import MentorshipRequest
 
 
 class AvailabilityBookingError(Exception):
@@ -82,7 +83,7 @@ def cancel_availability_booking(*, profile: Profile, slot_id, actor) -> Availabi
         # Accepted first-session requests keep a protected FK to the slot.
         # Once the booking is canceled, detach those links so the mentor can
         # delete the now-available slot without triggering ProtectedError.
-        from mentorship.models import MentorshipRequest
+        # MentorshipRequest moved to top level
 
         accepted_requests = MentorshipRequest.objects.select_for_update().filter(
             slot=slot,

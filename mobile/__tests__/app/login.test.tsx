@@ -3,6 +3,7 @@ import React from "react";
 
 import LoginScreen from "@/app/login";
 import { useLoginMutation } from "@/lib/queries/auth";
+import { useGoogleLoginMutation } from "@/lib/queries/googleAuth";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -20,7 +21,12 @@ jest.mock("@/lib/queries/auth", () => ({
   useLoginMutation: jest.fn(),
 }));
 
+jest.mock("@/lib/queries/googleAuth", () => ({
+  useGoogleLoginMutation: jest.fn(),
+}));
+
 const mockMutateAsync = jest.fn();
+const mockGoogleMutateAsync = jest.fn();
 
 describe("LoginScreen", () => {
   let logSpy: jest.SpyInstance;
@@ -32,6 +38,12 @@ describe("LoginScreen", () => {
     errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
     (useLoginMutation as jest.Mock).mockReturnValue({
       mutateAsync: mockMutateAsync,
+      isPending: false,
+      data: undefined,
+      error: null,
+    });
+    (useGoogleLoginMutation as jest.Mock).mockReturnValue({
+      mutateAsync: mockGoogleMutateAsync,
       isPending: false,
       data: undefined,
       error: null,
@@ -167,12 +179,12 @@ describe("LoginScreen", () => {
     );
   });
 
-  it("logs the current Google sign-in placeholder action", () => {
+  it("triggers Google login mutation when Log in with Google is pressed", () => {
     const { getByLabelText } = render(<LoginScreen />);
 
     fireEvent.press(getByLabelText("Log in with Google"));
 
-    expect(logSpy).toHaveBeenCalledWith("TODO: Implement Google OAuth sign-in");
+    expect(mockGoogleMutateAsync).toHaveBeenCalled();
   });
 
   it("navigates to the register screen when Sign Up is pressed", () => {

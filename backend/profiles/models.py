@@ -12,6 +12,7 @@ from django.contrib.postgres.fields.ranges import RangeOperators
 from django.db import models
 from django.db.models import F, Func, Q, Value
 from django.utils import timezone
+from django.utils.text import slugify
 
 
 class Skill(models.Model):
@@ -222,7 +223,6 @@ class CommunityTag(models.Model):
 
     def save(self, *args, **kwargs) -> None:
         """Auto-generate slug from name and enforce case-insensitive uniqueness."""
-        from django.utils.text import slugify
 
         if not self.slug:
             self.slug = slugify(self.name)

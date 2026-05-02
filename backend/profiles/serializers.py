@@ -11,6 +11,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from core.utils.timezone import get_project_timezone, to_local_time
+from mentorship.models import MeetingSession
 
 from .models import AvailabilitySlot, CommunityTag, Profile, Skill
 
@@ -121,9 +122,6 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
         """Return the ID of an active MeetingSession associated with this slot."""
         if not obj.is_booked:
             return None
-
-        # Inline import to avoid circular dependency
-        from mentorship.models import MeetingSession
 
         session = MeetingSession.objects.filter(
             source_slot=obj,

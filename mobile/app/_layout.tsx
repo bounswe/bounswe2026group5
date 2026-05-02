@@ -13,6 +13,7 @@ import "../global.css";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
+import { configureGoogleSignIn } from "@/lib/queries/googleAuth";
 
 export const unstable_settings = {
   anchor: "index",
@@ -31,6 +32,7 @@ export default function RootLayout() {
    * This runs once when the app launches.
    */
   useEffect(() => {
+    configureGoogleSignIn();
     initializeAuth();
   }, [initializeAuth]);
 

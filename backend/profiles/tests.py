@@ -7,23 +7,26 @@ from typing import Any, cast
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser, Group
 from django.contrib.gis.geos import Point
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from django.utils.text import slugify
 from rest_framework import serializers
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts.models import AppUsageMode
+from accounts.models import AppUsageMode, UserRole
 from mentorship.models import Feedback, Match, MentorshipRequest
 from mentorship.services import (
     create_mcte_event,
     deactivate_match,
     ensure_match_and_initial_session,
 )
-from profiles.models import AvailabilitySlot, Profile, Skill
+from notifications.models import Notification, NotificationType
+from profiles.models import AvailabilitySlot, CommunityTag, CommunityTagMembership, Profile, Skill
 from profiles.serializers import AvailabilitySlotSerializer, LocationField
 from profiles.services import (
     BookingCancelNotAllowedError,
@@ -2122,7 +2125,7 @@ class MentorPublicAverageRatingAPITests(TestCase):
     """Tests for GET /api/profiles/{username}/rating/."""
 
     def setUp(self) -> None:
-        from django.contrib.auth.models import Group
+        # Moved to top level
 
         from accounts.models import UserRole
 
@@ -2962,8 +2965,6 @@ class CommunityTagsAPITests(TestCase):
         self.my_tags_url = "/api/profiles/me/tags/"
 
         # Clean seeded tags for deterministic tests
-        from profiles.models import CommunityTag
-
         CommunityTag.objects.all().delete()
 
     def _auth(self, token=None):
@@ -3140,7 +3141,7 @@ class CommunityTagsAPITests(TestCase):
 
     def test_join_tag_updates_member_count(self) -> None:
         """Joining increments the denormalized member_count."""
-        from profiles.models import CommunityTag
+        # Moved to top level
 
         create_resp = self._create_tag("Count Tag")
         tag_id = create_resp.json()["id"]
@@ -3191,7 +3192,7 @@ class CommunityTagsAPITests(TestCase):
 
     def test_leave_tag_decrements_member_count(self) -> None:
         """Leaving decrements the denormalized member_count."""
-        from profiles.models import CommunityTag
+        # Moved to top level
 
         create_resp = self._create_tag("Decrement Tag")
         tag_id = create_resp.json()["id"]
@@ -3390,7 +3391,7 @@ class CommunityTagsAPITests(TestCase):
 
     def test_update_tag_name_and_slug_are_immutable(self) -> None:
         """Attempts to change name or slug are silently ignored."""
-        from profiles.models import CommunityTag
+        # Moved to top level
 
         create_resp = self._create_tag("Original Name", "desc")
         tag_id = create_resp.json()["id"]
@@ -3441,10 +3442,6 @@ class CommunityTagsAPITests(TestCase):
         joined_at=None,
     ) -> "CommunityTag":  # type: ignore[name-defined]
         """Create a tag and synthesize its memberships, optionally setting joined_at."""
-        from django.utils.text import slugify
-
-        from accounts.models import AppUsageMode
-        from profiles.models import CommunityTag, CommunityTagMembership
 
         tag = CommunityTag.objects.create(name=name, slug=slugify(name))
         for i in range(member_count):
@@ -3491,7 +3488,7 @@ class CommunityTagsAPITests(TestCase):
 
     def test_popular_tie_breaker_on_creation(self) -> None:
         """When member counts tie, more recently created tag wins."""
-        from profiles.models import CommunityTag
+        # Moved to top level
 
         old_tag = self._seed_tag_with_members("Older", 2)
         # force older creation timestamp
@@ -3560,8 +3557,6 @@ class CommunityTagsAPITests(TestCase):
 
     def test_popular_empty_when_no_tags(self) -> None:
         """Empty result when no tags have members."""
-        from profiles.models import CommunityTag
-
         CommunityTag.objects.all().delete()
 
         self.client.credentials()
@@ -3612,7 +3607,7 @@ class CommunityTagsAPITests(TestCase):
 
     def test_members_list_pagination(self) -> None:
         """Pagination respects pageSize and reports total count."""
-        from accounts.models import AppUsageMode
+        # Moved to top level
 
         create_resp = self._create_tag("Pagination Tag")
         tag_id = create_resp.json()["id"]
@@ -3726,7 +3721,7 @@ class CommunityTagNotificationTests(TestCase):
     """Tests for notification side effects of community tag events (#435)."""
 
     def setUp(self) -> None:
-        from accounts.models import UserRole
+        # Moved to top level
 
         self.client: Any = APIClient()
 
@@ -3761,11 +3756,7 @@ class CommunityTagNotificationTests(TestCase):
         )
         self.admin_token = str(RefreshToken.for_user(self.admin_user).access_token)
 
-        from profiles.models import CommunityTag
-
         CommunityTag.objects.all().delete()
-        from notifications.models import Notification
-
         Notification.objects.all().delete()
 
     def _auth(self, token: str) -> None:
@@ -3783,7 +3774,7 @@ class CommunityTagNotificationTests(TestCase):
     # ---- TAG_NEW_MEMBER ----
 
     def test_new_member_notifies_tag_creator(self) -> None:
-        from notifications.models import Notification, NotificationType
+        # Moved to top level, NotificationType
 
         tag_id = self._create_tag_via_api("Notif Tag")
         Notification.objects.all().delete()  # clear interest-match noise
@@ -3798,7 +3789,7 @@ class CommunityTagNotificationTests(TestCase):
         self.assertEqual(notifs.first().actor_id, self.member_profile.id)
 
     def test_creator_self_join_does_not_notify(self) -> None:
-        from notifications.models import Notification, NotificationType
+        # Moved to top level, NotificationType
 
         tag_id = self._create_tag_via_api("Self Join")
         Notification.objects.all().delete()
@@ -3816,7 +3807,7 @@ class CommunityTagNotificationTests(TestCase):
     # ---- TAG_DESCRIPTION_UPDATED ----
 
     def test_description_update_notifies_members_excluding_actor(self) -> None:
-        from notifications.models import Notification, NotificationType
+        # Moved to top level, NotificationType
 
         tag_id = self._create_tag_via_api("Desc Tag", "old")
         # member joins
@@ -3843,7 +3834,7 @@ class CommunityTagNotificationTests(TestCase):
         self.assertEqual(creator_notifs.count(), 0)
 
     def test_unchanged_description_patch_does_not_notify(self) -> None:
-        from notifications.models import Notification, NotificationType
+        # Moved to top level, NotificationType
 
         tag_id = self._create_tag_via_api("Same Desc", "stays")
         self._auth(self.member_token)
@@ -3865,9 +3856,6 @@ class CommunityTagNotificationTests(TestCase):
     # ---- TAG_DELETED ----
 
     def test_tag_deletion_notifies_members_excluding_actor(self) -> None:
-        from notifications.models import Notification, NotificationType
-        from profiles.models import CommunityTag, CommunityTagMembership
-
         # admin route lets us delete a tag that has members
         tag_id = self._create_tag_via_api("Doomed Tag")
         self._auth(self.member_token)
@@ -3891,7 +3879,7 @@ class CommunityTagNotificationTests(TestCase):
     # ---- TAG_MATCHES_INTEREST ----
 
     def test_tag_creation_notifies_users_with_matching_skills(self) -> None:
-        from notifications.models import Notification, NotificationType
+        # Moved to top level, NotificationType
 
         # member has the matching skill, creator does not
         self.member_profile.skills = ["Python", "Django"]
@@ -3905,7 +3893,7 @@ class CommunityTagNotificationTests(TestCase):
         self.assertEqual(notifs.count(), 1)
 
     def test_tag_creation_skips_creator_for_interest_match(self) -> None:
-        from notifications.models import Notification, NotificationType
+        # Moved to top level, NotificationType
 
         self.creator_profile.skills = ["Python"]
         self.creator_profile.save(update_fields=["skills"])
@@ -3920,7 +3908,7 @@ class CommunityTagNotificationTests(TestCase):
         )
 
     def test_tag_creation_does_not_notify_when_no_skills_match(self) -> None:
-        from notifications.models import Notification, NotificationType
+        # Moved to top level, NotificationType
 
         self.member_profile.skills = ["Carpentry"]
         self.member_profile.save(update_fields=["skills"])
