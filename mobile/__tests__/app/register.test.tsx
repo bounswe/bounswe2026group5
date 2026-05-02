@@ -2,13 +2,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 
+import { ApiValidationError } from "@/lib/api/client";
 import {
   registerFn,
   updateProfileFn,
   updateUsageModeFn,
   updateUsernameFn,
 } from "@/lib/queries/authQueries";
-import { ApiValidationError } from "@/lib/api/client";
 
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
@@ -28,8 +28,9 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 const mockSetAuthenticated = jest.fn();
 
 jest.mock("@/lib/auth/store", () => ({
-  useAuthStore: (selector: (state: { setAuthenticated: jest.Mock }) => unknown) =>
-    selector({ setAuthenticated: mockSetAuthenticated }),
+  useAuthStore: (
+    selector: (state: { setAuthenticated: jest.Mock }) => unknown,
+  ) => selector({ setAuthenticated: mockSetAuthenticated }),
 }));
 
 jest.mock("@/lib/queries/authQueries", () => ({
@@ -52,48 +53,61 @@ jest.mock("@/lib/queries/googleAuth", () => ({
   })),
 }));
 
-jest.mock(
-  "@/components/profile/RegistrationProfileSetupSheet",
-  () => ({
-    RegistrationProfileSetupSheet: ({
-      visible,
-      onSubmit,
-      submitError,
-      usernameError,
-    }: {
-      visible: boolean;
-      submitError?: string;
-      usernameError?: string;
-      onSubmit: (values: {
-        username: string;
-        displayName: string;
-        bio: string;
-        selectedSkills: string[];
-      }) => void;
-    }) => {
-      const { Text, TouchableOpacity, View } = require("react-native");
-      if (!visible) return null;
-      return (
-        <View>
-          <Text accessibilityLabel="profile-setup-sheet">Profile Setup Sheet</Text>
-          {submitError ? <Text>{submitError}</Text> : null}
-          {usernameError ? <Text>{usernameError}</Text> : null}
-          <TouchableOpacity
-            accessibilityLabel="submit-profile-setup"
-            onPress={() =>
-              onSubmit({
-                username: "testuser",
-                displayName: "Test User",
-                bio: "",
-                selectedSkills: [],
-              })
-            }
-          />
-        </View>
-      );
-    },
-  }),
-);
+jest.mock("@/components/profile/RegistrationProfileSetupSheet", () => ({
+  RegistrationProfileSetupSheet: ({
+    visible,
+    onSubmit,
+    submitError,
+    usernameError,
+  }: {
+    visible: boolean;
+    submitError?: string;
+    usernameError?: string;
+    onSubmit: (values: {
+      role: "mentor" | "mentee";
+      username: string;
+      displayName: string;
+      bio: string;
+      selectedSkills: string[];
+    }) => void;
+  }) => {
+    const { Text, TouchableOpacity, View } = require("react-native");
+    if (!visible) return null;
+    return (
+      <View>
+        <Text accessibilityLabel="profile-setup-sheet">
+          Profile Setup Sheet
+        </Text>
+        {submitError ? <Text>{submitError}</Text> : null}
+        {usernameError ? <Text>{usernameError}</Text> : null}
+        <TouchableOpacity
+          accessibilityLabel="submit-profile-setup"
+          onPress={() =>
+            onSubmit({
+              role: "mentor",
+              username: "testuser",
+              displayName: "Test User",
+              bio: "",
+              selectedSkills: [],
+            })
+          }
+        />
+        <TouchableOpacity
+          accessibilityLabel="submit-profile-setup-mentee"
+          onPress={() =>
+            onSubmit({
+              role: "mentee",
+              username: "testuser",
+              displayName: "Test User",
+              bio: "",
+              selectedSkills: [],
+            })
+          }
+        />
+      </View>
+    );
+  },
+}));
 
 import RegisterScreen from "@/app/register";
 
@@ -116,7 +130,9 @@ describe("RegisterScreen", () => {
     jest.clearAllMocks();
     (updateUsageModeFn as jest.Mock).mockResolvedValue({});
     (updateProfileFn as jest.Mock).mockResolvedValue({});
-    (updateUsernameFn as jest.Mock).mockResolvedValue({ username: "custom_user" });
+    (updateUsernameFn as jest.Mock).mockResolvedValue({
+      username: "custom_user",
+    });
   });
 
   it("renders all required form fields", () => {
@@ -207,7 +223,9 @@ describe("RegisterScreen", () => {
     // Profile setup sheet appears — submit it to trigger the registration mutation
     fireEvent.press(await findByLabelText("submit-profile-setup"));
 
-    expect((await findAllByText("Email already taken")).length).toBeGreaterThan(0);
+    expect((await findAllByText("Email already taken")).length).toBeGreaterThan(
+      0,
+    );
   });
 
   it("shows the profile setup sheet when registration succeeds", async () => {
@@ -239,7 +257,6 @@ describe("RegisterScreen", () => {
 
     const { getByLabelText, findByLabelText } = renderRegister();
 
-    fireEvent.press(getByLabelText("I want to be a Mentee"));
     fireEvent.changeText(getByLabelText("Email"), " user@example.com ");
     fireEvent.changeText(getByLabelText("Password"), "Password1");
     fireEvent.changeText(getByLabelText("Confirm password"), "Password1");
@@ -247,7 +264,7 @@ describe("RegisterScreen", () => {
       getByLabelText("I agree to the Terms of Service and Privacy Policy"),
     );
     fireEvent.press(getByLabelText("Complete registration"));
-    fireEvent.press(await findByLabelText("submit-profile-setup"));
+    fireEvent.press(await findByLabelText("submit-profile-setup-mentee"));
 
     await waitFor(() => {
       expect(registerFn).toHaveBeenCalledWith({
@@ -346,7 +363,9 @@ describe("RegisterScreen", () => {
 
     await waitFor(() => {
       const btn = getByLabelText("Complete registration");
-      expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBeTruthy();
+      expect(
+        btn.props.accessibilityState?.disabled ?? btn.props.disabled,
+      ).toBeTruthy();
     });
 
     // Resolve the promise inside act so React flushes the resulting state updates.

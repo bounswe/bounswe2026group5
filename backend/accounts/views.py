@@ -108,7 +108,7 @@ class RegisterAPIView(APIView):
             logger.exception("Failed to issue verification email for user %s", user.id)
 
         response = Response(
-            AuthResponseSerializer(build_auth_response(user, refresh)).data,
+            build_auth_response(user, refresh),
             status=status.HTTP_201_CREATED,
         )
         _set_auth_cookies(response, refresh)
@@ -139,7 +139,7 @@ class LoginAPIView(APIView):
         refresh = RefreshToken.for_user(user)
 
         response = Response(
-            AuthResponseSerializer(build_auth_response(user, refresh)).data,
+            build_auth_response(user, refresh),
             status=status.HTTP_200_OK,
         )
         _set_auth_cookies(response, refresh)
@@ -477,7 +477,9 @@ class ResendVerificationAPIView(APIView):
     @extend_schema(
         request=None,
         responses={
-            200: OpenApiResponse(description="Verification email sent if the account is unverified."),
+            200: OpenApiResponse(
+                description="Verification email sent if the account is unverified."
+            ),
             401: OpenApiResponse(description="Authentication required."),
             403: OpenApiResponse(description="Account banned."),
         },
@@ -495,9 +497,7 @@ class ResendVerificationAPIView(APIView):
                 raw_token, _ = EmailVerificationToken.issue_for_user(user)
                 _send_email_verification_email(user, raw_token)
             except Exception:
-                logger.exception(
-                    "Failed to resend verification email for user %s", user.id
-                )
+                logger.exception("Failed to resend verification email for user %s", user.id)
 
         return Response(
             {"detail": "If your email is unverified, a new verification link has been sent."},
@@ -634,7 +634,7 @@ class GoogleOAuthLoginAPIView(APIView):
 
         # Build display name from Google's given/family names
         parts = [token_data.get("given_name", ""), token_data.get("family_name", "")]
-        display_name = " ".join(p for p in parts if p).strip()
+        display_name = " ".join(p for p in parts if p).strip() or token_data.get("name", "").strip()
 
         try:
             user = _get_or_create_oauth_user(
@@ -651,10 +651,8 @@ class GoogleOAuthLoginAPIView(APIView):
 
         refresh = RefreshToken.for_user(user)
         response = Response(
-            AuthResponseSerializer(build_auth_response(user, refresh)).data,
+            build_auth_response(user, refresh),
             status=status.HTTP_200_OK,
         )
         _set_auth_cookies(response, refresh)
         return response
-
-

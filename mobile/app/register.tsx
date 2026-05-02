@@ -19,14 +19,14 @@ import { RegistrationProfileSetupSheet } from "@/components/profile/Registration
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useAuthStore } from "@/lib/auth/store";
 import { ApiValidationError } from "@/lib/api/client";
+import { useAuthStore } from "@/lib/auth/store";
 import {
   fetchSkillsFn,
   registerFn,
   updateProfileFn,
-  updateUsernameFn,
   updateUsageModeFn,
+  updateUsernameFn,
 } from "@/lib/queries/authQueries";
 import { useGoogleLoginMutation } from "@/lib/queries/googleAuth";
 
@@ -50,7 +50,7 @@ function validatePassword(value: string): string {
 
 function buildUsernamePreview(email: string): string {
   const localPart = email.trim().toLowerCase().split("@")[0] ?? "";
-  const sanitized = localPart.replace(/[^a-z0-9_]/g, "_");
+  const sanitized = localPart.replaceAll(/[^a-z0-9_]/g, "_");
   return sanitized || "user";
 }
 
@@ -87,9 +87,11 @@ export default function RegisterScreen() {
   const theme = Colors[colorScheme];
 
   const setAuthenticated = useAuthStore((state) => state.setAuthenticated);
+  const storedUser = useAuthStore((state) => state.user);
+  const storedAccessToken = useAuthStore((state) => state.accessToken);
+  const storedRefreshToken = useAuthStore((state) => state.refreshToken);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const googleLoginMutation = useGoogleLoginMutation();
-
-  const [role, setRole] = useState<"mentor" | "mentee">("mentor");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   const [password, setPassword] = useState("");
@@ -120,48 +122,74 @@ export default function RegisterScreen() {
 
   const completeRegistration = useMutation({
     mutationFn: async (params: {
+      role: "mentor" | "mentee";
       username: string;
       displayName: string;
       bio: string;
       selectedSkills: string[];
     }) => {
-      const registration = await registerFn({
-        email: email.trim(),
-        password,
-        confirm_password: confirmPassword,
-      });
+      let accessToken: string;
+      let refreshToken: string;
+      let user: any;
+
+      const hasStoredGoogleSession =
+        isAuthenticated &&
+        storedUser?.auth_provider === "GOOGLE" &&
+        !storedUser?.app_usage_mode &&
+        Boolean(storedAccessToken && storedRefreshToken);
+
+      if (hasStoredGoogleSession) {
+        accessToken = storedAccessToken as string;
+        refreshToken = storedRefreshToken as string;
+        user = storedUser;
+      } else if (googleLoginMutation.data) {
+        // Use existing Google session tokens
+        accessToken = googleLoginMutation.data.access_token;
+        refreshToken = googleLoginMutation.data.refresh_token;
+        user = googleLoginMutation.data.user;
+      } else {
+        // Normal email/password registration
+        const registration = await registerFn({
+          email: email.trim(),
+          password,
+          confirm_password: confirmPassword,
+        });
+        accessToken = registration.access_token;
+        refreshToken = registration.refresh_token;
+        user = registration.user;
+      }
 
       await updateUsageModeFn({
-        app_usage_mode: role.toUpperCase() as "MENTOR" | "MENTEE",
-        accessToken: registration.access_token,
+        app_usage_mode: params.role.toUpperCase() as "MENTOR" | "MENTEE",
+        accessToken,
       });
 
-      let finalizedUsername = registration.user.username;
+      let finalizedUsername = user.username;
 
-      if (params.username !== registration.user.username) {
+      if (params.username !== user.username) {
         const updatedUsername = await updateUsernameFn({
-          accessToken: registration.access_token,
+          accessToken,
           username: params.username,
         });
         finalizedUsername = updatedUsername.username ?? params.username;
       }
 
       const finalizedUser = {
-        ...registration.user,
+        ...user,
         username: finalizedUsername,
-        app_usage_mode: role.toUpperCase() as "MENTOR" | "MENTEE",
+        app_usage_mode: params.role.toUpperCase() as "MENTOR" | "MENTEE",
       };
 
       await updateProfileFn({
-        accessToken: registration.access_token,
+        accessToken,
         display_name: params.displayName,
         bio: params.bio.trim() || undefined,
         skills: params.selectedSkills,
       });
 
       await setAuthenticated(finalizedUser, {
-        access_token: registration.access_token,
-        refresh_token: registration.refresh_token,
+        access_token: accessToken,
+        refresh_token: refreshToken,
       });
     },
     onSuccess: () => {
@@ -180,10 +208,6 @@ export default function RegisterScreen() {
   const isPending = completeRegistration.isPending;
 
   // ── Handlers ───────────────────────────────────────────────────────────────
-
-  const handleRoleChange = (newRole: "mentor" | "mentee") => {
-    setRole(newRole);
-  };
 
   const handleConfirmPasswordChange = (text: string) => {
     setConfirmPassword(text);
@@ -237,13 +261,44 @@ export default function RegisterScreen() {
   };
 
   /**
-   * Navigate to dashboard when Google login succeeds.
+   * Handle navigation or profile setup when Google login succeeds.
    */
   useEffect(() => {
     if (googleLoginMutation.data) {
-      router.replace("/(tabs)");
+      const user = googleLoginMutation.data.user;
+      if (!user.app_usage_mode) {
+        // New user: pre-fill email and show the onboarding sheet
+        setEmail(user.email);
+        setProfileSetupVisible(true);
+        if (!skillsData?.length) {
+          void refetchSkills();
+        }
+      } else {
+        // Existing user: go to dashboard
+        router.replace("/(tabs)");
+      }
     }
-  }, [googleLoginMutation.data]);
+  }, [googleLoginMutation.data, skillsData?.length, refetchSkills]);
+
+  // If we arrived here from the login screen after Google sign-in,
+  // the session is already stored in the auth store. Continue profile setup.
+  useEffect(() => {
+    const shouldContinueGoogleOnboarding =
+      isAuthenticated &&
+      storedUser?.auth_provider === "GOOGLE" &&
+      !storedUser?.app_usage_mode;
+
+    if (!shouldContinueGoogleOnboarding) {
+      return;
+    }
+
+    setEmail(storedUser.email);
+    setProfileSetupVisible(true);
+
+    if (!skillsData?.length) {
+      void refetchSkills();
+    }
+  }, [isAuthenticated, storedUser, skillsData?.length, refetchSkills]);
 
   const isGoogleLoading = googleLoginMutation.isPending;
 
@@ -307,57 +362,6 @@ export default function RegisterScreen() {
 
           {/* ── Form ── */}
           <View className="gap-5">
-            {/* Role Segmented Control */}
-            <View className="gap-1.5">
-              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
-                My Role
-              </Text>
-              <View className="flex-row items-center p-1.5 rounded-xl h-14 bg-surface-input dark:bg-surface-input-dark">
-                <Pressable
-                  onPress={() => handleRoleChange("mentor")}
-                  className="flex-1 h-full rounded-lg items-center justify-center"
-                  style={
-                    role === "mentor"
-                      ? { backgroundColor: theme.cardBackground }
-                      : undefined
-                  }
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: role === "mentor" }}
-                  accessibilityLabel="I want to be a Mentor"
-                >
-                  <Text
-                    className="text-sm font-semibold"
-                    style={{
-                      color: role === "mentor" ? theme.primary : theme.textSoft,
-                    }}
-                  >
-                    Mentor
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => handleRoleChange("mentee")}
-                  className="flex-1 h-full rounded-lg items-center justify-center"
-                  style={
-                    role === "mentee"
-                      ? { backgroundColor: theme.cardBackground }
-                      : undefined
-                  }
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: role === "mentee" }}
-                  accessibilityLabel="I want to be a Mentee"
-                >
-                  <Text
-                    className="text-sm font-semibold"
-                    style={{
-                      color: role === "mentee" ? theme.primary : theme.textSoft,
-                    }}
-                  >
-                    Mentee
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
             {/* Email */}
             <View className="gap-1.5">
               <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
@@ -534,8 +538,12 @@ export default function RegisterScreen() {
 
             {/* CTA + Google + Log In link */}
             <View className="gap-5 pt-4">
-              {(submitError || googleLoginMutation.error) ? (
-                <ErrorBanner message={submitError || googleLoginMutation.error?.message || ""} />
+              {submitError || googleLoginMutation.error ? (
+                <ErrorBanner
+                  message={
+                    submitError || googleLoginMutation.error?.message || ""
+                  }
+                />
               ) : null}
               <TouchableOpacity
                 className="w-full h-16 rounded-xl items-center justify-center flex-row gap-3 bg-primary dark:bg-primary-dim"
@@ -617,13 +625,16 @@ export default function RegisterScreen() {
 
       <RegistrationProfileSetupSheet
         visible={profileSetupVisible}
-        role={role}
         skills={skillNames}
         isLoadingSkills={isLoadingSkills}
         isSubmitting={completeRegistration.isPending}
         submitError={submitError}
         usernameError={usernameError}
-        username={buildUsernamePreview(email)}
+        username={storedUser?.username ?? buildUsernamePreview(email)}
+        prefillDisplayName={
+          googleLoginMutation.data?.user.display_name ??
+          storedUser?.display_name
+        }
         onUsernameChange={() => setUsernameError("")}
         onClose={() => {
           setProfileSetupVisible(false);

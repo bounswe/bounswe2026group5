@@ -43,11 +43,17 @@ export default function LoginScreen() {
   }, [loginMutation.data]);
 
   /**
-   * Navigate to dashboard when Google login succeeds.
+   * Navigate to dashboard or onboarding when Google login succeeds.
    */
   useEffect(() => {
     if (googleLoginMutation.data) {
-      router.replace("/(tabs)");
+      const user = googleLoginMutation.data.user;
+      if (!user.app_usage_mode) {
+        // New user needs to select role and skills
+        router.replace("/register");
+      } else {
+        router.replace("/(tabs)");
+      }
     }
   }, [googleLoginMutation.data]);
 
