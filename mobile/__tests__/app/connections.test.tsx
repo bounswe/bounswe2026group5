@@ -182,12 +182,14 @@ jest.mock("@/components/connections/ConnectionActionsSheet", () => ({
     visible,
     name,
     onViewProfile,
+    onViewJourney,
     onRemoveConnection,
     onLeaveReview,
   }: {
     visible: boolean;
     name: string;
     onViewProfile: () => void;
+    onViewJourney?: () => void;
     onRemoveConnection: () => void;
     onLeaveReview?: () => void;
   }) => {
@@ -198,6 +200,9 @@ jest.mock("@/components/connections/ConnectionActionsSheet", () => ({
         <Text>{name}</Text>
         <TouchableOpacity testID="action-profile" onPress={onViewProfile}>
           <Text>Profile action</Text>
+        </TouchableOpacity>
+        <TouchableOpacity testID="action-journey" onPress={onViewJourney}>
+          <Text>Journey action</Text>
         </TouchableOpacity>
         <TouchableOpacity testID="action-remove" onPress={onRemoveConnection}>
           <Text>Remove action</Text>
@@ -496,6 +501,44 @@ describe("ConnectionsScreen", () => {
       expect(mockDeactivateMutateAsync).toHaveBeenCalledWith("match-2");
     });
     expect(await findByText("Ada Mentee has been removed.")).toBeTruthy();
+  });
+
+  it("opens a single mentor-side match journey directly", () => {
+    mockMatches = [mentorMatch];
+
+    const { getByTestId } = render(<ConnectionsScreen />);
+
+    fireEvent.press(getByTestId("card-more-Ada Mentee"));
+    fireEvent.press(getByTestId("action-journey"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/connections/timeline/match-1",
+    );
+  });
+
+  it("shows a journey picker instead of silently opening the first match", () => {
+    mockMatches = [
+      mentorMatch,
+      {
+        ...mentorMatch,
+        id: "match-2",
+      },
+    ];
+
+    const { getByTestId } = render(<ConnectionsScreen />);
+
+    fireEvent.press(getByTestId("card-more-Ada Mentee"));
+    fireEvent.press(getByTestId("action-journey"));
+
+    expect(mockPush).not.toHaveBeenCalledWith(
+      "/(tabs)/connections/timeline/match-1",
+    );
+
+    fireEvent.press(getByTestId("journey-match-match-2"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/connections/timeline/match-2",
+    );
   });
 
   it("toggles the mentor mentee preview and ignores missing conversations", () => {

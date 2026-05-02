@@ -9,6 +9,7 @@ interface ConnectionActionsSheetProps {
   name: string;
   onClose: () => void;
   onViewProfile: () => void;
+  onViewJourney?: () => void;
   onRemoveConnection: () => void;
   onLeaveReview?: () => void;
   hasReviewed?: boolean;
@@ -20,6 +21,7 @@ export function ConnectionActionsSheet({
   name,
   onClose,
   onViewProfile,
+  onViewJourney,
   onRemoveConnection,
   onLeaveReview,
   hasReviewed = false,
@@ -70,6 +72,19 @@ export function ConnectionActionsSheet({
                 View Profile
               </Text>
             </TouchableOpacity>
+
+            {onViewJourney ? (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={onViewJourney}
+                className="flex-row items-center justify-center gap-2 px-4 py-3.5 rounded-lg bg-primary mb-3"
+              >
+                <Ionicons name="map-outline" size={18} color="#ffffff" />
+                <Text className="text-base font-semibold text-white">
+                  View Journey
+                </Text>
+              </TouchableOpacity>
+            ) : null}
 
             {/* LEAVE REVIEW BUTTON (Matches Primary Button) */}
             {onLeaveReview && (
