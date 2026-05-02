@@ -94,16 +94,26 @@ function isPayloadIdField(key: string): boolean {
   return key === "id" || key.endsWith("_id");
 }
 
+function formatPayloadId(value: unknown): string {
+  const text = formatPayloadValue(value);
+  if (!text) {
+    return "";
+  }
+
+  return text.length > 8 ? `Ref ${text.slice(0, 8)}` : `Ref ${text}`;
+}
+
 function isPayloadTimeField(key: string): boolean {
   return key.endsWith("_at") || key.endsWith("_at_utc");
 }
 
 function getPayloadEntries(event: TimelineEvent): [string, string][] {
   return Object.entries(event.payload)
-    .filter(([key]) => !isPayloadIdField(key))
     .map(([key, value]) => [
-      formatPayloadKey(key),
-      isPayloadTimeField(key) && typeof value === "string"
+      isPayloadIdField(key) ? "Reference" : formatPayloadKey(key),
+      isPayloadIdField(key)
+        ? formatPayloadId(value)
+        : isPayloadTimeField(key) && typeof value === "string"
         ? formatTimestamp(value)
         : formatPayloadValue(value),
     ] as [string, string])

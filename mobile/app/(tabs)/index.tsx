@@ -15,6 +15,7 @@ import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal"
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
+import { useToast } from "@/components/ui/ToastProvider";
 
 import { useAuthStore } from "@/lib/auth/store";
 import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
@@ -59,6 +60,7 @@ function mapDashboardRequestToCardProps(
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const toast = useToast();
 
   const currentUsername = useAuthStore((state) => state.user?.username);
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
@@ -209,7 +211,7 @@ export default function DashboardScreen() {
       setSuccessMessage(null);
       await cancelSessionMutation.mutateAsync(selectedSession.sessionId);
       setSelectedSession(null);
-      setSuccessMessage("The session was cancelled.");
+      toast.success("The session was cancelled.");
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -424,10 +426,11 @@ export default function DashboardScreen() {
               .mutateAsync({
                 sessionId: rescheduleSessionId,
                 newSlotId,
+                mentorUsername: rescheduleSessionMentorUsername ?? undefined,
               })
               .then(() => {
                 setActionError(null);
-                setSuccessMessage("Your session was updated.");
+                toast.success("Your session was updated.");
                 setSelectedSession(null);
                 setShowRescheduleSheet(false);
               })

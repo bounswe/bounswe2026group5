@@ -7,6 +7,7 @@ const mockCreateRequestMutateAsync = jest.fn();
 const mockResendMutateAsync = jest.fn();
 const mockAvailabilityRefetch = jest.fn();
 const mockBookSlotMutateAsync = jest.fn();
+const mockToastSuccess = jest.fn();
 let mockUsernameParam: string | undefined = "mentor_ada";
 let mockAuthUser = {
   username: "mentee_bora",
@@ -39,6 +40,12 @@ jest.mock("expo-router", () => ({
 }));
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+
+jest.mock("@/components/ui/ToastProvider", () => ({
+  useToast: () => ({
+    success: mockToastSuccess,
+  }),
+}));
 
 jest.mock("@/lib/auth/store", () => ({
   useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
@@ -370,19 +377,21 @@ describe("MentorProfileScreen email verification gate", () => {
     expect(mockCreateRequestMutateAsync).not.toHaveBeenCalled();
   });
 
-  it("warns mentor-mode viewers that mentee mode is required", async () => {
+  it("prevents mentor-mode viewers from sending requests", async () => {
     mockAuthUser = {
       username: "mentor_viewer",
       app_usage_mode: "MENTOR",
       is_email_verified: true,
     };
 
-    const { findByText, getByTestId } = render(<MentorProfileScreen />);
+    const { findByText, getByTestId, queryByText } = render(
+      <MentorProfileScreen />,
+    );
 
     expect(await findByText("Ada Mentor")).toBeTruthy();
     expect(
-      await findByText("Enable mentee mode in Settings to send requests."),
-    ).toBeTruthy();
+      queryByText("Enable mentee mode in Settings to send requests."),
+    ).toBeNull();
 
     fireEvent.press(getByTestId("slot-slot-1"));
     expect(mockCreateRequestMutateAsync).not.toHaveBeenCalled();
@@ -458,7 +467,9 @@ describe("MentorProfileScreen email verification gate", () => {
       },
     ];
 
-    const { findByText, getByTestId } = render(<MentorProfileScreen />);
+    const { findByText, getByTestId, queryByText } = render(
+      <MentorProfileScreen />,
+    );
 
     expect(await findByText("Ada Mentor")).toBeTruthy();
 
@@ -476,7 +487,10 @@ describe("MentorProfileScreen email verification gate", () => {
         slotId: "slot-1",
       });
     });
-    expect(await findByText("Session booked successfully.")).toBeTruthy();
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      "Session booked successfully.",
+    );
+    expect(queryByText("Session booked successfully.")).toBeNull();
 
     mockBookSlotMutateAsync.mockRejectedValueOnce(new Error("Booking failed."));
     fireEvent.press(getByTestId("slot-slot-1"));

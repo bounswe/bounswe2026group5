@@ -119,6 +119,7 @@ interface SubmitFeedbackPayload {
 interface RescheduleSessionPayload {
   sessionId: string;
   newSlotId: string;
+  mentorUsername?: string;
 }
 
 export type MentorshipMatch = BackendMatch;
@@ -600,8 +601,8 @@ export function useRescheduleSessionMutation(currentUsername?: string) {
         `/api/mentorship/sessions/${encodeURIComponent(sessionId)}/reschedule/`,
         { new_slot_id: newSlotId },
       ),
-    onSuccess: async () => {
-      await Promise.all([
+    onSuccess: async (_data, variables) => {
+      const invalidations = [
         queryClient.invalidateQueries({
           queryKey: ["mentorship", "meeting-sessions", "me"],
         }),
@@ -624,7 +625,21 @@ export function useRescheduleSessionMutation(currentUsername?: string) {
         queryClient.invalidateQueries({
           queryKey: ["profiles"],
         }),
-      ]);
+      ];
+
+      if (variables.mentorUsername) {
+        invalidations.push(
+          queryClient.invalidateQueries({
+            queryKey: [
+              "profiles",
+              variables.mentorUsername,
+              "availability-slots",
+            ],
+          }),
+        );
+      }
+
+      await Promise.all(invalidations);
     },
   });
 }

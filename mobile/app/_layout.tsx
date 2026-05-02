@@ -11,6 +11,7 @@ import "react-native-reanimated";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "../global.css";
 
+import { ToastProvider } from "@/components/ui/ToastProvider";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
 
@@ -48,32 +49,34 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        {isAuthenticated ? (
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="notifications"
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="verify-email"
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen name="settings" options={{ headerShown: false }} />
-            <Stack.Screen name="messages" options={{ headerShown: false }} />
-          </Stack>
-        ) : (
-          <Stack>
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="login" options={{ headerShown: false }} />
-            <Stack.Screen name="register" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="verify-email"
-              options={{ headerShown: false }}
-            />
-          </Stack>
-        )}
-        <StatusBar style="auto" />
+        <ToastProvider>
+          {isAuthenticated ? (
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="notifications"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="verify-email"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen name="settings" options={{ headerShown: false }} />
+              <Stack.Screen name="messages" options={{ headerShown: false }} />
+            </Stack>
+          ) : (
+            <Stack>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="login" options={{ headerShown: false }} />
+              <Stack.Screen name="register" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="verify-email"
+                options={{ headerShown: false }}
+              />
+            </Stack>
+          )}
+          <StatusBar style="auto" />
+        </ToastProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

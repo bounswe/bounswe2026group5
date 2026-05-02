@@ -23,6 +23,7 @@ import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { useToast } from "@/components/ui/ToastProvider";
 import { API_BASE_URL } from "@/constants/api";
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -277,14 +278,6 @@ function renderBodyContent({
           />
         )}
 
-        {isViewedMentor && !canRequestMentorship && (
-          <View className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">
-            <Text className="text-amber-800 text-sm font-semibold">
-              Enable mentee mode in Settings to send requests.
-            </Text>
-          </View>
-        )}
-
         {!!requestFeedback && (
           <View className="mb-4">
             <ErrorBanner
@@ -389,6 +382,7 @@ const REVIEWS_PAGE_SIZE = 6;
 export default function MentorProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const toast = useToast();
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const currentUsername = useAuthStore((state) => state.user?.username);
   const params = useLocalSearchParams<{ username?: string }>();
@@ -691,8 +685,6 @@ export default function MentorProfileScreen() {
     slotId?: string;
   }) => {
     if (!canRequestMentorship) {
-      setRequestFeedbackVariant("warning");
-      setRequestFeedback("Enable mentee mode in Settings to send requests.");
       return;
     }
 
@@ -791,8 +783,7 @@ export default function MentorProfileScreen() {
       setProfile((prev) => prev);
 
       setSelectedSlot(null);
-      setRequestFeedbackVariant("success");
-      setRequestFeedback("Session booked successfully.");
+      toast.success("Session booked successfully.");
       availabilitySlotsQuery.refetch();
     } catch (mutationError) {
       setRequestFeedbackVariant("error");
