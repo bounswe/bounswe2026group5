@@ -70,6 +70,7 @@ describe("MatchJourneyScreen", () => {
             content: undefined,
             payload: {
               session_id: "session-1",
+              scheduled_start_at_utc: "2026-05-03T16:00:00+00:00",
             },
             show_on_profile: false,
             is_editable: false,
@@ -81,12 +82,14 @@ describe("MatchJourneyScreen", () => {
       error: null,
     };
 
-    const { getByText, getByTestId } = render(<MatchJourneyScreen />);
+    const { getByText, getByTestId, queryByText } = render(<MatchJourneyScreen />);
 
     expect(getByText("Session scheduled")).toBeTruthy();
     expect(getByText("System")).toBeTruthy();
-    expect(getByText("session_id")).toBeTruthy();
-    expect(getByText("session-1")).toBeTruthy();
+    expect(queryByText("session_id")).toBeNull();
+    expect(queryByText("session-1")).toBeNull();
+    expect(getByText("Starts")).toBeTruthy();
+    expect(queryByText("scheduled_start_at_utc")).toBeNull();
     expect(getByTestId("journey-event-session_scheduled:session-1")).toBeTruthy();
   });
 

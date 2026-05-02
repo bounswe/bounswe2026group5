@@ -27,6 +27,14 @@ const EVENT_LABELS: Record<string, string> = {
   progress: "Progress update",
 };
 
+const PAYLOAD_LABELS: Record<string, string> = {
+  scheduled_start_at_utc: "Starts",
+  scheduled_end_at_utc: "Ends",
+  initial_session_start_at: "Initial session starts",
+  initial_session_end_at: "Initial session ends",
+  cancel_reason: "Cancel reason",
+};
+
 function getParamValue(value?: string | string[]): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -67,9 +75,38 @@ function formatPayloadValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function formatPayloadKey(value: string): string {
+  if (PAYLOAD_LABELS[value]) {
+    return PAYLOAD_LABELS[value];
+  }
+
+  return value
+    .replace(/_utc$/u, "")
+    .replace(/_at$/u, "")
+    .replace(/_/gu, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function isPayloadIdField(key: string): boolean {
+  return key === "id" || key.endsWith("_id");
+}
+
+function isPayloadTimeField(key: string): boolean {
+  return key.endsWith("_at") || key.endsWith("_at_utc");
+}
+
 function getPayloadEntries(event: TimelineEvent): [string, string][] {
   return Object.entries(event.payload)
-    .map(([key, value]) => [key, formatPayloadValue(value)] as [string, string])
+    .filter(([key]) => !isPayloadIdField(key))
+    .map(([key, value]) => [
+      formatPayloadKey(key),
+      isPayloadTimeField(key) && typeof value === "string"
+        ? formatTimestamp(value)
+        : formatPayloadValue(value),
+    ] as [string, string])
     .filter(([, value]) => value.trim().length > 0)
     .slice(0, 4);
 }
