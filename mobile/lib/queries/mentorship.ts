@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiDelete, apiGet, apiPost } from "@/lib/api/client";
+import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api/client";
 
 export interface DashboardRequestItem {
   id: string;
@@ -43,6 +43,30 @@ export interface AvailabilityDayItem {
     isBooked: boolean;
     date?: string;
   }[];
+}
+
+export type TimelineCategory = "AGTE" | "MCTE" | "PrP" | "CoP";
+export type MCTEEventType = "achievement" | "social" | "progress";
+
+export interface TimelineEvent {
+  id: string;
+  category: TimelineCategory;
+  event_type: string;
+  timestamp: string;
+  actor_role?: string | null;
+  author?: BackendProfileSummary | null;
+  content?: string;
+  payload: Record<string, unknown>;
+  show_on_profile: boolean;
+  is_editable: boolean;
+}
+
+export interface MatchJourneyFeed {
+  ordering: "desc";
+  count: number;
+  offset: number;
+  limit: number;
+  results: TimelineEvent[];
 }
 
 interface BackendProfileSummary {
@@ -137,6 +161,43 @@ interface BackendMeetingSession {
   updated_at: string;
 }
 
+export type BackendJourneyEvent = Partial<TimelineEvent> & {
+  type?: string;
+  event_type?: string;
+  payload?: Record<string, unknown> | null;
+};
+
+export interface BackendJourneyFeed {
+  ordering: "desc";
+  count: number;
+  offset: number;
+  limit: number;
+  results: BackendJourneyEvent[];
+}
+
+export interface CreateTimelineEventPayload {
+  matchId: string;
+  event_type: MCTEEventType;
+  content: string;
+  timestamp?: string;
+  show_on_profile?: boolean;
+}
+
+export interface UpdateTimelineEventPayload {
+  matchId: string;
+  eventId: string;
+  event_type?: MCTEEventType;
+  content?: string;
+  timestamp?: string;
+  show_on_profile?: boolean;
+}
+
+export interface DeleteTimelineEventPayload {
+  matchId: string;
+  eventId: string;
+  show_on_profile?: boolean;
+}
+
 interface MeetingSessionQueryParams {
   role?: MeetingSessionRoleFilter;
   status?: MeetingSessionStatusFilter;
@@ -228,6 +289,33 @@ function toProposedDate(value: BackendMentorshipRequest): string | undefined {
   return end ? `${label} ${start}-${end}` : `${label} ${start}`;
 }
 
+function normalizeTimelineEvent(event: BackendJourneyEvent): TimelineEvent {
+  return {
+    id: String(event.id ?? ""),
+    category: event.category ?? "AGTE",
+    event_type: event.event_type ?? event.type ?? "journey_event",
+    timestamp: String(event.timestamp ?? new Date().toISOString()),
+    actor_role: event.actor_role ?? null,
+    author: event.author ?? null,
+    content: event.content,
+    payload: event.payload ?? {},
+    show_on_profile: event.show_on_profile ?? false,
+    is_editable: event.is_editable ?? false,
+  };
+}
+
+export function mapJourneyFeedToTimelineEvents(
+  feed: BackendJourneyFeed,
+): MatchJourneyFeed {
+  return {
+    ordering: feed.ordering,
+    count: feed.count,
+    offset: feed.offset,
+    limit: feed.limit,
+    results: feed.results.map(normalizeTimelineEvent),
+  };
+}
+
 /**
  * Helper to sort sessions: Active sessions first, then sorted by date.
  */
@@ -288,6 +376,147 @@ export function useMatchFeedbackQuery(matchId?: string) {
       ),
     enabled: Boolean(matchId),
     staleTime: 60_000,
+  });
+}
+
+/**
+ * Fetch private journey timeline events for a mentorship match.
+ *
+ * The current backend returns AGTE lifecycle events; the unified timeline
+ * response from #462 can also include MCTE records.
+ */
+export function useMatchJourneyQuery(matchId?: string) {
+  return useQuery({
+    queryKey: ["mentorship", "matches", matchId ?? "unknown", "journey"],
+    queryFn: async () => {
+      const feed = await apiGet<BackendJourneyFeed>(
+        `/api/mentorship/matches/${encodeURIComponent(matchId || "")}/journey/`,
+      );
+      return mapJourneyFeedToTimelineEvents(feed);
+    },
+    enabled: Boolean(matchId),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Create a manually-authored journey event for a match.
+ */
+export function useCreateTimelineEventMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      matchId,
+      event_type,
+      content,
+      timestamp,
+      show_on_profile,
+    }: CreateTimelineEventPayload) =>
+      apiPost<TimelineEvent, Omit<CreateTimelineEventPayload, "matchId">>(
+        `/api/mentorship/matches/${encodeURIComponent(matchId)}/journey/events/`,
+        {
+          event_type,
+          content,
+          ...(timestamp ? { timestamp } : {}),
+          show_on_profile: show_on_profile ?? false,
+        },
+      ),
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "matches", variables.matchId, "journey"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "matches",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+        variables.show_on_profile
+          ? queryClient.invalidateQueries({ queryKey: ["profiles"] })
+          : Promise.resolve(),
+      ]);
+    },
+  });
+}
+
+/**
+ * Update an editable manually-authored journey event.
+ */
+export function useUpdateTimelineEventMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      matchId,
+      eventId,
+      event_type,
+      content,
+      timestamp,
+      show_on_profile,
+    }: UpdateTimelineEventPayload) =>
+      apiPatch<TimelineEvent, Omit<UpdateTimelineEventPayload, "matchId" | "eventId">>(
+        `/api/mentorship/matches/${encodeURIComponent(matchId)}/journey/events/${encodeURIComponent(eventId)}/`,
+        {
+          ...(event_type ? { event_type } : {}),
+          ...(content !== undefined ? { content } : {}),
+          ...(timestamp ? { timestamp } : {}),
+          ...(show_on_profile !== undefined ? { show_on_profile } : {}),
+        },
+      ),
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "matches", variables.matchId, "journey"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "matches",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+        variables.show_on_profile !== undefined
+          ? queryClient.invalidateQueries({ queryKey: ["profiles"] })
+          : Promise.resolve(),
+      ]);
+    },
+  });
+}
+
+/**
+ * Delete an editable manually-authored journey event.
+ */
+export function useDeleteTimelineEventMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ matchId, eventId }: DeleteTimelineEventPayload) =>
+      apiDelete(
+        `/api/mentorship/matches/${encodeURIComponent(matchId)}/journey/events/${encodeURIComponent(eventId)}/`,
+      ),
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["mentorship", "matches", variables.matchId, "journey"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "mentorship",
+            "matches",
+            "me",
+            currentUsername ?? "anonymous",
+          ],
+        }),
+        variables.show_on_profile
+          ? queryClient.invalidateQueries({ queryKey: ["profiles"] })
+          : Promise.resolve(),
+      ]);
+    },
   });
 }
 
