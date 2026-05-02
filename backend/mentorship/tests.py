@@ -2318,8 +2318,17 @@ class MCTEAPITests(FeedbackAPIBaseTestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["event_type"], "achievement")
         self.assertEqual(response.data["content"], "Finished React Basics")
+        self.assertIsNone(response.data["media_url"])
         self.assertEqual(response.data["actor_role"], "mentor")
         self.assertIsNotNone(response.data["author"])
+
+    def test_create_mcte_with_media_url_returns_201(self) -> None:
+        response = self._make_event(
+            self.mentor_client,
+            media_url="https://cdn.example.com/media/progress-1.png",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["media_url"], "https://cdn.example.com/media/progress-1.png")
 
     def test_create_mcte_by_mentee_returns_201(self) -> None:
         response = self._make_event(self.mentee_client, event_type="social", content="First coffee")
@@ -2385,7 +2394,6 @@ class MCTEAPITests(FeedbackAPIBaseTestCase):
 
     def test_create_mcte_nonexistent_match_returns_404(self) -> None:
         url = f"/api/mentorship/matches/{uuid.uuid4()}/journey/events/"
-        response = self._make_event(self.mentor_client)
         # Use the bad url directly
         response2 = self.mentor_client.post(
             url,
@@ -2448,6 +2456,33 @@ class MCTEAPITests(FeedbackAPIBaseTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["content"], "Updated content")
         self.assertIsNotNone(response.data["last_edited"])
+
+    def test_edit_mcte_media_url_by_author_returns_200(self) -> None:
+        create_resp = self._make_event(self.mentor_client)
+        event_id = create_resp.data["id"]
+
+        response = self.mentor_client.patch(
+            self._event_url(event_id),
+            {"media_url": "https://cdn.example.com/media/progress-2.png"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["media_url"], "https://cdn.example.com/media/progress-2.png")
+
+    def test_edit_mcte_media_url_can_be_cleared(self) -> None:
+        create_resp = self._make_event(
+            self.mentor_client,
+            media_url="https://cdn.example.com/media/progress-3.png",
+        )
+        event_id = create_resp.data["id"]
+
+        response = self.mentor_client.patch(
+            self._event_url(event_id),
+            {"media_url": None},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["media_url"])
 
     def test_edit_mcte_by_non_author_returns_403(self) -> None:
         create_resp = self._make_event(self.mentor_client)

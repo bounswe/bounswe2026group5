@@ -904,6 +904,7 @@ class MCTECollectionAPIView(APIView):
             author_profile=profile,
             event_type=validated["event_type"],
             content=validated.get("content", ""),
+            media_url=validated.get("media_url"),
             timestamp=validated["timestamp"],
             show_on_profile=validated.get("show_on_profile", False),
         )
@@ -961,7 +962,7 @@ class MCTEEventDetailAPIView(APIView):
         },
         description=(
             "Partially update a manually-created timeline event. "
-            "Only 'content' and 'show_on_profile' may be changed. "
+            "Only 'content', 'media_url', and 'show_on_profile' may be changed. "
             "Only the original author can edit."
         ),
         tags=["Mentorship"],
@@ -980,7 +981,9 @@ class MCTEEventDetailAPIView(APIView):
         updated_event = edit_mcte_event(
             event=event,
             content=validated.get("content"),
+            media_url=validated.get("media_url"),
             show_on_profile=validated.get("show_on_profile"),
+            update_media_url="media_url" in validated,
         )
         return Response(MCTEEventSerializer(updated_event).data, status=status.HTTP_200_OK)
 

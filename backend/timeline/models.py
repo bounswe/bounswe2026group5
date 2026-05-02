@@ -47,6 +47,7 @@ class TimelineEvent(models.Model):
     community_id = models.UUIDField(null=True, blank=True)
     show_on_profile = models.BooleanField(default=False)
     content = models.TextField(blank=True, default="")
+    media_url = models.URLField(max_length=1000, null=True, blank=True, default=None)
     payload = models.JSONField(null=True, blank=True)
     actor_role = models.CharField(max_length=16, blank=True, default="")
     timestamp = models.DateTimeField()

@@ -359,6 +359,7 @@ class JourneyEventSerializer(serializers.Serializer):
     actor_role = serializers.CharField(read_only=True)
     payload = serializers.JSONField(read_only=True)
     content = serializers.CharField(read_only=True, default="")
+    media_url = serializers.URLField(read_only=True, allow_null=True, default=None)
     show_on_profile = serializers.BooleanField(read_only=True, default=False)
     author = serializers.SerializerMethodField()
     is_editable = serializers.SerializerMethodField()
@@ -399,6 +400,7 @@ class MCTECreateSerializer(serializers.Serializer):
 
     event_type = serializers.ChoiceField(choices=_MCTE_EVENT_TYPE_CHOICES)
     content = serializers.CharField(required=True, max_length=2000)
+    media_url = serializers.URLField(required=False, allow_null=True, default=None)
     timestamp = serializers.DateTimeField(required=True)
     show_on_profile = serializers.BooleanField(required=False, default=False)
 
@@ -413,13 +415,14 @@ class MCTEUpdateSerializer(serializers.Serializer):
     """Write serializer for partially updating a manually-created timeline event."""
 
     content = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    media_url = serializers.URLField(required=False, allow_null=True)
     show_on_profile = serializers.BooleanField(required=False)
 
     def validate(self, attrs: dict) -> dict:
         """Require at least one editable field to be provided."""
         if not attrs:
             raise serializers.ValidationError(
-                "At least one of 'content' or 'show_on_profile' must be provided."
+                "At least one of 'content', 'media_url', or 'show_on_profile' must be provided."
             )
         return attrs
 
@@ -441,6 +444,7 @@ class MCTEEventSerializer(serializers.Serializer):
     source_id = serializers.CharField(read_only=True)
     event_type = serializers.CharField(read_only=True)
     content = serializers.CharField(read_only=True)
+    media_url = serializers.URLField(read_only=True, allow_null=True)
     timestamp = serializers.DateTimeField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     last_edited = serializers.DateTimeField(read_only=True, allow_null=True)

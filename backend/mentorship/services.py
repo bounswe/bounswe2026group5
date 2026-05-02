@@ -44,6 +44,7 @@ def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[
             "actor_role",
             "payload",
             "content",
+            "media_url",
             "show_on_profile",
             "author_id",
         )
@@ -58,6 +59,7 @@ def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[
             "actor_role": row["actor_role"],
             "payload": row["payload"] or {},
             "content": row["content"],
+            "media_url": row["media_url"],
             "show_on_profile": row["show_on_profile"],
             "author_id": row["author_id"],
         }
@@ -83,6 +85,7 @@ def create_mcte_event(
     author_profile: Profile,
     event_type: str,
     content: str = "",
+    media_url: str | None = None,
     timestamp: Any,
     show_on_profile: bool = False,
 ) -> TimelineEvent:
@@ -108,6 +111,7 @@ def create_mcte_event(
         author=author_profile,
         mentorship=match,
         content=content,
+        media_url=media_url,
         actor_role=actor_role,
         timestamp=timestamp,
         show_on_profile=show_on_profile,
@@ -118,7 +122,9 @@ def edit_mcte_event(
     *,
     event: TimelineEvent,
     content: str | None = None,
+    media_url: str | None = None,
     show_on_profile: bool | None = None,
+    update_media_url: bool = False,
 ) -> TimelineEvent:
     """Partially update a manually-created timeline event.
 
@@ -130,6 +136,10 @@ def edit_mcte_event(
     if content is not None:
         event.content = content
         update_fields.append("content")
+
+    if update_media_url:
+        event.media_url = media_url
+        update_fields.append("media_url")
 
     if show_on_profile is not None:
         event.show_on_profile = show_on_profile
