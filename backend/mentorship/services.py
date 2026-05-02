@@ -86,7 +86,7 @@ def create_mcte_event(
     event_type: str,
     content: str = "",
     media_url: str | None = None,
-    timestamp: Any,
+    timestamp: Any | None = None,
     show_on_profile: bool = False,
 ) -> TimelineEvent:
     """Create and persist a manually-created timeline event for a match.
@@ -104,7 +104,8 @@ def create_mcte_event(
     actor_role = "mentor" if author_profile == match.mentor else "mentee"
     source_id = f"mcte:{uuid.uuid4()}"
 
-    return TimelineEvent.objects.create(
+    effective_timestamp = timestamp if timestamp is not None else timezone.now()
+    event = TimelineEvent.objects.create(
         source_id=source_id,
         category=TimelineEvent.Category.MCTE,
         event_type=event_type,
@@ -113,9 +114,16 @@ def create_mcte_event(
         content=content,
         media_url=media_url,
         actor_role=actor_role,
-        timestamp=timestamp,
+        timestamp=effective_timestamp,
         show_on_profile=show_on_profile,
     )
+
+    # Keep fallback semantics explicit: omitted timestamp should match created_at.
+    if timestamp is None:
+        event.timestamp = event.created_at
+        event.save(update_fields=["timestamp"])
+
+    return event
 
 
 def edit_mcte_event(

@@ -1,6 +1,10 @@
 """Domain services for profile-related business operations."""
 
+import uuid
+from typing import Any
+
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from .models import AvailabilitySlot, Profile
@@ -28,6 +32,10 @@ class SlotNotBookedError(AvailabilityBookingError):
 
 class BookingCancelNotAllowedError(AvailabilityBookingError):
     """Raised when request user cannot cancel this booking."""
+
+
+class InvalidPrPEventTypeError(Exception):
+    """Raised when an unsupported event_type is supplied for a profile post."""
 
 
 def book_availability_slot(*, profile: Profile, slot_id, actor) -> AvailabilitySlot:
@@ -97,3 +105,126 @@ def cancel_availability_booking(*, profile: Profile, slot_id, actor) -> Availabi
 
         slot.mark_available()
         return slot
+
+
+def list_profile_feed_events(
+    *,
+    profile: Profile,
+    offset: int,
+    limit: int,
+    category: str | None = None,
+    event_type: str | None = None,
+) -> dict[str, Any]:
+    """Return paginated profile feed events for a profile page.
+
+    Feed includes:
+    - Profile posts (PrP) authored by the profile.
+    - MCTE events authored by the profile where show_on_profile=True.
+    """
+    from timeline.models import TimelineEvent
+
+    queryset = (
+        TimelineEvent.objects.filter(author=profile, is_deleted=False)
+        .filter(
+            Q(category=TimelineEvent.Category.PRP)
+            | Q(category=TimelineEvent.Category.MCTE, show_on_profile=True)
+        )
+        .select_related("author")
+        .order_by("-timestamp", "-created_at")
+    )
+
+    if category is not None:
+        queryset = queryset.filter(category=category)
+
+    if event_type is not None:
+        queryset = queryset.filter(event_type=event_type)
+
+    total_count = queryset.count()
+    events = list(queryset[offset : offset + limit])
+
+    return {
+        "count": total_count,
+        "offset": offset,
+        "limit": limit,
+        "results": events,
+    }
+
+
+def create_prp_event(
+    *,
+    author_profile: Profile,
+    event_type: str,
+    content: str = "",
+    media_url: str | None = None,
+    timestamp: Any | None = None,
+) -> Any:
+    """Create and persist a profile post (PrP).
+
+    If timestamp is omitted, event timestamp is aligned with created_at.
+    """
+    from timeline.models import TimelineEvent
+
+    if event_type not in TimelineEvent.MCTEEventType.values:
+        raise InvalidPrPEventTypeError(
+            f"Invalid PrP event_type: '{event_type}'. "
+            f"Must be one of {TimelineEvent.MCTEEventType.values}."
+        )
+
+    event = TimelineEvent.objects.create(
+        source_id=f"prp:{uuid.uuid4()}",
+        category=TimelineEvent.Category.PRP,
+        event_type=event_type,
+        author=author_profile,
+        content=content,
+        media_url=media_url,
+        show_on_profile=True,
+        timestamp=timestamp if timestamp is not None else timezone.now(),
+    )
+
+    if timestamp is None:
+        event.timestamp = event.created_at
+        event.save(update_fields=["timestamp"])
+
+    return event
+
+
+def edit_prp_event(
+    *,
+    event: Any,
+    content: str | None = None,
+    event_type: str | None = None,
+    media_url: str | None = None,
+    update_media_url: bool = False,
+) -> Any:
+    """Partially update a profile post and set last_edited."""
+    from timeline.models import TimelineEvent
+
+    if event_type is not None and event_type not in TimelineEvent.MCTEEventType.values:
+        raise InvalidPrPEventTypeError(
+            f"Invalid PrP event_type: '{event_type}'. "
+            f"Must be one of {TimelineEvent.MCTEEventType.values}."
+        )
+
+    update_fields: list[str] = ["last_edited"]
+
+    if content is not None:
+        event.content = content
+        update_fields.append("content")
+
+    if event_type is not None:
+        event.event_type = event_type
+        update_fields.append("event_type")
+
+    if update_media_url:
+        event.media_url = media_url
+        update_fields.append("media_url")
+
+    event.last_edited = timezone.now()
+    event.save(update_fields=update_fields)
+    return event
+
+
+def soft_delete_prp_event(*, event: Any) -> None:
+    """Soft-delete a profile post by setting is_deleted=True."""
+    event.is_deleted = True
+    event.save(update_fields=["is_deleted"])

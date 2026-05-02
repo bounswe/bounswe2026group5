@@ -879,6 +879,8 @@ class MCTECollectionAPIView(APIView):
             "The author is always derived from the authenticated user's profile "
             "and cannot be overridden via the request body. "
             "event_type must be one of: achievement, social, progress. "
+            "`timestamp` is optional; if omitted, null, or empty, it is set to the event's "
+            "creation time. If provided, it cannot be more than 1 day in the future. "
             "Optional fields include `media_url` (URL string for event media/visuals, can be null) "
             "and `show_on_profile` (boolean, default false)."
         ),
@@ -909,7 +911,7 @@ class MCTECollectionAPIView(APIView):
             event_type=validated["event_type"],
             content=validated.get("content", ""),
             media_url=validated.get("media_url"),
-            timestamp=validated["timestamp"],
+            timestamp=validated.get("timestamp"),
             show_on_profile=validated.get("show_on_profile", False),
         )
         event.author = profile  # avoid an extra query in the serializer

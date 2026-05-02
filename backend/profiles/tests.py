@@ -18,7 +18,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode
 from mentorship.models import Feedback, Match, MentorshipRequest
-from mentorship.services import deactivate_match, ensure_match_and_initial_session
+from mentorship.services import (
+    create_mcte_event,
+    deactivate_match,
+    ensure_match_and_initial_session,
+)
 from profiles.models import AvailabilitySlot, Profile, Skill
 from profiles.serializers import AvailabilitySlotSerializer, LocationField
 from profiles.services import (
@@ -29,6 +33,7 @@ from profiles.services import (
     SlotNotBookedError,
     book_availability_slot,
     cancel_availability_booking,
+    create_prp_event,
 )
 from profiles.views import PublicMentorProfilesSearchListAPIView
 
@@ -556,6 +561,321 @@ class ProfileUsernameUpdateTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("username", response.json())
+
+
+class ProfilePostsAPITests(TestCase):
+    """Integration tests for profile posts endpoints."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+
+        self.owner_user = User.objects.create_user(
+            email="posts-owner@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.owner_profile = Profile.objects.create(
+            user=self.owner_user,
+            username="posts_owner",
+            display_name="Posts Owner",
+            is_visible=True,
+        )
+
+        self.viewer_user = User.objects.create_user(
+            email="posts-viewer@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.viewer_profile = Profile.objects.create(
+            user=self.viewer_user,
+            username="posts_viewer",
+            display_name="Posts Viewer",
+            is_visible=True,
+        )
+
+        self.partner_user = User.objects.create_user(
+            email="posts-partner@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.partner_profile = Profile.objects.create(
+            user=self.partner_user,
+            username="posts_partner",
+            display_name="Posts Partner",
+        )
+
+        self.owner_token = str(RefreshToken.for_user(self.owner_user).access_token)
+        self.viewer_token = str(RefreshToken.for_user(self.viewer_user).access_token)
+
+        self.owner_create_url = "/api/profiles/me/posts/"
+        self.owner_feed_url = f"/api/profiles/{self.owner_profile.username}/posts/"
+
+    def _auth_owner(self) -> None:
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+    def _auth_viewer(self) -> None:
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.viewer_token}")
+
+    def _create_match_for_owner(self) -> Match:
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.owner_profile,
+            mentee=self.partner_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        return ensure_match_and_initial_session(mentorship_request=request_obj)
+
+    def test_create_prp_missing_timestamp_returns_201(self) -> None:
+        self._auth_owner()
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {"event_type": "achievement", "content": "Built a prototype"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["category"], "PrP")
+        self.assertTrue(response.data["show_on_profile"])
+        self.assertIsNotNone(response.data["timestamp"])
+
+    def test_create_prp_null_timestamp_returns_201(self) -> None:
+        self._auth_owner()
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "progress",
+                "content": "Weekly update",
+                "timestamp": None,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNotNone(response.data["timestamp"])
+
+    def test_create_prp_empty_timestamp_returns_201(self) -> None:
+        self._auth_owner()
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "social",
+                "content": "Hosted a study group",
+                "timestamp": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNotNone(response.data["timestamp"])
+
+    def test_create_prp_far_future_timestamp_returns_400(self) -> None:
+        self._auth_owner()
+        future_ts = (timezone.now() + timedelta(days=5)).isoformat()
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "achievement",
+                "content": "Future post",
+                "timestamp": future_ts,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_list_profile_posts_requires_authentication(self) -> None:
+        response = self.api_client.get(self.owner_feed_url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_profile_posts_includes_prp_and_visible_mcte(self) -> None:
+        create_prp_event(
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="PrP entry",
+            timestamp=timezone.now() - timedelta(hours=3),
+        )
+        match = self._create_match_for_owner()
+        visible_mcte = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="progress",
+            content="Visible MCTE",
+            timestamp=timezone.now() - timedelta(hours=2),
+            show_on_profile=True,
+        )
+        hidden_mcte = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="social",
+            content="Hidden MCTE",
+            timestamp=timezone.now() - timedelta(hours=1),
+            show_on_profile=False,
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url)
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data["results"]
+        source_ids = {item["source_id"] for item in results}
+        self.assertIn(visible_mcte.source_id, source_ids)
+        self.assertNotIn(hidden_mcte.source_id, source_ids)
+        self.assertTrue(any(item["category"] == "PrP" for item in results))
+
+    def test_list_profile_posts_filter_by_category_returns_matching_items(self) -> None:
+        prp_event = create_prp_event(
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="PrP entry",
+            timestamp=timezone.now() - timedelta(hours=3),
+        )
+        match = self._create_match_for_owner()
+        visible_mcte = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="progress",
+            content="Visible MCTE",
+            timestamp=timezone.now() - timedelta(hours=2),
+            show_on_profile=True,
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url + "?category=PrP")
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data["results"]
+        self.assertTrue(all(item["category"] == "PrP" for item in results))
+        source_ids = {item["source_id"] for item in results}
+        self.assertIn(prp_event.source_id, source_ids)
+        self.assertNotIn(visible_mcte.source_id, source_ids)
+
+    def test_list_profile_posts_filter_by_event_type_returns_matching_items(self) -> None:
+        progress_prp = create_prp_event(
+            author_profile=self.owner_profile,
+            event_type="progress",
+            content="Progress note",
+            timestamp=timezone.now() - timedelta(hours=4),
+        )
+        create_prp_event(
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="Achievement note",
+            timestamp=timezone.now() - timedelta(hours=3),
+        )
+        match = self._create_match_for_owner()
+        progress_mcte = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="progress",
+            content="Visible MCTE progress",
+            timestamp=timezone.now() - timedelta(hours=2),
+            show_on_profile=True,
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url + "?event_type=progress")
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data["results"]
+        self.assertTrue(all(item["event_type"] == "progress" for item in results))
+        source_ids = {item["source_id"] for item in results}
+        self.assertIn(progress_prp.source_id, source_ids)
+        self.assertIn(progress_mcte.source_id, source_ids)
+
+    def test_list_private_profile_posts_returns_404_for_non_owner(self) -> None:
+        private_user = User.objects.create_user(
+            email="posts-private@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        private_profile = Profile.objects.create(
+            user=private_user,
+            username="posts_private",
+            display_name="Posts Private",
+            is_visible=False,
+        )
+        create_prp_event(
+            author_profile=private_profile,
+            event_type="achievement",
+            content="private post",
+            timestamp=timezone.now() - timedelta(minutes=30),
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(f"/api/profiles/{private_profile.username}/posts/")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_patch_prp_by_owner_returns_200(self) -> None:
+        self._auth_owner()
+        create_response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "achievement",
+                "content": "Initial post",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+
+        event_id = create_response.data["id"]
+        patch_response = self.api_client.patch(
+            f"/api/profiles/me/posts/{event_id}/",
+            {
+                "content": "Edited post",
+                "event_type": "progress",
+                "media_url": "https://cdn.example.com/prp.png",
+            },
+            format="json",
+        )
+
+        self.assertEqual(patch_response.status_code, 200)
+        self.assertEqual(patch_response.data["content"], "Edited post")
+        self.assertEqual(patch_response.data["event_type"], "progress")
+        self.assertEqual(patch_response.data["media_url"], "https://cdn.example.com/prp.png")
+
+    def test_patch_prp_empty_body_returns_400(self) -> None:
+        self._auth_owner()
+        create_response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "achievement",
+                "content": "Initial post",
+            },
+            format="json",
+        )
+        event_id = create_response.data["id"]
+
+        patch_response = self.api_client.patch(
+            f"/api/profiles/me/posts/{event_id}/",
+            {},
+            format="json",
+        )
+
+        self.assertEqual(patch_response.status_code, 400)
+
+    def test_delete_prp_hides_event_from_feed(self) -> None:
+        self._auth_owner()
+        create_response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "social",
+                "content": "Delete me",
+            },
+            format="json",
+        )
+        event_id = create_response.data["id"]
+
+        delete_response = self.api_client.delete(f"/api/profiles/me/posts/{event_id}/")
+        self.assertEqual(delete_response.status_code, 204)
+
+        list_response = self.api_client.get(self.owner_feed_url)
+        self.assertEqual(list_response.status_code, 200)
+        source_ids = {item["id"] for item in list_response.data["results"]}
+        self.assertNotIn(event_id, source_ids)
 
 
 class SkillListAPIViewTests(TestCase):
@@ -2643,13 +2963,12 @@ class CommunityTagsAPITests(TestCase):
 
         # Clean seeded tags for deterministic tests
         from profiles.models import CommunityTag
+
         CommunityTag.objects.all().delete()
 
     def _auth(self, token=None):
         """Set authorization header."""
-        self.client.credentials(
-            HTTP_AUTHORIZATION=f"Bearer {token or self.access_token}"
-        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token or self.access_token}")
 
     def _create_tag(self, name="Test Tag", description="A test tag", token=None):
         """Helper to create a tag via API."""
@@ -3112,6 +3431,7 @@ class CommunityTagsAPITests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["description"], "stays")
+
     # ---- Popular Tags Tests (#433) ----
 
     def _seed_tag_with_members(
@@ -3121,9 +3441,10 @@ class CommunityTagsAPITests(TestCase):
         joined_at=None,
     ) -> "CommunityTag":  # type: ignore[name-defined]
         """Create a tag and synthesize its memberships, optionally setting joined_at."""
+        from django.utils.text import slugify
+
         from accounts.models import AppUsageMode
         from profiles.models import CommunityTag, CommunityTagMembership
-        from django.utils.text import slugify
 
         tag = CommunityTag.objects.create(name=name, slug=slugify(name))
         for i in range(member_count):
@@ -3137,9 +3458,7 @@ class CommunityTagsAPITests(TestCase):
             )
             membership = CommunityTagMembership.objects.create(profile=profile, tag=tag)
             if joined_at is not None:
-                CommunityTagMembership.objects.filter(id=membership.id).update(
-                    joined_at=joined_at
-                )
+                CommunityTagMembership.objects.filter(id=membership.id).update(joined_at=joined_at)
         CommunityTag.objects.filter(id=tag.id).update(member_count=member_count)
         tag.refresh_from_db()
         return tag
@@ -3242,6 +3561,7 @@ class CommunityTagsAPITests(TestCase):
     def test_popular_empty_when_no_tags(self) -> None:
         """Empty result when no tags have members."""
         from profiles.models import CommunityTag
+
         CommunityTag.objects.all().delete()
 
         self.client.credentials()
@@ -3249,6 +3569,7 @@ class CommunityTagsAPITests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [])
+
     # ---- Members List Tests (#432) ----
 
     def test_members_list_public_access(self) -> None:
@@ -3441,8 +3762,10 @@ class CommunityTagNotificationTests(TestCase):
         self.admin_token = str(RefreshToken.for_user(self.admin_user).access_token)
 
         from profiles.models import CommunityTag
+
         CommunityTag.objects.all().delete()
         from notifications.models import Notification
+
         Notification.objects.all().delete()
 
     def _auth(self, token: str) -> None:
@@ -3542,8 +3865,8 @@ class CommunityTagNotificationTests(TestCase):
     # ---- TAG_DELETED ----
 
     def test_tag_deletion_notifies_members_excluding_actor(self) -> None:
-        from profiles.models import CommunityTag, CommunityTagMembership
         from notifications.models import Notification, NotificationType
+        from profiles.models import CommunityTag, CommunityTagMembership
 
         # admin route lets us delete a tag that has members
         tag_id = self._create_tag_via_api("Doomed Tag")
@@ -3608,4 +3931,3 @@ class CommunityTagNotificationTests(TestCase):
             Notification.objects.filter(type=NotificationType.TAG_MATCHES_INTEREST).count(),
             0,
         )
-
