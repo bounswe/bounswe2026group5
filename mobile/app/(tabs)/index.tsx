@@ -17,6 +17,7 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
 
 import { useAuthStore } from "@/lib/auth/store";
+import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
 import {
   MENTOR_MENTEE_CAPACITY_WARNING,
   shouldWarnBeforeAcceptingMentee,
@@ -115,6 +116,7 @@ export default function DashboardScreen() {
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  useAutoClearMessage(successMessage, setSuccessMessage);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );

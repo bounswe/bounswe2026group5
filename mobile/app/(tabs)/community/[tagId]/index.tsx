@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
+import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   useCommunityTagDetailQuery,
@@ -44,6 +45,7 @@ export default function CommunityDetailScreen() {
   const leaveMutation = useLeaveCommunityTagMutation(currentUsername);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  useAutoClearMessage(successMessage, setSuccessMessage);
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
 
   const tag = detailQuery.data;

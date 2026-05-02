@@ -12,6 +12,7 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
 
 import { Colors } from "@/constants/theme";
+import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -64,6 +65,7 @@ export default function ScheduleScreen() {
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  useAutoClearMessage(successMessage, setSuccessMessage);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
