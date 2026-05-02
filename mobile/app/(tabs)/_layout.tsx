@@ -56,6 +56,14 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="connections/timeline/[matchId]"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
         name="schedule"
         options={{
           href: null,
