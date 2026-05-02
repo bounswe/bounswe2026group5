@@ -401,11 +401,19 @@ class MCTECreateSerializer(serializers.Serializer):
     event_type = serializers.ChoiceField(choices=_MCTE_EVENT_TYPE_CHOICES)
     content = serializers.CharField(required=True, max_length=2000)
     media_url = serializers.URLField(required=False, allow_null=True, default=None)
-    timestamp = serializers.DateTimeField(required=True)
+    timestamp = serializers.DateTimeField(required=False, allow_null=True, default=None)
     show_on_profile = serializers.BooleanField(required=False, default=False)
 
+    def to_internal_value(self, data: Any) -> dict:
+        """Normalize empty timestamp values to null so fallback logic can be applied."""
+        if isinstance(data, dict) and data.get("timestamp") == "":
+            data = {**data, "timestamp": None}
+        return super().to_internal_value(data)
+
     def validate_timestamp(self, value: Any) -> Any:
-        """Reject timestamps more than 1 day in the future."""
+        """Reject timestamps more than 1 day in the future when provided."""
+        if value is None:
+            return value
         if value > timezone.now() + timedelta(days=1):
             raise serializers.ValidationError("Timestamp cannot be more than 1 day in the future.")
         return value

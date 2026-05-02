@@ -9,7 +9,7 @@ from django.db import IntegrityError, models, transaction
 from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -33,14 +33,28 @@ from .serializers import (
     CommunityTagUpdateSerializer,
     MenteeProfileResponseSerializer,
     MentorProfileResponseSerializer,
+    ProfilePostFeedSerializer,
+    ProfilePostListQueryParamsSerializer,
+    ProfilePostSerializer,
     ProfileResponseSerializer,
     ProfileUpdateSerializer,
     ProfileUsernameUpdateSerializer,
+    PrPCreateSerializer,
+    PrPUpdateSerializer,
     PublicMentorProfileSearchListResponseSerializer,
     PublicMentorProfileSearchResultSerializer,
     SkillSerializer,
 )
-from .services import OwnSlotBookingError, SlotAlreadyBookedError, SlotInPastError
+from .services import (
+    InvalidPrPEventTypeError,
+    OwnSlotBookingError,
+    SlotAlreadyBookedError,
+    SlotInPastError,
+    create_prp_event,
+    edit_prp_event,
+    list_profile_feed_events,
+    soft_delete_prp_event,
+)
 
 NOT_FOUND_DETAIL = {"detail": "Not found."}
 OVERLAP_DETAIL = {"detail": "Availability slot overlaps with an existing slot."}
@@ -178,6 +192,211 @@ class ProfileMeAPIView(ProfileLookupMixin, APIView):
         serializer.save()
 
         return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
+
+
+class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
+    """Read profile feed posts for a profile username."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="category",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.STR,
+                enum=["PrP", "MCTE"],
+                description="Filter by event category.",
+            ),
+            OpenApiParameter(
+                name="event_type",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.STR,
+                enum=["achievement", "social", "progress"],
+                description="Filter by event type.",
+            ),
+            OpenApiParameter(
+                name="offset",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Zero-based index of the first item to include. Default: 0.",
+            ),
+            OpenApiParameter(
+                name="limit",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Maximum number of items to return. Default: 50. Maximum: 200.",
+            ),
+        ],
+        responses={
+            200: ProfilePostFeedSerializer,
+            400: OpenApiResponse(description="Invalid query parameters."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "Return profile posts for a username. Includes both PrP posts authored by the "
+            "profile and MCTE events authored by the profile where `show_on_profile=true`. "
+            "If profile is private, only the owner can access this feed. "
+            "Supports optional filtering by `category` and `event_type`."
+        ),
+        tags=["Profiles"],
+    )
+    def get(self, request: Request, username: str) -> Response:
+        """Return paginated profile feed events for a profile page."""
+        profile = self._get_profile_or_404(username)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        is_owner = request.user == profile.user
+        if not is_owner and not profile.is_visible:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        params_serializer = ProfilePostListQueryParamsSerializer(data=request.query_params)
+        params_serializer.is_valid(raise_exception=True)
+        params = params_serializer.validated_data
+
+        payload = list_profile_feed_events(
+            profile=profile,
+            offset=params["offset"],
+            limit=params["limit"],
+            category=params.get("category"),
+            event_type=params.get("event_type"),
+        )
+        return Response(ProfilePostFeedSerializer(payload).data, status=status.HTTP_200_OK)
+
+
+class MyProfilePostsCollectionAPIView(ProfileLookupMixin, APIView):
+    """Create profile posts for authenticated user profile."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=PrPCreateSerializer,
+        responses={
+            201: ProfilePostSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "Create a profile post (PrP) for the authenticated user. "
+            "`timestamp` is optional; if omitted, null, or empty, it is set to the event's "
+            "creation time. If provided, it cannot be more than 1 day in the future."
+        ),
+        tags=["Profiles"],
+    )
+    def post(self, request: Request) -> Response:
+        """Create a new profile post authored by request.user's profile."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = PrPCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+
+        try:
+            event = create_prp_event(
+                author_profile=profile,
+                event_type=validated["event_type"],
+                content=validated.get("content", ""),
+                media_url=validated.get("media_url"),
+                timestamp=validated.get("timestamp"),
+            )
+        except InvalidPrPEventTypeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        event.author = profile
+        return Response(ProfilePostSerializer(event).data, status=status.HTTP_201_CREATED)
+
+
+class MyProfilePostDetailAPIView(ProfileLookupMixin, APIView):
+    """Update or soft-delete profile posts owned by authenticated user."""
+
+    permission_classes = [IsUser]
+
+    def _resolve_owned_post(self, request: Request, event_id: str):
+        """Return profile and owned PrP event, or 404 response."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        from timeline.models import TimelineEvent
+
+        try:
+            event = TimelineEvent.objects.select_related("author").get(
+                id=event_id,
+                author=profile,
+                category=TimelineEvent.Category.PRP,
+                is_deleted=False,
+            )
+        except TimelineEvent.DoesNotExist:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return profile, event
+
+    @extend_schema(
+        request=PrPUpdateSerializer,
+        responses={
+            200: ProfilePostSerializer,
+            400: OpenApiResponse(description="Validation error or no fields provided."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile post not found."),
+        },
+        description=(
+            "Partially update an owned profile post. Only `content`, `event_type`, "
+            "and `media_url` may be changed."
+        ),
+        tags=["Profiles"],
+    )
+    def patch(self, request: Request, event_id: str) -> Response:
+        """Apply a partial update to an owned profile post."""
+        result = self._resolve_owned_post(request, event_id)
+        if isinstance(result, Response):
+            return result
+        _profile, event = result
+
+        serializer = PrPUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+
+        try:
+            updated_event = edit_prp_event(
+                event=event,
+                content=validated.get("content"),
+                event_type=validated.get("event_type"),
+                media_url=validated.get("media_url"),
+                update_media_url="media_url" in validated,
+            )
+        except InvalidPrPEventTypeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(ProfilePostSerializer(updated_event).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        request=None,
+        responses={
+            204: OpenApiResponse(description="Profile post deleted."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile post not found."),
+        },
+        description="Soft-delete an owned profile post.",
+        tags=["Profiles"],
+    )
+    def delete(self, request: Request, event_id: str) -> Response:
+        """Soft-delete an owned profile post."""
+        result = self._resolve_owned_post(request, event_id)
+        if isinstance(result, Response):
+            return result
+        _profile, event = result
+
+        soft_delete_prp_event(event=event)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ProfileUsernameUpdateAPIView(ProfileLookupMixin, APIView):
@@ -1183,17 +1402,17 @@ class CommunityTagJoinAPIView(APIView):
                     {"detail": "You are already a member of this tag."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            CommunityTag.objects.filter(id=tag.id).update(
-                member_count=models.F("member_count") + 1
-            )
+            CommunityTag.objects.filter(id=tag.id).update(member_count=models.F("member_count") + 1)
 
         return Response(
-            CommunityTagMembershipSerializer({
-                "tag_id": tag.id,
-                "tag_name": tag.name,
-                "tag_slug": tag.slug,
-                "joined": True,
-            }).data,
+            CommunityTagMembershipSerializer(
+                {
+                    "tag_id": tag.id,
+                    "tag_name": tag.name,
+                    "tag_slug": tag.slug,
+                    "joined": True,
+                }
+            ).data,
             status=status.HTTP_200_OK,
         )
 
@@ -1234,17 +1453,17 @@ class CommunityTagLeaveAPIView(APIView):
                     {"detail": "You are not a member of this tag."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            CommunityTag.objects.filter(id=tag.id).update(
-                member_count=models.F("member_count") - 1
-            )
+            CommunityTag.objects.filter(id=tag.id).update(member_count=models.F("member_count") - 1)
 
         return Response(
-            CommunityTagMembershipSerializer({
-                "tag_id": tag.id,
-                "tag_name": tag.name,
-                "tag_slug": tag.slug,
-                "joined": False,
-            }).data,
+            CommunityTagMembershipSerializer(
+                {
+                    "tag_id": tag.id,
+                    "tag_name": tag.name,
+                    "tag_slug": tag.slug,
+                    "joined": False,
+                }
+            ).data,
             status=status.HTTP_200_OK,
         )
 
@@ -1322,16 +1541,13 @@ class PopularTagsListAPIView(APIView):
 
         days = POPULAR_TAGS_WINDOWS[window]
         if days is None:
-            qs = (
-                CommunityTag.objects
-                .filter(member_count__gt=0)
-                .order_by("-member_count", "-created_at")
+            qs = CommunityTag.objects.filter(member_count__gt=0).order_by(
+                "-member_count", "-created_at"
             )
         else:
             cutoff = timezone.now() - timedelta(days=days)
             qs = (
-                CommunityTag.objects
-                .annotate(
+                CommunityTag.objects.annotate(
                     window_count=Count(
                         "memberships",
                         filter=Q(memberships__joined_at__gte=cutoff),
@@ -1384,8 +1600,7 @@ class CommunityTagMembersListAPIView(APIView):
         page_size = max(1, min(page_size, 50))
 
         memberships = (
-            CommunityTagMembership.objects
-            .filter(tag_id=tag_id, profile__is_visible=True)
+            CommunityTagMembership.objects.filter(tag_id=tag_id, profile__is_visible=True)
             .select_related("profile__user")
             .order_by("-joined_at")
         )

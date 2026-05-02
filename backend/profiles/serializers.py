@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import Any, TYPE_CHECKING, cast
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
@@ -10,9 +10,10 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import AvailabilitySlot, CommunityTag, Profile, Skill
 from core.utils.timezone import get_project_timezone, to_local_time
 from mentorship.models import MeetingSession
+
+from .models import AvailabilitySlot, CommunityTag, Profile, Skill
 
 if TYPE_CHECKING:
     from accounts.models import User as UserType
@@ -455,6 +456,104 @@ class PublicMentorProfileSearchListResponseSerializer(serializers.Serializer):
     results = PublicMentorProfileSearchResultSerializer(many=True)
 
 
+_PROFILE_POST_EVENT_TYPE_CHOICES = ["achievement", "social", "progress"]
+_PROFILE_POST_CATEGORY_CHOICES = ["PrP", "MCTE"]
+
+
+class ProfilePostAuthorSerializer(serializers.ModelSerializer):
+    """Compact profile representation for profile post responses."""
+
+    class Meta:
+        model = Profile
+        fields = ("id", "username", "display_name", "picture_url", "title")
+        read_only_fields = fields
+
+
+class PrPCreateSerializer(serializers.Serializer):
+    """Write serializer for creating a profile post (PrP)."""
+
+    event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES)
+    content = serializers.CharField(required=True, max_length=2000)
+    media_url = serializers.URLField(required=False, allow_null=True, default=None)
+    timestamp = serializers.DateTimeField(required=False, allow_null=True, default=None)
+
+    def to_internal_value(self, data: Any) -> dict:
+        """Normalize empty timestamp values to null so fallback logic can be applied."""
+        if isinstance(data, dict) and data.get("timestamp") == "":
+            data = {**data, "timestamp": None}
+        return super().to_internal_value(data)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Reject timestamps more than 1 day in the future when provided."""
+        timestamp = attrs.get("timestamp")
+        if timestamp is not None and timestamp > timezone.now() + timedelta(days=1):
+            raise serializers.ValidationError(
+                {"timestamp": "Timestamp cannot be more than 1 day in the future."}
+            )
+        return attrs
+
+
+class PrPUpdateSerializer(serializers.Serializer):
+    """Write serializer for partially updating a profile post."""
+
+    content = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES, required=False)
+    media_url = serializers.URLField(required=False, allow_null=True)
+
+    def validate(self, attrs: dict) -> dict:
+        """Require at least one editable field to be provided."""
+        if not attrs:
+            raise serializers.ValidationError(
+                "At least one of 'content', 'event_type', or 'media_url' must be provided."
+            )
+        return attrs
+
+
+class ProfilePostListQueryParamsSerializer(serializers.Serializer):
+    """Validate query parameters for profile post listing endpoint."""
+
+    category = serializers.ChoiceField(
+        choices=_PROFILE_POST_CATEGORY_CHOICES,
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+    event_type = serializers.ChoiceField(
+        choices=_PROFILE_POST_EVENT_TYPE_CHOICES,
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+    offset = serializers.IntegerField(required=False, min_value=0, default=0)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=50)
+
+
+class ProfilePostSerializer(serializers.Serializer):
+    """Read serializer for profile feed items (PrP + visible MCTE)."""
+
+    id = serializers.UUIDField(read_only=True)
+    source_id = serializers.CharField(read_only=True)
+    category = serializers.CharField(read_only=True)
+    event_type = serializers.CharField(read_only=True)
+    content = serializers.CharField(read_only=True)
+    media_url = serializers.URLField(read_only=True, allow_null=True)
+    timestamp = serializers.DateTimeField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    last_edited = serializers.DateTimeField(read_only=True, allow_null=True)
+    show_on_profile = serializers.BooleanField(read_only=True)
+    actor_role = serializers.CharField(read_only=True)
+    author = ProfilePostAuthorSerializer(read_only=True)
+
+
+class ProfilePostFeedSerializer(serializers.Serializer):
+    """Paginated response wrapper for profile posts feed."""
+
+    count = serializers.IntegerField(read_only=True)
+    offset = serializers.IntegerField(read_only=True)
+    limit = serializers.IntegerField(read_only=True)
+    results = ProfilePostSerializer(many=True, read_only=True)
+
+
 # ---------------------------------------------------------------------------
 # Community Tags
 # ---------------------------------------------------------------------------
@@ -517,9 +616,7 @@ class CommunityTagCreateSerializer(serializers.Serializer):
         if not name:
             raise serializers.ValidationError("Tag name must not be empty.")
         if CommunityTag.objects.filter(name__iexact=name).exists():
-            raise serializers.ValidationError(
-                "A community tag with this name already exists."
-            )
+            raise serializers.ValidationError("A community tag with this name already exists.")
         return name
 
     def create(self, validated_data: dict) -> "CommunityTag":

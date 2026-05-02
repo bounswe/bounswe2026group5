@@ -2352,13 +2352,24 @@ class MCTEAPITests(FeedbackAPIBaseTestCase):
         response = self._make_event(event_type="invalid_type")
         self.assertEqual(response.status_code, 400)
 
-    def test_create_mcte_missing_timestamp_returns_400(self) -> None:
+    def test_create_mcte_missing_timestamp_returns_201(self) -> None:
         response = self.mentor_client.post(
             self.list_url,
             {"event_type": "achievement", "content": "done"},
             format="json",
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNotNone(response.data["timestamp"])
+
+    def test_create_mcte_null_timestamp_returns_201(self) -> None:
+        response = self._make_event(timestamp=None)
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNotNone(response.data["timestamp"])
+
+    def test_create_mcte_empty_timestamp_returns_201(self) -> None:
+        response = self._make_event(timestamp="")
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNotNone(response.data["timestamp"])
 
     def test_create_mcte_far_future_timestamp_returns_400(self) -> None:
         future_ts = (timezone.now() + timedelta(days=5)).isoformat()
