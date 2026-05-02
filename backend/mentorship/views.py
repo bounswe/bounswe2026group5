@@ -593,7 +593,9 @@ class MatchJourneyAPIView(APIView):
             "- `show_on_profile` — boolean; controls whether the event appears on the "
             "author's public profile. Relevant for MCTE only.\n"
             "- `author` — serialized profile summary (`id`, `full_name`, `avatar`) for "
-            "MCTE events; `null` for AGTE events.\n\n"
+            "MCTE events; `null` for AGTE events.\n"
+            "- `media_url` — optional URL for event media or visuals; can be `null`. "
+            "Currently only present on MCTE events.\n\n"
             "**AGTE event types and payloads:**\n"
             "- `request_accepted` — emitted when the mentor accepts the request; "
             "payload: `request_id`, `initial_session_start_at`, `initial_session_end_at`.\n"
@@ -876,7 +878,9 @@ class MCTECollectionAPIView(APIView):
             "Log a manually-created timeline event (milestone) on a match. "
             "The author is always derived from the authenticated user's profile "
             "and cannot be overridden via the request body. "
-            "event_type must be one of: achievement, social, progress."
+            "event_type must be one of: achievement, social, progress. "
+            "Optional fields include `media_url` (URL string for event media/visuals, can be null) "
+            "and `show_on_profile` (boolean, default false)."
         ),
         tags=["Mentorship"],
     )
