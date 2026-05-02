@@ -24,6 +24,10 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
 
 import { useAuthStore } from "@/lib/auth/store";
+import {
+  MENTOR_MENTEE_CAPACITY_WARNING,
+  shouldWarnBeforeAcceptingMentee,
+} from "@/lib/mentorship/capacity";
 import { useConversations } from "@/lib/queries/MessagingQueries";
 import {
   mapRequestsToDashboard,
@@ -266,6 +270,18 @@ function MentorConnections({
   const displayedMentees = showAllMentees
     ? mentees
     : mentees.slice(0, MENTEES_PREVIEW_COUNT);
+  const shouldShowCapacityWarning = shouldWarnBeforeAcceptingMentee(
+    mentees.length,
+  );
+
+  const handleRequestCardAccept = (cardProps: PendingRequestCardProps) => {
+    if (shouldShowCapacityWarning) {
+      setSelectedRequest(cardProps);
+      return;
+    }
+
+    void handleAccept(cardProps.id);
+  };
 
   return (
     <>
@@ -283,6 +299,9 @@ function MentorConnections({
         onAccept={handleAccept}
         onDecline={(id) => setDeclineTargetId(id)}
         disabled={respondMutation.isPending}
+        acceptanceWarning={
+          shouldShowCapacityWarning ? MENTOR_MENTEE_CAPACITY_WARNING : undefined
+        }
       />
 
       <ConnectionActionsSheet
@@ -355,7 +374,7 @@ function MentorConnections({
                   <PendingRequestCard
                     {...cardProps}
                     onPress={() => setSelectedRequest(cardProps)}
-                    onAccept={() => handleAccept(req.id)}
+                    onAccept={() => handleRequestCardAccept(cardProps)}
                     onDecline={() => setDeclineTargetId(req.id)}
                     disabled={respondMutation.isPending}
                   />

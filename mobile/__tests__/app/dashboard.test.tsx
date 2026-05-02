@@ -12,6 +12,7 @@ const mockRescheduleMutateAsync = jest.fn();
 let mockIsEmailVerified: boolean | undefined = true;
 let mockMappedRequests: any[] = [];
 let mockMappedSessions: any[] = [];
+let mockMatches: any[] = [];
 let mockRequestsIsError = false;
 let mockSessionsIsError = false;
 
@@ -216,6 +217,11 @@ jest.mock("@/lib/queries/mentorship", () => {
       isError: mockRequestsIsError,
       refetch: mockRequestsRefetch,
     }),
+    useMentorshipMatchesQuery: () => ({
+      data: mockMatches,
+      isLoading: false,
+      isError: false,
+    }),
     useMentorshipMeetingSessionsQuery: () => ({
       data: mockMappedSessions,
       isError: mockSessionsIsError,
@@ -246,6 +252,7 @@ describe("DashboardScreen session navigation", () => {
     mockIsEmailVerified = true;
     mockMappedRequests = [];
     mockMappedSessions = [defaultSession];
+    mockMatches = [];
     mockRequestsIsError = false;
     mockSessionsIsError = false;
     mockResendMutateAsync.mockResolvedValue({
