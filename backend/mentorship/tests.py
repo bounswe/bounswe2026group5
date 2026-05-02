@@ -37,8 +37,8 @@ from mentorship.services import (
 )
 from notifications.models import Notification, NotificationType
 from profiles.models import AvailabilitySlot, Profile
-from timeline.models import TimelineEvent
 from profiles.services import OwnSlotBookingError
+from timeline.models import TimelineEvent
 
 User: Any = get_user_model()
 
@@ -2291,3 +2291,270 @@ class MentorshipSerializerBranchTests(TestCase):
         self.assertEqual(notification.title, "New Feedback Available")
         self.assertEqual(notification.actor, self.mentee_profile)
         self.assertEqual(notification.resource_type, "profile")
+
+
+class MCTEAPITests(FeedbackAPIBaseTestCase):
+    """Tests for MCTE CRUD endpoints under /api/mentorship/matches/<match_id>/journey/events/."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.list_url = f"/api/mentorship/matches/{self.match.id}/journey/events/"
+
+    def _event_url(self, event_id) -> str:
+        return f"/api/mentorship/matches/{self.match.id}/journey/events/{event_id}/"
+
+    def _make_event(self, client=None, **overrides) -> Any:
+        """Helper: POST a valid MCTE and return the response."""
+        if client is None:
+            client = self.mentor_client
+        payload = {
+            "event_type": "achievement",
+            "content": "Finished React Basics",
+            "timestamp": (timezone.now() - timedelta(hours=1)).isoformat(),
+            **overrides,
+        }
+        return client.post(self.list_url, payload, format="json")
+
+    # --- create ---
+
+    def test_create_mcte_by_mentor_returns_201(self) -> None:
+        response = self._make_event(self.mentor_client)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["event_type"], "achievement")
+        self.assertEqual(response.data["content"], "Finished React Basics")
+        self.assertIsNone(response.data["media_url"])
+        self.assertEqual(response.data["actor_role"], "mentor")
+        self.assertIsNotNone(response.data["author"])
+
+    def test_create_mcte_with_media_url_returns_201(self) -> None:
+        response = self._make_event(
+            self.mentor_client,
+            media_url="https://cdn.example.com/media/progress-1.png",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["media_url"], "https://cdn.example.com/media/progress-1.png")
+
+    def test_create_mcte_by_mentee_returns_201(self) -> None:
+        response = self._make_event(self.mentee_client, event_type="social", content="First coffee")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["event_type"], "social")
+        self.assertEqual(response.data["actor_role"], "mentee")
+
+    def test_create_mcte_unauthenticated_returns_401(self) -> None:
+        response = self._make_event(self.anon_client)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_mcte_outsider_returns_403(self) -> None:
+        response = self._make_event(self.other_client)
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_mcte_invalid_event_type_returns_400(self) -> None:
+        response = self._make_event(event_type="invalid_type")
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_mcte_missing_timestamp_returns_400(self) -> None:
+        response = self.mentor_client.post(
+            self.list_url,
+            {"event_type": "achievement", "content": "done"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_mcte_far_future_timestamp_returns_400(self) -> None:
+        future_ts = (timezone.now() + timedelta(days=5)).isoformat()
+        response = self._make_event(timestamp=future_ts)
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_mcte_oversize_content_returns_400(self) -> None:
+        response = self._make_event(content="x" * 2001)
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_mcte_missing_content_returns_400(self) -> None:
+        response = self.mentor_client.post(
+            self.list_url,
+            {
+                "event_type": "achievement",
+                "timestamp": (timezone.now() - timedelta(hours=1)).isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_mcte_author_cannot_be_spoofed(self) -> None:
+        """author field in request body is ignored; server always derives it."""
+        response = self.mentor_client.post(
+            self.list_url,
+            {
+                "event_type": "progress",
+                "content": "Ongoing",
+                "timestamp": (timezone.now() - timedelta(hours=1)).isoformat(),
+                "author": str(self.mentee_profile.id),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        # Author should be mentor, not the spoofed mentee id
+        self.assertEqual(response.data["author"]["id"], str(self.mentor_profile.id))
+
+    def test_create_mcte_nonexistent_match_returns_404(self) -> None:
+        url = f"/api/mentorship/matches/{uuid.uuid4()}/journey/events/"
+        # Use the bad url directly
+        response2 = self.mentor_client.post(
+            url,
+            {"event_type": "achievement", "content": "x", "timestamp": timezone.now().isoformat()},
+            format="json",
+        )
+        self.assertEqual(response2.status_code, 404)
+
+    # --- list ---
+
+    def test_list_mcte_returns_200_for_mentor(self) -> None:
+        self._make_event(self.mentor_client)
+        response = self.mentor_client.get(self.list_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
+
+    def test_list_mcte_returns_200_for_mentee(self) -> None:
+        self._make_event(self.mentee_client, event_type="social", content="coffee")
+        response = self.mentee_client.get(self.list_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.data["count"], 1)
+
+    def test_list_mcte_outsider_returns_403(self) -> None:
+        response = self.other_client.get(self.list_url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_list_mcte_unauthenticated_returns_401(self) -> None:
+        response = self.anon_client.get(self.list_url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_mcte_filtered_by_event_type(self) -> None:
+        self._make_event(self.mentor_client, event_type="achievement")
+        self._make_event(self.mentee_client, event_type="social", content="coffee")
+
+        response = self.mentor_client.get(self.list_url, {"event_type": "achievement"})
+        self.assertEqual(response.status_code, 200)
+        for item in response.data["results"]:
+            self.assertEqual(item["event_type"], "achievement")
+
+    def test_list_mcte_excludes_soft_deleted(self) -> None:
+        create_resp = self._make_event(self.mentor_client)
+        event_id = create_resp.data["id"]
+        self.mentor_client.delete(self._event_url(event_id))
+
+        response = self.mentor_client.get(self.list_url)
+        self.assertEqual(response.status_code, 200)
+        ids = [item["id"] for item in response.data["results"]]
+        self.assertNotIn(str(event_id), [str(i) for i in ids])
+
+    # --- edit ---
+
+    def test_edit_mcte_by_author_returns_200(self) -> None:
+        create_resp = self._make_event(self.mentor_client)
+        event_id = create_resp.data["id"]
+
+        response = self.mentor_client.patch(
+            self._event_url(event_id), {"content": "Updated content"}, format="json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["content"], "Updated content")
+        self.assertIsNotNone(response.data["last_edited"])
+
+    def test_edit_mcte_media_url_by_author_returns_200(self) -> None:
+        create_resp = self._make_event(self.mentor_client)
+        event_id = create_resp.data["id"]
+
+        response = self.mentor_client.patch(
+            self._event_url(event_id),
+            {"media_url": "https://cdn.example.com/media/progress-2.png"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["media_url"], "https://cdn.example.com/media/progress-2.png")
+
+    def test_edit_mcte_media_url_can_be_cleared(self) -> None:
+        create_resp = self._make_event(
+            self.mentor_client,
+            media_url="https://cdn.example.com/media/progress-3.png",
+        )
+        event_id = create_resp.data["id"]
+
+        response = self.mentor_client.patch(
+            self._event_url(event_id),
+            {"media_url": None},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["media_url"])
+
+    def test_edit_mcte_by_non_author_returns_403(self) -> None:
+        create_resp = self._make_event(self.mentor_client)
+        event_id = create_resp.data["id"]
+
+        response = self.mentee_client.patch(
+            self._event_url(event_id), {"content": "Hijacked"}, format="json"
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_edit_mcte_empty_body_returns_400(self) -> None:
+        create_resp = self._make_event(self.mentor_client)
+        event_id = create_resp.data["id"]
+
+        response = self.mentor_client.patch(self._event_url(event_id), {}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    # --- delete ---
+
+    def test_delete_mcte_by_author_returns_204(self) -> None:
+        create_resp = self._make_event(self.mentor_client)
+        event_id = create_resp.data["id"]
+
+        response = self.mentor_client.delete(self._event_url(event_id))
+        self.assertEqual(response.status_code, 204)
+
+        from timeline.models import TimelineEvent
+
+        event = TimelineEvent.objects.get(id=event_id)
+        self.assertTrue(event.is_deleted)
+
+    def test_delete_mcte_by_non_author_returns_403(self) -> None:
+        create_resp = self._make_event(self.mentor_client)
+        event_id = create_resp.data["id"]
+
+        response = self.mentee_client.delete(self._event_url(event_id))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_mcte_makes_event_unavailable(self) -> None:
+        create_resp = self._make_event(self.mentor_client)
+        event_id = create_resp.data["id"]
+        self.mentor_client.delete(self._event_url(event_id))
+
+        # Subsequent PATCH on deleted event returns 404
+        response = self.mentor_client.patch(
+            self._event_url(event_id), {"content": "ghost"}, format="json"
+        )
+        self.assertEqual(response.status_code, 404)
+
+    # --- journey feed integration ---
+
+    def test_journey_feed_includes_mcte_events(self) -> None:
+        self._make_event(self.mentor_client)
+        journey_url = f"/api/mentorship/matches/{self.match.id}/journey/"
+        response = self.mentor_client.get(journey_url)
+        self.assertEqual(response.status_code, 200)
+        categories = [e.get("category") for e in response.data["results"]]
+        self.assertIn("MCTE", categories)
+
+    def test_soft_deleted_mcte_excluded_from_journey_feed(self) -> None:
+        create_resp = self._make_event(self.mentor_client)
+        event_id = create_resp.data["id"]
+        self.mentor_client.delete(self._event_url(event_id))
+
+        journey_url = f"/api/mentorship/matches/{self.match.id}/journey/"
+        response = self.mentor_client.get(journey_url)
+        self.assertEqual(response.status_code, 200)
+        ids = [e.get("id") for e in response.data["results"]]
+        # source_id starts with "mcte:" prefix
+        mcte_ids = [i for i in ids if str(i).startswith("mcte:")]
+        self.assertEqual(len(mcte_ids), 0)

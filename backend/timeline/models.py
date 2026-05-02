@@ -19,6 +19,13 @@ class TimelineEvent(models.Model):
         PRP = "PrP", "Profile Post"
         COP = "CoP", "Community Post"
 
+    class MCTEEventType(models.TextChoices):
+        """Allowed event_type values for manually-created timeline events."""
+
+        ACHIEVEMENT = "achievement", "Achievement"
+        SOCIAL = "social", "Social"
+        PROGRESS = "progress", "Progress"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     source_id = models.CharField(max_length=128, unique=True)
     category = models.CharField(max_length=4, choices=Category.choices)
@@ -40,6 +47,7 @@ class TimelineEvent(models.Model):
     community_id = models.UUIDField(null=True, blank=True)
     show_on_profile = models.BooleanField(default=False)
     content = models.TextField(blank=True, default="")
+    media_url = models.URLField(max_length=1000, null=True, blank=True, default=None)
     payload = models.JSONField(null=True, blank=True)
     actor_role = models.CharField(max_length=16, blank=True, default="")
     timestamp = models.DateTimeField()
