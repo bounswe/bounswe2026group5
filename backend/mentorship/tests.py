@@ -37,6 +37,7 @@ from mentorship.services import (
 )
 from notifications.models import Notification, NotificationType
 from profiles.models import AvailabilitySlot, Profile
+from timeline.models import TimelineEvent
 from profiles.services import OwnSlotBookingError
 
 User: Any = get_user_model()
@@ -794,7 +795,23 @@ class MatchJourneyAPIViewTests(FeedbackAPIBaseTestCase):
         self.journey_url = f"/api/mentorship/matches/{self.match.id}/journey/"
 
     def _set_request_accepted_time(self, dt) -> None:
-        MentorshipRequest.objects.filter(id=self.mentorship_request.id).update(responded_at=dt)
+        self.mentorship_request.responded_at = dt
+        self.mentorship_request.save(update_fields=["responded_at"])
+
+    def _sync_session_event_timestamp(self, *, session: MeetingSession, event_time) -> None:
+        event_type_by_status = {
+            MeetingSession.Status.SCHEDULED: "session_scheduled",
+            MeetingSession.Status.RESCHEDULED: "session_rescheduled",
+            MeetingSession.Status.CANCELED: "session_canceled",
+            MeetingSession.Status.COMPLETED: "session_completed",
+        }
+        event_type = event_type_by_status.get(session.status)
+        if event_type is None:
+            return
+
+        TimelineEvent.objects.filter(source_id=f"{event_type}:{session.id}").update(
+            timestamp=event_time
+        )
 
     def _create_session(
         self,
@@ -821,16 +838,16 @@ class MatchJourneyAPIViewTests(FeedbackAPIBaseTestCase):
             updated_at=event_time,
         )
         session.refresh_from_db()
+        self._sync_session_event_timestamp(session=session, event_time=event_time)
         return session
 
     def test_unauthenticated_returns_401(self) -> None:
         response = self.anon_client.get(self.journey_url)
         self.assertEqual(response.status_code, 401)
 
-    def test_authenticated_outsider_can_access(self) -> None:
+    def test_authenticated_outsider_returns_403(self) -> None:
         response = self.other_client.get(self.journey_url)
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("results", response.data)
+        self.assertEqual(response.status_code, 403)
 
     def test_fresh_match_with_only_request_returns_single_request_accepted(self) -> None:
         response = self.mentor_client.get(self.journey_url)
@@ -954,6 +971,25 @@ class MatchJourneyAPIViewTests(FeedbackAPIBaseTestCase):
             heavy_response = self.mentor_client.get(self.journey_url)
         self.assertEqual(heavy_response.status_code, 200)
         self.assertEqual(len(heavy_ctx), len(baseline_ctx))
+
+    def test_is_deleted_event_excluded_from_journey(self) -> None:
+        base_time = timezone.now() - timedelta(days=1)
+        self._set_request_accepted_time(base_time)
+        session = self._create_session(
+            status=MeetingSession.Status.SCHEDULED,
+            start_offset_days=1,
+            event_time=base_time + timedelta(hours=1),
+        )
+
+        TimelineEvent.objects.filter(
+            source_id=f"session_scheduled:{session.id}",
+            category=TimelineEvent.Category.AGTE,
+        ).update(is_deleted=True)
+
+        response = self.mentor_client.get(self.journey_url)
+        self.assertEqual(response.status_code, 200)
+        event_ids = {item["id"] for item in response.data["results"]}
+        self.assertNotIn(f"session_scheduled:{session.id}", event_ids)
 
 
 @override_settings(RATING_UPDATE_THRESHOLD=5)
