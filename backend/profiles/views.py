@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.db import IntegrityError, models, transaction
@@ -890,8 +891,6 @@ class PublicMentorProfilesSearchListAPIView(APIView):
             return False
         return any((skill or "").lower() in wanted for skill in (skills or []))
 
-
-
     @staticmethod
     def _maybe_parse_coordinates(request: Request) -> tuple[float, float] | None:
         """Parse lat/lng query params if present."""
@@ -1050,11 +1049,18 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
+        if coords is None and request.user.is_authenticated:
+            profile = getattr(request.user, "profile", None)
+            if profile and profile.location:
+                coords = (profile.location.y, profile.location.x)
+
         if coords is not None:
             lat, lng = coords
             point = Point(lng, lat, srid=4326)
             radius = distance_km if distance_km is not None else 15.0
+            qs = qs.annotate(distance=Distance("location", point))
             qs = qs.filter(location__distance_lte=(point, D(km=radius)))
+            qs = qs.order_by("distance", "id")
 
         # Community tag filtering (matches profiles in ANY of the given tags)
         tag_terms = self._parse_terms(request, keys=["tag", "tags"])

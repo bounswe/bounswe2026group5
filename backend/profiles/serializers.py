@@ -23,6 +23,16 @@ else:
 User = get_user_model()
 
 
+@extend_schema_field(
+    {
+        "type": "object",
+        "properties": {
+            "latitude": {"type": "number", "format": "float"},
+            "longitude": {"type": "number", "format": "float"},
+        },
+        "nullable": True,
+    }
+)
 class LocationField(serializers.Field):
     """Serialize a PointField as {latitude, longitude} and accept the same on input."""
 
@@ -412,8 +422,9 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     picture_url = serializers.URLField(read_only=True)
-    location = LocationField(read_only=True)
+    location = serializers.SerializerMethodField()
     show_initials_only = serializers.BooleanField(read_only=True)
+    distance_km = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -430,6 +441,7 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
             "skills",
             "average_rating",
             "total_mentee_count",
+            "distance_km",
         )
         read_only_fields = fields
 
@@ -445,6 +457,28 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
         # Invert is_visible to get "hidden" semantics.
         ret["hidden"] = not instance.is_visible
         return ret
+
+    @extend_schema_field(LocationField)
+    def get_location(self, obj: Profile) -> dict[str, float] | None:
+        """Return location with privacy jitter if precise location is not shared."""
+        if not obj.location:
+            return None
+        lat = obj.location.y
+        lng = obj.location.x
+        if not obj.share_precise_location:
+            import random
+            # Apply a random shift of up to ~4km (roughly 0.04 degrees)
+            lat += random.uniform(-0.04, 0.04)
+            lng += random.uniform(-0.04, 0.04)
+        return {"latitude": lat, "longitude": lng}
+
+    @extend_schema_field(OpenApiTypes.FLOAT)
+    def get_distance_km(self, obj: Profile) -> float | None:
+        """Return distance annotated by the view."""
+        distance = getattr(obj, "distance", None)
+        if distance is not None:
+            return round(distance.km, 2)
+        return None
 
 
 class PublicMentorProfileSearchListResponseSerializer(serializers.Serializer):
@@ -562,9 +596,11 @@ class ProfilePostFeedSerializer(serializers.Serializer):
 class CommunityTagListSerializer(serializers.ModelSerializer):
     """Read serializer for community tag list items."""
 
+    location = LocationField(read_only=True)
+
     class Meta:
         model = CommunityTag
-        fields = ("id", "name", "slug", "description", "member_count", "created_at")
+        fields = ("id", "name", "slug", "description", "location", "member_count", "created_at")
         read_only_fields = fields
 
 
@@ -573,6 +609,7 @@ class CommunityTagDetailSerializer(serializers.ModelSerializer):
 
     created_by_username = serializers.SerializerMethodField()
     is_member = serializers.SerializerMethodField()
+    location = LocationField(read_only=True)
 
     class Meta:
         model = CommunityTag
@@ -581,6 +618,7 @@ class CommunityTagDetailSerializer(serializers.ModelSerializer):
             "name",
             "slug",
             "description",
+            "location",
             "member_count",
             "created_by_username",
             "is_member",
@@ -621,10 +659,12 @@ class CommunityTagCreateSerializer(serializers.Serializer):
 
     def create(self, validated_data: dict) -> "CommunityTag":
         profile = self.context.get("profile")
+        location = profile.location if profile else None
         return CommunityTag.objects.create(
             name=validated_data["name"],
             description=validated_data.get("description", ""),
             created_by=profile,
+            location=location,
         )
 
 

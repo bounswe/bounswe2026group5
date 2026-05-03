@@ -43,6 +43,7 @@ class Profile(models.Model):
     picture_url = models.URLField(blank=True, default="")
     title = models.CharField(max_length=120, blank=True, default="")
     location = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
+    share_precise_location = models.BooleanField(default=True)
     is_visible = models.BooleanField(default=True)
     show_initials_only = models.BooleanField(default=False)
     skills = ArrayField(
@@ -201,6 +202,7 @@ class CommunityTag(models.Model):
         null=True,
         blank=True,
     )
+    location = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     members = models.ManyToManyField(
         "profiles.Profile",
         through="CommunityTagMembership",
