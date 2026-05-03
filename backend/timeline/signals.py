@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -75,7 +76,8 @@ def _upsert_agte(
 def _build_session_event_source_id(*, event_type: str, session: MeetingSession) -> str:
     """Return unique source id for a concrete session lifecycle action."""
     action_micros = int(session.updated_at.timestamp() * 1_000_000)
-    return f"{event_type}:{session.id}:{action_micros}"
+    entropy = uuid.uuid4().hex[:8]
+    return f"{event_type}:{session.id}:{action_micros}:{entropy}"
 
 
 @receiver(
