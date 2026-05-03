@@ -2,6 +2,47 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { apiGet, apiPatch } from "@/lib/api/client";
 
+/** Minimal author shape embedded in each profile post. */
+export interface ProfilePostAuthor {
+  id: string;
+  username: string;
+  display_name: string;
+  picture_url: string;
+  title: string;
+}
+
+/**
+ * A single item returned by GET /api/profiles/{username}/posts/.
+ *
+ * Categories:
+ *   - "PrP"  — profile post authored directly by the profile owner
+ *   - "MCTE" — manually-created timeline event where show_on_profile === true
+ *
+ * AGTE events never appear in this feed (server-side guarantee).
+ * Private MCTE (show_on_profile === false) never appear either.
+ */
+export interface ProfilePost {
+  id: string;
+  source_id: string;
+  category: "PrP" | "MCTE";
+  event_type: "achievement" | "social" | "progress";
+  content: string;
+  media_url: string | null;
+  timestamp: string;
+  created_at: string;
+  last_edited: string | null;
+  show_on_profile: boolean;
+  actor_role: string | null;
+  author: ProfilePostAuthor | null;
+}
+
+export interface ProfilePostFeedResponse {
+  count: number;
+  offset: number;
+  limit: number;
+  results: ProfilePost[];
+}
+
 interface UpdateProfilePayload {
   username: string;
   display_name?: string;
@@ -88,5 +129,50 @@ export function useUpdateOwnProfileMutation() {
         body,
       );
     },
+  });
+}
+
+interface UseProfilePostsQueryOptions {
+  limit?: number;
+  offset?: number;
+  enabled?: boolean;
+}
+
+/**
+ * Fetch profile feed posts for a given username.
+ *
+ * Returns PrP posts and public MCTE events (show_on_profile === true).
+ * AGTE events are excluded server-side; the hook also defensively filters them
+ * on the client.
+ *
+ * Endpoint: GET /api/profiles/{username}/posts/
+ */
+export function useProfilePostsQuery(
+  username?: string,
+  { limit = 6, offset = 0, enabled = true }: UseProfilePostsQueryOptions = {},
+) {
+  return useQuery({
+    queryKey: ["profiles", username ?? "anonymous", "posts", limit, offset],
+    queryFn: async () => {
+      const qs = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+      }).toString();
+      const feed = await apiGet<ProfilePostFeedResponse>(
+        `/api/profiles/${encodeURIComponent(username || "")}/posts/?${qs}`,
+      );
+      // Defensive client-side guard: strip any AGTE or private MCTE items that
+      // should never appear but could if the backend contract changes.
+      return {
+        ...feed,
+        results: feed.results.filter(
+          (post) =>
+            post.category !== ("AGTE" as string) &&
+            post.show_on_profile !== false,
+        ),
+      };
+    },
+    enabled: Boolean(username) && enabled,
+    staleTime: 60_000,
   });
 }
