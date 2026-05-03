@@ -1,5 +1,5 @@
-import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
+import React from "react";
 
 import { RegistrationProfileSetupSheet } from "@/components/profile/RegistrationProfileSetupSheet";
 
@@ -8,7 +8,7 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 describe("RegistrationProfileSetupSheet", () => {
   const baseProps = {
     visible: true,
-    role: "mentor" as const,
+    initialRole: "mentor" as const,
     username: "new_user",
     skills: ["React Native", "Testing"],
     isLoadingSkills: false,
@@ -61,6 +61,7 @@ describe("RegistrationProfileSetupSheet", () => {
     fireEvent.press(getByText("Save and continue"));
 
     expect(onSubmit).toHaveBeenCalledWith({
+      role: "mentor",
       username: "custom_user",
       displayName: "New User",
       bio: "Loves mentoring.",

@@ -21,7 +21,6 @@ class UserRole(models.TextChoices):
 class AuthProvider(models.TextChoices):
     LOCAL = "LOCAL", "Local"
     GOOGLE = "GOOGLE", "Google"
-    APPLE = "APPLE", "Apple"
 
 
 class AppUsageMode(models.TextChoices):

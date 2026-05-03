@@ -15,12 +15,29 @@ from .models import AppUsageMode, AuthProvider, PasswordResetToken, User, UserRo
 
 
 class UserResponseSerializer(serializers.ModelSerializer):
+    display_name = serializers.SerializerMethodField()
+    picture_url = serializers.SerializerMethodField()
+
+    def get_display_name(self, obj: User) -> str:
+        profile = getattr(obj, "profile", None)
+        display_name = getattr(profile, "display_name", "") if profile else ""
+        if display_name:
+            return display_name
+        return obj.username
+
+    def get_picture_url(self, obj: User) -> str:
+        profile = getattr(obj, "profile", None)
+        picture_url = getattr(profile, "picture_url", "") if profile else ""
+        return picture_url or ""
+
     class Meta:
         model = User
         fields = (
             "id",
             "email",
             "username",
+            "display_name",
+            "picture_url",
             "role",
             "auth_provider",
             "app_usage_mode",
@@ -219,3 +236,13 @@ class BannedAwareTokenRefreshSerializer(TokenRefreshSerializer):
             raise PermissionDenied("This account has been banned.")
 
         return super().validate(attrs)
+
+
+class OAuthLoginSerializer(serializers.Serializer):
+    """Write serializer for OAuth token exchange.
+
+    Provider selection is determined by the URL route, so the serializer
+    only validates the presence of the ``id_token`` field.
+    """
+
+    id_token = serializers.CharField(trim_whitespace=True)
