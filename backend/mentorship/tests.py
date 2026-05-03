@@ -809,8 +809,12 @@ class MatchJourneyAPIViewTests(FeedbackAPIBaseTestCase):
         if event_type is None:
             return
 
-        TimelineEvent.objects.filter(source_id=f"{event_type}:{session.id}").update(
-            timestamp=event_time
+        TimelineEvent.objects.filter(
+            source_id__startswith=f"{event_type}:{session.id}:",
+            category=TimelineEvent.Category.AGTE,
+        ).update(
+            created_at=event_time,
+            last_edited=event_time,
         )
 
     def _create_session(
@@ -855,6 +859,8 @@ class MatchJourneyAPIViewTests(FeedbackAPIBaseTestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["type"], "request_accepted")
+        self.assertIn("created_at", response.data["results"][0])
+        self.assertIn("last_edited", response.data["results"][0])
 
     def test_full_lifecycle_includes_all_scoped_event_types(self) -> None:
         base_time = timezone.now() - timedelta(days=2)
@@ -896,7 +902,7 @@ class MatchJourneyAPIViewTests(FeedbackAPIBaseTestCase):
         self.assertIn("mentorship_ended", event_types)
         self.assertNotIn("request_created", event_types)
 
-    def test_cross_type_ordering_is_descending_by_timestamp(self) -> None:
+    def test_cross_type_ordering_is_descending_by_created_at(self) -> None:
         base_time = timezone.now() - timedelta(days=1)
         self._set_request_accepted_time(base_time)
 
@@ -913,8 +919,8 @@ class MatchJourneyAPIViewTests(FeedbackAPIBaseTestCase):
 
         response = self.mentor_client.get(self.journey_url)
         self.assertEqual(response.status_code, 200)
-        timestamps = [item["timestamp"] for item in response.data["results"]]
-        self.assertEqual(timestamps, sorted(timestamps, reverse=True))
+        created_at_values = [item["created_at"] for item in response.data["results"]]
+        self.assertEqual(created_at_values, sorted(created_at_values, reverse=True))
 
     def test_offset_limit_slices_results(self) -> None:
         base_time = timezone.now() - timedelta(days=1)
@@ -981,15 +987,22 @@ class MatchJourneyAPIViewTests(FeedbackAPIBaseTestCase):
             event_time=base_time + timedelta(hours=1),
         )
 
-        TimelineEvent.objects.filter(
-            source_id=f"session_scheduled:{session.id}",
-            category=TimelineEvent.Category.AGTE,
-        ).update(is_deleted=True)
+        event = (
+            TimelineEvent.objects.filter(
+                source_id__startswith=f"session_scheduled:{session.id}:",
+                category=TimelineEvent.Category.AGTE,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        self.assertIsNotNone(event)
+        assert event is not None
+        TimelineEvent.objects.filter(id=event.id).update(is_deleted=True)
 
         response = self.mentor_client.get(self.journey_url)
         self.assertEqual(response.status_code, 200)
         event_ids = {item["id"] for item in response.data["results"]}
-        self.assertNotIn(f"session_scheduled:{session.id}", event_ids)
+        self.assertNotIn(event.source_id, event_ids)
 
 
 @override_settings(RATING_UPDATE_THRESHOLD=5)

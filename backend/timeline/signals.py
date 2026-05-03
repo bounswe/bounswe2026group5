@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, cast
+from typing import Any
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -50,7 +50,7 @@ def _upsert_agte(
     last_edited: datetime | None = None,
 ) -> None:
     """Create or update an AGTE record keyed by source id."""
-    TimelineEvent.objects.update_or_create(
+    event, _ = TimelineEvent.objects.update_or_create(
         source_id=source_id,
         defaults={
             "category": TimelineEvent.Category.AGTE,
@@ -67,6 +67,17 @@ def _upsert_agte(
             "reposted_from": None,
         },
     )
+    # AGTE update metadata mirrors creation metadata by product requirement.
+    if event.last_edited != event.created_at:
+        TimelineEvent.objects.filter(id=event.id).update(last_edited=event.created_at)
+
+
+def _build_session_event_source_id(
+    *, event_type: str, session: MeetingSession
+) -> str:
+    """Return unique source id for a concrete session lifecycle action."""
+    action_micros = int(session.updated_at.timestamp() * 1_000_000)
+    return f"{event_type}:{session.id}:{action_micros}"
 
 
 @receiver(
@@ -172,18 +183,16 @@ def materialize_session_agte(
 
     event_type = ""
     actor_role = "system"
-    event_timestamp = instance.updated_at
+    event_timestamp = instance.scheduled_start_at_utc
 
     if instance.status == MeetingSession.Status.SCHEDULED:
         event_type = "session_scheduled"
-        event_timestamp = instance.scheduled_start_at_utc
     elif instance.status == MeetingSession.Status.RESCHEDULED:
         event_type = "session_rescheduled"
         actor_role = "mentee"
     elif instance.status == MeetingSession.Status.CANCELED:
         event_type = "session_canceled"
         actor_role = _actor_role_from_canceled_by(instance.canceled_by_role)
-        event_timestamp = instance.scheduled_start_at_utc
         payload = {
             **payload,
             "cancel_reason": instance.cancel_reason,
@@ -194,63 +203,23 @@ def materialize_session_agte(
     if event_type == "":
         return
 
-    session_event_types = (
-        "session_scheduled",
-        "session_rescheduled",
-        "session_canceled",
-        "session_completed",
-    )
-
-    if event_type == "session_canceled":
-        canceled_source_id = f"session_canceled:{instance.id}"
-        prior_event = (
-            TimelineEvent.objects.filter(
-                source_id__in=(
-                    f"session_scheduled:{instance.id}",
-                    f"session_rescheduled:{instance.id}",
-                    f"session_completed:{instance.id}",
-                )
-            )
-            .order_by("-created_at")
-            .first()
-        )
-
-        if prior_event is not None:
-            TimelineEvent.objects.filter(id=prior_event.id).update(
-                source_id=canceled_source_id,
-                category=TimelineEvent.Category.AGTE,
-                event_type=event_type,
-                author=None,
-                mentorship=instance.match,
-                community_id=None,
-                show_on_profile=False,
-                content="",
-                payload=cast(dict[str, Any], payload),
-                actor_role=actor_role,
-                timestamp=event_timestamp,
-                last_edited=instance.updated_at,
-                reposted_from=None,
-            )
-
-            TimelineEvent.objects.filter(source_id=canceled_source_id).exclude(
-                id=prior_event.id
-            ).delete()
-            return
-
-    for old_type in session_event_types:
-        if old_type == event_type:
-            continue
-        TimelineEvent.objects.filter(source_id=f"{old_type}:{instance.id}").delete()
-
-    _upsert_agte(
-        source_id=f"{event_type}:{instance.id}",
+    source_id = _build_session_event_source_id(event_type=event_type, session=instance)
+    event = TimelineEvent.objects.create(
+        source_id=source_id,
+        category=TimelineEvent.Category.AGTE,
         event_type=event_type,
+        author=None,
         mentorship=instance.match,
-        timestamp=event_timestamp,
-        actor_role=actor_role,
+        community_id=None,
+        show_on_profile=False,
+        content="",
         payload=payload,
-        last_edited=instance.updated_at if event_type == "session_canceled" else None,
+        actor_role=actor_role,
+        timestamp=event_timestamp,
+        last_edited=None,
+        reposted_from=None,
     )
+    TimelineEvent.objects.filter(id=event.id).update(last_edited=event.created_at)
 
 
 @receiver(

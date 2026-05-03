@@ -694,7 +694,7 @@ class ProfilePostsAPITests(TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_list_profile_posts_includes_prp_and_visible_mcte(self) -> None:
-        create_prp_event(
+        prp_event = create_prp_event(
             author_profile=self.owner_profile,
             event_type="achievement",
             content="PrP entry",
@@ -727,6 +727,9 @@ class ProfilePostsAPITests(TestCase):
         self.assertIn(visible_mcte.source_id, source_ids)
         self.assertNotIn(hidden_mcte.source_id, source_ids)
         self.assertTrue(any(item["category"] == "PrP" for item in results))
+        ordered_ids = [item["source_id"] for item in results]
+        self.assertEqual(ordered_ids[0], visible_mcte.source_id)
+        self.assertIn(prp_event.source_id, ordered_ids[1:])
 
     def test_list_profile_posts_filter_by_category_returns_matching_items(self) -> None:
         prp_event = create_prp_event(
