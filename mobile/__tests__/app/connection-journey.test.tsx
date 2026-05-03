@@ -86,8 +86,14 @@ describe("MatchJourneyScreen", () => {
 
     expect(getByText("Session scheduled")).toBeTruthy();
     expect(getByText("System")).toBeTruthy();
+    expect(getByText("View details")).toBeTruthy();
     expect(queryByText("session_id")).toBeNull();
     expect(queryByText("session-1")).toBeNull();
+
+    fireEvent.press(
+      getByTestId("journey-event-toggle-session_scheduled:session-1"),
+    );
+
     expect(getByText("Starts")).toBeTruthy();
     expect(queryByText("scheduled_start_at_utc")).toBeNull();
     expect(getByTestId("journey-event-session_scheduled:session-1")).toBeTruthy();

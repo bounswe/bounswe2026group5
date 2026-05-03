@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -121,19 +122,45 @@ function getPayloadEntries(event: TimelineEvent): [string, string][] {
     .slice(0, 4);
 }
 
-function TimelineEventCard({ event }: Readonly<{ event: TimelineEvent }>) {
+function TimelineEventNode({
+  event,
+  expanded,
+  isFirst,
+  isLast,
+  onToggle,
+}: Readonly<{
+  event: TimelineEvent;
+  expanded: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  onToggle: () => void;
+}>) {
   const isSystemEvent = event.category === "AGTE";
   const payloadEntries = getPayloadEntries(event);
+  const hasDetails =
+    Boolean(event.content) ||
+    Boolean(event.actor_role) ||
+    payloadEntries.length > 0 ||
+    event.show_on_profile;
 
   return (
     <View
       testID={`journey-event-${event.id}`}
-      className="mb-3 rounded-xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4"
+      className="flex-row"
     >
-      <View className="flex-row items-start gap-3">
+      <View className="w-12 items-center">
         <View
-          className={`h-10 w-10 items-center justify-center rounded-full ${
-            isSystemEvent ? "bg-sky-50 dark:bg-sky-950/30" : "bg-emerald-50 dark:bg-emerald-950/30"
+          className={`w-0.5 flex-1 ${
+            isFirst ? "bg-transparent" : "bg-divider dark:bg-divider-dark"
+          }`}
+        />
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={onToggle}
+          className={`h-11 w-11 items-center justify-center rounded-full border-2 ${
+            isSystemEvent
+              ? "border-sky-200 bg-sky-50 dark:border-sky-900 dark:bg-sky-950/30"
+              : "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30"
           }`}
         >
           <Ionicons
@@ -141,9 +168,21 @@ function TimelineEventCard({ event }: Readonly<{ event: TimelineEvent }>) {
             size={18}
             color={isSystemEvent ? "#0369a1" : "#047857"}
           />
-        </View>
+        </TouchableOpacity>
+        <View
+          className={`w-0.5 flex-1 ${
+            isLast ? "bg-transparent" : "bg-divider dark:bg-divider-dark"
+          }`}
+        />
+      </View>
 
-        <View className="flex-1">
+      <View className="flex-1 pb-5 pl-2">
+        <TouchableOpacity
+          testID={`journey-event-toggle-${event.id}`}
+          activeOpacity={0.82}
+          onPress={onToggle}
+          className="rounded-xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 py-3"
+        >
           <View className="flex-row items-start justify-between gap-3">
             <View className="flex-1">
               <Text className="text-base font-extrabold text-on-surface dark:text-on-surface-dark">
@@ -159,45 +198,69 @@ function TimelineEventCard({ event }: Readonly<{ event: TimelineEvent }>) {
               </Text>
             </View>
           </View>
-
-          {event.content ? (
-            <Text className="mt-3 text-sm leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
-              {event.content}
+          <View className="mt-2 flex-row items-center gap-1.5">
+            <Text className="text-xs font-semibold capitalize text-primary dark:text-primary-dim">
+              {event.actor_role ?? (isSystemEvent ? "System" : "Milestone")}
             </Text>
-          ) : null}
+            {hasDetails ? (
+              <>
+                <Text className="text-xs text-on-surface-muted dark:text-on-surface-muted-dark">
+                  ·
+                </Text>
+                <Text className="text-xs font-semibold text-on-surface-muted dark:text-on-surface-muted-dark">
+                  {expanded ? "Hide details" : "View details"}
+                </Text>
+                <Ionicons
+                  name={expanded ? "chevron-up" : "chevron-down"}
+                  size={13}
+                  color="#737686"
+                />
+              </>
+            ) : null}
+          </View>
+        </TouchableOpacity>
 
-          {event.actor_role ? (
-            <Text className="mt-3 text-xs font-semibold capitalize text-primary dark:text-primary-dim">
-              {event.actor_role}
-            </Text>
-          ) : null}
-
-          {payloadEntries.length > 0 ? (
-            <View className="mt-3 gap-1.5">
-              {payloadEntries.map(([key, value]) => (
-                <View key={key} className="flex-row gap-2">
-                  <Text className="w-28 text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark">
-                    {key}
-                  </Text>
-                  <Text
-                    className="flex-1 text-xs text-on-surface-soft dark:text-on-surface-soft-dark"
-                    numberOfLines={2}
-                  >
-                    {value}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          {event.show_on_profile ? (
-            <View className="mt-3 self-start rounded-full bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1">
-              <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                Shown on profile
+        {expanded && hasDetails ? (
+          <View className="mt-2 rounded-xl border border-divider/70 dark:border-divider-dark bg-surface-card/80 dark:bg-surface-card-dark px-4 py-3">
+            {event.content ? (
+              <Text className="text-sm leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
+                {event.content}
               </Text>
-            </View>
-          ) : null}
-        </View>
+            ) : null}
+
+            {event.actor_role ? (
+              <Text className="mt-3 text-xs font-semibold capitalize text-primary dark:text-primary-dim">
+                {event.actor_role}
+              </Text>
+            ) : null}
+
+            {payloadEntries.length > 0 ? (
+              <View className="mt-3 gap-1.5">
+                {payloadEntries.map(([key, value]) => (
+                  <View key={key} className="flex-row gap-2">
+                    <Text className="w-28 text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark">
+                      {key}
+                    </Text>
+                    <Text
+                      className="flex-1 text-xs text-on-surface-soft dark:text-on-surface-soft-dark"
+                      numberOfLines={2}
+                    >
+                      {value}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {event.show_on_profile ? (
+              <View className="mt-3 self-start rounded-full bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1">
+                <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                  Shown on profile
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -208,11 +271,25 @@ export default function MatchJourneyScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ matchId?: string | string[] }>();
   const matchId = getParamValue(params.matchId);
+  const [expandedEventIds, setExpandedEventIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const journeyQuery = useMatchJourneyQuery(matchId);
   const journeyEvents =
     journeyQuery.data?.results.filter(
       (event) => event.category === "AGTE" || event.category === "MCTE",
     ) ?? [];
+  const toggleExpandedEvent = (eventId: string) => {
+    setExpandedEventIds((current) => {
+      const next = new Set(current);
+      if (next.has(eventId)) {
+        next.delete(eventId);
+      } else {
+        next.add(eventId);
+      }
+      return next;
+    });
+  };
 
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
@@ -275,8 +352,15 @@ export default function MatchJourneyScreen() {
             </Text>
           </View>
         ) : (
-          journeyEvents.map((event) => (
-            <TimelineEventCard key={event.id} event={event} />
+          journeyEvents.map((event, index) => (
+            <TimelineEventNode
+              key={event.id}
+              event={event}
+              expanded={expandedEventIds.has(event.id)}
+              isFirst={index === 0}
+              isLast={index === journeyEvents.length - 1}
+              onToggle={() => toggleExpandedEvent(event.id)}
+            />
           ))
         )}
       </ScrollView>
