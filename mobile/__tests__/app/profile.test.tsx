@@ -1,4 +1,4 @@
-import ProfileScreen from "@/app/(tabs)/profile";
+import ProfileScreen from "@/app/(tabs)/profile/index";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 import { Alert } from "react-native";
