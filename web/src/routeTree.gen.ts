@@ -24,7 +24,8 @@ import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/dis
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 import { Route as AuthorizedConnectionsRouteImport } from './routes/_authorized/connections'
 import { Route as AuthorizedCommunitiesRouteImport } from './routes/_authorized/communities'
-import { Route as AuthorizedCommunitiesCommunityIdRouteImport } from './routes/_authorized/communities.$communityId'
+import { Route as AuthorizedCommunitiesIndexRouteImport } from './routes/_authorized/communities.index'
+import { Route as AuthorizedCommunitiesCommunitySlugRouteImport } from './routes/_authorized/communities.$communitySlug'
 
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
   id: '/_unauthorized',
@@ -99,10 +100,16 @@ const AuthorizedCommunitiesRoute = AuthorizedCommunitiesRouteImport.update({
   path: '/communities',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
-const AuthorizedCommunitiesCommunityIdRoute =
-  AuthorizedCommunitiesCommunityIdRouteImport.update({
-    id: '/$communityId',
-    path: '/$communityId',
+const AuthorizedCommunitiesIndexRoute =
+  AuthorizedCommunitiesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthorizedCommunitiesRoute,
+  } as any)
+const AuthorizedCommunitiesCommunitySlugRoute =
+  AuthorizedCommunitiesCommunitySlugRouteImport.update({
+    id: '/$communitySlug',
+    path: '/$communitySlug',
     getParentRoute: () => AuthorizedCommunitiesRoute,
   } as any)
 
@@ -119,11 +126,11 @@ export interface FileRoutesByFullPath {
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
-  '/communities/$communityId': typeof AuthorizedCommunitiesCommunityIdRoute
+  '/communities/$communitySlug': typeof AuthorizedCommunitiesCommunitySlugRoute
+  '/communities/': typeof AuthorizedCommunitiesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
@@ -134,7 +141,8 @@ export interface FileRoutesByTo {
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
-  '/communities/$communityId': typeof AuthorizedCommunitiesCommunityIdRoute
+  '/communities/$communitySlug': typeof AuthorizedCommunitiesCommunitySlugRoute
+  '/communities': typeof AuthorizedCommunitiesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -153,7 +161,8 @@ export interface FileRoutesById {
   '/_unauthorized/login': typeof UnauthorizedLoginRoute
   '/_unauthorized/register': typeof UnauthorizedRegisterRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
-  '/_authorized/communities/$communityId': typeof AuthorizedCommunitiesCommunityIdRoute
+  '/_authorized/communities/$communitySlug': typeof AuthorizedCommunitiesCommunitySlugRoute
+  '/_authorized/communities/': typeof AuthorizedCommunitiesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -170,11 +179,11 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/profiles/$username'
-    | '/communities/$communityId'
+    | '/communities/$communitySlug'
+    | '/communities/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/communities'
     | '/connections'
     | '/dashboard'
     | '/discover'
@@ -185,7 +194,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/profiles/$username'
-    | '/communities/$communityId'
+    | '/communities/$communitySlug'
+    | '/communities'
   id:
     | '__root__'
     | '/'
@@ -203,7 +213,8 @@ export interface FileRouteTypes {
     | '/_unauthorized/login'
     | '/_unauthorized/register'
     | '/profiles/$username'
-    | '/_authorized/communities/$communityId'
+    | '/_authorized/communities/$communitySlug'
+    | '/_authorized/communities/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -321,22 +332,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedCommunitiesRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
-    '/_authorized/communities/$communityId': {
-      id: '/_authorized/communities/$communityId'
-      path: '/$communityId'
-      fullPath: '/communities/$communityId'
-      preLoaderRoute: typeof AuthorizedCommunitiesCommunityIdRouteImport
+    '/_authorized/communities/': {
+      id: '/_authorized/communities/'
+      path: '/'
+      fullPath: '/communities/'
+      preLoaderRoute: typeof AuthorizedCommunitiesIndexRouteImport
+      parentRoute: typeof AuthorizedCommunitiesRoute
+    }
+    '/_authorized/communities/$communitySlug': {
+      id: '/_authorized/communities/$communitySlug'
+      path: '/$communitySlug'
+      fullPath: '/communities/$communitySlug'
+      preLoaderRoute: typeof AuthorizedCommunitiesCommunitySlugRouteImport
       parentRoute: typeof AuthorizedCommunitiesRoute
     }
   }
 }
 
 interface AuthorizedCommunitiesRouteChildren {
-  AuthorizedCommunitiesCommunityIdRoute: typeof AuthorizedCommunitiesCommunityIdRoute
+  AuthorizedCommunitiesCommunitySlugRoute: typeof AuthorizedCommunitiesCommunitySlugRoute
+  AuthorizedCommunitiesIndexRoute: typeof AuthorizedCommunitiesIndexRoute
 }
 
 const AuthorizedCommunitiesRouteChildren: AuthorizedCommunitiesRouteChildren = {
-  AuthorizedCommunitiesCommunityIdRoute: AuthorizedCommunitiesCommunityIdRoute,
+  AuthorizedCommunitiesCommunitySlugRoute:
+    AuthorizedCommunitiesCommunitySlugRoute,
+  AuthorizedCommunitiesIndexRoute: AuthorizedCommunitiesIndexRoute,
 }
 
 const AuthorizedCommunitiesRouteWithChildren =

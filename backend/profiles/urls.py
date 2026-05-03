@@ -80,22 +80,22 @@ urlpatterns = [
     path("tags/", CommunityTagListCreateAPIView.as_view(), name="community-tag-list-create"),
     path("tags/popular/", PopularTagsListAPIView.as_view(), name="community-tag-popular"),
     path(
-        "tags/<uuid:tag_id>/",
+        "tags/<str:tag_id>/",
         CommunityTagDetailAPIView.as_view(),
         name="community-tag-detail",
     ),
     path(
-        "tags/<uuid:tag_id>/join/",
+        "tags/<str:tag_id>/join/",
         CommunityTagJoinAPIView.as_view(),
         name="community-tag-join",
     ),
     path(
-        "tags/<uuid:tag_id>/leave/",
+        "tags/<str:tag_id>/leave/",
         CommunityTagLeaveAPIView.as_view(),
         name="community-tag-leave",
     ),
     path(
-        "tags/<uuid:tag_id>/members/",
+        "tags/<str:tag_id>/members/",
         CommunityTagMembersListAPIView.as_view(),
         name="community-tag-members",
     ),

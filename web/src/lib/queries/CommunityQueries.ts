@@ -129,6 +129,19 @@ export async function createCommunity(payload: {
     return res.json()
 }
 
+export async function updateCommunityDescription(payload: {
+    communitySlug: string
+    description: string
+}): Promise<CommunityTagDetail> {
+    const res = await fetch(`${API_BASE_URL}/profiles/tags/${encodeURIComponent(payload.communitySlug)}/`, {
+        method: 'PATCH',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: payload.description.trim() }),
+    })
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
 export async function joinCommunity(communityId: string): Promise<CommunityMembershipResponse> {
     const res = await fetch(`${API_BASE_URL}/profiles/tags/${encodeURIComponent(communityId)}/join/`, {
         method: 'POST',
@@ -228,6 +241,16 @@ export function useJoinCommunityMutation() {
         onSuccess: async (membership) => {
             await queryClient.invalidateQueries({ queryKey: communityQueryKeys.all })
             await queryClient.invalidateQueries({ queryKey: communityQueryKeys.detail(membership.tag_id) })
+        },
+    })
+}
+
+export function useUpdateCommunityDescriptionMutation() {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: updateCommunityDescription,
+        onSuccess: async (updated) => {
+            await queryClient.invalidateQueries({ queryKey: communityQueryKeys.detail(updated.slug) })
         },
     })
 }

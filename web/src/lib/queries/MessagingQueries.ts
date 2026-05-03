@@ -1,5 +1,7 @@
 import { throwApiError } from '#/lib/apiError.ts'
 import { queryOptions, useMutation, useQuery } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
+import { useCallback } from 'react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -98,4 +100,16 @@ export function useSendMessage(conversationId: string) {
     return useMutation({
         mutationFn: (body: string) => sendMessage(conversationId, body),
     })
+}
+
+export function useSendMessageToUser() {
+    const navigate = useNavigate()
+    const { data: conversations = [] } = useConversations()
+
+    return useCallback((username: string) => {
+        const conv = conversations.find(
+            c => c.mentor.username === username || c.mentee.username === username,
+        )
+        navigate({ to: '/messages', search: { conversationId: conv?.id ?? '' } })
+    }, [navigate, conversations])
 }

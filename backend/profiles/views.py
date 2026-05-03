@@ -61,6 +61,18 @@ OVERLAP_DETAIL = {"detail": "Availability slot overlaps with an existing slot."}
 PERMISSION_DENIED_DETAIL = {"detail": "You do not have permission to perform this action."}
 
 
+def _resolve_community_tag(tag_id: str, qs=None) -> "CommunityTag | None":
+    """Return a CommunityTag by UUID or slug. Pass a custom queryset for select_related etc."""
+    from uuid import UUID
+    if qs is None:
+        qs = CommunityTag.objects
+    try:
+        UUID(tag_id)
+        return qs.filter(id=tag_id).first()
+    except (ValueError, AttributeError):
+        return qs.filter(slug=tag_id).first()
+
+
 class ProfileLookupMixin:
     """Shared profile lookup and mentor checks for profile API views."""
 
@@ -1270,7 +1282,7 @@ class CommunityTagDetailAPIView(APIView):
         tags=["Community Tags"],
     )
     def get(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id, qs=CommunityTag.objects.select_related("created_by"))
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1297,7 +1309,7 @@ class CommunityTagDetailAPIView(APIView):
         tags=["Community Tags"],
     )
     def patch(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id, qs=CommunityTag.objects.select_related("created_by"))
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1336,7 +1348,7 @@ class CommunityTagDetailAPIView(APIView):
         tags=["Community Tags"],
     )
     def delete(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id, qs=CommunityTag.objects.select_related("created_by"))
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1383,7 +1395,7 @@ class CommunityTagJoinAPIView(APIView):
         tags=["Community Tags"],
     )
     def post(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id)
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1434,7 +1446,7 @@ class CommunityTagLeaveAPIView(APIView):
         tags=["Community Tags"],
     )
     def delete(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id)
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1584,7 +1596,8 @@ class CommunityTagMembersListAPIView(APIView):
         tags=["Community Tags"],
     )
     def get(self, request: Request, tag_id: str) -> Response:
-        if not CommunityTag.objects.filter(id=tag_id).exists():
+        tag = _resolve_community_tag(tag_id)
+        if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         try:
@@ -1600,7 +1613,7 @@ class CommunityTagMembersListAPIView(APIView):
         page_size = max(1, min(page_size, 50))
 
         memberships = (
-            CommunityTagMembership.objects.filter(tag_id=tag_id, profile__is_visible=True)
+            CommunityTagMembership.objects.filter(tag=tag, profile__is_visible=True)
             .select_related("profile__user")
             .order_by("-joined_at")
         )

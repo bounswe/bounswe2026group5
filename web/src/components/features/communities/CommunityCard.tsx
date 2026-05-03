@@ -85,7 +85,7 @@ export function CommunityCard({
                 <Button
                     className="w-full bg-accent hover:bg-accent-light text-white shadow-sm"
                     size="sm"
-                    onClick={() => onViewCommunity?.(community.id)}
+                    onClick={() => onViewCommunity?.(community.slug)}
                 >
                     View
                 </Button>
