@@ -15,6 +15,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
@@ -33,3 +34,9 @@ urlpatterns = [
         name="swagger-ui",
     ),
 ]
+
+# Serve uploaded media files from local filesystem in development
+if settings.DEBUG and hasattr(settings, "MEDIA_ROOT"):
+    from django.conf.urls.static import static
+
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

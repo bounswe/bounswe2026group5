@@ -9,6 +9,7 @@ from rest_framework import serializers
 from accounts.models import AppUsageMode
 from core.utils.timezone import to_local_time
 from profiles.models import AvailabilitySlot, Profile
+from profiles.serializers import resolve_picture_url
 
 from .models import Feedback, Match, MeetingSession, MentorshipRequest
 
@@ -16,10 +17,16 @@ from .models import Feedback, Match, MeetingSession, MentorshipRequest
 class ProfileSummarySerializer(serializers.ModelSerializer):
     """Compact profile representation for embedding in request/match responses."""
 
+    picture_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Profile
         fields = ("id", "username", "display_name", "picture_url", "title")
         read_only_fields = fields
+
+    def get_picture_url(self, obj: Profile) -> str:
+        """Return uploaded picture URL or external URL fallback."""
+        return resolve_picture_url(obj)
 
 
 class MentorshipRequestSerializer(serializers.ModelSerializer):
