@@ -1,4 +1,4 @@
-import MentorProfileScreen from "@/app/(tabs)/user/[username]";
+import MentorProfileScreen from "@/app/(tabs)/user/[username]/index";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 
