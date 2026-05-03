@@ -75,6 +75,10 @@ jest.mock("@/lib/queries/profile", () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),
+  useProfilePostsQuery: () => ({
+    data: { count: 0, results: [] },
+    isLoading: false,
+  }),
 }));
 
 jest.mock("@/lib/queries/communityTags", () => ({

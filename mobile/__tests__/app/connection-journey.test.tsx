@@ -185,4 +185,39 @@ describe("MatchJourneyScreen", () => {
     fireEvent.press(getByTestId("journey-back-button"));
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
+
+  it("renders MCTE content and calls toggle", () => {
+    mockJourneyQuery = {
+      data: {
+        results: [
+          {
+            id: "mcte-1",
+            category: "MCTE",
+            event_type: "achievement",
+            timestamp: "2026-05-02T10:00:00Z",
+            actor_role: "mentee",
+            author: null,
+            content: "Finished React Basics",
+            payload: {},
+            show_on_profile: true,
+            is_editable: true,
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    };
+
+    const { getByText, getByTestId } = render(<MatchJourneyScreen />);
+
+    expect(getByText("Achievement")).toBeTruthy();
+    expect(getByText("Milestone")).toBeTruthy();
+    expect(getByText("View details")).toBeTruthy();
+
+    fireEvent.press(getByTestId("journey-event-toggle-mcte-1"));
+    expect(getByText("Finished React Basics")).toBeTruthy();
+    expect(getByTestId("journey-event-mcte-1")).toBeTruthy();
+  });
 });
+

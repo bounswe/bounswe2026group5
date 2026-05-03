@@ -52,6 +52,7 @@ describe("mentorship query mappers", () => {
         actor_role: "mentor",
         author: null,
         content: undefined,
+        media_url: null,
         payload: {
           session_id: "session-1",
         },

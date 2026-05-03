@@ -89,4 +89,29 @@ describe("TimelineEventCard", () => {
     fireEvent.press(getByTestId("journey-event-toggle-mcte-1"));
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
+
+  it("renders MCTE with show_on_profile=false and does not show 'Shown on profile' badge", () => {
+    const { getByText, queryByText } = render(
+      <TimelineEventCard
+        event={makeEvent({
+          id: "mcte-private",
+          category: "MCTE",
+          event_type: "progress",
+          actor_role: "mentor",
+          content: "Private progress update",
+          show_on_profile: false,
+        })}
+        expanded={true}
+        isFirst={true}
+        isLast={true}
+        onToggle={jest.fn()}
+      />,
+    );
+
+    expect(getByText("Progress update")).toBeTruthy();
+    expect(getByText("Milestone")).toBeTruthy();
+    expect(getByText("Private progress update")).toBeTruthy();
+    expect(queryByText("Shown on profile")).toBeNull();
+  });
 });
+

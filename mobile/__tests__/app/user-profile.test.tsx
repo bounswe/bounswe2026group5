@@ -32,10 +32,13 @@ let mockReviewsData: any = {
   results: [],
 };
 
+const mockPush = jest.fn();
+
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ username: mockUsernameParam }),
   useRouter: () => ({
     back: mockBack,
+    push: mockPush,
   }),
 }));
 
@@ -100,6 +103,13 @@ jest.mock("@/lib/queries/profile", () => ({
     isLoading: false,
     isFetching: false,
     error: null,
+  }),
+  useProfilePostsQuery: () => ({
+    data: {
+      count: 1,
+      results: [{ id: "post-1", content: "hello" }],
+    },
+    isLoading: false,
   }),
 }));
 
@@ -498,5 +508,15 @@ describe("MentorProfileScreen email verification gate", () => {
     fireEvent.press(getByTestId("confirm-booking"));
 
     expect(await findByText("Booking failed.")).toBeTruthy();
+  });
+
+  it("navigates to the posts route when 'View All' is pressed in the posts preview", async () => {
+    const { findByText, getByTestId } = render(<MentorProfileScreen />);
+
+    expect(await findByText("Ada Mentor")).toBeTruthy();
+
+    fireEvent.press(getByTestId("view-all-posts-button"));
+
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/user/mentor_ada/posts");
   });
 });
