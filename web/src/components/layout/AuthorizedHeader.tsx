@@ -61,6 +61,13 @@ export function AuthorizedHeader() {
                 Discover
               </Link>
               <Link
+                  to="/communities"
+                  activeProps={{ className: "bg-accent-muted text-ink font-semibold" }}
+                  className="text-sm font-medium text-ink-soft hover:text-ink hover:bg-accent-muted/60 transition-colors px-3 py-1.5 rounded-lg"
+              >
+                Communities
+              </Link>
+              <Link
                   to="/connections"
                   activeProps={{ className: "bg-accent-muted text-ink font-semibold" }}
                   className="text-sm font-medium text-ink-soft hover:text-ink hover:bg-accent-muted/60 transition-colors px-3 py-1.5 rounded-lg"
