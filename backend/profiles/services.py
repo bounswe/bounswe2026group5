@@ -8,8 +8,9 @@ from django.db.models import Q
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from .models import AvailabilitySlot, Profile
 from mentorship.models import MentorshipRequest
+
+from .models import AvailabilitySlot, Profile
 
 
 class AvailabilityBookingError(Exception):

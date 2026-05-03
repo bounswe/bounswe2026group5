@@ -159,3 +159,62 @@ class TimelineSignalTests(TestCase):
         self.assertEqual(event.payload["match_id"], str(self.match.id))
         self.assertIn("notification_id", event.payload)
         self.assertEqual(event.last_edited, event.created_at)
+
+    def test_session_status_change_creates_distinct_history_rows(self) -> None:
+        start_at = timezone.now() + timedelta(days=3)
+        session = MeetingSession.objects.create(
+            match=self.match,
+            mentor=self.match.mentor,
+            mentee=self.match.mentee,
+            scheduled_start_at_utc=start_at,
+            scheduled_end_at_utc=start_at + timedelta(hours=1),
+            status=MeetingSession.Status.SCHEDULED,
+        )
+
+        session.status = MeetingSession.Status.RESCHEDULED
+        session.save(update_fields=["status", "updated_at"])
+        session.status = MeetingSession.Status.COMPLETED
+        session.save(update_fields=["status", "updated_at"])
+
+        scheduled_count = TimelineEvent.objects.filter(
+            source_id__startswith=f"session_scheduled:{session.id}:",
+            category=TimelineEvent.Category.AGTE,
+        ).count()
+        rescheduled_count = TimelineEvent.objects.filter(
+            source_id__startswith=f"session_rescheduled:{session.id}:",
+            category=TimelineEvent.Category.AGTE,
+        ).count()
+        completed_count = TimelineEvent.objects.filter(
+            source_id__startswith=f"session_completed:{session.id}:",
+            category=TimelineEvent.Category.AGTE,
+        ).count()
+
+        self.assertEqual(scheduled_count, 1)
+        self.assertEqual(rescheduled_count, 1)
+        self.assertEqual(completed_count, 1)
+
+    def test_agte_created_at_reflects_action_time_not_event_time(self) -> None:
+        start_at = timezone.now() + timedelta(days=7)
+        session = MeetingSession.objects.create(
+            match=self.match,
+            mentor=self.match.mentor,
+            mentee=self.match.mentee,
+            scheduled_start_at_utc=start_at,
+            scheduled_end_at_utc=start_at + timedelta(hours=1),
+            status=MeetingSession.Status.SCHEDULED,
+        )
+
+        event = (
+            TimelineEvent.objects.filter(
+                source_id__startswith=f"session_scheduled:{session.id}:",
+                category=TimelineEvent.Category.AGTE,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        self.assertIsNotNone(event)
+        assert event is not None
+
+        # Event time is the session time, while created_at captures action time.
+        self.assertGreater(event.timestamp, event.created_at)
+        self.assertEqual(event.last_edited, event.created_at)

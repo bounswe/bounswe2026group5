@@ -667,7 +667,7 @@ class MyAvailabilitySlotDetailAPIView(ProfileLookupMixin, APIView):
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         try:
-                # MentorshipRequest moved to top level
+            # MentorshipRequest moved to top level
 
             with transaction.atomic():
                 locked_slot = AvailabilitySlot.objects.select_for_update().get(id=slot.id)

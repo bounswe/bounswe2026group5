@@ -1,5 +1,6 @@
 """Domain services for mentorship lifecycle operations."""
 
+import logging
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -26,7 +27,6 @@ from timeline.models import TimelineEvent
 
 from .models import Feedback, Match, MeetingSession, MentorshipRequest
 
-import logging
 logger = logging.getLogger(__name__)
 
 
