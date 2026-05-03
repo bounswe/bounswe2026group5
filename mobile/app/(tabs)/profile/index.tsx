@@ -13,6 +13,7 @@ import {
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { ProfilePostsPreview } from "@/components/profile/ProfilePostsPreview";
 import { ProfileReviews } from "@/components/profile/ProfileReviews";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
@@ -460,6 +461,13 @@ export default function ProfileScreen() {
                 ))}
               </View>
             </View>
+          ) : null}
+
+          {currentUsername ? (
+            <ProfilePostsPreview
+              username={currentUsername}
+              onViewAll={() => router.push("/(tabs)/profile/posts" as any)}
+            />
           ) : null}
 
           {isMentorMode && showAvailability && (
