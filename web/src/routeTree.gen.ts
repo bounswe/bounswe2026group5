@@ -14,6 +14,7 @@ import { Route as OnBoardingRouteRouteImport } from './routes/_onBoarding/route'
 import { Route as AuthorizedRouteRouteImport } from './routes/_authorized/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProfilesUsernameRouteImport } from './routes/profiles.$username'
+import { Route as UnauthorizedResetPasswordRouteImport } from './routes/_unauthorized/reset-password'
 import { Route as UnauthorizedRegisterRouteImport } from './routes/_unauthorized/register'
 import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/login'
 import { Route as UnauthorizedForgotPasswordRouteImport } from './routes/_unauthorized/forgot-password'
@@ -24,7 +25,6 @@ import { Route as AuthorizedMessagesRouteImport } from './routes/_authorized/mes
 import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/discover'
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 import { Route as AuthorizedConnectionsRouteImport } from './routes/_authorized/connections'
-import { Route as UnauthorizedResetPasswordTokenRouteImport } from './routes/_unauthorized/reset-password.$token'
 
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
   id: '/_unauthorized',
@@ -48,6 +48,12 @@ const ProfilesUsernameRoute = ProfilesUsernameRouteImport.update({
   path: '/profiles/$username',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UnauthorizedResetPasswordRoute =
+  UnauthorizedResetPasswordRouteImport.update({
+    id: '/reset-password',
+    path: '/reset-password',
+    getParentRoute: () => UnauthorizedRouteRoute,
+  } as any)
 const UnauthorizedRegisterRoute = UnauthorizedRegisterRouteImport.update({
   id: '/register',
   path: '/register',
@@ -100,12 +106,6 @@ const AuthorizedConnectionsRoute = AuthorizedConnectionsRouteImport.update({
   path: '/connections',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
-const UnauthorizedResetPasswordTokenRoute =
-  UnauthorizedResetPasswordTokenRouteImport.update({
-    id: '/reset-password/$token',
-    path: '/reset-password/$token',
-    getParentRoute: () => UnauthorizedRouteRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -119,8 +119,8 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof UnauthorizedForgotPasswordRoute
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
+  '/reset-password': typeof UnauthorizedResetPasswordRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
-  '/reset-password/$token': typeof UnauthorizedResetPasswordTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -134,8 +134,8 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof UnauthorizedForgotPasswordRoute
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
+  '/reset-password': typeof UnauthorizedResetPasswordRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
-  '/reset-password/$token': typeof UnauthorizedResetPasswordTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -153,8 +153,8 @@ export interface FileRoutesById {
   '/_unauthorized/forgot-password': typeof UnauthorizedForgotPasswordRoute
   '/_unauthorized/login': typeof UnauthorizedLoginRoute
   '/_unauthorized/register': typeof UnauthorizedRegisterRoute
+  '/_unauthorized/reset-password': typeof UnauthorizedResetPasswordRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
-  '/_unauthorized/reset-password/$token': typeof UnauthorizedResetPasswordTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -170,8 +170,8 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/register'
+    | '/reset-password'
     | '/profiles/$username'
-    | '/reset-password/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -185,8 +185,8 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/register'
+    | '/reset-password'
     | '/profiles/$username'
-    | '/reset-password/$token'
   id:
     | '__root__'
     | '/'
@@ -203,8 +203,8 @@ export interface FileRouteTypes {
     | '/_unauthorized/forgot-password'
     | '/_unauthorized/login'
     | '/_unauthorized/register'
+    | '/_unauthorized/reset-password'
     | '/profiles/$username'
-    | '/_unauthorized/reset-password/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -251,6 +251,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/profiles/$username'
       preLoaderRoute: typeof ProfilesUsernameRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_unauthorized/reset-password': {
+      id: '/_unauthorized/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof UnauthorizedResetPasswordRouteImport
+      parentRoute: typeof UnauthorizedRouteRoute
     }
     '/_unauthorized/register': {
       id: '/_unauthorized/register'
@@ -322,13 +329,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedConnectionsRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
-    '/_unauthorized/reset-password/$token': {
-      id: '/_unauthorized/reset-password/$token'
-      path: '/reset-password/$token'
-      fullPath: '/reset-password/$token'
-      preLoaderRoute: typeof UnauthorizedResetPasswordTokenRouteImport
-      parentRoute: typeof UnauthorizedRouteRoute
-    }
   }
 }
 
@@ -369,7 +369,7 @@ interface UnauthorizedRouteRouteChildren {
   UnauthorizedForgotPasswordRoute: typeof UnauthorizedForgotPasswordRoute
   UnauthorizedLoginRoute: typeof UnauthorizedLoginRoute
   UnauthorizedRegisterRoute: typeof UnauthorizedRegisterRoute
-  UnauthorizedResetPasswordTokenRoute: typeof UnauthorizedResetPasswordTokenRoute
+  UnauthorizedResetPasswordRoute: typeof UnauthorizedResetPasswordRoute
 }
 
 const UnauthorizedRouteRouteChildren: UnauthorizedRouteRouteChildren = {
@@ -377,7 +377,7 @@ const UnauthorizedRouteRouteChildren: UnauthorizedRouteRouteChildren = {
   UnauthorizedForgotPasswordRoute: UnauthorizedForgotPasswordRoute,
   UnauthorizedLoginRoute: UnauthorizedLoginRoute,
   UnauthorizedRegisterRoute: UnauthorizedRegisterRoute,
-  UnauthorizedResetPasswordTokenRoute: UnauthorizedResetPasswordTokenRoute,
+  UnauthorizedResetPasswordRoute: UnauthorizedResetPasswordRoute,
 }
 
 const UnauthorizedRouteRouteWithChildren =

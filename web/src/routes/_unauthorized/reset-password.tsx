@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle, KeyRound, XCircle } from 'lucide-react'
+import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,12 +10,17 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Display, Heading, Body, Muted } from '@/components/Typography'
 import { resetPasswordFn, clearAuthState } from '#/lib/queries/AuthQueries.ts'
 
-export const Route = createFileRoute('/_unauthorized/reset-password/$token')({
+const searchSchema = z.object({
+    token: z.string().catch(''),
+})
+
+export const Route = createFileRoute('/_unauthorized/reset-password')({
+    validateSearch: searchSchema,
     component: ResetPasswordPage,
 })
 
 export function ResetPasswordPage() {
-    const { token } = Route.useParams()
+    const { token } = Route.useSearch()
     const router = useRouter()
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
@@ -27,6 +33,23 @@ export function ResetPasswordPage() {
             setTimeout(() => router.navigate({ to: '/login' }), 2000)
         },
     })
+
+    if (!token) {
+        return (
+            <div className="flex min-h-screen items-center justify-center px-6">
+                <div className="w-full max-w-md text-center space-y-4">
+                    <XCircle className="w-12 h-12 text-destructive mx-auto" />
+                    <Heading as="h2">Invalid Reset Link</Heading>
+                    <Muted className="text-ink-soft">
+                        This link is missing a reset token. Please request a new one.
+                    </Muted>
+                    <Link to="/forgot-password">
+                        <Button className="mt-2">Request New Link</Button>
+                    </Link>
+                </div>
+            </div>
+        )
+    }
 
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
@@ -41,7 +64,7 @@ export function ResetPasswordPage() {
             return
         }
 
-        resetPassword.mutate({ token, password })
+        resetPassword.mutate({ token, new_password: password, confirm_password: confirmPassword })
     }
 
     return (

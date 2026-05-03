@@ -166,7 +166,7 @@ export async function forgotPasswordFn(data: { email: string }) {
     if (!res.ok && res.status !== 400) await throwApiError(res)
 }
 
-export async function resetPasswordFn(data: { token: string; password: string }) {
+export async function resetPasswordFn(data: { token: string; new_password: string; confirm_password: string }) {
     const res = await fetch(`${API_BASE_URL}/auth/reset-password/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
