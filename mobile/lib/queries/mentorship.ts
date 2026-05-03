@@ -56,6 +56,7 @@ export interface TimelineEvent {
   actor_role?: string | null;
   author?: BackendProfileSummary | null;
   content?: string;
+  media_url?: string | null;
   payload: Record<string, unknown>;
   show_on_profile: boolean;
   is_editable: boolean;
@@ -180,6 +181,7 @@ export interface CreateTimelineEventPayload {
   matchId: string;
   event_type: MCTEEventType;
   content: string;
+  media_url?: string | null;
   timestamp?: string;
   show_on_profile?: boolean;
 }
@@ -189,6 +191,7 @@ export interface UpdateTimelineEventPayload {
   eventId: string;
   event_type?: MCTEEventType;
   content?: string;
+  media_url?: string | null;
   timestamp?: string;
   show_on_profile?: boolean;
 }
@@ -299,6 +302,7 @@ function normalizeTimelineEvent(event: BackendJourneyEvent): TimelineEvent {
     actor_role: event.actor_role ?? null,
     author: event.author ?? null,
     content: event.content,
+    media_url: event.media_url ?? null,
     payload: event.payload ?? {},
     show_on_profile: event.show_on_profile ?? false,
     is_editable: event.is_editable ?? false,
@@ -411,6 +415,7 @@ export function useCreateTimelineEventMutation(currentUsername?: string) {
       matchId,
       event_type,
       content,
+      media_url,
       timestamp,
       show_on_profile,
     }: CreateTimelineEventPayload) =>
@@ -419,6 +424,7 @@ export function useCreateTimelineEventMutation(currentUsername?: string) {
         {
           event_type,
           content,
+          ...(media_url !== undefined ? { media_url } : {}),
           ...(timestamp ? { timestamp } : {}),
           show_on_profile: show_on_profile ?? false,
         },
@@ -456,6 +462,7 @@ export function useUpdateTimelineEventMutation(currentUsername?: string) {
       eventId,
       event_type,
       content,
+      media_url,
       timestamp,
       show_on_profile,
     }: UpdateTimelineEventPayload) =>
@@ -464,6 +471,7 @@ export function useUpdateTimelineEventMutation(currentUsername?: string) {
         {
           ...(event_type ? { event_type } : {}),
           ...(content !== undefined ? { content } : {}),
+          ...(media_url !== undefined ? { media_url } : {}),
           ...(timestamp ? { timestamp } : {}),
           ...(show_on_profile !== undefined ? { show_on_profile } : {}),
         },
