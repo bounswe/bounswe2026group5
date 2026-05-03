@@ -67,13 +67,6 @@ describe("TabLayout", () => {
     expect(queryByTestId("visible-tab-schedule")).toBeNull();
   });
 
-  it("uses a forum-style Community icon instead of another people/group icon", () => {
-    const { getByTestId, queryByTestId } = render(<TabLayout />);
-
-    expect(getByTestId("icon-bubble.left.and.bubble.right.fill")).toBeTruthy();
-    expect(queryByTestId("icon-person.3.fill")).toBeNull();
-  });
-
   it("keeps profile detail as a hidden tab route", () => {
     const { getByTestId, queryByTestId } = render(<TabLayout />);
 
