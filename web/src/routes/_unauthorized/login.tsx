@@ -140,12 +140,12 @@ export function LoginPage() {
                                 <div className="grid gap-1.5">
                                     <div className="flex items-center justify-between">
                                         <Label htmlFor="password">Password</Label>
-                                        <a
-                                            href="#"
+                                        <Link
+                                            to="/forgot-password"
                                             className="text-xs text-accent-light underline-offset-4 hover:underline hover:text-accent transition-colors"
                                         >
                                             Forgot your password?
-                                        </a>
+                                        </Link>
                                     </div>
                                     <Input
                                         id="password"

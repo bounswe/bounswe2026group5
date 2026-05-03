@@ -15,6 +15,8 @@ import { Route as AuthorizedRouteRouteImport } from './routes/_authorized/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProfilesUsernameRouteImport } from './routes/profiles.$username'
 import { Route as UnauthorizedRegisterRouteImport } from './routes/_unauthorized/register'
+import { Route as UnauthorizedResetPasswordTokenRouteImport } from './routes/_unauthorized/reset-password.$token'
+import { Route as UnauthorizedForgotPasswordRouteImport } from './routes/_unauthorized/forgot-password'
 import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/login'
 import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/about'
 import { Route as OnBoardingGettingToKnowYouRouteImport } from './routes/_onBoarding/gettingToKnowYou'
@@ -51,6 +53,18 @@ const UnauthorizedRegisterRoute = UnauthorizedRegisterRouteImport.update({
   path: '/register',
   getParentRoute: () => UnauthorizedRouteRoute,
 } as any)
+const UnauthorizedResetPasswordTokenRoute =
+  UnauthorizedResetPasswordTokenRouteImport.update({
+    id: '/reset-password/$token',
+    path: '/reset-password/$token',
+    getParentRoute: () => UnauthorizedRouteRoute,
+  } as any)
+const UnauthorizedForgotPasswordRoute =
+  UnauthorizedForgotPasswordRouteImport.update({
+    id: '/forgot-password',
+    path: '/forgot-password',
+    getParentRoute: () => UnauthorizedRouteRoute,
+  } as any)
 const UnauthorizedLoginRoute = UnauthorizedLoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -103,6 +117,8 @@ export interface FileRoutesByFullPath {
   '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/about': typeof UnauthorizedAboutRoute
   '/login': typeof UnauthorizedLoginRoute
+  '/forgot-password': typeof UnauthorizedForgotPasswordRoute
+  '/reset-password/$token': typeof UnauthorizedResetPasswordTokenRoute
   '/register': typeof UnauthorizedRegisterRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
 }
@@ -116,6 +132,8 @@ export interface FileRoutesByTo {
   '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/about': typeof UnauthorizedAboutRoute
   '/login': typeof UnauthorizedLoginRoute
+  '/forgot-password': typeof UnauthorizedForgotPasswordRoute
+  '/reset-password/$token': typeof UnauthorizedResetPasswordTokenRoute
   '/register': typeof UnauthorizedRegisterRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
 }
@@ -133,6 +151,8 @@ export interface FileRoutesById {
   '/_onBoarding/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/_unauthorized/about': typeof UnauthorizedAboutRoute
   '/_unauthorized/login': typeof UnauthorizedLoginRoute
+  '/_unauthorized/forgot-password': typeof UnauthorizedForgotPasswordRoute
+  '/_unauthorized/reset-password/$token': typeof UnauthorizedResetPasswordTokenRoute
   '/_unauthorized/register': typeof UnauthorizedRegisterRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
 }
@@ -148,6 +168,8 @@ export interface FileRouteTypes {
     | '/gettingToKnowYou'
     | '/about'
     | '/login'
+    | '/forgot-password'
+    | '/reset-password/$token'
     | '/register'
     | '/profiles/$username'
   fileRoutesByTo: FileRoutesByTo
@@ -161,6 +183,8 @@ export interface FileRouteTypes {
     | '/gettingToKnowYou'
     | '/about'
     | '/login'
+    | '/forgot-password'
+    | '/reset-password/$token'
     | '/register'
     | '/profiles/$username'
   id:
@@ -177,6 +201,8 @@ export interface FileRouteTypes {
     | '/_onBoarding/gettingToKnowYou'
     | '/_unauthorized/about'
     | '/_unauthorized/login'
+    | '/_unauthorized/forgot-password'
+    | '/_unauthorized/reset-password/$token'
     | '/_unauthorized/register'
     | '/profiles/$username'
   fileRoutesById: FileRoutesById
@@ -231,6 +257,20 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof UnauthorizedRegisterRouteImport
+      parentRoute: typeof UnauthorizedRouteRoute
+    }
+    '/_unauthorized/forgot-password': {
+      id: '/_unauthorized/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof UnauthorizedForgotPasswordRouteImport
+      parentRoute: typeof UnauthorizedRouteRoute
+    }
+    '/_unauthorized/reset-password/$token': {
+      id: '/_unauthorized/reset-password/$token'
+      path: '/reset-password/$token'
+      fullPath: '/reset-password/$token'
+      preLoaderRoute: typeof UnauthorizedResetPasswordTokenRouteImport
       parentRoute: typeof UnauthorizedRouteRoute
     }
     '/_unauthorized/login': {
@@ -327,12 +367,16 @@ const OnBoardingRouteRouteWithChildren = OnBoardingRouteRoute._addFileChildren(
 interface UnauthorizedRouteRouteChildren {
   UnauthorizedAboutRoute: typeof UnauthorizedAboutRoute
   UnauthorizedLoginRoute: typeof UnauthorizedLoginRoute
+  UnauthorizedForgotPasswordRoute: typeof UnauthorizedForgotPasswordRoute
+  UnauthorizedResetPasswordTokenRoute: typeof UnauthorizedResetPasswordTokenRoute
   UnauthorizedRegisterRoute: typeof UnauthorizedRegisterRoute
 }
 
 const UnauthorizedRouteRouteChildren: UnauthorizedRouteRouteChildren = {
   UnauthorizedAboutRoute: UnauthorizedAboutRoute,
   UnauthorizedLoginRoute: UnauthorizedLoginRoute,
+  UnauthorizedForgotPasswordRoute: UnauthorizedForgotPasswordRoute,
+  UnauthorizedResetPasswordTokenRoute: UnauthorizedResetPasswordTokenRoute,
   UnauthorizedRegisterRoute: UnauthorizedRegisterRoute,
 }
 
