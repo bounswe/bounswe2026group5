@@ -155,3 +155,29 @@ export function useUpdateAppUsageMode() {
         mutationFn: updateAppUsageModeFn,
     })
 }
+
+export async function forgotPasswordFn(data: { email: string }) {
+    const res = await fetch(`${API_BASE_URL}/auth/forgot-password/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    })
+    // Always swallow errors — generic response to prevent account enumeration
+    if (!res.ok && res.status !== 400) await throwApiError(res)
+}
+
+export async function resetPasswordFn(data: { token: string; password: string }) {
+    const res = await fetch(`${API_BASE_URL}/auth/reset-password/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    })
+    if (!res.ok) await throwApiError(res)
+}
+
+export function clearAuthState() {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('id')
+    queryClient.clear()
+}
