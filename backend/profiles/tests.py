@@ -2990,7 +2990,7 @@ class CommunityTagsAPITests(TestCase):
         data = response.json()
         self.assertEqual(data["name"], "Python Devs")
         self.assertEqual(data["slug"], "python-devs")
-        self.assertEqual(data["member_count"], 0)
+        self.assertEqual(data["member_count"], 1)
         self.assertEqual(data["created_by_username"], self.profile.username)
 
     def test_create_tag_unauthenticated_returns_401(self) -> None:
@@ -3079,6 +3079,7 @@ class CommunityTagsAPITests(TestCase):
         tag_id = create_resp.json()["id"]
 
         self._auth()
+        self.client.delete(f"/api/profiles/tags/{tag_id}/leave/")
         response = self.client.delete(f"/api/profiles/tags/{tag_id}/")
 
         self.assertEqual(response.status_code, 204)
@@ -3131,7 +3132,7 @@ class CommunityTagsAPITests(TestCase):
         create_resp = self._create_tag("Joinable Tag")
         tag_id = create_resp.json()["id"]
 
-        self._auth()
+        self._auth(self.access_token2)
         response = self.client.post(f"/api/profiles/tags/{tag_id}/join/")
 
         self.assertEqual(response.status_code, 200)
@@ -3146,9 +3147,6 @@ class CommunityTagsAPITests(TestCase):
         create_resp = self._create_tag("Count Tag")
         tag_id = create_resp.json()["id"]
 
-        self._auth()
-        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
-
         self._auth(self.access_token2)
         self.client.post(f"/api/profiles/tags/{tag_id}/join/")
 
@@ -3160,7 +3158,7 @@ class CommunityTagsAPITests(TestCase):
         create_resp = self._create_tag("Dup Join Tag")
         tag_id = create_resp.json()["id"]
 
-        self._auth()
+        self._auth(self.access_token2)
         self.client.post(f"/api/profiles/tags/{tag_id}/join/")
         response = self.client.post(f"/api/profiles/tags/{tag_id}/join/")
 
@@ -3183,7 +3181,6 @@ class CommunityTagsAPITests(TestCase):
         tag_id = create_resp.json()["id"]
 
         self._auth()
-        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
         response = self.client.delete(f"/api/profiles/tags/{tag_id}/leave/")
 
         self.assertEqual(response.status_code, 200)
@@ -3196,9 +3193,6 @@ class CommunityTagsAPITests(TestCase):
 
         create_resp = self._create_tag("Decrement Tag")
         tag_id = create_resp.json()["id"]
-
-        self._auth()
-        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
 
         self._auth(self.access_token2)
         self.client.post(f"/api/profiles/tags/{tag_id}/join/")
@@ -3214,7 +3208,7 @@ class CommunityTagsAPITests(TestCase):
         create_resp = self._create_tag("No Membership Tag")
         tag_id = create_resp.json()["id"]
 
-        self._auth()
+        self._auth(self.access_token2)
         response = self.client.delete(f"/api/profiles/tags/{tag_id}/leave/")
 
         self.assertEqual(response.status_code, 400)
@@ -3226,12 +3220,9 @@ class CommunityTagsAPITests(TestCase):
         """My tags endpoint returns only tags the user has joined."""
         resp1 = self._create_tag("My Tag 1")
         resp2 = self._create_tag("My Tag 2")
-        self._create_tag("Not Joined Tag")
+        self._create_tag("Not Joined Tag", token=self.access_token2)
 
         self._auth()
-        self.client.post(f"/api/profiles/tags/{resp1.json()['id']}/join/")
-        self.client.post(f"/api/profiles/tags/{resp2.json()['id']}/join/")
-
         response = self.client.get(self.my_tags_url)
 
         self.assertEqual(response.status_code, 200)
@@ -3476,7 +3467,7 @@ class CommunityTagsAPITests(TestCase):
     def test_popular_excludes_zero_member_tags(self) -> None:
         """Tags with no members are not included in the popular list."""
         self._seed_tag_with_members("Has Members", 2)
-        self._create_tag("Empty Tag")  # zero members
+        CommunityTag.objects.create(name="Empty Tag", slug="empty-tag")  # zero members
 
         self.client.credentials()
         response = self.client.get("/api/profiles/tags/popular/")
@@ -3688,6 +3679,9 @@ class CommunityTagsAPITests(TestCase):
         """An empty tag returns an empty results array with count zero."""
         create_resp = self._create_tag("Empty Tag")
         tag_id = create_resp.json()["id"]
+
+        self._auth()
+        self.client.delete(f"/api/profiles/tags/{tag_id}/leave/")
 
         self.client.credentials()
         response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
