@@ -22,7 +22,7 @@ import {
     useUpdateCommunityDescriptionMutation,
 } from '@/lib/queries/CommunityQueries.ts'
 import { meQueryOptions } from '@/lib/queries/AuthQueries.ts'
-import { useSendMessageToUser } from '@/lib/queries/MessagingQueries.ts'
+import { useMessaging } from '@/lib/queries/MessagingQueries.ts'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -131,7 +131,7 @@ export function CommunityDetailPage() {
     const joinMutation = useJoinCommunityMutation()
     const leaveMutation = useLeaveCommunityMutation()
     const updateMutation = useUpdateCommunityDescriptionMutation()
-    const handleSendMessage = useSendMessageToUser()
+    const { matchedUsernames, sendMessageTo } = useMessaging()
 
     const isMember = community?.is_member ?? false
     const isCreator = Boolean(me && community?.created_by_username === me.username)
@@ -315,7 +315,7 @@ export function CommunityDetailPage() {
                                     onViewProfile={(username) =>
                                         navigate({ to: '/profiles/$username', params: { username } })
                                     }
-                                    onSendMessage={handleSendMessage}
+                                    onSendMessage={matchedUsernames.has(profile.username) ? sendMessageTo : undefined}
                                 />
                             ))}
                         </div>

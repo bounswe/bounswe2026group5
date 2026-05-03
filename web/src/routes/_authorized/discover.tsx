@@ -14,7 +14,7 @@ import {
     recentlyAddedMentorsQueryOptions,
 } from '@/lib/queries/DiscoverQueries.ts'
 import { TrendingUp, Sparkles } from 'lucide-react'
-import { useSendMessageToUser } from '@/lib/queries/MessagingQueries.ts'
+import { useMessaging } from '@/lib/queries/MessagingQueries.ts'
 
 const PAGE_SIZE = 6
 const DISCOVER_SECTION_CONTAINER_CLASS =
@@ -35,9 +35,10 @@ interface MentorRowProps {
     profiles: import('@/lib/queries/DiscoverQueries.ts').PublicMentorProfile[]
     onViewProfile: (username: string) => void
     onSendMessage: (username: string) => void
+    matchedUsernames: Set<string>
 }
 
-function MentorRow({ title, subtitle, icon, profiles, onViewProfile, onSendMessage }: MentorRowProps) {
+function MentorRow({ title, subtitle, icon, profiles, onViewProfile, onSendMessage, matchedUsernames }: MentorRowProps) {
     return (
         <div className={`${DISCOVER_SECTION_CONTAINER_CLASS} flex flex-col gap-4`}>
             <div className="flex items-end justify-between">
@@ -59,7 +60,7 @@ function MentorRow({ title, subtitle, icon, profiles, onViewProfile, onSendMessa
                         <ProfileCard
                             profile={profile}
                             onViewProfile={onViewProfile}
-                            onSendMessage={onSendMessage}
+                            onSendMessage={matchedUsernames.has(profile.username) ? onSendMessage : undefined}
                             className="h-full"
                         />
                     </div>
@@ -75,7 +76,7 @@ function MentorRow({ title, subtitle, icon, profiles, onViewProfile, onSendMessa
 
 export function DiscoverPage() {
     const navigate = useNavigate()
-    const handleSendMessage = useSendMessageToUser()
+    const { matchedUsernames, sendMessageTo } = useMessaging()
     const [query, setQuery] = useState('')
     const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set())
 
@@ -158,7 +159,8 @@ export function DiscoverPage() {
                             icon={<TrendingUp className="h-5 w-5 text-accent" />}
                             profiles={popularMentors}
                             onViewProfile={handleViewProfile}
-                            onSendMessage={handleSendMessage}
+                            onSendMessage={sendMessageTo}
+                            matchedUsernames={matchedUsernames}
                         />
                     )}
 
@@ -169,7 +171,8 @@ export function DiscoverPage() {
                             icon={<Sparkles className="h-5 w-5 text-amber-500" />}
                             profiles={recentMentors}
                             onViewProfile={handleViewProfile}
-                            onSendMessage={handleSendMessage}
+                            onSendMessage={sendMessageTo}
+                            matchedUsernames={matchedUsernames}
                         />
                     )}
 
@@ -206,7 +209,7 @@ export function DiscoverPage() {
                                 key={profile.id}
                                 profile={profile}
                                 onViewProfile={handleViewProfile}
-                                onSendMessage={handleSendMessage}
+                                onSendMessage={matchedUsernames.has(profile.username) ? sendMessageTo : undefined}
                                 className="h-full"
                             />
                         ))}

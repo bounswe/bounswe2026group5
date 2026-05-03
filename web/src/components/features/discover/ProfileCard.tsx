@@ -98,7 +98,7 @@ export function ProfileCard({
         </Body>
 
         {/* Actions */}
-        <div className="grid grid-cols-2 gap-3 mt-auto">
+        <div className={cn('grid gap-3 mt-auto', onSendMessage ? 'grid-cols-2' : 'grid-cols-1')}>
           <Button
               className="w-full bg-accent hover:bg-accent-light text-white shadow-sm"
               size="sm"
@@ -106,14 +106,16 @@ export function ProfileCard({
           >
             View Profile
           </Button>
-          <Button
-              variant="outline"
-              className="w-full flex-1 min-w-0 truncate border-line text-ink-soft hover:text-ink hover:border-accent/30 bg-mist hover:bg-accent/20"
-              size="sm"
-              onClick={() => onSendMessage?.(profile.username)}
-          >
-            Send Message
-          </Button>
+          {onSendMessage && (
+            <Button
+                variant="outline"
+                className="w-full flex-1 min-w-0 truncate border-line text-ink-soft hover:text-ink hover:border-accent/30 bg-mist hover:bg-accent/20"
+                size="sm"
+                onClick={() => onSendMessage(profile.username)}
+            >
+              Send Message
+            </Button>
+          )}
         </div>
       </div>
   )
