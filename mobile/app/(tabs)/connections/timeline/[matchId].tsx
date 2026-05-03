@@ -150,28 +150,28 @@ function TimelineEventNode({
     >
       <View className="w-12 items-center">
         <View
-          className={`w-0.5 flex-1 ${
-            isFirst ? "bg-transparent" : "bg-divider dark:bg-divider-dark"
+          className={`w-1 flex-1 rounded-full ${
+            isFirst ? "bg-transparent" : "bg-primary/35 dark:bg-primary-dim/40"
           }`}
         />
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={onToggle}
-          className={`h-11 w-11 items-center justify-center rounded-full border-2 ${
+          className={`h-11 w-11 items-center justify-center rounded-full border-[3px] ${
             isSystemEvent
-              ? "border-sky-200 bg-sky-50 dark:border-sky-900 dark:bg-sky-950/30"
-              : "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30"
+              ? "border-primary/45 bg-primary/10 dark:border-primary-dim/60 dark:bg-primary-dim/15"
+              : "border-emerald-500/45 bg-emerald-50 dark:border-emerald-400/60 dark:bg-emerald-950/30"
           }`}
         >
           <Ionicons
             name={isSystemEvent ? "sparkles-outline" : "flag-outline"}
             size={18}
-            color={isSystemEvent ? "#0369a1" : "#047857"}
+            color={isSystemEvent ? "#2f7d68" : "#047857"}
           />
         </TouchableOpacity>
         <View
-          className={`w-0.5 flex-1 ${
-            isLast ? "bg-transparent" : "bg-divider dark:bg-divider-dark"
+          className={`w-1 flex-1 rounded-full ${
+            isLast ? "bg-transparent" : "bg-primary/35 dark:bg-primary-dim/40"
           }`}
         />
       </View>
