@@ -64,7 +64,7 @@ class TimelineSignalTests(TestCase):
         self.assertEqual(event.event_type, "request_accepted")
         self.assertFalse(event.show_on_profile)
         self.assertFalse(event.is_deleted)
-        self.assertIsNone(event.last_edited)
+        self.assertEqual(event.last_edited, event.created_at)
         self.assertIsNone(event.reposted_from)
         self.assertEqual(event.payload["request_id"], str(self.request.id))
 
@@ -79,12 +79,22 @@ class TimelineSignalTests(TestCase):
             status=MeetingSession.Status.SCHEDULED,
         )
 
-        event = TimelineEvent.objects.get(source_id=f"session_scheduled:{session.id}")
+        event = (
+            TimelineEvent.objects.filter(
+                source_id__startswith=f"session_scheduled:{session.id}:",
+                category=TimelineEvent.Category.AGTE,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        self.assertIsNotNone(event)
+        assert event is not None
         self.assertEqual(event.event_type, "session_scheduled")
         self.assertEqual(event.actor_role, "system")
         self.assertEqual(event.timestamp, session.scheduled_start_at_utc)
+        self.assertEqual(event.last_edited, event.created_at)
 
-    def test_session_status_change_replaces_old_session_event(self) -> None:
+    def test_session_status_change_keeps_history_and_creates_new_event(self) -> None:
         start_at = timezone.now() + timedelta(days=2)
         session = MeetingSession.objects.create(
             match=self.match,
@@ -94,7 +104,16 @@ class TimelineSignalTests(TestCase):
             scheduled_end_at_utc=start_at + timedelta(hours=1),
             status=MeetingSession.Status.SCHEDULED,
         )
-        scheduled_event = TimelineEvent.objects.get(source_id=f"session_scheduled:{session.id}")
+        scheduled_event = (
+            TimelineEvent.objects.filter(
+                source_id__startswith=f"session_scheduled:{session.id}:",
+                category=TimelineEvent.Category.AGTE,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        self.assertIsNotNone(scheduled_event)
+        assert scheduled_event is not None
         scheduled_created_at = scheduled_event.created_at
 
         session.status = MeetingSession.Status.CANCELED
@@ -103,16 +122,27 @@ class TimelineSignalTests(TestCase):
         session.save(update_fields=["status", "canceled_by_role", "cancel_reason", "updated_at"])
         session.refresh_from_db()
 
-        self.assertFalse(
-            TimelineEvent.objects.filter(source_id=f"session_scheduled:{session.id}").exists()
+        self.assertTrue(
+            TimelineEvent.objects.filter(
+                source_id__startswith=f"session_scheduled:{session.id}:",
+                category=TimelineEvent.Category.AGTE,
+            ).exists()
         )
-        canceled_event = TimelineEvent.objects.get(source_id=f"session_canceled:{session.id}")
+        canceled_event = (
+            TimelineEvent.objects.filter(
+                source_id__startswith=f"session_canceled:{session.id}:",
+                category=TimelineEvent.Category.AGTE,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        self.assertIsNotNone(canceled_event)
+        assert canceled_event is not None
         self.assertEqual(canceled_event.actor_role, "mentee")
         self.assertEqual(canceled_event.payload["cancel_reason"], "No longer needed")
-        self.assertEqual(canceled_event.created_at, scheduled_created_at)
-        self.assertIsNotNone(canceled_event.last_edited)
+        self.assertGreaterEqual(canceled_event.created_at, scheduled_created_at)
         self.assertEqual(canceled_event.timestamp, session.scheduled_start_at_utc)
-        self.assertEqual(canceled_event.last_edited, session.updated_at)
+        self.assertEqual(canceled_event.last_edited, canceled_event.created_at)
 
     def test_match_deactivation_materializes_single_mentorship_ended_agte(self) -> None:
         deactivate_match(match=self.match, actor_profile=self.mentor_profile)
@@ -124,6 +154,67 @@ class TimelineSignalTests(TestCase):
 
         event = events.first()
         self.assertIsNotNone(event)
+        assert event is not None
         self.assertEqual(event.actor_role, "mentor")
         self.assertEqual(event.payload["match_id"], str(self.match.id))
         self.assertIn("notification_id", event.payload)
+        self.assertEqual(event.last_edited, event.created_at)
+
+    def test_session_status_change_creates_distinct_history_rows(self) -> None:
+        start_at = timezone.now() + timedelta(days=3)
+        session = MeetingSession.objects.create(
+            match=self.match,
+            mentor=self.match.mentor,
+            mentee=self.match.mentee,
+            scheduled_start_at_utc=start_at,
+            scheduled_end_at_utc=start_at + timedelta(hours=1),
+            status=MeetingSession.Status.SCHEDULED,
+        )
+
+        session.status = MeetingSession.Status.RESCHEDULED
+        session.save(update_fields=["status", "updated_at"])
+        session.status = MeetingSession.Status.COMPLETED
+        session.save(update_fields=["status", "updated_at"])
+
+        scheduled_count = TimelineEvent.objects.filter(
+            source_id__startswith=f"session_scheduled:{session.id}:",
+            category=TimelineEvent.Category.AGTE,
+        ).count()
+        rescheduled_count = TimelineEvent.objects.filter(
+            source_id__startswith=f"session_rescheduled:{session.id}:",
+            category=TimelineEvent.Category.AGTE,
+        ).count()
+        completed_count = TimelineEvent.objects.filter(
+            source_id__startswith=f"session_completed:{session.id}:",
+            category=TimelineEvent.Category.AGTE,
+        ).count()
+
+        self.assertEqual(scheduled_count, 1)
+        self.assertEqual(rescheduled_count, 1)
+        self.assertEqual(completed_count, 1)
+
+    def test_agte_created_at_reflects_action_time_not_event_time(self) -> None:
+        start_at = timezone.now() + timedelta(days=7)
+        session = MeetingSession.objects.create(
+            match=self.match,
+            mentor=self.match.mentor,
+            mentee=self.match.mentee,
+            scheduled_start_at_utc=start_at,
+            scheduled_end_at_utc=start_at + timedelta(hours=1),
+            status=MeetingSession.Status.SCHEDULED,
+        )
+
+        event = (
+            TimelineEvent.objects.filter(
+                source_id__startswith=f"session_scheduled:{session.id}:",
+                category=TimelineEvent.Category.AGTE,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        self.assertIsNotNone(event)
+        assert event is not None
+
+        # Event time is the session time, while created_at captures action time.
+        self.assertGreater(event.timestamp, event.created_at)
+        self.assertEqual(event.last_edited, event.created_at)

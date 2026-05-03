@@ -356,6 +356,8 @@ class JourneyEventSerializer(serializers.Serializer):
     type = serializers.CharField(read_only=True)
     category = serializers.CharField(read_only=True)
     timestamp = serializers.DateTimeField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    last_edited = serializers.DateTimeField(read_only=True, allow_null=True)
     actor_role = serializers.CharField(read_only=True)
     payload = serializers.JSONField(read_only=True)
     content = serializers.CharField(read_only=True, default="")

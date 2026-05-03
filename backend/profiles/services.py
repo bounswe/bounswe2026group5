@@ -5,10 +5,12 @@ from typing import Any
 
 from django.db import transaction
 from django.db.models import Q
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from .models import AvailabilitySlot, Profile
 from mentorship.models import MentorshipRequest
+
+from .models import AvailabilitySlot, Profile
 
 
 class AvailabilityBookingError(Exception):
@@ -131,7 +133,8 @@ def list_profile_feed_events(
             | Q(category=TimelineEvent.Category.MCTE, show_on_profile=True)
         )
         .select_related("author")
-        .order_by("-timestamp", "-created_at")
+        .annotate(effective_last_update=Coalesce("last_edited", "created_at"))
+        .order_by("-created_at", "-effective_last_update", "-source_id")
     )
 
     if category is not None:
