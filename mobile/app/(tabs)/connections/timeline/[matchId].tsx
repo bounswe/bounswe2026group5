@@ -41,7 +41,6 @@ export default function MatchJourneyScreen() {
   );
   const [isComposerOpen, setComposerOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const journeyQuery = useMatchJourneyQuery(matchId);
   const createEventMutation = useCreateTimelineEventMutation(currentUsername);
   const updateEventMutation = useUpdateTimelineEventMutation(currentUsername);
@@ -61,7 +60,6 @@ export default function MatchJourneyScreen() {
     }
 
     try {
-      setActionError(null);
       await createEventMutation.mutateAsync({
         matchId,
         ...payload,
@@ -70,7 +68,7 @@ export default function MatchJourneyScreen() {
       toast.success("Milestone added.");
       return true;
     } catch (error) {
-      setActionError(
+      toast.error(
         getActionErrorMessage(
           error,
           "Could not add milestone. The timeline API may be temporarily unavailable.",
@@ -93,7 +91,6 @@ export default function MatchJourneyScreen() {
     }
 
     try {
-      setActionError(null);
       await updateEventMutation.mutateAsync({
         matchId,
         eventId: event.id,
@@ -104,7 +101,7 @@ export default function MatchJourneyScreen() {
       setSelectedEvent(null);
       toast.success("Milestone updated.");
     } catch (error) {
-      setActionError(
+      toast.error(
         getActionErrorMessage(
           error,
           "Could not update milestone. The timeline API may be temporarily unavailable.",
@@ -119,7 +116,6 @@ export default function MatchJourneyScreen() {
     }
 
     try {
-      setActionError(null);
       await deleteEventMutation.mutateAsync({
         matchId,
         eventId: event.id,
@@ -128,7 +124,7 @@ export default function MatchJourneyScreen() {
       setSelectedEvent(null);
       toast.success("Milestone deleted.");
     } catch (error) {
-      setActionError(
+      toast.error(
         getActionErrorMessage(
           error,
           "Could not delete milestone. The timeline API may be temporarily unavailable.",
@@ -189,12 +185,6 @@ export default function MatchJourneyScreen() {
           />
         ) : (
           <>
-            {actionError ? (
-              <View className="mb-4">
-                <ErrorBanner message={actionError} />
-              </View>
-            ) : null}
-
             {journeyQuery.isLoading ? (
               <View testID="journey-loading" className="py-12 items-center">
                 <ActivityIndicator />
