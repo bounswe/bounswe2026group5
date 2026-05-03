@@ -40,6 +40,7 @@ def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[
     total_count = queryset.count()
     event_rows = list(
         queryset[offset : offset + limit].values(
+            "id",
             "source_id",
             "event_type",
             "category",
@@ -55,7 +56,8 @@ def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[
 
     results = [
         {
-            "id": row["source_id"],
+            "id": row["id"],
+            "source_id": row["source_id"],
             "type": row["event_type"],
             "category": row["category"],
             "timestamp": row["timestamp"],

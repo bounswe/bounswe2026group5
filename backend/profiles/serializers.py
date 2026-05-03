@@ -23,6 +23,7 @@ else:
 User = get_user_model()
 
 
+@extend_schema_field(OpenApiTypes.OBJECT)
 class LocationField(serializers.Field):
     """Serialize a PointField as {latitude, longitude} and accept the same on input."""
 

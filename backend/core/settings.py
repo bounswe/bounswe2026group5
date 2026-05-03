@@ -108,6 +108,9 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Neighborship App API Documentation",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {
+        "AppUsageModeEnum": "accounts.models.AppUsageMode",
+    },
 }
 
 MIDDLEWARE = [
