@@ -18,6 +18,7 @@ import {
   type AvailabilitySlot,
 } from "@/components/profile/AvailabilityPreview";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { ProfilePostsPreview } from "@/components/profile/ProfilePostsPreview";
 import { ProfileReviews } from "@/components/profile/ProfileReviews";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
@@ -165,6 +166,10 @@ type BodyContentProps = {
   onResendVerification?: () => void;
   onSubmit: () => void;
   isRequestPending: boolean;
+  /** Username used to load the posts preview strip. */
+  postsUsername: string;
+  /** Called when the user taps "View All Posts". */
+  onViewAllPosts: () => void;
 };
 
 function renderBodyContent({
@@ -197,6 +202,8 @@ function renderBodyContent({
   onResendVerification,
   onSubmit,
   isRequestPending,
+  postsUsername,
+  onViewAllPosts,
 }: BodyContentProps): React.ReactNode {
   if (loading) {
     return (
@@ -277,6 +284,12 @@ function renderBodyContent({
             }
           />
         )}
+
+        {/* Profile posts preview (PrP + public MCTE) — hidden when empty */}
+        <ProfilePostsPreview
+          username={postsUsername}
+          onViewAll={onViewAllPosts}
+        />
 
         {!!requestFeedback && (
           <View className="mb-4">
@@ -861,6 +874,12 @@ export default function MentorProfileScreen() {
     onSubmit: submitCoverLetter,
     isRequestPending:
       createRequestMutation.isPending || bookSlotMutation.isPending,
+    postsUsername: username ?? "",
+    onViewAllPosts: () => {
+      if (username) {
+        router.push(`/(tabs)/user/${encodeURIComponent(username)}/posts` as any);
+      }
+    },
   });
 
   const screenTitle = isViewedMentor ? "Mentor Profile" : "Profile";
