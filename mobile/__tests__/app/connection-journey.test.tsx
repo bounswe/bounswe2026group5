@@ -3,6 +3,10 @@ import { fireEvent, render } from "@testing-library/react-native";
 import React from "react";
 
 const mockBack = jest.fn();
+const mockSuccessToast = jest.fn();
+const mockCreateMutateAsync = jest.fn();
+const mockUpdateMutateAsync = jest.fn();
+const mockDeleteMutateAsync = jest.fn();
 let mockMatchId: string | undefined = "match-1";
 let mockJourneyQuery: any = {
   data: {
@@ -38,13 +42,39 @@ jest.mock("@/components/ui/ErrorBanner", () => ({
   },
 }));
 
+jest.mock("@/components/ui/ToastProvider", () => ({
+  useToast: () => ({
+    success: mockSuccessToast,
+  }),
+}));
+
+jest.mock("@/lib/auth/store", () => ({
+  useAuthStore: (selector: (state: { user: { username: string } }) => unknown) =>
+    selector({ user: { username: "current_user" } }),
+}));
+
 jest.mock("@/lib/queries/mentorship", () => ({
   useMatchJourneyQuery: () => mockJourneyQuery,
+  useCreateTimelineEventMutation: () => ({
+    mutateAsync: mockCreateMutateAsync,
+    isPending: false,
+  }),
+  useUpdateTimelineEventMutation: () => ({
+    mutateAsync: mockUpdateMutateAsync,
+    isPending: false,
+  }),
+  useDeleteTimelineEventMutation: () => ({
+    mutateAsync: mockDeleteMutateAsync,
+    isPending: false,
+  }),
 }));
 
 describe("MatchJourneyScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCreateMutateAsync.mockResolvedValue({});
+    mockUpdateMutateAsync.mockResolvedValue({});
+    mockDeleteMutateAsync.mockResolvedValue({});
     mockMatchId = "match-1";
     mockJourneyQuery = {
       data: {

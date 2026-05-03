@@ -10,275 +10,133 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { TimelineEventComposer } from "@/components/timeline/TimelineEventComposer";
+import { TimelineEventEditSheet } from "@/components/timeline/TimelineEventEditSheet";
+import { TimelineEventList } from "@/components/timeline/TimelineEventList";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { useToast } from "@/components/ui/ToastProvider";
+import { useAuthStore } from "@/lib/auth/store";
 import {
+  useCreateTimelineEventMutation,
+  useDeleteTimelineEventMutation,
   useMatchJourneyQuery,
+  useUpdateTimelineEventMutation,
+  type MCTEEventType,
   type TimelineEvent,
 } from "@/lib/queries/mentorship";
-
-const EVENT_LABELS: Record<string, string> = {
-  request_accepted: "Request accepted",
-  session_scheduled: "Session scheduled",
-  session_rescheduled: "Session rescheduled",
-  session_canceled: "Session canceled",
-  session_completed: "Session completed",
-  mentorship_ended: "Mentorship ended",
-  achievement: "Achievement",
-  social: "Social moment",
-  progress: "Progress update",
-};
-
-const PAYLOAD_LABELS: Record<string, string> = {
-  scheduled_start_at_utc: "Starts",
-  scheduled_end_at_utc: "Ends",
-  initial_session_start_at: "Initial session starts",
-  initial_session_end_at: "Initial session ends",
-  cancel_reason: "Cancel reason",
-};
 
 function getParamValue(value?: string | string[]): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function formatTimestamp(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function formatEventType(value: string): string {
-  return (
-    EVENT_LABELS[value] ??
-    value
-      .split("_")
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ")
-  );
-}
-
-function formatPayloadValue(value: unknown): string {
-  if (value === null || value === undefined || value === "") {
-    return "";
-  }
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  return JSON.stringify(value);
-}
-
-function formatPayloadKey(value: string): string {
-  if (PAYLOAD_LABELS[value]) {
-    return PAYLOAD_LABELS[value];
-  }
-
-  return value
-    .replace(/_utc$/u, "")
-    .replace(/_at$/u, "")
-    .replace(/_/gu, " ")
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function isPayloadIdField(key: string): boolean {
-  return key === "id" || key.endsWith("_id");
-}
-
-function formatPayloadId(value: unknown): string {
-  const text = formatPayloadValue(value);
-  if (!text) {
-    return "";
-  }
-
-  return text.length > 8 ? `Ref ${text.slice(0, 8)}` : `Ref ${text}`;
-}
-
-function isPayloadTimeField(key: string): boolean {
-  return key.endsWith("_at") || key.endsWith("_at_utc");
-}
-
-function getPayloadEntries(event: TimelineEvent): [string, string][] {
-  return Object.entries(event.payload)
-    .map(([key, value]) => [
-      isPayloadIdField(key) ? "Reference" : formatPayloadKey(key),
-      isPayloadIdField(key)
-        ? formatPayloadId(value)
-        : isPayloadTimeField(key) && typeof value === "string"
-        ? formatTimestamp(value)
-        : formatPayloadValue(value),
-    ] as [string, string])
-    .filter(([, value]) => value.trim().length > 0)
-    .slice(0, 4);
-}
-
-function TimelineEventNode({
-  event,
-  expanded,
-  isFirst,
-  isLast,
-  onToggle,
-}: Readonly<{
-  event: TimelineEvent;
-  expanded: boolean;
-  isFirst: boolean;
-  isLast: boolean;
-  onToggle: () => void;
-}>) {
-  const isSystemEvent = event.category === "AGTE";
-  const payloadEntries = getPayloadEntries(event);
-  const hasDetails =
-    Boolean(event.content) ||
-    Boolean(event.actor_role) ||
-    payloadEntries.length > 0 ||
-    event.show_on_profile;
-
-  return (
-    <View
-      testID={`journey-event-${event.id}`}
-      className="flex-row"
-    >
-      <View className="w-12 items-center">
-        <View
-          className={`w-1 flex-1 rounded-full ${
-            isFirst ? "bg-transparent" : "bg-primary/35 dark:bg-primary-dim/40"
-          }`}
-        />
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={onToggle}
-          className={`h-11 w-11 items-center justify-center rounded-full border-[3px] ${
-            isSystemEvent
-              ? "border-primary/45 bg-primary/10 dark:border-primary-dim/60 dark:bg-primary-dim/15"
-              : "border-emerald-500/45 bg-emerald-50 dark:border-emerald-400/60 dark:bg-emerald-950/30"
-          }`}
-        >
-          <Ionicons
-            name={isSystemEvent ? "sparkles-outline" : "flag-outline"}
-            size={18}
-            color={isSystemEvent ? "#2f7d68" : "#047857"}
-          />
-        </TouchableOpacity>
-        <View
-          className={`w-1 flex-1 rounded-full ${
-            isLast ? "bg-transparent" : "bg-primary/35 dark:bg-primary-dim/40"
-          }`}
-        />
-      </View>
-
-      <View className="flex-1 pb-5 pl-2">
-        <TouchableOpacity
-          testID={`journey-event-toggle-${event.id}`}
-          activeOpacity={0.82}
-          onPress={onToggle}
-          className="rounded-xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 py-3"
-        >
-          <View className="flex-row items-start justify-between gap-3">
-            <View className="flex-1">
-              <Text className="text-base font-extrabold text-on-surface dark:text-on-surface-dark">
-                {formatEventType(event.event_type)}
-              </Text>
-              <Text className="mt-1 text-xs font-semibold text-on-surface-muted dark:text-on-surface-muted-dark">
-                {formatTimestamp(event.timestamp)}
-              </Text>
-            </View>
-            <View className="rounded-full bg-surface-active dark:bg-gray-800 px-2.5 py-1">
-              <Text className="text-[10px] font-black uppercase text-on-surface-muted dark:text-on-surface-muted-dark">
-                {isSystemEvent ? "System" : "Milestone"}
-              </Text>
-            </View>
-          </View>
-          <View className="mt-2 flex-row items-center gap-1.5">
-            <Text className="text-xs font-semibold capitalize text-primary dark:text-primary-dim">
-              {event.actor_role ?? (isSystemEvent ? "System" : "Milestone")}
-            </Text>
-            {hasDetails ? (
-              <>
-                <Text className="text-xs text-on-surface-muted dark:text-on-surface-muted-dark">
-                  ·
-                </Text>
-                <Text className="text-xs font-semibold text-on-surface-muted dark:text-on-surface-muted-dark">
-                  {expanded ? "Hide details" : "View details"}
-                </Text>
-                <Ionicons
-                  name={expanded ? "chevron-up" : "chevron-down"}
-                  size={13}
-                  color="#737686"
-                />
-              </>
-            ) : null}
-          </View>
-        </TouchableOpacity>
-
-        {expanded && hasDetails ? (
-          <View className="mt-2 rounded-xl border border-divider/70 dark:border-divider-dark bg-surface-card/80 dark:bg-surface-card-dark px-4 py-3">
-            {event.content ? (
-              <Text className="text-sm leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
-                {event.content}
-              </Text>
-            ) : null}
-
-            {event.actor_role ? (
-              <Text className="mt-3 text-xs font-semibold capitalize text-primary dark:text-primary-dim">
-                {event.actor_role}
-              </Text>
-            ) : null}
-
-            {payloadEntries.length > 0 ? (
-              <View className="mt-3 gap-1.5">
-                {payloadEntries.map(([key, value]) => (
-                  <View key={key} className="flex-row gap-2">
-                    <Text className="w-28 text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark">
-                      {key}
-                    </Text>
-                    <Text
-                      className="flex-1 text-xs text-on-surface-soft dark:text-on-surface-soft-dark"
-                      numberOfLines={2}
-                    >
-                      {value}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            {event.show_on_profile ? (
-              <View className="mt-3 self-start rounded-full bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1">
-                <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                  Shown on profile
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
 export default function MatchJourneyScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const toast = useToast();
   const params = useLocalSearchParams<{ matchId?: string | string[] }>();
   const matchId = getParamValue(params.matchId);
+  const currentUsername = useAuthStore((state) => state.user?.username);
   const [expandedEventIds, setExpandedEventIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [isComposerOpen, setComposerOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const journeyQuery = useMatchJourneyQuery(matchId);
-  const journeyEvents =
-    journeyQuery.data?.results.filter(
-      (event) => event.category === "AGTE" || event.category === "MCTE",
-    ) ?? [];
+  const createEventMutation = useCreateTimelineEventMutation(currentUsername);
+  const updateEventMutation = useUpdateTimelineEventMutation(currentUsername);
+  const deleteEventMutation = useDeleteTimelineEventMutation(currentUsername);
+
+  const getActionErrorMessage = (error: unknown, fallback: string) =>
+    error instanceof Error && error.message.trim() ? error.message : fallback;
+
+  const handleCreateEvent = async (payload: {
+    event_type: MCTEEventType;
+    content: string;
+    media_url?: string | null;
+    show_on_profile: boolean;
+  }) => {
+    if (!matchId) {
+      return;
+    }
+
+    try {
+      setActionError(null);
+      await createEventMutation.mutateAsync({
+        matchId,
+        ...payload,
+      });
+      setComposerOpen(false);
+      toast.success("Milestone added.");
+      return true;
+    } catch (error) {
+      setActionError(
+        getActionErrorMessage(
+          error,
+          "Could not add milestone. The timeline API may be temporarily unavailable.",
+        ),
+      );
+      return false;
+    }
+  };
+
+  const handleUpdateEvent = async (
+    event: TimelineEvent,
+    payload: {
+      content: string;
+      media_url?: string | null;
+      show_on_profile: boolean;
+    },
+  ) => {
+    if (!matchId) {
+      return;
+    }
+
+    try {
+      setActionError(null);
+      await updateEventMutation.mutateAsync({
+        matchId,
+        eventId: event.id,
+        content: payload.content,
+        media_url: payload.media_url,
+        show_on_profile: payload.show_on_profile,
+      });
+      setSelectedEvent(null);
+      toast.success("Milestone updated.");
+    } catch (error) {
+      setActionError(
+        getActionErrorMessage(
+          error,
+          "Could not update milestone. The timeline API may be temporarily unavailable.",
+        ),
+      );
+    }
+  };
+
+  const handleDeleteEvent = async (event: TimelineEvent) => {
+    if (!matchId) {
+      return;
+    }
+
+    try {
+      setActionError(null);
+      await deleteEventMutation.mutateAsync({
+        matchId,
+        eventId: event.id,
+        show_on_profile: event.show_on_profile,
+      });
+      setSelectedEvent(null);
+      toast.success("Milestone deleted.");
+    } catch (error) {
+      setActionError(
+        getActionErrorMessage(
+          error,
+          "Could not delete milestone. The timeline API may be temporarily unavailable.",
+        ),
+      );
+    }
+  };
+
   const toggleExpandedEvent = (eventId: string) => {
     setExpandedEventIds((current) => {
       const next = new Set(current);
@@ -329,41 +187,69 @@ export default function MatchJourneyScreen() {
             title="Journey unavailable"
             message="Missing mentorship match id."
           />
-        ) : journeyQuery.isLoading ? (
-          <View testID="journey-loading" className="py-12 items-center">
-            <ActivityIndicator />
-            <Text className="mt-3 text-on-surface-soft dark:text-on-surface-soft-dark">
-              Loading journey...
-            </Text>
-          </View>
-        ) : journeyQuery.isError ? (
-          <ErrorBanner
-            title="Could not load journey"
-            message={
-              journeyQuery.error instanceof Error
-                ? journeyQuery.error.message
-                : "Journey events are temporarily unavailable."
-            }
-          />
-        ) : journeyEvents.length === 0 ? (
-          <View testID="journey-empty" className="py-8">
-            <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
-              No journey events yet.
-            </Text>
-          </View>
         ) : (
-          journeyEvents.map((event, index) => (
-            <TimelineEventNode
-              key={event.id}
-              event={event}
-              expanded={expandedEventIds.has(event.id)}
-              isFirst={index === 0}
-              isLast={index === journeyEvents.length - 1}
-              onToggle={() => toggleExpandedEvent(event.id)}
-            />
-          ))
+          <>
+            {actionError ? (
+              <View className="mb-4">
+                <ErrorBanner message={actionError} />
+              </View>
+            ) : null}
+
+            {journeyQuery.isLoading ? (
+              <View testID="journey-loading" className="py-12 items-center">
+                <ActivityIndicator />
+                <Text className="mt-3 text-on-surface-soft dark:text-on-surface-soft-dark">
+                  Loading journey...
+                </Text>
+              </View>
+            ) : journeyQuery.isError ? (
+              <ErrorBanner
+                title="Could not load journey"
+                message={
+                  journeyQuery.error instanceof Error
+                    ? journeyQuery.error.message
+                    : "Journey events are temporarily unavailable."
+                }
+              />
+            ) : (
+              <TimelineEventList
+                events={journeyQuery.data?.results ?? []}
+                expandedEventIds={expandedEventIds}
+                currentUsername={currentUsername}
+                onEditEvent={setSelectedEvent}
+                onToggleEvent={toggleExpandedEvent}
+              />
+            )}
+          </>
         )}
       </ScrollView>
+
+      {matchId ? (
+        <TouchableOpacity
+          testID="timeline-open-composer"
+          activeOpacity={0.9}
+          onPress={() => setComposerOpen(true)}
+          className="absolute bottom-7 right-5 h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg dark:bg-primary-dim"
+        >
+          <Ionicons name="create-outline" size={24} color="#ffffff" />
+        </TouchableOpacity>
+      ) : null}
+
+      <TimelineEventComposer
+        visible={isComposerOpen}
+        isSubmitting={createEventMutation.isPending}
+        onClose={() => setComposerOpen(false)}
+        onSubmit={handleCreateEvent}
+      />
+
+      <TimelineEventEditSheet
+        event={selectedEvent}
+        isSaving={updateEventMutation.isPending}
+        isDeleting={deleteEventMutation.isPending}
+        onClose={() => setSelectedEvent(null)}
+        onDelete={handleDeleteEvent}
+        onSave={handleUpdateEvent}
+      />
     </View>
   );
 }
