@@ -110,7 +110,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="profile"
+        name="profile/index"
         options={{
           title: "Profile",
           headerShown: false,
@@ -119,7 +119,23 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="user/[username]"
+        name="profile/posts"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="user/[username]/index"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="user/[username]/posts"
         options={{
           href: null,
           headerShown: false,

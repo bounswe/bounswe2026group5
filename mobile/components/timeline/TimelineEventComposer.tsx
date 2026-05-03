@@ -1,10 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -48,14 +45,12 @@ export function TimelineEventComposer({
 }>) {
   const [eventType, setEventType] = useState<MCTEEventType>("achievement");
   const [content, setContent] = useState("");
-  const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [showOnProfile, setShowOnProfile] = useState(false);
 
   const canSubmit = content.trim().length > 0 && !isSubmitting;
 
   const resetForm = () => {
     setContent("");
-    setMediaUri(null);
     setShowOnProfile(false);
     setEventType("achievement");
   };
@@ -65,12 +60,9 @@ export function TimelineEventComposer({
       return;
     }
 
-    const resolvedMediaUrl = mediaUri ?? undefined;
-
     const didSubmit = await onSubmit({
       event_type: eventType,
       content: content.trim(),
-      media_url: resolvedMediaUrl,
       show_on_profile: showOnProfile,
     });
 
@@ -80,28 +72,6 @@ export function TimelineEventComposer({
 
     resetForm();
     onClose();
-  };
-
-  const handlePickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (status !== "granted") {
-      Alert.alert(
-        "Permission required",
-        "Please allow access to your photos to select an image.",
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
-      setMediaUri(result.assets[0].uri);
-    }
   };
 
   return (
@@ -192,54 +162,6 @@ export function TimelineEventComposer({
                 textAlignVertical="top"
                 className="mt-4 min-h-[112px] rounded-xl border border-divider bg-surface-card px-3 py-3 text-on-surface dark:border-divider-dark dark:bg-surface-card-dark dark:text-on-surface-dark"
               />
-
-              <View className="mt-3">
-                <Text className="text-xs text-on-surface-soft dark:text-on-surface-soft-dark">
-                  Image Upload (optional)
-                </Text>
-
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={handlePickImage}
-                  className="mt-2 flex-row items-center justify-between rounded-xl border border-divider bg-surface-card px-3 py-3 dark:border-divider-dark dark:bg-surface-card-dark"
-                >
-                  <View className="flex-1 flex-row items-center">
-                    {mediaUri ? (
-                      <Image
-                        source={{ uri: mediaUri }}
-                        className="h-12 w-12 rounded-lg"
-                      />
-                    ) : (
-                      <View className="h-12 w-12 items-center justify-center rounded-md bg-gray-100 dark:bg-gray-700">
-                        <Ionicons
-                          name="image-outline"
-                          size={20}
-                          color="#8b909e"
-                        />
-                      </View>
-                    )}
-
-                    <Text
-                      className="ml-3 flex-1 text-on-surface dark:text-on-surface-dark"
-                      numberOfLines={2}
-                    >
-                      {mediaUri ? "Change image" : "Select image from device"}
-                    </Text>
-                  </View>
-
-                  {mediaUri ? (
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => setMediaUri(null)}
-                      className="ml-3"
-                    >
-                      <Text className="text-sm font-bold text-primary dark:text-primary-dim">
-                        Remove
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </TouchableOpacity>
-              </View>
 
               <View className="mt-4 flex-row items-center justify-between gap-3 pb-4">
                 <View className="flex-1">

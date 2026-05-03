@@ -70,9 +70,15 @@ describe("TabLayout", () => {
   it("keeps profile detail as a hidden tab route", () => {
     const { getByTestId, queryByTestId } = render(<TabLayout />);
 
-    expect(getByTestId("tab-screen-user/[username]")).toBeTruthy();
+    expect(getByTestId("tab-screen-user/[username]/index")).toBeTruthy();
+    expect(getByTestId("tab-screen-user/[username]/posts")).toBeTruthy();
+    expect(getByTestId("tab-screen-profile/posts")).toBeTruthy();
     expect(getByTestId("tab-screen-community/[tagId]/index")).toBeTruthy();
     expect(getByTestId("tab-screen-community/[tagId]/members")).toBeTruthy();
+    
+    expect(queryByTestId("visible-tab-user/[username]/index")).toBeNull();
+    expect(queryByTestId("visible-tab-user/[username]/posts")).toBeNull();
+    expect(queryByTestId("visible-tab-profile/posts")).toBeNull();
     expect(queryByTestId("visible-tab-community/[tagId]/index")).toBeNull();
     expect(queryByTestId("visible-tab-community/[tagId]/members")).toBeNull();
   });

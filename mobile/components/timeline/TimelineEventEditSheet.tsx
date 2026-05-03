@@ -36,12 +36,10 @@ export function TimelineEventEditSheet({
   ) => Promise<void> | void;
 }>) {
   const [content, setContent] = useState("");
-  const [mediaUrl, setMediaUrl] = useState("");
   const [showOnProfile, setShowOnProfile] = useState(false);
 
   useEffect(() => {
     setContent(event?.content ?? "");
-    setMediaUrl(event?.media_url ?? "");
     setShowOnProfile(Boolean(event?.show_on_profile));
   }, [event]);
 
@@ -93,18 +91,6 @@ export function TimelineEventEditSheet({
             className="mt-5 min-h-[120px] rounded-xl border border-divider bg-surface-card px-3 py-3 text-on-surface dark:border-divider-dark dark:bg-surface-card-dark dark:text-on-surface-dark"
           />
 
-          <TextInput
-            testID="timeline-edit-media-url"
-            value={mediaUrl}
-            onChangeText={setMediaUrl}
-            placeholder="Image URL (optional)"
-            placeholderTextColor="#8b8d98"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            className="mt-3 rounded-xl border border-divider bg-surface-card px-3 py-3 text-on-surface dark:border-divider-dark dark:bg-surface-card-dark dark:text-on-surface-dark"
-          />
-
           <View className="mt-4 flex-row items-center justify-between gap-3">
             <View className="flex-1">
               <Text className="text-sm font-bold text-on-surface dark:text-on-surface-dark">
@@ -133,7 +119,6 @@ export function TimelineEventEditSheet({
                 if (event && canSave) {
                   void onSave(event, {
                     content: content.trim(),
-                    media_url: mediaUrl.trim() ? mediaUrl.trim() : null,
                     show_on_profile: showOnProfile,
                   });
                 }
