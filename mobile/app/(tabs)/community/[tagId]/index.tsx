@@ -223,11 +223,12 @@ export default function CommunityDetailScreen() {
 
             <View>
               <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark mb-3">
-                Feed
+                Community Posts
               </Text>
               <View className="border-l-2 border-divider dark:border-divider-dark pl-4 py-1">
+                {/* TODO: wire up GET /api/profiles/tags/{tag_id}/posts/ when endpoint ships */}
                 <Text className="text-sm text-on-surface-soft/80 dark:text-on-surface-soft-dark/80">
-                  Community posts will appear here when the posts backend is ready.
+                  Community posts will appear here once the community posts endpoint (GET /api/profiles/tags/&#123;tag_id&#125;/posts/) is available.
                 </Text>
               </View>
             </View>
