@@ -19,3 +19,6 @@ tzdata==2025.3
 uritemplate==4.2.0
 google-auth>=2.38.0
 requests>=2.32.0
+Pillow>=11.0.0
+django-storages[google]>=1.14.0
+google-cloud-storage>=2.18.0
