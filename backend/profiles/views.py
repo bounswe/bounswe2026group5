@@ -248,7 +248,9 @@ class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
             "Return profile posts for a username. Includes both PrP posts authored by the "
             "profile and MCTE events authored by the profile where `show_on_profile=true`. "
             "If profile is private, only the owner can access this feed. "
-            "Supports optional filtering by `category` and `event_type`."
+            "Supports optional filtering by `category` and `event_type`. "
+            "Results are ordered newest-first by action metadata: `created_at`, then "
+            "`last_edited` as a tie-breaker."
         ),
         tags=["Profiles"],
     )
@@ -292,7 +294,8 @@ class MyProfilePostsCollectionAPIView(ProfileLookupMixin, APIView):
         description=(
             "Create a profile post (PrP) for the authenticated user. "
             "`timestamp` is optional; if omitted, null, or empty, it is set to the event's "
-            "creation time. If provided, it cannot be more than 1 day in the future."
+            "creation time. If provided, it cannot be more than 1 day in the future. "
+            "`timestamp` represents event time, while `created_at` represents action time."
         ),
         tags=["Profiles"],
     )

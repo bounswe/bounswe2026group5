@@ -39,6 +39,7 @@ from profiles.services import (
     create_prp_event,
 )
 from profiles.views import PublicMentorProfilesSearchListAPIView
+from timeline.models import TimelineEvent
 
 User: Any = get_user_model()
 
@@ -657,6 +658,23 @@ class ProfilePostsAPITests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertIsNotNone(response.data["timestamp"])
 
+    def test_create_prp_with_explicit_past_timestamp_keeps_action_time_distinct(self) -> None:
+        self._auth_owner()
+        explicit_timestamp = timezone.now() - timedelta(days=5)
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "progress",
+                "content": "Backfilled post",
+                "timestamp": explicit_timestamp.isoformat(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertGreater(response.data["created_at"], response.data["timestamp"])
+
     def test_create_prp_empty_timestamp_returns_201(self) -> None:
         self._auth_owner()
 
@@ -694,7 +712,7 @@ class ProfilePostsAPITests(TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_list_profile_posts_includes_prp_and_visible_mcte(self) -> None:
-        create_prp_event(
+        prp_event = create_prp_event(
             author_profile=self.owner_profile,
             event_type="achievement",
             content="PrP entry",
@@ -727,6 +745,9 @@ class ProfilePostsAPITests(TestCase):
         self.assertIn(visible_mcte.source_id, source_ids)
         self.assertNotIn(hidden_mcte.source_id, source_ids)
         self.assertTrue(any(item["category"] == "PrP" for item in results))
+        ordered_ids = [item["source_id"] for item in results]
+        self.assertEqual(ordered_ids[0], visible_mcte.source_id)
+        self.assertIn(prp_event.source_id, ordered_ids[1:])
 
     def test_list_profile_posts_filter_by_category_returns_matching_items(self) -> None:
         prp_event = create_prp_event(
@@ -879,6 +900,42 @@ class ProfilePostsAPITests(TestCase):
         self.assertEqual(list_response.status_code, 200)
         source_ids = {item["id"] for item in list_response.data["results"]}
         self.assertNotIn(event_id, source_ids)
+
+    def test_profile_feed_tiebreaks_with_last_edited_for_same_created_at(self) -> None:
+        match = self._create_match_for_owner()
+
+        first_event = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="progress",
+            content="First visible event",
+            show_on_profile=True,
+        )
+        second_event = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="Second visible event",
+            show_on_profile=True,
+        )
+
+        common_created_at = timezone.now() - timedelta(hours=1)
+        TimelineEvent.objects.filter(id__in=[first_event.id, second_event.id]).update(
+            created_at=common_created_at,
+            last_edited=common_created_at,
+        )
+
+        newer_edit_time = common_created_at + timedelta(minutes=5)
+        TimelineEvent.objects.filter(id=first_event.id).update(last_edited=newer_edit_time)
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url)
+        self.assertEqual(response.status_code, 200)
+
+        result_ids = [item["source_id"] for item in response.data["results"]]
+        self.assertLess(
+            result_ids.index(first_event.source_id), result_ids.index(second_event.source_id)
+        )
 
 
 class SkillListAPIViewTests(TestCase):
