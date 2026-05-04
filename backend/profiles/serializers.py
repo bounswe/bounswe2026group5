@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
@@ -10,17 +10,31 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from core.utils.image import resize_image
+from core.utils.validators import validate_file_size, validate_image_content_type
+
 from core.utils.timezone import get_project_timezone, to_local_time
 from mentorship.models import MeetingSession
 
 from .models import AvailabilitySlot, CommunityTag, Profile, Skill
 
-if TYPE_CHECKING:
-    from accounts.models import User as UserType
-else:
-    UserType = Any
-
 User = get_user_model()
+
+
+def resolve_picture_url(profile: Profile) -> str:
+    """Return the best available picture URL for a profile.
+
+    Priority:
+    1. Uploaded picture file (ImageField) — when present, return its URL.
+    2. External picture_url (URLField) — e.g. Google OAuth avatar.
+    3. Empty string — no picture available.
+    """
+    if profile.picture and hasattr(profile.picture, "url"):
+        try:
+            return profile.picture.url
+        except ValueError:
+            pass
+    return profile.picture_url or ""
 
 
 class LocationField(serializers.Field):
@@ -61,6 +75,94 @@ class SkillSerializer(serializers.ModelSerializer):
         model = Skill
         fields = ("id", "name")
         read_only_fields = fields
+
+
+class ProfilePictureUploadSerializer(serializers.Serializer):
+    """Write serializer for uploading a profile picture."""
+
+    picture = serializers.ImageField(required=True)
+
+    def validate_picture(self, picture):
+        """Validate image content-type and enforce a size limit."""
+        from django.conf import settings
+
+        validate_image_content_type(picture)
+        validate_file_size(
+            picture,
+            settings.MAX_PROFILE_PICTURE_SIZE_BYTES,
+            label="Profile picture",
+        )
+        return picture
+
+    def save_picture(self, profile: Profile):
+        """Resize the image and persist it on the profile."""
+        from django.conf import settings
+
+        picture = self.validated_data["picture"]
+        resized = resize_image(
+            picture,
+            max_dimension=settings.PROFILE_PICTURE_MAX_DIMENSION,
+            output_format="JPEG",
+        )
+
+        # Delete old uploaded picture file if it exists
+        if profile.picture:
+            try:
+                profile.picture.delete(save=False)
+            except Exception:
+                pass
+
+        profile.picture.save(resized.name, resized, save=True)
+        return profile
+
+
+class PostMediaUploadSerializer(serializers.Serializer):
+    """Write serializer for uploading media files attached to posts."""
+
+    file = serializers.FileField(required=True)
+
+    def validate_file(self, file):
+        """Validate content-type (image or PDF) and enforce a size limit."""
+        from django.conf import settings
+        from core.utils.validators import validate_media_content_type
+
+        validate_media_content_type(file)
+        validate_file_size(
+            file,
+            settings.MAX_POST_MEDIA_SIZE_BYTES,
+            label="Post media",
+        )
+        return file
+
+    def save_file(self):
+        """Resize (if image) and persist the file, returning the public URL."""
+        from django.conf import settings
+        from django.core.files.storage import default_storage
+        from core.utils.validators import IMAGE_CONTENT_TYPES
+
+        uploaded = self.validated_data["file"]
+
+        # If it's an image, resize; otherwise save as-is
+        if uploaded.content_type in IMAGE_CONTENT_TYPES:
+            processed = resize_image(
+                uploaded,
+                max_dimension=settings.POST_MEDIA_MAX_DIMENSION,
+                output_format="JPEG",
+            )
+        else:
+            processed = uploaded
+
+        import uuid as _uuid
+        from django.utils import timezone as _tz
+
+        now = _tz.now()
+        filename = f"{_uuid.uuid4().hex}_{processed.name}"
+        path = (
+            f"post_media/{now.year}/{now.month:02d}"
+            f"/{now.day:02d}/{filename}"
+        )
+        saved_path = default_storage.save(path, processed)
+        return default_storage.url(saved_path)
 
 
 class AvailabilitySlotSerializer(serializers.ModelSerializer):
@@ -135,7 +237,7 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
 
     full_name = serializers.CharField(source="display_name", read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
-    picture_url = serializers.URLField(read_only=True)
+    picture_url = serializers.SerializerMethodField()
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
 
     class Meta:
@@ -151,6 +253,11 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_picture_url(self, obj: Profile) -> str:
+        """Return uploaded picture URL or external URL fallback."""
+        return resolve_picture_url(obj)
+
     def to_representation(self, instance: Profile) -> dict[str, Any]:
         """Add 'hidden' field to the output representation."""
         ret = super().to_representation(instance)
@@ -165,7 +272,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="display_name", read_only=True)
     title = serializers.CharField(read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
-    picture_url = serializers.URLField(read_only=True)
+    picture_url = serializers.SerializerMethodField()
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     average_rating = serializers.DecimalField(max_digits=3, decimal_places=2, read_only=True)
     total_mentee_count = serializers.IntegerField(read_only=True)
@@ -186,6 +293,11 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_picture_url(self, obj: Profile) -> str:
+        """Return uploaded picture URL or external URL fallback."""
+        return resolve_picture_url(obj)
+
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         # Invert is_visible to get "hidden" semantics
@@ -198,6 +310,7 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
 
     location = LocationField(read_only=True)
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
+    picture_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -216,6 +329,11 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_picture_url(self, obj: Profile) -> str:
+        """Return uploaded picture URL or external URL fallback."""
+        return resolve_picture_url(obj)
 
 
 class UsernameUpdateMixin:
@@ -411,7 +529,7 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
     username = serializers.CharField(read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
-    picture_url = serializers.URLField(read_only=True)
+    picture_url = serializers.SerializerMethodField()
     location = LocationField(read_only=True)
     show_initials_only = serializers.BooleanField(read_only=True)
 
@@ -439,6 +557,11 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
             return _get_display_initials(obj.display_name or "")
         return obj.display_name
 
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_picture_url(self, obj: Profile) -> str:
+        """Return uploaded picture URL or external URL fallback."""
+        return resolve_picture_url(obj)
+
     def to_representation(self, instance: Profile) -> dict[str, Any]:
         """Add 'hidden' field to the output representation."""
         ret = super().to_representation(instance)
@@ -463,10 +586,17 @@ _PROFILE_POST_CATEGORY_CHOICES = ["PrP", "MCTE"]
 class ProfilePostAuthorSerializer(serializers.ModelSerializer):
     """Compact profile representation for profile post responses."""
 
+    picture_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Profile
         fields = ("id", "username", "display_name", "picture_url", "title")
         read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_picture_url(self, obj: Profile) -> str:
+        """Return uploaded picture URL or external URL fallback."""
+        return resolve_picture_url(obj)
 
 
 class PrPCreateSerializer(serializers.Serializer):

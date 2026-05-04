@@ -10,8 +10,11 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import Profile
+from profiles.serializers import resolve_picture_url
 
 from .models import AppUsageMode, AuthProvider, PasswordResetToken, User, UserRole
+
+_INVALID_TOKEN_ERROR = {"token": "Invalid or expired token."}
 
 
 class UserResponseSerializer(serializers.ModelSerializer):
@@ -27,8 +30,9 @@ class UserResponseSerializer(serializers.ModelSerializer):
 
     def get_picture_url(self, obj: User) -> str:
         profile = getattr(obj, "profile", None)
-        picture_url = getattr(profile, "picture_url", "") if profile else ""
-        return picture_url or ""
+        if profile is None:
+            return ""
+        return resolve_picture_url(profile)
 
     class Meta:
         model = User
@@ -205,14 +209,14 @@ class ResetPasswordSerializer(serializers.Serializer):
                 token_hash=token_hash
             )
         except PasswordResetToken.DoesNotExist:
-            raise serializers.ValidationError({"token": "Invalid or expired token."})
+            raise serializers.ValidationError(_INVALID_TOKEN_ERROR)
 
         if not reset_token.is_valid():
-            raise serializers.ValidationError({"token": "Invalid or expired token."})
+            raise serializers.ValidationError(_INVALID_TOKEN_ERROR)
 
         user = reset_token.user
         if not user.is_active or user.is_banned:
-            raise serializers.ValidationError({"token": "Invalid or expired token."})
+            raise serializers.ValidationError(_INVALID_TOKEN_ERROR)
 
         password_validation.validate_password(new_password, user=user)
 
