@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { TestDataApi, type UserSeed } from './api/TestDataApi';
-import { DashboardPage } from './pages/DashboardPage';
-import { DiscoverPage } from './pages/DiscoverPage';
-import { ProfilePage } from './pages/ProfilePage';
+import { TestDataApi, type UserSeed } from '../api/TestDataApi';
+import { DashboardPage } from '../pages/DashboardPage';
+import { DiscoverPage } from '../pages/DiscoverPage';
+import { ProfilePage } from '../pages/ProfilePage';
 
 test.describe('AT-AVAIL-004: Availability & Booking', () => {
   test('mentor publishes availability and mentee books through request acceptance', async ({

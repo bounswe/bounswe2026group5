@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { TestDataApi, type UserSeed } from './api/TestDataApi';
-import { DashboardPage } from './pages/DashboardPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { SchedulePage } from './pages/SchedulePage';
+import { TestDataApi, type UserSeed } from '../api/TestDataApi';
+import { DashboardPage } from '../pages/DashboardPage';
+import { ProfilePage } from '../pages/ProfilePage';
+import { SchedulePage } from '../pages/SchedulePage';
 
 test.describe('AT-003: Meeting Session Management', () => {
   test('mentee and mentor manage a rescheduled and canceled session from web surfaces', async ({
