@@ -27,6 +27,18 @@ function formatPostTimestamp(value: string): string {
   }).format(date);
 }
 
+function getInitials(name: string): string {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word[0] ?? "")
+    .join("")
+    .toUpperCase();
+
+  return initials || "?";
+}
+
 interface ProfilePostCardProps {
   post: ProfilePost;
   /** When true, content is not truncated. Default: false (preview mode). */
@@ -45,6 +57,9 @@ export function ProfilePostCard({
   const label = EVENT_TYPE_LABELS[post.event_type] ?? post.event_type;
   const categoryLabel = CATEGORY_LABELS[post.category] ?? post.category;
   const dateLabel = formatPostTimestamp(post.timestamp);
+  const authorName =
+    post.author?.display_name || post.author?.username || "Unknown user";
+  const authorSubtitle = post.author?.title || post.author?.username || "";
 
   const isAchievement = post.event_type === "achievement";
   const accentColor = isAchievement
@@ -65,17 +80,50 @@ export function ProfilePostCard({
       testID={`post-card-${post.id}`}
       className="rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4"
     >
-      {/* Header row */}
-      <View className="flex-row items-center justify-between mb-2">
-        <View className="flex-row items-center gap-1.5">
-          <Ionicons name={iconName} size={14} color="#6b7280" />
-          <Text className={`text-xs font-bold ${accentColor}`}>{label}</Text>
+      <View className="mb-3 flex-row items-start justify-between gap-3">
+        <View className="min-w-0 flex-1 flex-row items-center gap-3">
+          {post.author?.picture_url ? (
+            <Image
+              testID={`post-card-avatar-${post.id}`}
+              source={{ uri: post.author.picture_url }}
+              className="h-10 w-10 rounded-full bg-surface-active dark:bg-surface-active-dark"
+              resizeMode="cover"
+            />
+          ) : (
+            <View
+              testID={`post-card-avatar-fallback-${post.id}`}
+              className="h-10 w-10 items-center justify-center rounded-full bg-surface-active dark:bg-surface-active-dark"
+            >
+              <Text className="text-sm font-extrabold text-primary dark:text-primary-dim">
+                {getInitials(authorName)}
+              </Text>
+            </View>
+          )}
+          <View className="min-w-0 flex-1">
+            <Text
+              numberOfLines={1}
+              className="text-sm font-bold text-on-surface dark:text-on-surface-dark"
+            >
+              {authorName}
+            </Text>
+            <Text
+              numberOfLines={1}
+              className="text-xs text-on-surface-muted dark:text-on-surface-muted-dark"
+            >
+              {authorSubtitle ? `${authorSubtitle} - ${dateLabel}` : dateLabel}
+            </Text>
+          </View>
         </View>
         <View className="rounded-full bg-surface-active dark:bg-gray-800 px-2 py-0.5">
           <Text className="text-[10px] font-black uppercase text-on-surface-muted dark:text-on-surface-muted-dark">
             {categoryLabel}
           </Text>
         </View>
+      </View>
+
+      <View className="mb-2 flex-row items-center gap-1.5">
+        <Ionicons name={iconName} size={14} color="#6b7280" />
+        <Text className={`text-xs font-bold ${accentColor}`}>{label}</Text>
       </View>
 
       {/* Content */}
@@ -99,10 +147,6 @@ export function ProfilePostCard({
         />
       ) : null}
 
-      {/* Footer */}
-      <Text className="mt-3 text-xs text-on-surface-muted dark:text-on-surface-muted-dark">
-        {dateLabel}
-      </Text>
     </View>
   );
 }

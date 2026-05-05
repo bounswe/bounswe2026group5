@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
   ActivityIndicator,
-  ScrollView,
   Text,
   TouchableOpacity,
   View,
@@ -17,7 +16,7 @@ interface ProfilePostsPreviewProps {
 }
 
 /**
- * Horizontal scrolling preview strip showing up to 3 profile posts.
+ * Vertical preview stack showing up to 3 profile posts.
  *
  * Data rules:
  *   - Relies on backend to return PrP + public MCTE only.
@@ -55,38 +54,31 @@ export function ProfilePostsPreview({
 
   return (
     <View testID="profile-posts-preview" className="mb-6">
-      {/* Section header */}
-      <View className="flex-row items-center justify-between mb-3">
+      <View className="mb-3">
         <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
           Posts
         </Text>
-        {totalCount > 0 ? (
-          <TouchableOpacity
-            testID="view-all-posts-button"
-            activeOpacity={0.75}
-            onPress={onViewAll}
-            className="flex-row items-center gap-1"
-          >
-            <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
-              View All
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color="#2f7d68" />
-          </TouchableOpacity>
-        ) : null}
       </View>
 
-      {/* Horizontal card strip */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 12, paddingRight: 4 }}
-      >
+      <View className="gap-3">
         {posts.map((post) => (
-          <View key={post.id} style={{ width: 240 }}>
-            <ProfilePostCard post={post} />
-          </View>
+          <ProfilePostCard key={post.id} post={post} />
         ))}
-      </ScrollView>
+      </View>
+
+      {totalCount > 0 ? (
+        <TouchableOpacity
+          testID="view-all-posts-button"
+          activeOpacity={0.75}
+          onPress={onViewAll}
+          className="mt-3 flex-row items-center justify-center gap-1 rounded-xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark py-3"
+        >
+          <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
+            View All
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color="#2f7d68" />
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }

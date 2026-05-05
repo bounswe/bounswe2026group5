@@ -102,3 +102,5 @@ mobile/android
 *.key
 *.mobileprovision
 *.pem
+
+credentials/
