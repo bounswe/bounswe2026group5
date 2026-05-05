@@ -41,6 +41,7 @@ export class DiscoverPage {
   async filterBySkill(skill: string) {
     await this.openSkillFilter();
     await this.selectSkill(skill);
+    await this.openSkillFilter();
   }
 
   async expectSelectedSkillCount(count: number) {
@@ -57,6 +58,13 @@ export class DiscoverPage {
 
   async expectRecentlyJoinedSectionVisible() {
     await expect(this.page.getByRole('heading', { name: 'Recently Joined' })).toBeVisible();
+  }
+
+  async expectMentorCard(mentorName: string, skill: string) {
+    const card = this.mentorCard(mentorName);
+    await expect(card).toBeVisible({ timeout: 2_000 });
+    await expect(card.getByText(skill, { exact: true })).toBeVisible();
+    await expect(card.getByRole('button', { name: 'View Profile' })).toBeVisible();
   }
 
   async openMentorProfile(mentorName: string) {

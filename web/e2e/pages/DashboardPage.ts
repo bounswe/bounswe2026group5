@@ -41,6 +41,12 @@ export class DashboardPage {
     await expect(this.page.getByText('Request accepted').first()).toBeVisible();
   }
 
+  async declineIncomingRequest(menteeName: string, coverLetter?: string) {
+    const requestCard = await this.findIncomingRequest(menteeName, coverLetter);
+    await requestCard.getByRole('button', { name: /Decline/i }).click();
+    await expect(this.page.getByText('Request declined').first()).toBeVisible();
+  }
+
   async expectUpcomingSession(peerName: string) {
     await expect(this.page.getByRole('heading', { name: 'Upcoming Sessions' })).toBeVisible();
     await expect(this.page.getByText(`Session with ${peerName}`).first()).toBeVisible();

@@ -69,11 +69,11 @@ export type Match = {
 
 export type Notification = {
   id: string;
-  type: 'session_rescheduled' | 'session_canceled' | string;
+  type: string;
   title: string;
   message: string;
   resource_id: string | null;
-  is_read: boolean;
+  is_read?: boolean;
 };
 
 export class TestDataApi {
@@ -178,12 +178,16 @@ export class TestDataApi {
   }
 
   async respondToRequest(auth: AuthResponse, requestId: string, action: 'accept' | 'reject') {
-    const response = await this.request.post(`${API_BASE_URL}/mentorship/requests/${requestId}/respond/`, {
+    const response = await this.tryRespondToRequest(auth, requestId, action);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<MentorshipRequest>;
+  }
+
+  async tryRespondToRequest(auth: AuthResponse, requestId: string, action: 'accept' | 'reject') {
+    return this.request.post(`${API_BASE_URL}/mentorship/requests/${requestId}/respond/`, {
       headers: this.authHeaders(auth),
       data: { action },
     });
-    expect(response.ok()).toBeTruthy();
-    return response.json() as Promise<MentorshipRequest>;
   }
 
   async fetchMyMatches(auth: AuthResponse) {
