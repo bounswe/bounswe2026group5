@@ -82,8 +82,6 @@ function PublicProfileRoute() {
             app_usage_mode: profile.app_usage_mode,
         }
 
-    console.log('profile from cache:', profile)
-
     return (
         <div className="flex min-h-screen flex-col">
             {header}

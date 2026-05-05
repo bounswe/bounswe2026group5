@@ -270,7 +270,7 @@ class ReportCreateSerializer(serializers.Serializer):
     related_message_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
     def validate(self, attrs):
-        # Resolve reported user from either id or username
+        # Step 1: Resolve reported user from either id or username
         user_id = attrs.get("reported_user_id")
         username = attrs.get("reported_username")
 
@@ -301,6 +301,33 @@ class ReportCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"reported_user_id": "You cannot report yourself."}
             )
+
+        # Step 2: Validate related_message_id if provided
+        related_message_id = attrs.get("related_message_id")
+        if related_message_id:
+            from messaging.models import Message
+            try:
+                # Select related conversation and match to minimize queries
+                message = Message.objects.select_related("conversation__match").get(id=related_message_id)
+            except Message.DoesNotExist:
+                raise serializers.ValidationError(
+                    {"related_message_id": "Message not found."}
+                )
+
+            # Check if the reporting user is allowed to reference this message
+            if request and request.user:
+                profile = getattr(request.user, "profile", None)
+                if not profile:
+                    raise serializers.ValidationError(
+                        {"related_message_id": "User profile not found."}
+                    )
+                
+                match = message.conversation.match
+                if profile.id not in [match.mentor_id, match.mentee_id]:
+                    raise serializers.ValidationError(
+                        {"related_message_id": "You can only report messages from your own conversations."}
+                    )
+
         return attrs
 
 
