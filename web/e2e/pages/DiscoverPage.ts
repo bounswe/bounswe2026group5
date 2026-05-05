@@ -16,6 +16,19 @@ export class DiscoverPage {
     await this.page.getByLabel('Search profiles, skills, or projects...').fill(query);
   }
 
+  async filterBySkill(skill: string) {
+    await this.page.getByRole('button', { name: 'Filter by skill' }).click();
+    await this.page.getByRole('button', { name: skill, exact: true }).click();
+    await this.page.getByRole('button', { name: 'Filter by skill' }).click();
+  }
+
+  async expectMentorCard(mentorName: string, skill: string) {
+    const card = this.page.locator('.island-shell', { has: this.page.getByRole('heading', { name: mentorName }) }).first();
+    await expect(card).toBeVisible({ timeout: 2_000 });
+    await expect(card.getByText(skill, { exact: true })).toBeVisible();
+    await expect(card.getByRole('button', { name: 'View Profile' })).toBeVisible();
+  }
+
   async openMentorProfile(mentorName: string) {
     const card = this.page.locator('.island-shell', { has: this.page.getByRole('heading', { name: mentorName }) }).first();
     await expect(card).toBeVisible();

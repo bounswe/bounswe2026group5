@@ -131,6 +131,13 @@ export class TestDataApi {
     });
   }
 
+  async respondToRequest(auth: AuthResponse, requestId: string, action: 'accept' | 'reject') {
+    return this.request.post(`${API_BASE_URL}/mentorship/requests/${requestId}/respond/`, {
+      headers: this.authHeaders(auth),
+      data: { action },
+    });
+  }
+
   async fetchMyMatches(auth: AuthResponse) {
     const response = await this.request.get(`${API_BASE_URL}/mentorship/matches/me/`, {
       headers: this.authHeaders(auth),
