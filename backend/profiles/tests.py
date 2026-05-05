@@ -1006,6 +1006,324 @@ class ProfilePostsAPITests(TestCase):
         )
 
 
+class CommunityTagPostsAPITests(TestCase):
+    """Integration tests for community tag posts endpoints (CoP)."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+
+        self.member_user = User.objects.create_user(
+            email="cop-member@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.member_profile = Profile.objects.create(
+            user=self.member_user,
+            username="cop_member",
+            display_name="CoP Member",
+        )
+
+        self.outsider_user = User.objects.create_user(
+            email="cop-outsider@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.outsider_profile = Profile.objects.create(
+            user=self.outsider_user,
+            username="cop_outsider",
+            display_name="CoP Outsider",
+        )
+
+        self.tag = CommunityTag.objects.create(
+            name="Test Community",
+            description="A test community",
+            created_by=self.member_profile,
+        )
+        CommunityTagMembership.objects.create(
+            profile=self.member_profile,
+            tag=self.tag,
+        )
+
+        self.member_token = str(RefreshToken.for_user(self.member_user).access_token)
+        self.outsider_token = str(RefreshToken.for_user(self.outsider_user).access_token)
+
+        self.list_create_url = f"/api/profiles/tags/{self.tag.id}/posts/"
+
+    def _auth_member(self) -> None:
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.member_token}")
+
+    def _auth_outsider(self) -> None:
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.outsider_token}")
+
+    def _detail_url(self, event_id: str) -> str:
+        return f"/api/profiles/tags/{self.tag.id}/posts/{event_id}/"
+
+    # ------------------------------------------------------------------ list
+
+    def test_list_community_posts_unauthenticated_returns_401(self) -> None:
+        response = self.api_client.get(self.list_create_url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_community_posts_empty_tag_returns_empty_feed(self) -> None:
+        self._auth_member()
+        response = self.api_client.get(self.list_create_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 0)
+        self.assertEqual(response.data["results"], [])
+
+    def test_list_community_posts_returns_cop_events(self) -> None:
+        from timeline.models import TimelineEvent
+
+        event = TimelineEvent.objects.create(
+            source_id=f"cop:{uuid.uuid4()}",
+            category=TimelineEvent.Category.COP,
+            event_type="social",
+            author=self.member_profile,
+            community_id=self.tag.id,
+            content="Hello community",
+            timestamp=timezone.now() - timedelta(minutes=5),
+        )
+
+        self._auth_member()
+        response = self.api_client.get(self.list_create_url)
+
+        self.assertEqual(response.status_code, 200)
+        source_ids = {item["source_id"] for item in response.data["results"]}
+        self.assertIn(event.source_id, source_ids)
+        result = next(i for i in response.data["results"] if i["source_id"] == event.source_id)
+        self.assertEqual(result["category"], "CoP")
+        self.assertIn("community_id", result)
+
+    def test_list_community_posts_excludes_deleted(self) -> None:
+        from timeline.models import TimelineEvent
+
+        deleted = TimelineEvent.objects.create(
+            source_id=f"cop:{uuid.uuid4()}",
+            category=TimelineEvent.Category.COP,
+            event_type="social",
+            author=self.member_profile,
+            community_id=self.tag.id,
+            content="Deleted post",
+            is_deleted=True,
+            timestamp=timezone.now() - timedelta(minutes=5),
+        )
+
+        self._auth_member()
+        response = self.api_client.get(self.list_create_url)
+
+        self.assertEqual(response.status_code, 200)
+        source_ids = {item["source_id"] for item in response.data["results"]}
+        self.assertNotIn(deleted.source_id, source_ids)
+
+    def test_list_community_posts_filter_by_event_type(self) -> None:
+        from timeline.models import TimelineEvent
+
+        social = TimelineEvent.objects.create(
+            source_id=f"cop:{uuid.uuid4()}",
+            category=TimelineEvent.Category.COP,
+            event_type="social",
+            author=self.member_profile,
+            community_id=self.tag.id,
+            content="Social post",
+            timestamp=timezone.now() - timedelta(minutes=10),
+        )
+        TimelineEvent.objects.create(
+            source_id=f"cop:{uuid.uuid4()}",
+            category=TimelineEvent.Category.COP,
+            event_type="achievement",
+            author=self.member_profile,
+            community_id=self.tag.id,
+            content="Achievement post",
+            timestamp=timezone.now() - timedelta(minutes=5),
+        )
+
+        self._auth_member()
+        response = self.api_client.get(self.list_create_url + "?event_type=social")
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data["results"]
+        self.assertTrue(all(item["event_type"] == "social" for item in results))
+        self.assertIn(social.source_id, {item["source_id"] for item in results})
+
+    def test_list_community_posts_tag_not_found_returns_404(self) -> None:
+        self._auth_member()
+        response = self.api_client.get(f"/api/profiles/tags/{uuid.uuid4()}/posts/")
+        self.assertEqual(response.status_code, 404)
+
+    # ------------------------------------------------------------------ create
+
+    def test_create_community_post_by_member_returns_201(self) -> None:
+        self._auth_member()
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "achievement", "content": "We did it!"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["category"], "CoP")
+        self.assertEqual(response.data["event_type"], "achievement")
+        self.assertEqual(response.data["content"], "We did it!")
+        self.assertFalse(response.data["show_on_profile"])
+        self.assertIsNotNone(response.data["community_id"])
+
+    def test_create_community_post_with_show_on_profile_true(self) -> None:
+        self._auth_member()
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Shared!", "show_on_profile": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["show_on_profile"])
+
+    def test_create_community_post_by_non_member_returns_403(self) -> None:
+        self._auth_outsider()
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Uninvited post"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_community_post_unauthenticated_returns_401(self) -> None:
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "No auth"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_community_post_missing_content_returns_400(self) -> None:
+        self._auth_member()
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_community_post_invalid_event_type_returns_400(self) -> None:
+        self._auth_member()
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "invalid_type", "content": "Bad post"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_community_post_far_future_timestamp_returns_400(self) -> None:
+        self._auth_member()
+        future_ts = (timezone.now() + timedelta(days=5)).isoformat()
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "progress", "content": "Future post", "timestamp": future_ts},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_community_post_appears_in_community_feed(self) -> None:
+        self._auth_member()
+        create_response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Feed entry"},
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        source_id = create_response.data["source_id"]
+
+        list_response = self.api_client.get(self.list_create_url)
+        self.assertEqual(list_response.status_code, 200)
+        feed_ids = {item["source_id"] for item in list_response.data["results"]}
+        self.assertIn(source_id, feed_ids)
+
+    # ------------------------------------------------------------------ patch
+
+    def test_patch_community_post_by_author_returns_200(self) -> None:
+        self._auth_member()
+        create_response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Original"},
+            format="json",
+        )
+        event_id = create_response.data["id"]
+
+        patch_response = self.api_client.patch(
+            self._detail_url(event_id),
+            {"content": "Edited", "event_type": "progress", "show_on_profile": True},
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, 200)
+        self.assertEqual(patch_response.data["content"], "Edited")
+        self.assertEqual(patch_response.data["event_type"], "progress")
+        self.assertTrue(patch_response.data["show_on_profile"])
+        self.assertIsNotNone(patch_response.data["last_edited"])
+
+    def test_patch_community_post_by_non_author_returns_404(self) -> None:
+        self._auth_member()
+        create_response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Original"},
+            format="json",
+        )
+        event_id = create_response.data["id"]
+
+        self._auth_outsider()
+        response = self.api_client.patch(
+            self._detail_url(event_id),
+            {"content": "Hacked"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_patch_community_post_empty_body_returns_400(self) -> None:
+        self._auth_member()
+        create_response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Original"},
+            format="json",
+        )
+        event_id = create_response.data["id"]
+
+        patch_response = self.api_client.patch(
+            self._detail_url(event_id),
+            {},
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, 400)
+
+    # ------------------------------------------------------------------ delete
+
+    def test_delete_community_post_by_author_returns_204(self) -> None:
+        self._auth_member()
+        create_response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Delete me"},
+            format="json",
+        )
+        event_id = create_response.data["id"]
+        source_id = create_response.data["source_id"]
+
+        delete_response = self.api_client.delete(self._detail_url(event_id))
+        self.assertEqual(delete_response.status_code, 204)
+
+        list_response = self.api_client.get(self.list_create_url)
+        feed_ids = {item["source_id"] for item in list_response.data["results"]}
+        self.assertNotIn(source_id, feed_ids)
+
+    def test_delete_community_post_by_non_author_returns_404(self) -> None:
+        self._auth_member()
+        create_response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Mine"},
+            format="json",
+        )
+        event_id = create_response.data["id"]
+
+        self._auth_outsider()
+        response = self.api_client.delete(self._detail_url(event_id))
+        self.assertEqual(response.status_code, 404)
+
+
 class SkillListAPIViewTests(TestCase):
     """Tests for GET /api/profiles/skills/ endpoint."""
 

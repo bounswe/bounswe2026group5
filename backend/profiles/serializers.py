@@ -799,3 +799,90 @@ class CommunityTagListResponseSerializer(serializers.Serializer):
     page = serializers.IntegerField()
     pageSize = serializers.IntegerField()
     results = CommunityTagListSerializer(many=True)
+
+
+# ---------------------------------------------------------------------------
+# Community Posts (CoP)
+# ---------------------------------------------------------------------------
+
+
+class CoPCreateSerializer(serializers.Serializer):
+    """Write serializer for creating a community post (CoP)."""
+
+    event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES)
+    content = serializers.CharField(required=True, max_length=2000)
+    media_url = serializers.URLField(required=False, allow_null=True, default=None)
+    show_on_profile = serializers.BooleanField(required=False, default=False)
+    timestamp = serializers.DateTimeField(required=False, allow_null=True, default=None)
+
+    def to_internal_value(self, data: Any) -> dict:
+        """Normalize empty timestamp values to null so fallback logic can be applied."""
+        if isinstance(data, dict) and data.get("timestamp") == "":
+            data = {**data, "timestamp": None}
+        return super().to_internal_value(data)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Reject timestamps more than 1 day in the future when provided."""
+        timestamp = attrs.get("timestamp")
+        if timestamp is not None and timestamp > timezone.now() + timedelta(days=1):
+            raise serializers.ValidationError(
+                {"timestamp": "Timestamp cannot be more than 1 day in the future."}
+            )
+        return attrs
+
+
+class CoPUpdateSerializer(serializers.Serializer):
+    """Write serializer for partially updating a community post."""
+
+    content = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES, required=False)
+    media_url = serializers.URLField(required=False, allow_null=True)
+    show_on_profile = serializers.BooleanField(required=False)
+
+    def validate(self, attrs: dict) -> dict:
+        """Require at least one editable field to be provided."""
+        if not attrs:
+            raise serializers.ValidationError(
+                "At least one of 'content', 'event_type', 'media_url', or "
+                "'show_on_profile' must be provided."
+            )
+        return attrs
+
+
+class CommunityPostListQueryParamsSerializer(serializers.Serializer):
+    """Validate query parameters for community post listing endpoint."""
+
+    event_type = serializers.ChoiceField(
+        choices=_PROFILE_POST_EVENT_TYPE_CHOICES,
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+    offset = serializers.IntegerField(required=False, min_value=0, default=0)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=50)
+
+
+class CommunityPostSerializer(serializers.Serializer):
+    """Read serializer for community feed items (CoP)."""
+
+    id = serializers.UUIDField(read_only=True)
+    source_id = serializers.CharField(read_only=True)
+    category = serializers.CharField(read_only=True)
+    event_type = serializers.CharField(read_only=True)
+    content = serializers.CharField(read_only=True)
+    media_url = serializers.URLField(read_only=True, allow_null=True)
+    timestamp = serializers.DateTimeField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    last_edited = serializers.DateTimeField(read_only=True, allow_null=True)
+    show_on_profile = serializers.BooleanField(read_only=True)
+    community_id = serializers.UUIDField(read_only=True)
+    author = ProfilePostAuthorSerializer(read_only=True)
+
+
+class CommunityPostFeedSerializer(serializers.Serializer):
+    """Paginated response wrapper for community posts feed."""
+
+    count = serializers.IntegerField(read_only=True)
+    offset = serializers.IntegerField(read_only=True)
+    limit = serializers.IntegerField(read_only=True)
+    results = CommunityPostSerializer(many=True, read_only=True)
