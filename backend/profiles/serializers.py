@@ -589,7 +589,7 @@ class PublicMentorProfileSearchListResponseSerializer(serializers.Serializer):
 
 
 _PROFILE_POST_EVENT_TYPE_CHOICES = ["achievement", "social", "progress"]
-_PROFILE_POST_CATEGORY_CHOICES = ["PrP", "MCTE"]
+_PROFILE_POST_CATEGORY_CHOICES = ["PrP", "MCTE", "CoP"]
 
 
 class ProfilePostAuthorSerializer(serializers.ModelSerializer):

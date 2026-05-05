@@ -212,7 +212,7 @@ class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
                 location=OpenApiParameter.QUERY,
                 required=False,
                 type=OpenApiTypes.STR,
-                enum=["PrP", "MCTE"],
+                enum=["PrP", "MCTE", "CoP"],
                 description="Filter by event category.",
             ),
             OpenApiParameter(
@@ -246,7 +246,8 @@ class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
         },
         description=(
             "Return profile posts for a username. Includes both PrP posts authored by the "
-            "profile and MCTE events authored by the profile where `show_on_profile=true`. "
+            "profile, MCTE events authored by the profile where `show_on_profile=true`, and "
+            "CoP events authored by the profile where `show_on_profile=true`. "
             "If profile is private, only the owner can access this feed. "
             "Supports optional filtering by `category` and `event_type`. "
             "Results are ordered newest-first by action metadata: `created_at`, then "
@@ -308,7 +309,6 @@ class MyProfilePostsCollectionAPIView(ProfileLookupMixin, APIView):
         serializer = PrPCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         validated = serializer.validated_data
-
         try:
             event = create_prp_event(
                 author_profile=profile,

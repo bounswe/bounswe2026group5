@@ -123,6 +123,7 @@ def list_profile_feed_events(
     Feed includes:
     - Profile posts (PrP) authored by the profile.
     - MCTE events authored by the profile where show_on_profile=True.
+    - CoP events authored by the profile where show_on_profile=True.
     """
     from timeline.models import TimelineEvent
 
@@ -131,6 +132,7 @@ def list_profile_feed_events(
         .filter(
             Q(category=TimelineEvent.Category.PRP)
             | Q(category=TimelineEvent.Category.MCTE, show_on_profile=True)
+            | Q(category=TimelineEvent.Category.COP, show_on_profile=True)
         )
         .select_related("author")
         .annotate(effective_last_update=Coalesce("last_edited", "created_at"))

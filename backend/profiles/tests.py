@@ -628,6 +628,25 @@ class ProfilePostsAPITests(TestCase):
         )
         return ensure_match_and_initial_session(mentorship_request=request_obj)
 
+    def _create_cop_for_owner(
+        self,
+        *,
+        content: str,
+        show_on_profile: bool,
+        timestamp: datetime | None = None,
+    ) -> TimelineEvent:
+        effective_timestamp = timestamp if timestamp is not None else timezone.now()
+        return TimelineEvent.objects.create(
+            source_id=f"cop:{uuid.uuid4()}",
+            category=TimelineEvent.Category.COP,
+            event_type="social",
+            author=self.owner_profile,
+            community_id=uuid.uuid4(),
+            show_on_profile=show_on_profile,
+            content=content,
+            timestamp=effective_timestamp,
+        )
+
     def test_create_prp_missing_timestamp_returns_201(self) -> None:
         self._auth_owner()
 
@@ -775,6 +794,55 @@ class ProfilePostsAPITests(TestCase):
         source_ids = {item["source_id"] for item in results}
         self.assertIn(prp_event.source_id, source_ids)
         self.assertNotIn(visible_mcte.source_id, source_ids)
+
+    def test_list_profile_posts_includes_visible_cop_and_excludes_hidden_cop(self) -> None:
+        visible_cop = self._create_cop_for_owner(
+            content="Visible community post",
+            show_on_profile=True,
+            timestamp=timezone.now() - timedelta(minutes=20),
+        )
+        hidden_cop = self._create_cop_for_owner(
+            content="Hidden community post",
+            show_on_profile=False,
+            timestamp=timezone.now() - timedelta(minutes=10),
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url)
+
+        self.assertEqual(response.status_code, 200)
+        source_ids = {item["source_id"] for item in response.data["results"]}
+        self.assertIn(visible_cop.source_id, source_ids)
+        self.assertNotIn(hidden_cop.source_id, source_ids)
+        self.assertTrue(any(item["category"] == "CoP" for item in response.data["results"]))
+
+    def test_list_profile_posts_filter_by_category_cop_returns_matching_items(self) -> None:
+        visible_cop = self._create_cop_for_owner(
+            content="Visible community post",
+            show_on_profile=True,
+            timestamp=timezone.now() - timedelta(minutes=20),
+        )
+        self._create_cop_for_owner(
+            content="Hidden community post",
+            show_on_profile=False,
+            timestamp=timezone.now() - timedelta(minutes=10),
+        )
+        prp_event = create_prp_event(
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="PrP entry",
+            timestamp=timezone.now() - timedelta(hours=1),
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url + "?category=CoP")
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data["results"]
+        self.assertTrue(all(item["category"] == "CoP" for item in results))
+        source_ids = {item["source_id"] for item in results}
+        self.assertIn(visible_cop.source_id, source_ids)
+        self.assertNotIn(prp_event.source_id, source_ids)
 
     def test_list_profile_posts_filter_by_event_type_returns_matching_items(self) -> None:
         progress_prp = create_prp_event(
