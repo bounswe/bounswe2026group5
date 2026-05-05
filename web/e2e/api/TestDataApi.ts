@@ -60,6 +60,13 @@ export type MentorshipRequest = {
   cover_letter: string;
 };
 
+export type Match = {
+  id: string;
+  mentor: { username: string; display_name: string };
+  mentee: { username: string; display_name: string };
+  is_active: boolean;
+};
+
 export type Notification = {
   id: string;
   type: 'session_rescheduled' | 'session_canceled' | string;
@@ -120,32 +127,54 @@ export class TestDataApi {
     mentorAuth: AuthResponse,
     slot: { date: string; startTime: string; endTime: string },
   ) {
-    const response = await this.request.post(`${API_BASE_URL}/profiles/me/availability-slots/`, {
-      headers: this.authHeaders(mentorAuth),
-      data: slot,
-    });
+    const response = await this.tryCreateAvailabilitySlot(mentorAuth, slot);
     expect(response.ok()).toBeTruthy();
     return response.json() as Promise<AvailabilitySlot>;
   }
 
-  async fetchAvailabilitySlots(mentorUsername: string, auth: AuthResponse) {
+  async tryCreateAvailabilitySlot(
+    mentorAuth: AuthResponse,
+    slot: { date: string; startTime: string; endTime: string },
+  ) {
+    return this.request.post(`${API_BASE_URL}/profiles/me/availability-slots/`, {
+      headers: this.authHeaders(mentorAuth),
+      data: slot,
+    });
+  }
+
+  async fetchAvailabilitySlots(mentorUsername: string, auth?: AuthResponse) {
     const response = await this.request.get(`${API_BASE_URL}/profiles/${mentorUsername}/availability-slots/`, {
-      headers: this.authHeaders(auth),
+      headers: auth ? this.authHeaders(auth) : undefined,
     });
     expect(response.ok()).toBeTruthy();
     return response.json() as Promise<AvailabilitySlot[]>;
+  }
+
+  async fetchMyRequests(auth: AuthResponse) {
+    const response = await this.request.get(`${API_BASE_URL}/mentorship/requests/me/`, {
+      headers: this.authHeaders(auth),
+    });
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<MentorshipRequest[]>;
   }
 
   async sendMentorshipRequest(
     auth: AuthResponse,
     body: { mentor_username: string; slot_id: string; cover_letter: string },
   ) {
-    const response = await this.request.post(`${API_BASE_URL}/mentorship/requests/`, {
+    const response = await this.trySendMentorshipRequest(auth, body);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<MentorshipRequest>;
+  }
+
+  async trySendMentorshipRequest(
+    auth: AuthResponse,
+    body: { mentor_username: string; slot_id: string; cover_letter: string },
+  ) {
+    return this.request.post(`${API_BASE_URL}/mentorship/requests/`, {
       headers: this.authHeaders(auth),
       data: body,
     });
-    expect(response.ok()).toBeTruthy();
-    return response.json() as Promise<MentorshipRequest>;
   }
 
   async respondToRequest(auth: AuthResponse, requestId: string, action: 'accept' | 'reject') {
@@ -155,6 +184,14 @@ export class TestDataApi {
     });
     expect(response.ok()).toBeTruthy();
     return response.json() as Promise<MentorshipRequest>;
+  }
+
+  async fetchMyMatches(auth: AuthResponse) {
+    const response = await this.request.get(`${API_BASE_URL}/mentorship/matches/me/`, {
+      headers: this.authHeaders(auth),
+    });
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<Match[]>;
   }
 
   async fetchMySessions(auth: AuthResponse, query = '?role=mentee&status=upcoming') {

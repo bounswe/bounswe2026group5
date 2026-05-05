@@ -38,6 +38,11 @@ export class DiscoverPage {
     await this.page.getByRole('button', { name: new RegExp(`^${escapeRegExp(skill)}$`) }).click();
   }
 
+  async filterBySkill(skill: string) {
+    await this.openSkillFilter();
+    await this.selectSkill(skill);
+  }
+
   async expectSelectedSkillCount(count: number) {
     await expect(this.page.getByText(`${count} selected ${count === 1 ? 'skill' : 'skills'}`)).toBeVisible();
   }
@@ -55,6 +60,7 @@ export class DiscoverPage {
   }
 
   async openMentorProfile(mentorName: string) {
+    await expect(this.mentorCard(mentorName)).toBeVisible();
     await this.mentorCard(mentorName).getByRole('button', { name: /View Profile/i }).click();
   }
 

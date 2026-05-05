@@ -20,10 +20,30 @@ export class DashboardPage {
     await this.page.getByRole('button', { name: /Sign out/i }).click();
   }
 
+  async expectSentRequest(mentorName: string, coverLetter?: string) {
+    await expect(this.page.getByRole('heading', { name: 'Sent Requests' })).toBeVisible();
+    await expect(this.page.getByText(`To: ${mentorName}`)).toBeVisible();
+    if (coverLetter) {
+      await expect(this.page.getByText(coverLetter)).toBeVisible();
+    }
+    await expect(this.page.getByText('PENDING')).toBeVisible();
+  }
+
   async expectNotification(title: string, messagePart: string) {
     await expect(this.page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
     const notification = this.page.locator('.border-l-4', { hasText: title }).filter({ hasText: messagePart }).first();
     await expect(notification).toBeVisible();
+  }
+
+  async acceptIncomingRequest(menteeName: string, coverLetter?: string) {
+    const requestCard = await this.findIncomingRequest(menteeName, coverLetter);
+    await requestCard.getByRole('button', { name: /Accept/i }).click();
+    await expect(this.page.getByText('Request accepted').first()).toBeVisible();
+  }
+
+  async expectUpcomingSession(peerName: string) {
+    await expect(this.page.getByRole('heading', { name: 'Upcoming Sessions' })).toBeVisible();
+    await expect(this.page.getByText(`Session with ${peerName}`).first()).toBeVisible();
   }
 
   async openSessionManager(peerName: string) {
@@ -57,5 +77,18 @@ export class DashboardPage {
   async cancelSession() {
     await this.page.getByRole('button', { name: 'Cancel Session' }).click();
     await expect(this.page.getByText('Session cancelled').first()).toBeVisible();
+  }
+
+  private async findIncomingRequest(menteeName: string, coverLetter?: string) {
+    await expect(this.page.getByRole('heading', { name: 'Incoming Requests' })).toBeVisible();
+    const requestCard = this.page.locator('.island-shell', {
+      has: this.page.getByText(`${menteeName} wants to be your mentee.`),
+    }).first();
+
+    await expect(requestCard).toBeVisible();
+    if (coverLetter) {
+      await expect(requestCard.getByText(coverLetter)).toBeVisible();
+    }
+    return requestCard;
   }
 }
