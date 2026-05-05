@@ -198,30 +198,24 @@ test.describe('AT-001: Authentication & Onboarding', () => {
     // Part E — Banned User Rejection
     // ==========================================
     await test.step('Part E: Banned User Rejection', async () => {
-      try {
-        // Step 32: Admin bans user
-        const banRes = await authApi.banUser(TEST_EMAIL);
-        expect(banRes.status()).toBe(200);
+      // Step 32: Admin bans user
+      const banRes = await authApi.banUser(TEST_EMAIL);
+      expect(banRes.status()).toBe(200);
 
-        // Step 33: API GET /me
-        const getMeRes = await authApi.getMe();
-        expect(getMeRes.status()).toBe(403);
+      // Step 33: API GET /me should return 403 for banned user
+      const getMeRes = await authApi.getMe();
+      expect(getMeRes.status()).toBe(403);
 
-        // Step 34: API Token Refresh
-        const refreshRes = await authApi.refreshToken();
-        expect(refreshRes.status()).toBe(403);
+      // Step 34: API Token Refresh should return 403 for banned user
+      const refreshRes = await authApi.refreshToken();
+      expect(refreshRes.status()).toBe(403);
 
-        // Step 35: UI Login blocked
-        await dashboardPage.logout();
-        await loginPage.fillEmail(TEST_EMAIL);
-        await loginPage.fillPassword(TEST_PASSWORD);
-        await loginPage.submit();
-        await loginPage.expectInlineError(/This account is banned|banned/i);
-      } catch (error) {
-        // Since Admin endpoints might not be implemented exactly this way yet,
-        // we log the error but don't fail the entire test suite if it's expected.
-        console.warn('Part E failed (possibly because Admin API is not fully implemented yet):', error);
-      }
+      // Step 35: UI Login should be blocked for banned user
+      await dashboardPage.logout();
+      await loginPage.fillEmail(TEST_EMAIL);
+      await loginPage.fillPassword(TEST_PASSWORD);
+      await loginPage.submit();
+      await loginPage.expectInlineError(/This account is banned|banned/i);
     });
 
   });

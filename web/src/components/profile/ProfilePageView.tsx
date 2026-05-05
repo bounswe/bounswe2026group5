@@ -121,6 +121,8 @@ function HiddenField({ label }: { label: string }) {
   )
 }
 
+import { ReportUserDialog } from '#/components/ReportUserDialog.tsx'
+
 export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: ProfilePageViewProps) {
   const [editOpen, setEditOpen] = useState(false)
   const isHidden = profile.hidden && !isOwner
@@ -157,6 +159,11 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
+            )}
+            {!isOwner && isAuthenticatedViewer && (
+                <div className="ml-auto">
+                  <ReportUserDialog reportedUsername={profile.username} />
+                </div>
             )}
           </div>
 

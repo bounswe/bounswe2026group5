@@ -74,6 +74,7 @@ class ConversationDetailAPIView(APIView):
             "Supports pagination via `page` and `pageSize` query params."
         ),
         tags=["Messages"],
+        operation_id="messages_conversation_messages_list",
     )
     def get(self, request: Request, conversation_id: str) -> Response:
         """Return paginated messages for the conversation if user is a participant."""

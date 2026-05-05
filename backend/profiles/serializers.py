@@ -36,7 +36,16 @@ def resolve_picture_url(profile: Profile) -> str:
             pass
     return profile.picture_url or ""
 
-
+@extend_schema_field(
+    {
+        "type": "object",
+        "properties": {
+            "latitude": {"type": "number", "format": "float"},
+            "longitude": {"type": "number", "format": "float"},
+        },
+        "nullable": True,
+    }
+)
 class LocationField(serializers.Field):
     """Serialize a PointField as {latitude, longitude} and accept the same on input."""
 
