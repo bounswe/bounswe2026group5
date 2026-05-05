@@ -9,7 +9,7 @@ export class ProfilePage {
 
   async expectLoaded(username: string, displayName: string) {
     await expect(this.page).toHaveURL(new RegExp(`/profiles/${username}`));
-    await expect(this.page.getByRole('heading', { name: displayName })).toBeVisible();
+    await expect(this.page.locator('h1').filter({ hasText: displayName })).toBeVisible();
     await expect(this.page.getByText('Green slots are available to book.')).toBeVisible();
   }
 
