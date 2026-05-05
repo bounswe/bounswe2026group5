@@ -1,7 +1,7 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
 
 export const API_BASE_URL = 'http://localhost:8000/api';
-const PASSWORD = 'SessionPass123!';
+const PASSWORD = 'E2ePass123!';
 
 export type AuthResponse = {
   access_token: string;
@@ -20,6 +20,16 @@ export type UserSeed = {
   title: string;
   bio: string;
   skills: string[];
+};
+
+export type PublicMentorProfile = {
+  username: string;
+  full_name: string;
+  bio: string;
+  skills: string[];
+  rating?: number;
+  average_rating?: string | number;
+  total_mentee_count: number;
 };
 
 export type AvailabilitySlot = {
@@ -68,18 +78,8 @@ export class TestDataApi {
 
   async seedUser(seed: UserSeed, appUsageMode: 'MENTEE' | 'MENTOR') {
     const auth = await this.registerOrLogin(seed.email);
-    await this.patchWithAuth(auth.access_token, `${API_BASE_URL}/auth/me/role/`, {
-      app_usage_mode: appUsageMode,
-    });
-    await this.patchWithAuth(auth.access_token, `${API_BASE_URL}/profiles/me/`, {
-      username: seed.username,
-      display_name: seed.displayName,
-      bio: seed.bio,
-      title: seed.title,
-      is_visible: true,
-      show_initials_only: false,
-      skills: seed.skills,
-    });
+    await this.setUsageMode(auth.access_token, appUsageMode);
+    await this.updateProfile(auth.access_token, seed);
     return auth;
   }
 
@@ -96,6 +96,24 @@ export class TestDataApi {
       localStorage.setItem('id', storedTokens.userId);
     }, tokens);
     await page.goto('/dashboard');
+  }
+
+  async fetchMentors(query = '') {
+    const response = await this.request.get(`${API_BASE_URL}/profiles/${query}`);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<{ results: PublicMentorProfile[] }>;
+  }
+
+  async fetchPopularMentors(limit = 6) {
+    const response = await this.request.get(`${API_BASE_URL}/profiles/popular/?limit=${limit}`);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<{ results: PublicMentorProfile[] }>;
+  }
+
+  async fetchRecentlyAddedMentors(limit = 6) {
+    const response = await this.request.get(`${API_BASE_URL}/profiles/recently-added/?limit=${limit}`);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<{ results: PublicMentorProfile[] }>;
   }
 
   async createAvailabilitySlot(
@@ -156,7 +174,12 @@ export class TestDataApi {
   }
 
   private async registerOrLogin(email: string): Promise<AuthResponse> {
-    const payload = { email, password: PASSWORD, confirm_password: PASSWORD };
+    const payload = {
+      email,
+      password: PASSWORD,
+      confirm_password: PASSWORD,
+    };
+
     const register = await this.request.post(`${API_BASE_URL}/auth/register/`, { data: payload });
     if (register.ok()) {
       return register.json();
@@ -169,12 +192,35 @@ export class TestDataApi {
     return login.json();
   }
 
-  private async patchWithAuth(token: string, url: string, data: Record<string, unknown>) {
+  private async patchWithAuth(
+    token: string,
+    url: string,
+    data: Record<string, unknown>,
+  ) {
     const response = await this.request.patch(url, {
       headers: { Authorization: `Bearer ${token}` },
       data,
     });
     expect(response.ok()).toBeTruthy();
+    return response.json().catch(() => null);
+  }
+
+  private async setUsageMode(token: string, appUsageMode: 'MENTEE' | 'MENTOR') {
+    await this.patchWithAuth(token, `${API_BASE_URL}/auth/me/role/`, {
+      app_usage_mode: appUsageMode,
+    });
+  }
+
+  private async updateProfile(token: string, profile: UserSeed) {
+    await this.patchWithAuth(token, `${API_BASE_URL}/profiles/me/`, {
+      username: profile.username,
+      display_name: profile.displayName,
+      bio: profile.bio,
+      title: profile.title,
+      is_visible: true,
+      show_initials_only: false,
+      skills: profile.skills,
+    });
   }
 
   private authHeaders(auth: AuthResponse) {

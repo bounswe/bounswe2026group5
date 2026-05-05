@@ -11,6 +11,15 @@ export class DashboardPage {
     await this.page.goto('/dashboard');
   }
 
+  async expectLoaded() {
+    await expect(this.page).toHaveURL(/.*dashboard/);
+    await expect(this.page.getByRole('link', { name: /Open profile page/i })).toBeVisible();
+  }
+
+  async logout() {
+    await this.page.getByRole('button', { name: /Sign out/i }).click();
+  }
+
   async expectNotification(title: string, messagePart: string) {
     await expect(this.page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
     const notification = this.page.locator('.border-l-4', { hasText: title }).filter({ hasText: messagePart }).first();

@@ -12,4 +12,9 @@ export class ProfilePage {
     await expect(this.page.getByRole('heading', { name: displayName })).toBeVisible();
     await expect(this.page.getByText('Green slots are available to book.')).toBeVisible();
   }
+
+  async goBackToDiscover() {
+    await this.page.goBack();
+    await expect(this.page).toHaveURL(/\/discover/);
+  }
 }
