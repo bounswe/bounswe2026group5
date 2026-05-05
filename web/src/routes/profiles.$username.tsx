@@ -69,6 +69,7 @@ function PublicProfileRoute() {
             average_rating: Number(profile.average_rating),
             total_mentee_count: profile.total_mentee_count,
             username: username,
+            app_usage_mode: profile.app_usage_mode,
         }
         : {
             isMentor: false as const,
@@ -77,7 +78,8 @@ function PublicProfileRoute() {
             hidden: profile.hidden,
             picture_url: profile.picture_url,
             skills: profile.skills ?? [],
-            username: username
+            username: username,
+            app_usage_mode: profile.app_usage_mode,
         }
 
     console.log('profile from cache:', profile)

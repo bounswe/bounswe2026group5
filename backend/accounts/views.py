@@ -522,7 +522,18 @@ class AdminUsersListAPIView(APIView):
         tags=["Admin"],
     )
     def get(self, request: Request) -> Response:
-        users = User.objects.all().values(
+        users_qs = User.objects.all().order_by("-created_at")
+        
+        # Manual pagination
+        try:
+            page = max(int(request.query_params.get("page", 1)), 1)
+            page_size = min(max(int(request.query_params.get("pageSize", 50)), 1), 100)
+        except ValueError:
+            page = 1
+            page_size = 50
+            
+        offset = (page - 1) * page_size
+        users = users_qs[offset : offset + page_size].values(
             "id",
             "email",
             "username",
@@ -535,7 +546,7 @@ class AdminUsersListAPIView(APIView):
 
         return Response(
             {
-                "count": User.objects.count(),
+                "count": users_qs.count(),
                 "results": list(users),
             },
             status=status.HTTP_200_OK,
@@ -773,16 +784,27 @@ class AdminReportListAPIView(APIView):
     def get(self, request: Request) -> Response:
         queryset = Report.objects.select_related(
             "submitted_by", "reported_user", "resolved_by"
-        )
+        ).order_by("-created_at")
 
         status_filter = request.query_params.get("status")
         if status_filter:
             queryset = queryset.filter(status=status_filter.upper())
 
-        reports = ReportListSerializer(queryset, many=True).data
+        # Manual pagination
+        try:
+            page = max(int(request.query_params.get("page", 1)), 1)
+            page_size = min(max(int(request.query_params.get("pageSize", 50)), 1), 100)
+        except ValueError:
+            page = 1
+            page_size = 50
+            
+        offset = (page - 1) * page_size
+        paginated_reports = queryset[offset : offset + page_size]
+
+        reports = ReportListSerializer(paginated_reports, many=True).data
         return Response(
             {
-                "count": len(reports),
+                "count": queryset.count(),
                 "results": reports,
             },
             status=status.HTTP_200_OK,

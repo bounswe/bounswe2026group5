@@ -26,6 +26,7 @@ class AuthProvider(models.TextChoices):
 class AppUsageMode(models.TextChoices):
     MENTEE = "MENTEE", "Mentee"
     MENTOR = "MENTOR", "Mentor"
+    ADMIN = "ADMIN", "Admin"
 
 
 class UserManager(BaseUserManager["User"]):

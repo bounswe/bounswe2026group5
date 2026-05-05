@@ -11,12 +11,13 @@ import { useMentorReviews } from '#/lib/queries/ProfileQueries.ts'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 interface BaseMappedProfile {
+  username: string
   full_name: string
   bio: string
   hidden: boolean
   picture_url: string
   skills: string[]
-  username: string,
+  app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
 }
 
 interface MentorMappedProfile extends BaseMappedProfile {
@@ -148,7 +149,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
               {profile.full_name}
             </Heading>
             <Badge className="bg-accent-muted text-ink border border-line">
-              {profile.isMentor ? 'Mentor' : 'Mentee'}
+              {profile.app_usage_mode === 'ADMIN' ? 'Admin' : profile.app_usage_mode === 'MENTOR' ? 'Mentor' : 'Mentee'}
             </Badge>
             {isHidden && <Badge variant="secondary">Private</Badge>}
             {isOwner && (

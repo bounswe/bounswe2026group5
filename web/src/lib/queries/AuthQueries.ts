@@ -11,7 +11,7 @@ export interface User {
     email: string
     role: string
     auth_provider: string
-    app_usage_mode: "MENTEE" | "MENTOR"
+    app_usage_mode: "MENTEE" | "MENTOR" | "ADMIN"
     is_active: boolean
     created_at: string
 }

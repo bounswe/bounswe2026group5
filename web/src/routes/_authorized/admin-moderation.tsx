@@ -19,7 +19,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   Table,
@@ -110,7 +109,7 @@ function ReasonLabel({ reason }: Readonly<{ reason: string }>) {
 // PAGE
 // ---------------------------------------------------------------------------
 
-function AdminModerationPage() {
+export function AdminModerationPage() {
   const [activeTab, setActiveTab] = useState<'users' | 'reports'>('users')
 
   return (
@@ -171,10 +170,16 @@ function AdminModerationPage() {
 // ---------------------------------------------------------------------------
 
 function UserManagementTab() {
-  const { data: users = [], isLoading } = useQuery(adminUsersQueryOptions)
+  const [page, setPage] = useState(1)
+  const { data, isLoading } = useQuery(adminUsersQueryOptions(page))
   const toggleBan = useToggleBan()
   const [search, setSearch] = useState('')
   const [confirmAction, setConfirmAction] = useState<{ user: AdminUser; action: 'ban' | 'unban' } | null>(null)
+
+  const users = data?.results || []
+  const count = data?.count || 0
+  const hasNext = count > page * 50
+  const hasPrev = page > 1
 
   const filtered = users.filter(u =>
     u.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -217,19 +222,21 @@ function UserManagementTab() {
             All Users
             {!isLoading && (
               <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
-                {users.length}
+                {count}
               </span>
             )}
           </CardTitle>
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-soft" />
-            <input
-              type="text"
-              placeholder="Search by email or username..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-line bg-white focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition"
-            />
+          <div className="flex items-center gap-4">
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-soft" />
+              <input
+                type="text"
+                placeholder="Search by email or username..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-line bg-white focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition"
+              />
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -319,6 +326,30 @@ function UserManagementTab() {
           </Table>
         )}
       </CardContent>
+      {/* Pagination controls */}
+      {(!search && (hasPrev || hasNext)) && (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-line">
+          <Muted className="text-sm">Page {page}</Muted>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(p => p - 1)}
+              disabled={!hasPrev || isLoading}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(p => p + 1)}
+              disabled={!hasNext || isLoading}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Ban/Unban Confirmation Dialog */}
       <Dialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
@@ -371,10 +402,16 @@ function UserManagementTab() {
 // ---------------------------------------------------------------------------
 
 function ReportsTab() {
-  const { data: reports = [], isLoading } = useQuery(adminReportsQueryOptions)
+  const [page, setPage] = useState(1)
+  const { data, isLoading } = useQuery(adminReportsQueryOptions(page))
   const resolveReport = useResolveReport()
   const [selectedReport, setSelectedReport] = useState<Report | null>(null)
   const [resolutionNote, setResolutionNote] = useState('')
+
+  const reports = data?.results || []
+  const count = data?.count || 0
+  const hasNext = count > page * 50
+  const hasPrev = page > 1
 
   const handleResolve = (reportId: string, newStatus: string) => {
     resolveReport.mutate(
@@ -398,7 +435,7 @@ function ReportsTab() {
           Reports
           {!isLoading && (
             <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
-              {reports.length}
+              {count}
             </span>
           )}
         </CardTitle>
@@ -461,6 +498,30 @@ function ReportsTab() {
           </Table>
         )}
       </CardContent>
+      {/* Pagination controls */}
+      {(hasPrev || hasNext) && (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-line">
+          <Muted className="text-sm">Page {page}</Muted>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(p => p - 1)}
+              disabled={!hasPrev || isLoading}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(p => p + 1)}
+              disabled={!hasNext || isLoading}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Report Review Dialog */}
       <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>

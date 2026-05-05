@@ -36,28 +36,38 @@ export interface Report {
 
 // ---- Query Options ----
 
-export const adminUsersQueryOptions = queryOptions({
-  queryKey: ['admin', 'users'],
+export interface PaginatedAdminUsers {
+  count: number;
+  results: AdminUser[];
+}
+
+export interface PaginatedReports {
+  count: number;
+  results: Report[];
+}
+
+export const adminUsersQueryOptions = (page: number = 1) => queryOptions({
+  queryKey: ['admin', 'users', page],
   queryFn: async () => {
-    const res = await fetch(`${API_BASE_URL}/auth/admin/users/`, {
+    const res = await fetch(`${API_BASE_URL}/auth/admin/users/?page=${page}&pageSize=50`, {
       headers: getAuthHeaders(),
     })
     if (!res.ok) throw new Error('Failed to fetch users')
     const data = await res.json()
-    return data.results as AdminUser[]
+    return data as PaginatedAdminUsers
   },
   staleTime: 30_000,
 })
 
-export const adminReportsQueryOptions = queryOptions({
-  queryKey: ['admin', 'reports'],
+export const adminReportsQueryOptions = (page: number = 1) => queryOptions({
+  queryKey: ['admin', 'reports', page],
   queryFn: async () => {
-    const res = await fetch(`${API_BASE_URL}/auth/admin/reports/`, {
+    const res = await fetch(`${API_BASE_URL}/auth/admin/reports/?page=${page}&pageSize=50`, {
       headers: getAuthHeaders(),
     })
     if (!res.ok) throw new Error('Failed to fetch reports')
     const data = await res.json()
-    return data.results as Report[]
+    return data as PaginatedReports
   },
   staleTime: 30_000,
 })
