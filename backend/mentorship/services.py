@@ -106,9 +106,6 @@ def create_mcte_event(
     The author must be a participant (mentor or mentee) of the match.
     ``timestamp`` must be a timezone-aware datetime; far-future dates
     (more than 1 day ahead of now) are rejected at the serializer layer.
-
-    Stores partner profile ID in payload to preserve it even if the match is deleted
-    or if the partner's username changes.
     """
     if event_type not in TimelineEvent.MCTEEventType.values:
         raise InvalidMCTEEventTypeError(
@@ -120,14 +117,7 @@ def create_mcte_event(
     source_id = f"mcte:{uuid.uuid4()}"
 
     effective_timestamp = timestamp if timestamp is not None else timezone.now()
-    
-    # Store partner profile ID in payload as fallback for deleted mentorships
-    # (usernames can change, so we use stable profile ID)
-    if actor_role == "mentor":
-        partner_id = str(match.mentee.id)
-    else:
-        partner_id = str(match.mentor.id)
-    
+
     event = TimelineEvent.objects.create(
         source_id=source_id,
         category=TimelineEvent.Category.MCTE,
@@ -139,7 +129,6 @@ def create_mcte_event(
         actor_role=actor_role,
         timestamp=effective_timestamp,
         show_on_profile=show_on_profile,
-        payload={"mentorship_partner_id": partner_id},
     )
 
     # Keep fallback semantics explicit: omitted timestamp should match created_at.

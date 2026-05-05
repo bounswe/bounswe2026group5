@@ -721,10 +721,7 @@ class ProfilePostSerializer(serializers.Serializer):
         For MCTE events, returns the username of the mentee or mentor (whichever is not
         the author). For other event types, returns None.
 
-        Handles edge cases gracefully:
-        - If mentorship exists: fetch from related mentor/mentee objects
-        - If mentorship is deleted: fall back to profile ID in payload
-        - If partner's profile is hidden or deleted, still returns their username
+        The username is resolved from the live mentorship relation.
         """
         if obj.category != TimelineEvent.Category.MCTE:
             return None
@@ -732,26 +729,14 @@ class ProfilePostSerializer(serializers.Serializer):
         if obj.author is None:
             return None
 
-        # Try to get from active mentorship first
-        if obj.mentorship is not None:
-            # Determine partner based on author's role
-            if obj.author == obj.mentorship.mentor:
-                # Author is mentor, so partner is mentee
-                return obj.mentorship.mentee.username
-            elif obj.author == obj.mentorship.mentee:
-                # Author is mentee, so partner is mentor
-                return obj.mentorship.mentor.username
+        if obj.mentorship is None:
+            return None
 
-        # Fall back to payload if mentorship was deleted
-        payload = obj.payload or {}
-        partner_id = payload.get("mentorship_partner_id")
-        if partner_id:
-            try:
-                partner_profile = Profile.objects.get(id=partner_id)
-                return partner_profile.username
-            except Profile.DoesNotExist:
-                # Partner profile was also deleted, but we tried our best
-                return None
+        # Determine partner based on author's role.
+        if obj.author == obj.mentorship.mentor:
+            return obj.mentorship.mentee.username
+        if obj.author == obj.mentorship.mentee:
+            return obj.mentorship.mentor.username
 
         return None
 

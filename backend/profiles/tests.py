@@ -4697,68 +4697,11 @@ class ProfileFeedDeletionScenarioTests(TestCase):
         return ensure_match_and_initial_session(mentorship_request=request_obj)
 
     # ------------------------------------------------------------------
-    # MCTE: deleted mentorship
+    # MCTE: deleted mentorship (CASCADE)
     # ------------------------------------------------------------------
 
-    def test_mcte_partner_returned_after_match_deleted(self) -> None:
-        """mentorship_partner is still returned from payload after the Match is deleted."""
-        match = self._create_match()
-        event = create_mcte_event(
-            match=match,
-            author_profile=self.mentor_profile,
-            event_type="achievement",
-            content="A milestone",
-            show_on_profile=True,
-        )
-
-        # Null the FK on the event to simulate the mentorship being gone
-        # (mirrors SET_NULL semantics; CASCADE would delete the event entirely)
-        TimelineEvent.objects.filter(id=event.id).update(mentorship=None)
-
-        self._auth_viewer()
-        response = self.api_client.get(self.feed_url + "?category=MCTE")
-
-        self.assertEqual(response.status_code, 200)
-        result = next(
-            item for item in response.data["results"] if item["source_id"] == event.source_id
-        )
-        self.assertEqual(result["mentorship_partner"], self.mentee_profile.username)
-
-    # ------------------------------------------------------------------
-    # MCTE: deleted mentorship + changed username
-    # ------------------------------------------------------------------
-
-    def test_mcte_partner_reflects_updated_username_after_match_deleted(self) -> None:
-        """After match deletion the payload ID resolves to the partner's current username."""
-        match = self._create_match()
-        event = create_mcte_event(
-            match=match,
-            author_profile=self.mentor_profile,
-            event_type="progress",
-            content="Progress note",
-            show_on_profile=True,
-        )
-
-        # Null the FK on the event, then rename the partner
-        TimelineEvent.objects.filter(id=event.id).update(mentorship=None)
-        self.mentee_profile.username = "renamed_mentee"
-        self.mentee_profile.save(update_fields=["username"])
-
-        self._auth_viewer()
-        response = self.api_client.get(self.feed_url + "?category=MCTE")
-
-        self.assertEqual(response.status_code, 200)
-        result = next(
-            item for item in response.data["results"] if item["source_id"] == event.source_id
-        )
-        self.assertEqual(result["mentorship_partner"], "renamed_mentee")
-
-    # ------------------------------------------------------------------
-    # MCTE: deleted mentorship + deleted partner profile
-    # ------------------------------------------------------------------
-
-    def test_mcte_partner_is_none_after_match_and_profile_deleted(self) -> None:
-        """mentorship_partner is None when both the match and partner profile are gone."""
+    def test_mcte_event_removed_after_match_deleted(self) -> None:
+        """Deleting a match removes its MCTE events from the profile feed."""
         match = self._create_match()
         event = create_mcte_event(
             match=match,
@@ -4768,18 +4711,14 @@ class ProfileFeedDeletionScenarioTests(TestCase):
             show_on_profile=True,
         )
 
-        # Null the FK on the event, then delete the partner profile and user
-        TimelineEvent.objects.filter(id=event.id).update(mentorship=None)
-        self.mentee_user.delete()  # cascades to mentee_profile
+        match.request.delete()
 
         self._auth_viewer()
         response = self.api_client.get(self.feed_url + "?category=MCTE")
 
         self.assertEqual(response.status_code, 200)
-        result = next(
-            item for item in response.data["results"] if item["source_id"] == event.source_id
-        )
-        self.assertIsNone(result["mentorship_partner"])
+        source_ids = {item["source_id"] for item in response.data["results"]}
+        self.assertNotIn(event.source_id, source_ids)
 
     # ------------------------------------------------------------------
     # MCTE: active match, hidden partner
