@@ -16,10 +16,11 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from .models import AuthProvider, EmailVerificationToken, PasswordResetToken, User
+from .models import AuthProvider, EmailVerificationToken, PasswordResetToken, Report, User
 from .oauth import OAuthVerificationError, verify_google_id_token
-from .permissions import IsAdmin, IsNotBanned
+from .permissions import IsAdmin, IsNotBanned, IsUser
 from .serializers import (
+    AdminUserUpdateSerializer,
     AuthResponseSerializer,
     BannedAwareTokenRefreshSerializer,
     ForgotPasswordSerializer,
@@ -27,6 +28,9 @@ from .serializers import (
     LogoutSerializer,
     OAuthLoginSerializer,
     RegisterSerializer,
+    ReportCreateSerializer,
+    ReportListSerializer,
+    ReportResolveSerializer,
     ResetPasswordSerializer,
     UserAppUsageModeUpdateSerializer,
     UserResponseSerializer,
@@ -518,7 +522,18 @@ class AdminUsersListAPIView(APIView):
         tags=["Admin"],
     )
     def get(self, request: Request) -> Response:
-        users = User.objects.all().values(
+        users_qs = User.objects.all().order_by("-created_at")
+        
+        # Manual pagination
+        try:
+            page = max(int(request.query_params.get("page", 1)), 1)
+            page_size = min(max(int(request.query_params.get("pageSize", 50)), 1), 100)
+        except ValueError:
+            page = 1
+            page_size = 50
+            
+        offset = (page - 1) * page_size
+        users = users_qs[offset : offset + page_size].values(
             "id",
             "email",
             "username",
@@ -531,7 +546,7 @@ class AdminUsersListAPIView(APIView):
 
         return Response(
             {
-                "count": User.objects.count(),
+                "count": users_qs.count(),
                 "results": list(users),
             },
             status=status.HTTP_200_OK,
@@ -656,3 +671,191 @@ class GoogleOAuthLoginAPIView(APIView):
         )
         _set_auth_cookies(response, refresh)
         return response
+
+
+# ---------------------------------------------------------------------------
+# Admin – user management
+# ---------------------------------------------------------------------------
+
+
+class AdminUserUpdateAPIView(APIView):
+    permission_classes = [IsAdmin]
+    serializer_class = AdminUserUpdateSerializer
+
+    @extend_schema(
+        request=AdminUserUpdateSerializer,
+        responses={
+            200: UserResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Admin access required."),
+            404: OpenApiResponse(description="User not found."),
+        },
+        description="Admin only: update a user's ban status.",
+        tags=["Admin"],
+    )
+    def patch(self, request: Request, user_id: str) -> Response:
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {"detail": "User not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        admin = cast(User, request.user)
+        if str(target_user.id) == str(admin.id):
+            return Response(
+                {"detail": "You cannot modify your own account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = AdminUserUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        is_banned = serializer.validated_data["is_banned"]
+        target_user.is_banned = is_banned
+        target_user.save(update_fields=["is_banned", "updated_at"])
+
+        if is_banned:
+            _blacklist_user_refresh_tokens(target_user)
+
+        return Response(
+            UserResponseSerializer(target_user).data,
+            status=status.HTTP_200_OK,
+        )
+
+    # Support PUT as well for backward compatibility with E2E tests
+    def put(self, request: Request, user_id: str) -> Response:
+        return self.patch(request, user_id)
+
+
+# ---------------------------------------------------------------------------
+# Reports
+# ---------------------------------------------------------------------------
+
+
+class ReportCreateAPIView(APIView):
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=ReportCreateSerializer,
+        responses={
+            201: ReportListSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+        },
+        description="Submit a report against another user.",
+        tags=["Reports"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ReportCreateSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        report = Report.objects.create(
+            submitted_by=cast(User, request.user),
+            reported_user_id=serializer.validated_data["reported_user_id"],
+            reason=serializer.validated_data["reason"],
+            description=serializer.validated_data.get("description", ""),
+            related_message_id=serializer.validated_data.get("related_message_id"),
+        )
+
+        return Response(
+            ReportListSerializer(report).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AdminReportListAPIView(APIView):
+    permission_classes = [IsAdmin]
+
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(description="List of reports."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Admin access required."),
+        },
+        description="Admin only: list all reports. Filterable by ?status=OPEN.",
+        tags=["Admin"],
+    )
+    def get(self, request: Request) -> Response:
+        queryset = Report.objects.select_related(
+            "submitted_by", "reported_user", "resolved_by"
+        ).order_by("-created_at")
+
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter.upper())
+
+        # Manual pagination
+        try:
+            page = max(int(request.query_params.get("page", 1)), 1)
+            page_size = min(max(int(request.query_params.get("pageSize", 50)), 1), 100)
+        except ValueError:
+            page = 1
+            page_size = 50
+            
+        offset = (page - 1) * page_size
+        paginated_reports = queryset[offset : offset + page_size]
+
+        reports = ReportListSerializer(paginated_reports, many=True).data
+        return Response(
+            {
+                "count": queryset.count(),
+                "results": reports,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class AdminReportUpdateAPIView(APIView):
+    permission_classes = [IsAdmin]
+
+    @extend_schema(
+        request=ReportResolveSerializer,
+        responses={
+            200: ReportListSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Admin access required."),
+            404: OpenApiResponse(description="Report not found."),
+        },
+        description="Admin only: update a report's status and resolution note.",
+        tags=["Admin"],
+    )
+    def patch(self, request: Request, report_id: str) -> Response:
+        try:
+            report = Report.objects.select_related(
+                "submitted_by", "reported_user", "resolved_by"
+            ).get(id=report_id)
+        except Report.DoesNotExist:
+            return Response(
+                {"detail": "Report not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = ReportResolveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        new_status = serializer.validated_data["status"]
+        report.status = new_status
+        report.resolution_note = serializer.validated_data.get("resolution_note", "")
+
+        if new_status in ("RESOLVED", "DISMISSED"):
+            report.resolved_by = cast(User, request.user)
+            report.resolved_at = timezone.now()
+        else:
+            # Clear resolution fields if moving back to OPEN or IN_REVIEW
+            report.resolved_by = None
+            report.resolved_at = None
+
+        report.save()
+
+        return Response(
+            ReportListSerializer(report).data,
+            status=status.HTTP_200_OK,
+        )
+

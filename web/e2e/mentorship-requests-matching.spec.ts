@@ -92,7 +92,7 @@ test.describe('AT-006: Mentorship Requests & Matching', () => {
     });
 
     await test.step('One pending request per mentor is enforced', async () => {
-      const duplicate = await api.sendMentorshipRequest(acceptedMenteeAuth, {
+      const duplicate = await api.trySendMentorshipRequest(acceptedMenteeAuth, {
         mentor_username: mentor.username,
         slot_id: secondSlot.id,
         cover_letter: 'Trying to send a second pending request to the same mentor.',
@@ -193,7 +193,7 @@ test.describe('AT-006: Mentorship Requests & Matching', () => {
       const notifications = await api.fetchNotifications(otherMenteeAuth);
       expect(notifications.some((item) => item.type === 'mentorship_request_rejected')).toBeTruthy();
 
-      const repeatedResponse = await api.respondToRequest(mentorAuth, acceptedRequestId, 'reject');
+      const repeatedResponse = await api.tryRespondToRequest(mentorAuth, acceptedRequestId, 'reject');
       expect(repeatedResponse.status()).toBe(400);
       await expect(repeatedResponse.json()).resolves.toMatchObject({
         detail: 'Only pending requests can be accepted or rejected.',

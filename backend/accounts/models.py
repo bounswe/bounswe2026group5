@@ -26,6 +26,7 @@ class AuthProvider(models.TextChoices):
 class AppUsageMode(models.TextChoices):
     MENTEE = "MENTEE", "Mentee"
     MENTOR = "MENTOR", "Mentor"
+    ADMIN = "ADMIN", "Admin"
 
 
 class UserManager(BaseUserManager["User"]):
@@ -230,3 +231,67 @@ class EmailVerificationToken(models.Model):
             expires_at=timezone.now() + timedelta(hours=lifetime_hours),
         )
         return raw_token, instance
+
+
+class ReportReason(models.TextChoices):
+    SPAM = "SPAM", "Spam"
+    HARASSMENT = "HARASSMENT", "Harassment"
+    INAPPROPRIATE_CONTENT = "INAPPROPRIATE_CONTENT", "Inappropriate Content"
+    OTHER = "OTHER", "Other"
+
+
+class ReportStatus(models.TextChoices):
+    OPEN = "OPEN", "Open"
+    IN_REVIEW = "IN_REVIEW", "In Review"
+    RESOLVED = "RESOLVED", "Resolved"
+    DISMISSED = "DISMISSED", "Dismissed"
+
+
+class Report(models.Model):
+    """User-submitted report about inappropriate or problematic behavior."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    submitted_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="submitted_reports",
+    )
+    reported_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="received_reports",
+    )
+    related_message = models.ForeignKey(
+        "messaging.Message",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="account_reports",
+    )
+    reason = models.CharField(
+        max_length=32,
+        choices=ReportReason.choices,
+    )
+    description = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=16,
+        choices=ReportStatus.choices,
+        default=ReportStatus.OPEN,
+    )
+    resolution_note = models.TextField(blank=True)
+    resolved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_reports",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "reports"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Report({self.reason}, {self.status}, by={self.submitted_by_id})"

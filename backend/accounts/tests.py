@@ -8,6 +8,7 @@ from django.core import mail
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from drf_spectacular.openapi import AutoSchema
+from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -19,6 +20,9 @@ from .models import (
     AuthProvider,
     EmailVerificationToken,
     PasswordResetToken,
+    Report,
+    ReportReason,
+    ReportStatus,
     User,
     UserRole,
 )
@@ -765,9 +769,7 @@ class AccountsHelpersAndPermissionsTests(TestCase):
         """OpenAPI extension returns expected bearer security definition."""
         auto_schema = cast(AutoSchema, object())
         schema_extension = CookieOrHeaderJWTAuthenticationScheme(object())
-        security_definition = schema_extension.get_security_definition(
-            auto_schema
-        )
+        security_definition = schema_extension.get_security_definition(auto_schema)
 
         self.assertEqual(
             security_definition,
@@ -1133,16 +1135,12 @@ class ResetPasswordAPIViewTests(TestCase):
     def test_reset_password_blacklists_existing_refresh_tokens(self) -> None:
         refresh = RefreshToken.for_user(self.user)
         self.assertTrue(OutstandingToken.objects.filter(user=self.user).exists())
-        self.assertFalse(
-            BlacklistedToken.objects.filter(token__jti=refresh["jti"]).exists()
-        )
+        self.assertFalse(BlacklistedToken.objects.filter(token__jti=refresh["jti"]).exists())
 
         response = self.api_client.post(self.URL, self._payload())
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(
-            BlacklistedToken.objects.filter(token__jti=refresh["jti"]).exists()
-        )
+        self.assertTrue(BlacklistedToken.objects.filter(token__jti=refresh["jti"]).exists())
 
 
 class EmailVerificationTokenModelTests(TestCase):
@@ -1551,9 +1549,9 @@ class GoogleOAuthLoginTests(TestCase):
     @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
     @patch(
         "accounts.views.verify_google_id_token",
-        side_effect=__import__("accounts.oauth", fromlist=["OAuthVerificationError"]).OAuthVerificationError(
-            "Invalid or expired Google token."
-        ),
+        side_effect=__import__(
+            "accounts.oauth", fromlist=["OAuthVerificationError"]
+        ).OAuthVerificationError("Invalid or expired Google token."),
     )
     def test_google_login_invalid_token_rejected(self, mock_verify: Mock) -> None:
         """Invalid Google token returns 400."""
@@ -1581,3 +1579,123 @@ class GoogleOAuthLoginTests(TestCase):
         self.assertEqual(response.status_code, 400)
 
 
+class AdminUserUpdateAPIViewTests(TestCase):
+    def setUp(self):
+        self.api_client = APIClient()
+        self.admin_user = User.objects.create_user(
+            email="admin_unique@test.com", password="Pass123!", role=UserRole.ADMIN
+        )
+        self.target_user = User.objects.create_user(email="target@test.com", password="Pass123!")
+
+    def test_admin_can_ban_user(self):
+        self.api_client.force_authenticate(user=self.admin_user)
+        response = self.api_client.patch(
+            f"/api/auth/admin/users/{self.target_user.id}/",
+            {"is_banned": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.target_user.refresh_from_db()
+        self.assertTrue(self.target_user.is_banned)
+
+    def test_admin_cannot_ban_self(self):
+        self.api_client.force_authenticate(user=self.admin_user)
+        response = self.api_client.patch(
+            f"/api/auth/admin/users/{self.admin_user.id}/",
+            {"is_banned": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_non_admin_cannot_ban(self):
+        self.api_client.force_authenticate(user=self.target_user)
+        response = self.api_client.patch(
+            f"/api/auth/admin/users/{self.admin_user.id}/",
+            {"is_banned": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ReportAPITests(TestCase):
+    def setUp(self):
+        self.api_client = APIClient()
+        self.admin = User.objects.create_user(
+            email="admin2@test.com", password="Pass123!", role=UserRole.ADMIN
+        )
+        self.reporter = User.objects.create_user(email="reporter@test.com", password="Pass123!")
+        self.reported = User.objects.create_user(
+            email="reported@test.com", password="Pass123!", username="baduser"
+        )
+        self.report = Report.objects.create(
+            submitted_by=self.reporter,
+            reported_user=self.reported,
+            reason=ReportReason.SPAM,
+            description="Spamming the feed",
+            status=ReportStatus.OPEN,
+        )
+
+    def test_user_can_submit_report_by_id(self):
+        self.api_client.force_authenticate(user=self.reporter)
+        response = self.api_client.post(
+            "/api/auth/reports/",
+            {
+                "reported_user_id": str(self.reported.id),
+                "reason": "HARASSMENT",
+                "description": "Being rude",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Report.objects.count(), 2)
+
+    def test_user_can_submit_report_by_username(self):
+        self.api_client.force_authenticate(user=self.reporter)
+        response = self.api_client.post(
+            "/api/auth/reports/",
+            {
+                "reported_username": self.reported.username,
+                "reason": "SPAM",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_user_cannot_report_self(self):
+        self.api_client.force_authenticate(user=self.reporter)
+        response = self.api_client.post(
+            "/api/auth/reports/",
+            {
+                "reported_user_id": str(self.reporter.id),
+                "reason": "SPAM",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_admin_can_list_reports(self):
+        self.api_client.force_authenticate(user=self.admin)
+        response = self.api_client.get("/api/auth/admin/reports/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 1)
+
+    def test_non_admin_cannot_list_reports(self):
+        self.api_client.force_authenticate(user=self.reporter)
+        response = self.api_client.get("/api/auth/admin/reports/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_can_resolve_report(self):
+        self.api_client.force_authenticate(user=self.admin)
+        response = self.api_client.patch(
+            f"/api/auth/admin/reports/{self.report.id}/",
+            {
+                "status": "RESOLVED",
+                "resolution_note": "Banned user",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, ReportStatus.RESOLVED)
+        self.assertEqual(self.report.resolved_by, self.admin)
+        self.assertEqual(self.report.resolution_note, "Banned user")
