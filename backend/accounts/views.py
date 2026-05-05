@@ -847,6 +847,10 @@ class AdminReportUpdateAPIView(APIView):
         if new_status in ("RESOLVED", "DISMISSED"):
             report.resolved_by = cast(User, request.user)
             report.resolved_at = timezone.now()
+        else:
+            # Clear resolution fields if moving back to OPEN or IN_REVIEW
+            report.resolved_by = None
+            report.resolved_at = None
 
         report.save()
 
