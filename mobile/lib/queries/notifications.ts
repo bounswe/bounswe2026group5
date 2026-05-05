@@ -242,3 +242,19 @@ export function useMarkNotificationReadMutation(username?: string) {
     },
   });
 }
+
+export function useRegisterFCMTokenMutation() {
+  return useMutation({
+    mutationFn: ({
+      token,
+      device_type,
+    }: {
+      token: string;
+      device_type: "android" | "ios";
+    }) =>
+      apiPost<{ detail: string }>("/api/notifications/fcm-token/", {
+        token,
+        device_type,
+      }),
+  });
+}

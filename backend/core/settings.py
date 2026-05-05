@@ -242,6 +242,7 @@ RATING_UPDATE_THRESHOLD = int(os.getenv("RATING_UPDATE_THRESHOLD", "5"))
 
 # Notifications
 NOTIFICATIONS_HISTORY_LIMIT = int(os.getenv("NOTIFICATIONS_HISTORY_LIMIT", "100"))
+FIREBASE_SERVICE_ACCOUNT_PATH = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH", "credentials/firebase-service-account.json")
 
 # Password reset
 PASSWORD_RESET_TOKEN_LIFETIME_MINUTES = int(

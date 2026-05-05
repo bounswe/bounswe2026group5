@@ -8,7 +8,36 @@ from rest_framework.views import APIView
 from accounts.permissions import IsUser
 
 from .models import Notification
-from .serializers import NotificationSerializer
+from .serializers import FCMTokenSerializer, NotificationSerializer
+
+
+class FCMTokenRegisterAPIView(APIView):
+    """Register or update an FCM token for the authenticated user."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=FCMTokenSerializer,
+        responses={
+            201: OpenApiResponse(description="Token registered successfully."),
+            401: OpenApiResponse(description="Authentication required."),
+        },
+        description="Register or update an FCM token for the current user.",
+        tags=["Notifications"],
+    )
+    def post(self, request: Request) -> Response:
+        """Register the FCM token."""
+        serializer = FCMTokenSerializer(data=request.data, context={"request": request})
+        if not serializer.is_valid():
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"FCM Token registration failed: {serializer.errors} | Data: {request.data}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(
+            {"detail": "Token registered successfully."},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class NotificationListAPIView(APIView):
