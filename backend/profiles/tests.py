@@ -856,8 +856,7 @@ class ProfilePostsAPITests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         cop_result = next(
-            item for item in response.data["results"]
-            if item["source_id"] == visible_cop.source_id
+            item for item in response.data["results"] if item["source_id"] == visible_cop.source_id
         )
         self.assertIn("community_id", cop_result)
         self.assertEqual(str(cop_result["community_id"]), str(visible_cop.community_id))
@@ -875,8 +874,7 @@ class ProfilePostsAPITests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         prp_result = next(
-            item for item in response.data["results"]
-            if item["source_id"] == prp_event.source_id
+            item for item in response.data["results"] if item["source_id"] == prp_event.source_id
         )
         self.assertIn("community_id", prp_result)
         self.assertIsNone(prp_result["community_id"])
@@ -4423,14 +4421,20 @@ class ProfilePictureUploadTests(TestCase):
     def _make_image_file(self, name: str = "test.jpg", size: tuple = (100, 100), fmt: str = "JPEG"):
         """Create an in-memory image file for testing."""
         from io import BytesIO
-        from PIL import Image as PILImage
+
         from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image as PILImage
 
         img = PILImage.new("RGB", size, color="red")
         buf = BytesIO()
         img.save(buf, format=fmt)
         buf.seek(0)
-        content_type = {"JPEG": "image/jpeg", "PNG": "image/png", "GIF": "image/gif", "WEBP": "image/webp"}.get(fmt, "image/jpeg")
+        content_type = {
+            "JPEG": "image/jpeg",
+            "PNG": "image/png",
+            "GIF": "image/gif",
+            "WEBP": "image/webp",
+        }.get(fmt, "image/jpeg")
         return SimpleUploadedFile(name=name, content=buf.read(), content_type=content_type)
 
     def test_upload_valid_jpeg_returns_200(self) -> None:
@@ -4448,8 +4452,9 @@ class ProfilePictureUploadTests(TestCase):
     def test_upload_oversized_file_returns_400(self) -> None:
         """Files exceeding 5 MB should be rejected."""
         from io import BytesIO
-        from PIL import Image as PILImage
+
         from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image as PILImage
 
         # Create a large image (uncompressed)
         img = PILImage.new("RGB", (4000, 4000), color="blue")
@@ -4503,7 +4508,9 @@ class ProfilePictureUploadTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
         # The returned URL should NOT be the Google one
-        self.assertNotEqual(response.data["picture_url"], "https://lh3.googleusercontent.com/photo.jpg")
+        self.assertNotEqual(
+            response.data["picture_url"], "https://lh3.googleusercontent.com/photo.jpg"
+        )
 
     def test_after_delete_falls_back_to_oauth_url(self) -> None:
         """After deleting the uploaded picture, picture_url falls back to OAuth."""
@@ -4515,7 +4522,9 @@ class ProfilePictureUploadTests(TestCase):
 
         response = self.client.delete(self.PICTURE_URL)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["picture_url"], "https://lh3.googleusercontent.com/photo.jpg")
+        self.assertEqual(
+            response.data["picture_url"], "https://lh3.googleusercontent.com/photo.jpg"
+        )
 
     def test_unauthenticated_upload_returns_401(self) -> None:
         self.client.credentials()
@@ -4569,8 +4578,9 @@ class PostMediaUploadTests(TestCase):
     def _make_image_file(self, name: str = "post.jpg"):
         """Create an in-memory image file for testing."""
         from io import BytesIO
-        from PIL import Image as PILImage
+
         from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image as PILImage
 
         img = PILImage.new("RGB", (200, 200), color="green")
         buf = BytesIO()
@@ -4596,7 +4606,9 @@ class PostMediaUploadTests(TestCase):
     def test_upload_unsupported_type_returns_400(self) -> None:
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        file = SimpleUploadedFile("script.exe", b"MZ\x90\x00", content_type="application/x-msdownload")
+        file = SimpleUploadedFile(
+            "script.exe", b"MZ\x90\x00", content_type="application/x-msdownload"
+        )
         response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
         self.assertEqual(response.status_code, 400)
 

@@ -668,7 +668,12 @@ class ProfilePostListQueryParamsSerializer(serializers.Serializer):
 
 
 class ProfilePostSerializer(serializers.Serializer):
-    """Read serializer for profile feed items (PrP + visible MCTE)."""
+    """Read serializer for profile feed items (PrP, visible MCTE, and visible CoP).
+
+    ``community_id`` is populated only for CoP posts and is ``null`` for PrP and MCTE.
+    Clients can use it to navigate to ``/api/profiles/tags/{community_id}/`` or link
+    to the community feed at ``/api/profiles/tags/{community_id}/posts/``.
+    """
 
     id = serializers.UUIDField(read_only=True)
     source_id = serializers.CharField(read_only=True)

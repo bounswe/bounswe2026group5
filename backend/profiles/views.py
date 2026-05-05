@@ -255,13 +255,16 @@ class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
             404: OpenApiResponse(description="Profile not found."),
         },
         description=(
-            "Return profile posts for a username. Includes both PrP posts authored by the "
+            "Return profile posts for a username. Includes PrP posts authored by the "
             "profile, MCTE events authored by the profile where `show_on_profile=true`, and "
             "CoP events authored by the profile where `show_on_profile=true`. "
-            "If profile is private, only the owner can access this feed. "
+            "If the profile is private, only the owner can access this feed. "
             "Supports optional filtering by `category` and `event_type`. "
             "Results are ordered newest-first by action metadata: `created_at`, then "
-            "`last_edited` as a tie-breaker."
+            "`last_edited` as a tie-breaker. "
+            "Each result includes a `community_id` field: populated with the community tag "
+            "UUID for CoP posts (use it to link to `GET /api/profiles/tags/{community_id}/` "
+            "or `GET /api/profiles/tags/{community_id}/posts/`), and `null` for PrP and MCTE."
         ),
         tags=["Profiles"],
     )
