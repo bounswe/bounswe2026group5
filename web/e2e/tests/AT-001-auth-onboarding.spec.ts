@@ -228,8 +228,11 @@ test.describe('AT-001: Authentication & Onboarding', () => {
 
       // Step 32: Admin login & navigate
       await dashboardPage.logout();
-      await loginPage.fillEmail('admin@admin.com');
-      await loginPage.fillPassword('Adana2024-');
+      const adminEmail = process.env.ADMIN_EMAIL || 'admin@test.com';
+      const adminPassword = process.env.ADMIN_PASSWORD || 'AdminPass123!';
+      
+      await loginPage.fillEmail(adminEmail);
+      await loginPage.fillPassword(adminPassword);
       await loginPage.submit();
       
       // Wait for navigation to complete (e.g. to dashboard) before going to admin page
@@ -252,8 +255,8 @@ test.describe('AT-001: Authentication & Onboarding', () => {
       await loginPage.expectInlineError(/This account is banned|banned/i);
 
       // Step 35: Resolve Report
-      await loginPage.fillEmail('admin@admin.com');
-      await loginPage.fillPassword('Adana2024-');
+      await loginPage.fillEmail(process.env.ADMIN_EMAIL || 'admin@test.com');
+      await loginPage.fillPassword(process.env.ADMIN_PASSWORD || 'AdminPass123!');
       await loginPage.submit();
       
       // Wait for navigation

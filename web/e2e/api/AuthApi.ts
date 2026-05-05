@@ -47,10 +47,13 @@ export class AuthApi {
    */
   async banUser(email: string) {
     // 1. Login as admin via the correct endpoint
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@test.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'AdminPass123!';
+
     const loginRes = await this.request.post(`${this.baseURL}/api/auth/login/`, {
       data: {
-        email: 'admin@admin.com',
-        password: 'Adana2024-'
+        email: adminEmail,
+        password: adminPassword
       }
     });
 
