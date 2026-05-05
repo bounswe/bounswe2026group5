@@ -17,6 +17,11 @@ export class ProfilePage {
     await this.page.goto(`/profiles/${username}`);
   }
 
+  async goBackToDiscover() {
+    await this.page.goBack();
+    await expect(this.page).toHaveURL(/\/discover/);
+  }
+
   async expectOwnerAvailabilityEmpty() {
     await expect(this.page.getByText('Click any empty slot to mark yourself as available.')).toBeVisible();
     await expect(this.page.getByText('Available ✕')).toHaveCount(0);

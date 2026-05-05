@@ -58,6 +58,7 @@ class MarkNotificationReadAPIView(APIView):
     permission_classes = [IsUser]
 
     @extend_schema(
+        request=None,
         responses={
             200: OpenApiResponse(description="Notification marked as read."),
             401: OpenApiResponse(description="Authentication required."),

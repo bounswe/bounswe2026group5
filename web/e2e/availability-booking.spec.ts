@@ -131,7 +131,7 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
     });
 
     await test.step('Duplicate request to same mentor is blocked while pending', async () => {
-      const duplicate = await api.sendMentorshipRequest(menteeAuth, {
+      const duplicate = await api.trySendMentorshipRequest(menteeAuth, {
         mentor_username: mentor.username,
         slot_id: secondSlotId,
         cover_letter: 'Trying to send a duplicate pending request.',
@@ -181,7 +181,7 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
     });
 
     await test.step('Another mentee can request a different available slot from same mentor', async () => {
-      const response = await api.sendMentorshipRequest(otherMenteeAuth, {
+      const response = await api.trySendMentorshipRequest(otherMenteeAuth, {
         mentor_username: mentor.username,
         slot_id: secondSlotId,
         cover_letter: 'I would like the later slot for a separate mentorship request.',
