@@ -36,6 +36,7 @@ from profiles.services import (
     SlotNotBookedError,
     book_availability_slot,
     cancel_availability_booking,
+    create_cop_event,
     create_prp_event,
 )
 from profiles.views import PublicMentorProfilesSearchListAPIView
@@ -4637,3 +4638,261 @@ class PostMediaUploadTests(TestCase):
         file = self._make_image_file("post.jpg")
         response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
         self.assertEqual(response.status_code, 404)
+
+
+class ProfileFeedDeletionScenarioTests(TestCase):
+    """Tests for profile feed serializer behaviour when related objects are deleted."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+
+        self.mentor_user = User.objects.create_user(
+            email="feed-mentor@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            username="feed_mentor",
+            display_name="Feed Mentor",
+            is_visible=True,
+        )
+
+        self.mentee_user = User.objects.create_user(
+            email="feed-mentee@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user,
+            username="feed_mentee",
+            display_name="Feed Mentee",
+            is_visible=True,
+        )
+
+        self.viewer_user = User.objects.create_user(
+            email="feed-viewer@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.viewer_profile = Profile.objects.create(
+            user=self.viewer_user,
+            username="feed_viewer",
+            display_name="Feed Viewer",
+            is_visible=True,
+        )
+        self.viewer_token = str(RefreshToken.for_user(self.viewer_user).access_token)
+
+        self.feed_url = f"/api/profiles/{self.mentor_profile.username}/posts/"
+
+    def _auth_viewer(self) -> None:
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.viewer_token}")
+
+    def _create_match(self) -> Match:
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        return ensure_match_and_initial_session(mentorship_request=request_obj)
+
+    # ------------------------------------------------------------------
+    # MCTE: deleted mentorship
+    # ------------------------------------------------------------------
+
+    def test_mcte_partner_returned_after_match_deleted(self) -> None:
+        """mentorship_partner is still returned from payload after the Match is deleted."""
+        match = self._create_match()
+        event = create_mcte_event(
+            match=match,
+            author_profile=self.mentor_profile,
+            event_type="achievement",
+            content="A milestone",
+            show_on_profile=True,
+        )
+
+        # Null the FK on the event to simulate the mentorship being gone
+        # (mirrors SET_NULL semantics; CASCADE would delete the event entirely)
+        TimelineEvent.objects.filter(id=event.id).update(mentorship=None)
+
+        self._auth_viewer()
+        response = self.api_client.get(self.feed_url + "?category=MCTE")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            item for item in response.data["results"] if item["source_id"] == event.source_id
+        )
+        self.assertEqual(result["mentorship_partner"], self.mentee_profile.username)
+
+    # ------------------------------------------------------------------
+    # MCTE: deleted mentorship + changed username
+    # ------------------------------------------------------------------
+
+    def test_mcte_partner_reflects_updated_username_after_match_deleted(self) -> None:
+        """After match deletion the payload ID resolves to the partner's current username."""
+        match = self._create_match()
+        event = create_mcte_event(
+            match=match,
+            author_profile=self.mentor_profile,
+            event_type="progress",
+            content="Progress note",
+            show_on_profile=True,
+        )
+
+        # Null the FK on the event, then rename the partner
+        TimelineEvent.objects.filter(id=event.id).update(mentorship=None)
+        self.mentee_profile.username = "renamed_mentee"
+        self.mentee_profile.save(update_fields=["username"])
+
+        self._auth_viewer()
+        response = self.api_client.get(self.feed_url + "?category=MCTE")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            item for item in response.data["results"] if item["source_id"] == event.source_id
+        )
+        self.assertEqual(result["mentorship_partner"], "renamed_mentee")
+
+    # ------------------------------------------------------------------
+    # MCTE: deleted mentorship + deleted partner profile
+    # ------------------------------------------------------------------
+
+    def test_mcte_partner_is_none_after_match_and_profile_deleted(self) -> None:
+        """mentorship_partner is None when both the match and partner profile are gone."""
+        match = self._create_match()
+        event = create_mcte_event(
+            match=match,
+            author_profile=self.mentor_profile,
+            event_type="social",
+            content="A social note",
+            show_on_profile=True,
+        )
+
+        # Null the FK on the event, then delete the partner profile and user
+        TimelineEvent.objects.filter(id=event.id).update(mentorship=None)
+        self.mentee_user.delete()  # cascades to mentee_profile
+
+        self._auth_viewer()
+        response = self.api_client.get(self.feed_url + "?category=MCTE")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            item for item in response.data["results"] if item["source_id"] == event.source_id
+        )
+        self.assertIsNone(result["mentorship_partner"])
+
+    # ------------------------------------------------------------------
+    # MCTE: active match, hidden partner
+    # ------------------------------------------------------------------
+
+    def test_mcte_partner_returned_when_partner_profile_hidden(self) -> None:
+        """mentorship_partner username is returned even when the partner's profile is hidden."""
+        match = self._create_match()
+        event = create_mcte_event(
+            match=match,
+            author_profile=self.mentor_profile,
+            event_type="achievement",
+            content="Achievement",
+            show_on_profile=True,
+        )
+
+        self.mentee_profile.is_visible = False
+        self.mentee_profile.save(update_fields=["is_visible"])
+
+        self._auth_viewer()
+        response = self.api_client.get(self.feed_url + "?category=MCTE")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            item for item in response.data["results"] if item["source_id"] == event.source_id
+        )
+        self.assertEqual(result["mentorship_partner"], self.mentee_profile.username)
+
+    # ------------------------------------------------------------------
+    # CoP: live community
+    # ------------------------------------------------------------------
+
+    def test_cop_community_name_returned_for_active_community(self) -> None:
+        """community_name is returned from the live CommunityTag record."""
+        community = CommunityTag.objects.create(
+            name="Active Community",
+            created_by=self.mentor_profile,
+        )
+        event = create_cop_event(
+            author_profile=self.mentor_profile,
+            community_tag=community,
+            event_type="social",
+            content="Hello community",
+            show_on_profile=True,
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.feed_url + "?category=CoP")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            item for item in response.data["results"] if item["source_id"] == event.source_id
+        )
+        self.assertEqual(result["community_id"], str(community.id))
+        self.assertEqual(result["community_name"], "Active Community")
+
+    # ------------------------------------------------------------------
+    # CoP: deleted community
+    # ------------------------------------------------------------------
+
+    def test_cop_community_name_falls_back_to_payload_after_community_deleted(self) -> None:
+        """community_name is served from payload after the CommunityTag is deleted."""
+        community = CommunityTag.objects.create(
+            name="Soon Deleted Community",
+            created_by=self.mentor_profile,
+        )
+        community_id = community.id
+        event = create_cop_event(
+            author_profile=self.mentor_profile,
+            community_tag=community,
+            event_type="social",
+            content="Post before deletion",
+            show_on_profile=True,
+        )
+
+        community.delete()
+
+        self._auth_viewer()
+        response = self.api_client.get(self.feed_url + "?category=CoP")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            item for item in response.data["results"] if item["source_id"] == event.source_id
+        )
+        self.assertEqual(str(result["community_id"]), str(community_id))
+        self.assertEqual(result["community_name"], "Soon Deleted Community")
+
+    # ------------------------------------------------------------------
+    # CoP: community_name reflects live renames
+    # ------------------------------------------------------------------
+
+    def test_cop_community_name_reflects_live_rename(self) -> None:
+        """community_name tracks the current live name, not the snapshot."""
+        community = CommunityTag.objects.create(
+            name="Original Name",
+            created_by=self.mentor_profile,
+        )
+        event = create_cop_event(
+            author_profile=self.mentor_profile,
+            community_tag=community,
+            event_type="achievement",
+            content="Post before rename",
+            show_on_profile=True,
+        )
+
+        community.name = "Renamed Community"
+        community.save(update_fields=["name"])
+
+        self._auth_viewer()
+        response = self.api_client.get(self.feed_url + "?category=CoP")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            item for item in response.data["results"] if item["source_id"] == event.source_id
+        )
+        self.assertEqual(result["community_name"], "Renamed Community")
