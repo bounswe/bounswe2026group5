@@ -76,6 +76,6 @@ export default defineConfig({
     command: 'cd .. && docker compose up',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000, // Important: Docker can take a while to spin up the database, backend, and frontend
+    timeout: 300 * 1000, // Important: Docker can take a while to spin up the database, backend, and frontend
   },
 });
