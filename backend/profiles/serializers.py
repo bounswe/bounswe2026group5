@@ -696,7 +696,7 @@ class ProfilePostSerializer(serializers.Serializer):
     mentorship_partner = serializers.SerializerMethodField()
     author = ProfilePostAuthorSerializer(read_only=True)
 
-    @extend_schema_field(OpenApiTypes.STR)
+    @extend_schema_field({"type": "string", "nullable": True})
     def get_community_name(self, obj: TimelineEvent) -> str | None:
         """Return the community name for CoP events.
 
@@ -714,7 +714,7 @@ class ProfilePostSerializer(serializers.Serializer):
         payload = obj.payload or {}
         return payload.get("community_name")
 
-    @extend_schema_field(OpenApiTypes.STR)
+    @extend_schema_field({"type": "string", "nullable": True})
     def get_mentorship_partner(self, obj: TimelineEvent) -> str | None:
         """Return the username of the mentorship partner for MCTE events.
 
