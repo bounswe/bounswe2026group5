@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 import {
     Loader2,
@@ -43,7 +44,6 @@ import {
     CalendarCheck2,
     Flag,
     AlertCircle,
-    UserCheck,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/_authorized/connections/$matchId')({
@@ -154,8 +154,7 @@ function JourneyPage() {
                                 key={event.id}
                                 event={event}
                                 isLast={index === feed.results.length - 1}
-                                matchId={matchId}
-                                currentUserId={me?.id}
+                                currentUsername={me?.username}
                                 onEdit={setEditEvent}
                                 onDelete={setDeleteEvent}
                             />
@@ -202,17 +201,17 @@ function JourneyPage() {
 interface TimelineEventItemProps {
     event: JourneyEvent
     isLast: boolean
-    matchId: string
-    currentUserId: string | undefined
+    currentUsername: string | undefined
     onEdit: (e: JourneyEvent) => void
     onDelete: (e: JourneyEvent) => void
 }
 
-function TimelineEventItem({ event, isLast, matchId, onEdit, onDelete }: TimelineEventItemProps) {
+function TimelineEventItem({ event, isLast, currentUsername, onEdit, onDelete }: TimelineEventItemProps) {
     if (event.category === 'AGTE') {
         return <AGTEItem event={event} isLast={isLast} />
     }
-    return <MCTEItem event={event} isLast={isLast} matchId={matchId} onEdit={onEdit} onDelete={onDelete} />
+    const isOwner = !!currentUsername && event.author?.username === currentUsername
+    return <MCTEItem event={event} isLast={isLast} isOwner={isOwner} onEdit={onEdit} onDelete={onDelete} />
 }
 
 function AGTEItem({ event, isLast }: { event: JourneyEvent; isLast: boolean }) {
@@ -255,26 +254,18 @@ function AGTEItem({ event, isLast }: { event: JourneyEvent; isLast: boolean }) {
 function MCTEItem({
     event,
     isLast,
-    matchId,
+    isOwner,
     onEdit,
     onDelete,
 }: {
     event: JourneyEvent
     isLast: boolean
-    matchId: string
+    isOwner: boolean
     onEdit: (e: JourneyEvent) => void
     onDelete: (e: JourneyEvent) => void
 }) {
     const meta = MCTE_META[event.type] ?? { label: event.type, Icon: AlertCircle, variant: 'outline' as const }
     const { Icon, label, variant } = meta
-    const editMutation = useEditMCTE(matchId)
-
-    function toggleShowOnProfile() {
-        editMutation.mutate(
-            { eventId: event.id, payload: { show_on_profile: !event.show_on_profile } },
-            { onError: () => toast.error('Failed to update. Please try again.') },
-        )
-    }
 
     return (
         <div className="relative flex gap-4 pb-8">
@@ -293,19 +284,8 @@ function MCTEItem({
                                 <Muted className="text-xs">by @{event.author.username}</Muted>
                             )}
                         </div>
-                        {event.is_editable && (
+                        {isOwner && (
                             <div className="flex items-center gap-1">
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    disabled={editMutation.isPending}
-                                    onClick={toggleShowOnProfile}
-                                    aria-label={event.show_on_profile ? 'Remove from profile' : 'Share on profile'}
-                                    title={event.show_on_profile ? 'Shared on profile — click to remove' : 'Share on profile'}
-                                    className={`h-7 w-7 p-0 transition-colors ${event.show_on_profile ? 'text-accent' : 'text-ink-soft hover:text-accent'}`}
-                                >
-                                    <UserCheck className="w-3.5 h-3.5" />
-                                </Button>
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -373,6 +353,7 @@ function CreateMCTEDialog({ matchId, open, onOpenChange }: CreateMCTEDialogProps
             event_type: form.event_type,
             content: form.content.trim(),
             ...(form.media_url?.trim() ? { media_url: form.media_url.trim() } : {}),
+            show_on_profile: form.show_on_profile,
         }
         createMutation.mutate(payload, {
             onSuccess: () => {
@@ -432,6 +413,16 @@ function CreateMCTEDialog({ matchId, open, onOpenChange }: CreateMCTEDialogProps
                             type="url"
                         />
                     </div>
+                    <div className="flex items-center gap-2">
+                        <Checkbox
+                            id="show_on_profile"
+                            checked={form.show_on_profile}
+                            onCheckedChange={v => setForm(f => ({ ...f, show_on_profile: !!v }))}
+                        />
+                        <Label htmlFor="show_on_profile" className="cursor-pointer font-normal">
+                            Also share this on my profile
+                        </Label>
+                    </div>
                     <DialogFooter className="mt-2">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancel
@@ -470,6 +461,7 @@ function EditMCTEDialog({ matchId, event, open, onOpenChange }: EditMCTEDialogPr
     const [form, setForm] = useState<MCTEUpdatePayload>({
         content: event.content,
         media_url: event.media_url ?? '',
+        show_on_profile: event.show_on_profile,
     })
 
     function handleSubmit(e: React.FormEvent) {
@@ -477,6 +469,7 @@ function EditMCTEDialog({ matchId, event, open, onOpenChange }: EditMCTEDialogPr
         const payload: MCTEUpdatePayload = {
             content: form.content?.trim(),
             media_url: form.media_url?.trim() || null,
+            show_on_profile: form.show_on_profile,
         }
         editMutation.mutate(
             { eventId: event.id, payload },
@@ -521,6 +514,16 @@ function EditMCTEDialog({ matchId, event, open, onOpenChange }: EditMCTEDialogPr
                             placeholder="https://..."
                             type="url"
                         />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Checkbox
+                            id="edit_show_on_profile"
+                            checked={form.show_on_profile ?? false}
+                            onCheckedChange={v => setForm(f => ({ ...f, show_on_profile: !!v }))}
+                        />
+                        <Label htmlFor="edit_show_on_profile" className="cursor-pointer font-normal">
+                            Also share this on my profile
+                        </Label>
                     </div>
                     <DialogFooter className="mt-2">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
