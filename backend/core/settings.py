@@ -124,6 +124,9 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Neighborship App API Documentation",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {
+        "AppUsageModeEnum": "accounts.models.AppUsageMode",
+    },
 }
 
 MIDDLEWARE = [
@@ -268,3 +271,7 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@neighborship.app")
+
+# Initial Admin Seeding
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@test.com")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "AdminPass123!")

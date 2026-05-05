@@ -1,4 +1,4 @@
-import { APIRequestContext, expect } from '@playwright/test';
+import { APIRequestContext, Page } from '@playwright/test';
 
 export class AuthApi {
   readonly request: APIRequestContext;
@@ -42,35 +42,46 @@ export class AuthApi {
   }
 
   /**
-   * Helper to ban a user as an admin.
-   * Note: This assumes 'admin:change-me' is valid and creates a fresh context for admin.
+   * Ban a user by email using an admin account.
+   * The admin is seeded in docker-compose startup.
    */
   async banUser(email: string) {
-    // 1. Get admin token
-    const loginRes = await this.request.post(`${this.baseURL}/api/auth/jwt/create/`, {
+    // 1. Login as admin via the correct endpoint
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@test.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'AdminPass123!';
+
+    const loginRes = await this.request.post(`${this.baseURL}/api/auth/login/`, {
       data: {
-        email: 'admin',
-        password: 'change-me'
+        email: adminEmail,
+        password: adminPassword
       }
     });
-    
-    // In Django Rest Framework SimpleJWT, it returns { access, refresh }
-    const { access } = await loginRes.json();
 
-    // 2. We need to find the user ID to ban them.
-    // If the API supports banning by email, we can do that. Assuming it's PUT /api/auth/admin/users/{id}/
-    // First, let's get the list of users
+    if (!loginRes.ok()) {
+      throw new Error(`Admin login failed: ${loginRes.status()} ${await loginRes.text()}`);
+    }
+
+    const loginData = await loginRes.json();
+    const adminToken = loginData.access_token;
+
+    // 2. Get the list of users to find the target by email
     const usersRes = await this.request.get(`${this.baseURL}/api/auth/admin/users/`, {
-      headers: { Authorization: `Bearer ${access}` }
+      headers: { Authorization: `Bearer ${adminToken}` }
     });
-    const users = await usersRes.json();
-    const targetUser = users.find((u: any) => u.email === email);
-    
+
+    if (!usersRes.ok()) {
+      throw new Error(`Failed to list users: ${usersRes.status()}`);
+    }
+
+    const usersData = await usersRes.json();
+    const users = usersData.results || usersData;
+    const targetUser = users.find((u: { email: string }) => u.email === email);
+
     if (!targetUser) throw new Error(`User ${email} not found for banning.`);
 
-    // 3. Ban the user
+    // 3. Ban the user via PUT (backward compat) or PATCH
     const banRes = await this.request.put(`${this.baseURL}/api/auth/admin/users/${targetUser.id}/`, {
-      headers: { Authorization: `Bearer ${access}` },
+      headers: { Authorization: `Bearer ${adminToken}` },
       data: { is_banned: true }
     });
 
