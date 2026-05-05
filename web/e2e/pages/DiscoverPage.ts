@@ -16,6 +16,11 @@ export class DiscoverPage {
     await this.page.getByLabel('Search profiles, skills, or projects...').fill(query);
   }
 
+  async filterBySkill(skill: string) {
+    await this.page.getByRole('button', { name: 'Filter by skill' }).click();
+    await this.page.getByRole('button', { name: skill }).click();
+  }
+
   async openMentorProfile(mentorName: string) {
     const mentorCard = this.page.locator('.island-shell', {
       has: this.page.getByRole('heading', { name: mentorName }),

@@ -4,10 +4,6 @@ import { DashboardPage } from './pages/DashboardPage';
 import { DiscoverPage } from './pages/DiscoverPage';
 import { ProfilePage } from './pages/ProfilePage';
 
-function toDateString(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
 test.describe('AT-AVAIL-004: Availability & Booking', () => {
   test('mentor publishes availability and mentee books through request acceptance', async ({
     browser,
@@ -42,55 +38,115 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
       bio: 'Wants guidance on model evaluation and reliable experimentation.',
       skills: ['Machine Learning'],
     };
-    const coverLetter = `Hi Dr Ayse, I would like help planning a machine learning project. Run ${runId}.`;
 
     const mentorAuth = await api.seedUser(mentor, 'MENTOR');
     const menteeAuth = await api.seedUser(mentee, 'MENTEE');
     const otherMenteeAuth = await api.seedUser(otherMentee, 'MENTEE');
 
-    const slotDate = toDateString(new Date(Date.now() + 24 * 60 * 60 * 1000));
-    const firstSlot = await api.createAvailabilitySlot(mentorAuth, {
-      date: slotDate,
-      startTime: '14:00:00',
-      endTime: '15:00:00',
-    });
-    const secondSlot = await api.createAvailabilitySlot(mentorAuth, {
-      date: slotDate,
-      startTime: '15:00:00',
-      endTime: '16:00:00',
+    await test.step('Mentor starts with an empty availability calendar', async () => {
+      const profilePage = new ProfilePage(page);
+
+      await api.loginInBrowser(page, mentorAuth);
+      await profilePage.goto(mentor.username);
+      await profilePage.expectOwnerAvailabilityEmpty();
+      const slots = await api.fetchAvailabilitySlots(mentor.username, mentorAuth);
+      expect(slots).toEqual([]);
     });
 
-    await test.step('Mentee discovers mentor and sends a request with a cover letter', async () => {
+    let firstSlotId = '';
+    let secondSlotId = '';
+
+    await test.step('Mentor creates first availability slot and overlapping slot is rejected', async () => {
+      const profilePage = new ProfilePage(page);
+
+      await profilePage.createAvailabilityCell(6, 14);
+      await profilePage.expectAvailabilityCount(1);
+
+      const slots = await api.fetchAvailabilitySlots(mentor.username, mentorAuth);
+      const firstSlot = slots.find((slot) => (
+        slot.date === '2026-05-10'
+        && slot.startTime === '14:00:00'
+        && slot.endTime === '15:00:00'
+      ));
+      expect(firstSlot?.status).toBe('AVAILABLE');
+      firstSlotId = firstSlot?.id ?? '';
+
+      const overlap = await api.tryCreateAvailabilitySlot(mentorAuth, {
+        date: '2026-05-10',
+        startTime: '14:30:00',
+        endTime: '15:30:00',
+      });
+      expect(overlap.status()).toBe(400);
+      await expect(overlap.json()).resolves.toMatchObject({
+        detail: expect.stringContaining('overlaps'),
+      });
+      expect(await api.fetchAvailabilitySlots(mentor.username, mentorAuth)).toHaveLength(1);
+    });
+
+    await test.step('Mentor creates adjacent slot and past slot creation is blocked', async () => {
+      const profilePage = new ProfilePage(page);
+
+      await profilePage.createAvailabilityCell(6, 15);
+      await profilePage.expectAvailabilityCount(2);
+
+      const slots = await api.fetchAvailabilitySlots(mentor.username, mentorAuth);
+      const secondSlot = slots.find((slot) => (
+        slot.date === '2026-05-10'
+        && slot.startTime === '15:00:00'
+        && slot.endTime === '16:00:00'
+      ));
+      expect(secondSlot?.status).toBe('AVAILABLE');
+      secondSlotId = secondSlot?.id ?? '';
+
+      const past = await api.tryCreateAvailabilitySlot(mentorAuth, {
+        date: '2026-04-10',
+        startTime: '10:00:00',
+        endTime: '11:00:00',
+      });
+      expect(past.status()).toBe(400);
+      await expect(past.json()).resolves.toMatchObject({
+        date: expect.arrayContaining([expect.stringContaining('past')]),
+      });
+      expect(slots.some((slot) => slot.date === '2026-04-10')).toBeFalsy();
+    });
+
+    await test.step('Mentee discovers mentor by skill and sends an empty-cover-letter request', async () => {
       const discoverPage = new DiscoverPage(page);
       const profilePage = new ProfilePage(page);
 
       await api.loginInBrowser(page, menteeAuth);
       await discoverPage.goto();
+      await discoverPage.filterBySkill('Machine Learning');
       await discoverPage.search(mentor.displayName);
       await discoverPage.openMentorProfile(mentor.displayName);
       await profilePage.expectLoaded(mentor.username, mentor.displayName);
-      await profilePage.sendMentorshipRequest(coverLetter);
+      await profilePage.expectBookableSlots(2);
+      await profilePage.sendMentorshipRequest();
 
       const requests = await api.fetchMyRequests(menteeAuth);
       const pendingRequest = requests.find((item) => item.mentor.username === mentor.username);
       expect(pendingRequest?.status).toBe('PENDING');
-      expect(pendingRequest?.slot_id).toBe(firstSlot.id);
-      expect(pendingRequest?.cover_letter).toBe(coverLetter);
+      expect(pendingRequest?.slot_id).toBe(firstSlotId);
+      expect(pendingRequest?.cover_letter).toBe('');
     });
 
-    await test.step('Duplicate request to same mentor is rejected while pending', async () => {
+    await test.step('Duplicate request to same mentor is blocked while pending', async () => {
       const duplicate = await api.sendMentorshipRequest(menteeAuth, {
         mentor_username: mentor.username,
-        slot_id: secondSlot.id,
+        slot_id: secondSlotId,
         cover_letter: 'Trying to send a duplicate pending request.',
       });
       expect(duplicate.status()).toBe(400);
+
+      const profilePage = new ProfilePage(page);
+      await profilePage.goto(mentor.username);
+      await profilePage.expectPendingRequestBlocksOtherSlots();
     });
 
     await test.step('Mentee can track pending request on dashboard', async () => {
       const dashboardPage = new DashboardPage(page);
       await dashboardPage.goto();
-      await dashboardPage.expectSentRequest(mentor.displayName, coverLetter);
+      await dashboardPage.expectSentRequest(mentor.displayName);
     });
 
     const mentorContext = await browser.newContext();
@@ -100,7 +156,7 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
       const mentorDashboard = new DashboardPage(mentorPage);
       await api.loginInBrowser(mentorPage, mentorAuth);
       await mentorDashboard.goto();
-      await mentorDashboard.acceptIncomingRequest(mentee.displayName, coverLetter);
+      await mentorDashboard.acceptIncomingRequest(mentee.displayName);
 
       const requests = await api.fetchMyRequests(mentorAuth);
       const acceptedRequest = requests.find((item) => item.mentee.username === mentee.username);
@@ -115,7 +171,7 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
       expect(sessions.some((session) => session.mentor.username === mentor.username)).toBeTruthy();
 
       const slots = await api.fetchAvailabilitySlots(mentor.username, menteeAuth);
-      expect(slots.find((slot) => slot.id === firstSlot.id)?.status).toBe('BOOKED');
+      expect(slots.find((slot) => slot.id === firstSlotId)?.status).toBe('BOOKED');
     });
 
     await test.step('Mentee sees confirmed session on dashboard', async () => {
@@ -127,7 +183,7 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
     await test.step('Another mentee can request a different available slot from same mentor', async () => {
       const response = await api.sendMentorshipRequest(otherMenteeAuth, {
         mentor_username: mentor.username,
-        slot_id: secondSlot.id,
+        slot_id: secondSlotId,
         cover_letter: 'I would like the later slot for a separate mentorship request.',
       });
       expect(response.status()).toBe(201);

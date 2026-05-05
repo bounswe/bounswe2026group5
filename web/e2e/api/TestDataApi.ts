@@ -82,12 +82,19 @@ export class TestDataApi {
     mentorAuth: AuthResponse,
     slot: { date: string; startTime: string; endTime: string },
   ) {
-    const response = await this.request.post(`${API_BASE_URL}/profiles/me/availability-slots/`, {
+    const response = await this.tryCreateAvailabilitySlot(mentorAuth, slot);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<AvailabilitySlot>;
+  }
+
+  async tryCreateAvailabilitySlot(
+    mentorAuth: AuthResponse,
+    slot: { date: string; startTime: string; endTime: string },
+  ) {
+    return this.request.post(`${API_BASE_URL}/profiles/me/availability-slots/`, {
       headers: this.authHeaders(mentorAuth),
       data: slot,
     });
-    expect(response.ok()).toBeTruthy();
-    return response.json() as Promise<AvailabilitySlot>;
   }
 
   async fetchAvailabilitySlots(mentorUsername: string, auth?: AuthResponse) {
