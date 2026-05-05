@@ -15,12 +15,22 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
-  const notificationTitle = payload.notification.title;
+
+  // If the payload contains a 'notification' property, the browser will 
+  // automatically show a native notification when the app is in the background.
+  // Calling showNotification here would result in a duplicate.
+  if (payload.notification) {
+    console.log('Background notification handled by browser automatically.');
+    return;
+  }
+
+  // Fallback for data-only messages (if any)
+  const notificationTitle = 'New Notification';
   const notificationOptions = {
-    body: payload.notification.body,
+    body: payload.data?.body || 'You have a new update.',
     icon: '/favicon.ico',
     data: payload.data
   };
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  return self.registration.showNotification(notificationTitle, notificationOptions);
 });

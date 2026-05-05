@@ -33,6 +33,9 @@ class FCMTokenSerializer(serializers.ModelSerializer):
     class Meta:
         model = FCMToken
         fields = ["token", "device_type"]
+        extra_kwargs = {
+            "token": {"validators": []},  # Remove UniqueValidator to allow update_or_create
+        }
 
     def create(self, validated_data):
         user = self.context["request"].user

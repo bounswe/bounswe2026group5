@@ -46,21 +46,14 @@ def send_push_notification(
     if not tokens:
         return
 
-    # Prepare the message
-    notification = messaging.Notification(
-        title=title,
-        body=body,
-    )
-
-    # Multicast message to all user devices
+    notification = messaging.Notification(title=title, body=body)
     messages = [
-        messaging.Message(
-            notification=notification,
-            data=data or {},
-            token=token,
-        )
+        messaging.Message(notification=notification, data=data or {}, token=token)
         for token in tokens
     ]
+
+    if not messages:
+        return
 
     try:
         response = messaging.send_each(messages)

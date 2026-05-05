@@ -29,9 +29,6 @@ class FCMTokenRegisterAPIView(APIView):
         """Register the FCM token."""
         serializer = FCMTokenSerializer(data=request.data, context={"request": request})
         if not serializer.is_valid():
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"FCM Token registration failed: {serializer.errors} | Data: {request.data}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
         return Response(

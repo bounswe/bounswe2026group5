@@ -15,6 +15,7 @@ def trigger_push_notification(sender, instance, created, **kwargs):
             "resource_type": instance.resource_type or "",
             "resource_id": str(instance.resource_id) if instance.resource_id else "",
             "notification_id": str(instance.id),
+            "actor_username": instance.actor.user.username if instance.actor and instance.actor.user else "",
         }
         
         # Add action_url if present
