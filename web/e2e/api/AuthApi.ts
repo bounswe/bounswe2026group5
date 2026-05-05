@@ -49,8 +49,8 @@ export class AuthApi {
     // 1. Login as admin via the correct endpoint
     const loginRes = await this.request.post(`${this.baseURL}/api/auth/login/`, {
       data: {
-        email: 'admin@test.com',
-        password: 'AdminPass123!'
+        email: 'admin@admin.com',
+        password: 'Adana2024-'
       }
     });
 

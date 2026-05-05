@@ -1583,7 +1583,7 @@ class AdminUserUpdateAPIViewTests(TestCase):
     def setUp(self):
         self.api_client = APIClient()
         self.admin_user = User.objects.create_user(
-            email="admin@test.com", password="Pass123!", role=UserRole.ADMIN
+            email="admin_unique@test.com", password="Pass123!", role=UserRole.ADMIN
         )
         self.target_user = User.objects.create_user(email="target@test.com", password="Pass123!")
 

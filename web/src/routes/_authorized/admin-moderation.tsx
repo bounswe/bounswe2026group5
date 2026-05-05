@@ -1,16 +1,16 @@
 // web/src/routes/_authorized/admin-moderation.tsx
-import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import {
-  adminUsersQueryOptions,
   adminReportsQueryOptions,
-  useToggleBan,
+  adminUsersQueryOptions,
   useResolveReport,
+  useToggleBan,
   type AdminUser,
   type Report,
 } from "#/lib/queries/AdminQueries.ts"
-import { Body, Heading, Muted } from '@/components/Typography'
-import { Button } from '@/components/ui/button'
+import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
+import { Body, Display, Muted } from '@/components/Typography'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
@@ -114,11 +114,13 @@ export function AdminModerationPage() {
 
   return (
     <div className="page-wrap py-10 rise-in flex flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <Heading as="h2" className="flex items-center gap-3">
-          <ShieldCheck className="w-7 h-7 text-accent" />
-          Admin Moderation
-        </Heading>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <ShieldCheck className="w-10 h-10 text-accent" />
+          <Display as="h1" id="admin-moderation-heading" data-testid="admin-moderation-title">
+            Admin Moderation
+          </Display>
+        </div>
         <Body className="text-ink-soft max-w-xl">
           Manage platform users and review reports.
         </Body>

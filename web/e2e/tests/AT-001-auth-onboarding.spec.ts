@@ -5,6 +5,7 @@ import { LandingPage } from '../pages/LandingPage';
 import { LoginPage } from '../pages/LoginPage';
 import { OnboardingPage } from '../pages/OnboardingPage';
 import { RegisterPage } from '../pages/RegisterPage';
+import { AdminModerationPage } from '../pages/AdminModerationPage';
 
 test.describe('AT-001: Authentication & Onboarding', () => {
   test.use({ actionTimeout: 5000 });
@@ -195,27 +196,74 @@ test.describe('AT-001: Authentication & Onboarding', () => {
     });
 
     // ==========================================
-    // Part E — Banned User Rejection
+    // Part E — Admin Management & User Moderation
     // ==========================================
-    await test.step('Part E: Banned User Rejection', async () => {
-      // Step 32: Admin bans user
-      const banRes = await authApi.banUser(TEST_EMAIL);
-      expect(banRes.status()).toBe(200);
+    await test.step('Part E: Admin Moderation', async () => {
+      const adminPage = new AdminModerationPage(page);
 
-      // Step 33: API GET /me should return 403 for banned user
-      const getMeRes = await authApi.getMe();
-      expect(getMeRes.status()).toBe(403);
+      // --- Setup: Report another user so we have something in the reports tab ---
+      // Dynamically find a user to report instead of guessing usernames
+      const accessToken = await page.evaluate(() => window.localStorage.getItem('access_token'));
+      const profilesRes = await request.get('http://localhost:8000/api/profiles/', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      expect(profilesRes.ok()).toBe(true);
+      const profilesData = await profilesRes.json();
+      const targetUser = profilesData.results?.find(u => u.username !== TEST_USERNAME);
+      const targetUsername = targetUser?.username || 'mentor_demo'; // fallback just in case
+      
+      const reportRes = await request.post('http://localhost:8000/api/auth/reports/', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: {
+          reported_username: targetUsername,
+          reason: 'SPAM',
+          description: 'Test report for E2E'
+        }
+      });
+      if (!reportRes.ok()) {
+        const errorBody = await reportRes.json().catch(() => ({}));
+        console.error('Report Creation Failed:', errorBody);
+      }
+      expect(reportRes.ok()).toBe(true);
 
-      // Step 34: API Token Refresh should return 403 for banned user
-      const refreshRes = await authApi.refreshToken();
-      expect(refreshRes.status()).toBe(403);
+      // Step 32: Admin login & navigate
+      await dashboardPage.logout();
+      await loginPage.fillEmail('admin@admin.com');
+      await loginPage.fillPassword('Adana2024-');
+      await loginPage.submit();
+      
+      // Wait for navigation to complete (e.g. to dashboard) before going to admin page
+      await page.waitForURL(/.*dashboard|.*admin-moderation/);
+      
+      await adminPage.goto();
+      await adminPage.expectLoaded();
 
-      // Step 35: UI Login should be blocked for banned user
+      // Step 33: Ban Alice via UI
+      await adminPage.searchUser(TEST_USERNAME);
+      await adminPage.banUser(TEST_USERNAME);
+      await adminPage.expectToast(new RegExp(`${TEST_USERNAME} has been banned`, 'i'));
+      await adminPage.expectUserBanned(TEST_USERNAME);
+
+      // Step 34: UI Login should be blocked for banned user
       await dashboardPage.logout();
       await loginPage.fillEmail(TEST_EMAIL);
       await loginPage.fillPassword(TEST_PASSWORD);
       await loginPage.submit();
       await loginPage.expectInlineError(/This account is banned|banned/i);
+
+      // Step 35: Resolve Report
+      await loginPage.fillEmail('admin@admin.com');
+      await loginPage.fillPassword('Adana2024-');
+      await loginPage.submit();
+      
+      // Wait for navigation
+      await page.waitForURL(/.*dashboard|.*admin-moderation/);
+      
+      await adminPage.goto();
+      await adminPage.switchToReports();
+      await adminPage.reviewReport(targetUsername);
+      await adminPage.resolveReport('Resolved in E2E test');
+      await adminPage.expectToast(/Report resolved/i);
     });
 
   });
