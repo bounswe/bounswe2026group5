@@ -18,8 +18,10 @@ from .views import (
     MyTagsListAPIView,
     PopularMentorsListAPIView,
     PopularTagsListAPIView,
+    PostMediaUploadAPIView,
     ProfileByUsernameAPIView,
     ProfileMeAPIView,
+    ProfilePictureUploadAPIView,
     ProfilePostsListAPIView,
     ProfileReviewsByUsernameAPIView,
     ProfileUsernameUpdateAPIView,
@@ -31,6 +33,8 @@ from .views import (
 urlpatterns = [
     path("", PublicMentorProfilesSearchListAPIView.as_view(), name="mentor-profiles-search"),
     path("me/", ProfileMeAPIView.as_view(), name="profile-me"),
+    path("me/picture/", ProfilePictureUploadAPIView.as_view(), name="profile-picture-upload"),
+    path("me/uploads/", PostMediaUploadAPIView.as_view(), name="post-media-upload"),
     path("me/posts/", MyProfilePostsCollectionAPIView.as_view(), name="profile-posts-me-create"),
     path(
         "me/posts/<uuid:event_id>/",
