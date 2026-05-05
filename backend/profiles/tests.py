@@ -844,6 +844,43 @@ class ProfilePostsAPITests(TestCase):
         self.assertIn(visible_cop.source_id, source_ids)
         self.assertNotIn(prp_event.source_id, source_ids)
 
+    def test_profile_feed_cop_post_includes_community_id(self) -> None:
+        visible_cop = self._create_cop_for_owner(
+            content="Community post with tag link",
+            show_on_profile=True,
+            timestamp=timezone.now() - timedelta(minutes=5),
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url + "?category=CoP")
+
+        self.assertEqual(response.status_code, 200)
+        cop_result = next(
+            item for item in response.data["results"]
+            if item["source_id"] == visible_cop.source_id
+        )
+        self.assertIn("community_id", cop_result)
+        self.assertEqual(str(cop_result["community_id"]), str(visible_cop.community_id))
+
+    def test_profile_feed_prp_post_has_null_community_id(self) -> None:
+        prp_event = create_prp_event(
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="PrP post",
+            timestamp=timezone.now() - timedelta(minutes=5),
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url + "?category=PrP")
+
+        self.assertEqual(response.status_code, 200)
+        prp_result = next(
+            item for item in response.data["results"]
+            if item["source_id"] == prp_event.source_id
+        )
+        self.assertIn("community_id", prp_result)
+        self.assertIsNone(prp_result["community_id"])
+
     def test_list_profile_posts_filter_by_event_type_returns_matching_items(self) -> None:
         progress_prp = create_prp_event(
             author_profile=self.owner_profile,

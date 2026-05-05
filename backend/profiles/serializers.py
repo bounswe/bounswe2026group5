@@ -11,9 +11,8 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from core.utils.image import resize_image
-from core.utils.validators import validate_file_size, validate_image_content_type
-
 from core.utils.timezone import get_project_timezone, to_local_time
+from core.utils.validators import validate_file_size, validate_image_content_type
 from mentorship.models import MeetingSession
 
 from .models import AvailabilitySlot, CommunityTag, Profile, Skill
@@ -35,6 +34,7 @@ def resolve_picture_url(profile: Profile) -> str:
         except ValueError:
             pass
     return profile.picture_url or ""
+
 
 @extend_schema_field(
     {
@@ -133,6 +133,7 @@ class PostMediaUploadSerializer(serializers.Serializer):
     def validate_file(self, file):
         """Validate content-type (image or PDF) and enforce a size limit."""
         from django.conf import settings
+
         from core.utils.validators import validate_media_content_type
 
         validate_media_content_type(file)
@@ -147,6 +148,7 @@ class PostMediaUploadSerializer(serializers.Serializer):
         """Resize (if image) and persist the file, returning the public URL."""
         from django.conf import settings
         from django.core.files.storage import default_storage
+
         from core.utils.validators import IMAGE_CONTENT_TYPES
 
         uploaded = self.validated_data["file"]
@@ -162,14 +164,12 @@ class PostMediaUploadSerializer(serializers.Serializer):
             processed = uploaded
 
         import uuid as _uuid
+
         from django.utils import timezone as _tz
 
         now = _tz.now()
         filename = f"{_uuid.uuid4().hex}_{processed.name}"
-        path = (
-            f"post_media/{now.year}/{now.month:02d}"
-            f"/{now.day:02d}/{filename}"
-        )
+        path = f"post_media/{now.year}/{now.month:02d}" f"/{now.day:02d}/{filename}"
         saved_path = default_storage.save(path, processed)
         return default_storage.url(saved_path)
 
@@ -680,6 +680,7 @@ class ProfilePostSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(read_only=True)
     last_edited = serializers.DateTimeField(read_only=True, allow_null=True)
     show_on_profile = serializers.BooleanField(read_only=True)
+    community_id = serializers.UUIDField(read_only=True, allow_null=True)
     actor_role = serializers.CharField(read_only=True)
     author = ProfilePostAuthorSerializer(read_only=True)
 
