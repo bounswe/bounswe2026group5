@@ -1,11 +1,11 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite'
-import path from 'node:path'
+import tailwindcss from '@tailwindcss/vite'
 import { devtools } from '@tanstack/devtools-vite'
-import tsconfigPaths from 'vite-tsconfig-paths'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import viteReact from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
+import path from 'node:path'
+import { defineConfig } from 'vite'
+import tsconfigPaths from 'vite-tsconfig-paths'
 
 const config = defineConfig({
   envDir: path.resolve(__dirname, '..'),
@@ -21,6 +21,7 @@ const config = defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     css: false, // Speeds up tests by not parsing CSS
+    exclude: ['node_modules', 'dist', '.idea', '.git', '.cache', 'e2e/**'],
   }, 
   server: {
       proxy: {
