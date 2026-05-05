@@ -1,4 +1,4 @@
-import { expect, Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 export class AdminModerationPage {
   readonly page: Page;
@@ -29,7 +29,7 @@ export class AdminModerationPage {
 
   async banUser(username: string) {
     // Find the row with the username and click the Ban button
-    const row = this.page.locator('tr').filter({ hasText: username });
+    const row = this.page.locator('tr').filter({ hasText: username }).first();
     await row.getByRole('button', { name: /Ban/i }).click();
     
     // Confirm in dialog
@@ -38,12 +38,12 @@ export class AdminModerationPage {
   }
 
   async expectUserBanned(username: string) {
-    const row = this.page.locator('tr').filter({ hasText: username });
+    const row = this.page.locator('tr').filter({ hasText: username }).first();
     await expect(row.getByText(/Banned/i)).toBeVisible();
   }
 
   async reviewReport(reportedUsername: string) {
-    const row = this.page.locator('tr').filter({ hasText: reportedUsername });
+    const row = this.page.locator('tr').filter({ hasText: reportedUsername }).first();
     await row.getByRole('button', { name: /Review/i }).click();
   }
 
