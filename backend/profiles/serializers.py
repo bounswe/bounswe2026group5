@@ -14,6 +14,7 @@ from core.utils.image import resize_image
 from core.utils.timezone import get_project_timezone, to_local_time
 from core.utils.validators import validate_file_size, validate_image_content_type
 from mentorship.models import MeetingSession
+from timeline.models import TimelineEvent
 
 from .models import AvailabilitySlot, CommunityTag, Profile, Skill
 
@@ -670,8 +671,12 @@ class ProfilePostListQueryParamsSerializer(serializers.Serializer):
 class ProfilePostSerializer(serializers.Serializer):
     """Read serializer for profile feed items (PrP, visible MCTE, and visible CoP).
 
-    ``community_id`` is populated only for CoP posts and is ``null`` for PrP and MCTE.
-    Clients can use it to navigate to ``/api/profiles/tags/{community_id}/`` or link
+    ``community_id`` and ``community_name`` are populated only for CoP posts.
+    ``community_name`` is fetched live; if the community has been deleted it falls back
+    to the name snapshotted in ``payload`` at creation time.
+    ``mentorship_partner`` is populated only for MCTE posts and contains the username of
+    the mentorship partner (mentor or mentee, depending on the author's role).
+    Clients can use ``community_id`` to navigate to ``/api/profiles/tags/{community_id}/`` or link
     to the community feed at ``/api/profiles/tags/{community_id}/posts/``.
     """
 
@@ -686,8 +691,69 @@ class ProfilePostSerializer(serializers.Serializer):
     last_edited = serializers.DateTimeField(read_only=True, allow_null=True)
     show_on_profile = serializers.BooleanField(read_only=True)
     community_id = serializers.UUIDField(read_only=True, allow_null=True)
+    community_name = serializers.SerializerMethodField()
     actor_role = serializers.CharField(read_only=True)
+    mentorship_partner = serializers.SerializerMethodField()
     author = ProfilePostAuthorSerializer(read_only=True)
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_community_name(self, obj: TimelineEvent) -> str | None:
+        """Return the community name for CoP events.
+
+        First tries to fetch the live name from the database. Falls back to the
+        name stored in payload at creation time if the community has been deleted.
+        """
+        if obj.category != TimelineEvent.Category.COP or obj.community_id is None:
+            return None
+
+        community = CommunityTag.objects.filter(id=obj.community_id).values("name").first()
+        if community is not None:
+            return community["name"]
+
+        # Community was deleted — fall back to snapshot stored at creation time
+        payload = obj.payload or {}
+        return payload.get("community_name")
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_mentorship_partner(self, obj: TimelineEvent) -> str | None:
+        """Return the username of the mentorship partner for MCTE events.
+
+        For MCTE events, returns the username of the mentee or mentor (whichever is not
+        the author). For other event types, returns None.
+
+        Handles edge cases gracefully:
+        - If mentorship exists: fetch from related mentor/mentee objects
+        - If mentorship is deleted: fall back to profile ID in payload
+        - If partner's profile is hidden or deleted, still returns their username
+        """
+        if obj.category != TimelineEvent.Category.MCTE:
+            return None
+
+        if obj.author is None:
+            return None
+
+        # Try to get from active mentorship first
+        if obj.mentorship is not None:
+            # Determine partner based on author's role
+            if obj.author == obj.mentorship.mentor:
+                # Author is mentor, so partner is mentee
+                return obj.mentorship.mentee.username
+            elif obj.author == obj.mentorship.mentee:
+                # Author is mentee, so partner is mentor
+                return obj.mentorship.mentor.username
+
+        # Fall back to payload if mentorship was deleted
+        payload = obj.payload or {}
+        partner_id = payload.get("mentorship_partner_id")
+        if partner_id:
+            try:
+                partner_profile = Profile.objects.get(id=partner_id)
+                return partner_profile.username
+            except Profile.DoesNotExist:
+                # Partner profile was also deleted, but we tried our best
+                return None
+
+        return None
 
 
 class ProfilePostFeedSerializer(serializers.Serializer):
