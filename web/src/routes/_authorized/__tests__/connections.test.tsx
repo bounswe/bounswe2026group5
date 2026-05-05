@@ -103,7 +103,7 @@ vi.mock('#/lib/queries/MentorshipQueries.ts', () => ({
   myMatchesQueryOptions: { queryKey: ['mentorship', 'matches'], queryFn: () => null },
 }))
 
-import { ConnectionsPage } from '../connections'
+import { ConnectionsPage } from '../connections.index'
 
 function renderWithUser(appUsageMode: 'MENTOR' | 'MENTEE') {
   const queryClient = new QueryClient({
