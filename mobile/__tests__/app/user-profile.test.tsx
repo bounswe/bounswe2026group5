@@ -1,12 +1,14 @@
-import MentorProfileScreen from "@/app/(tabs)/user/[username]";
+import MentorProfileScreen from "@/app/(tabs)/user/[username]/index";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 
 const mockBack = jest.fn();
 const mockCreateRequestMutateAsync = jest.fn();
 const mockResendMutateAsync = jest.fn();
+const mockSubmitReportMutateAsync = jest.fn();
 const mockAvailabilityRefetch = jest.fn();
 const mockBookSlotMutateAsync = jest.fn();
+const mockToastSuccess = jest.fn();
 let mockUsernameParam: string | undefined = "mentor_ada";
 let mockAuthUser = {
   username: "mentee_bora",
@@ -31,14 +33,23 @@ let mockReviewsData: any = {
   results: [],
 };
 
+const mockPush = jest.fn();
+
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ username: mockUsernameParam }),
   useRouter: () => ({
     back: mockBack,
+    push: mockPush,
   }),
 }));
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+
+jest.mock("@/components/ui/ToastProvider", () => ({
+  useToast: () => ({
+    success: mockToastSuccess,
+  }),
+}));
 
 jest.mock("@/lib/auth/store", () => ({
   useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
@@ -93,6 +104,20 @@ jest.mock("@/lib/queries/profile", () => ({
     isLoading: false,
     isFetching: false,
     error: null,
+  }),
+  useProfilePostsQuery: () => ({
+    data: {
+      count: 1,
+      results: [{ id: "post-1", content: "hello" }],
+    },
+    isLoading: false,
+  }),
+}));
+
+jest.mock("@/lib/queries/reporting", () => ({
+  useSubmitReportMutation: () => ({
+    mutateAsync: mockSubmitReportMutateAsync,
+    isPending: false,
   }),
 }));
 
@@ -267,6 +292,7 @@ describe("MentorProfileScreen email verification gate", () => {
       detail: "If your email is unverified, a new verification link has been sent.",
     });
     mockBookSlotMutateAsync.mockResolvedValue({});
+    mockSubmitReportMutateAsync.mockResolvedValue({});
   });
 
   it("shows an error when the username route param is missing", async () => {
@@ -370,19 +396,21 @@ describe("MentorProfileScreen email verification gate", () => {
     expect(mockCreateRequestMutateAsync).not.toHaveBeenCalled();
   });
 
-  it("warns mentor-mode viewers that mentee mode is required", async () => {
+  it("prevents mentor-mode viewers from sending requests", async () => {
     mockAuthUser = {
       username: "mentor_viewer",
       app_usage_mode: "MENTOR",
       is_email_verified: true,
     };
 
-    const { findByText, getByTestId } = render(<MentorProfileScreen />);
+    const { findByText, getByTestId, queryByText } = render(
+      <MentorProfileScreen />,
+    );
 
     expect(await findByText("Ada Mentor")).toBeTruthy();
     expect(
-      await findByText("Enable mentee mode in Settings to send requests."),
-    ).toBeTruthy();
+      queryByText("Enable mentee mode in Settings to send requests."),
+    ).toBeNull();
 
     fireEvent.press(getByTestId("slot-slot-1"));
     expect(mockCreateRequestMutateAsync).not.toHaveBeenCalled();
@@ -448,6 +476,62 @@ describe("MentorProfileScreen email verification gate", () => {
     expect(queryByTestId("skills-modal")).toBeNull();
   });
 
+  it("submits a profile report from the flag action", async () => {
+    const { findByText, getByTestId, getByPlaceholderText } = render(
+      <MentorProfileScreen />,
+    );
+
+    expect(await findByText("Ada Mentor")).toBeTruthy();
+
+    fireEvent.press(getByTestId("profile-report-button"));
+    expect(await findByText("Report Ada Mentor")).toBeTruthy();
+
+    fireEvent.press(getByTestId("report-reason-HARASSMENT"));
+    fireEvent.changeText(
+      getByPlaceholderText("Additional details (optional)"),
+      "Repeatedly sending hostile profile messages.",
+    );
+    fireEvent.press(getByTestId("submit-report-button"));
+
+    await waitFor(() => {
+      expect(mockSubmitReportMutateAsync).toHaveBeenCalledWith({
+        reported_username: "mentor_ada",
+        reason: "HARASSMENT",
+        description: "Repeatedly sending hostile profile messages.",
+      });
+    });
+    expect(
+      await findByText(
+        "Report submitted. Thank you for helping keep the community safe.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("does not show the profile report action for your own profile", async () => {
+    mockUsernameParam = "mentee_bora";
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        username: "mentee_bora",
+        full_name: "Bora Mentee",
+        bio: "Learning mobile engineering.",
+        hidden: false,
+        picture_url: "",
+        title: "Learner",
+        show_initials_only: false,
+        app_usage_mode: "MENTEE",
+        skills: ["React Native"],
+        average_rating: "0",
+        total_mentee_count: 0,
+      }),
+    }) as unknown as typeof fetch;
+
+    const { findByText, queryByTestId } = render(<MentorProfileScreen />);
+
+    expect(await findByText("Bora Mentee")).toBeTruthy();
+    expect(queryByTestId("profile-report-button")).toBeNull();
+  });
+
   it("books sessions for connected mentees and handles booking failures", async () => {
     mockMatches = [
       {
@@ -458,7 +542,9 @@ describe("MentorProfileScreen email verification gate", () => {
       },
     ];
 
-    const { findByText, getByTestId } = render(<MentorProfileScreen />);
+    const { findByText, getByTestId, queryByText } = render(
+      <MentorProfileScreen />,
+    );
 
     expect(await findByText("Ada Mentor")).toBeTruthy();
 
@@ -476,7 +562,10 @@ describe("MentorProfileScreen email verification gate", () => {
         slotId: "slot-1",
       });
     });
-    expect(await findByText("Session booked successfully.")).toBeTruthy();
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      "Session booked successfully.",
+    );
+    expect(queryByText("Session booked successfully.")).toBeNull();
 
     mockBookSlotMutateAsync.mockRejectedValueOnce(new Error("Booking failed."));
     fireEvent.press(getByTestId("slot-slot-1"));
@@ -484,5 +573,15 @@ describe("MentorProfileScreen email verification gate", () => {
     fireEvent.press(getByTestId("confirm-booking"));
 
     expect(await findByText("Booking failed.")).toBeTruthy();
+  });
+
+  it("navigates to the posts route when 'View All' is pressed in the posts preview", async () => {
+    const { findByText, getByTestId } = render(<MentorProfileScreen />);
+
+    expect(await findByText("Ada Mentor")).toBeTruthy();
+
+    fireEvent.press(getByTestId("view-all-posts-button"));
+
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/user/mentor_ada/posts");
   });
 });

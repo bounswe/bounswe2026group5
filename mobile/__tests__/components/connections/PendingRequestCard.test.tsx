@@ -49,6 +49,28 @@ describe("PendingRequestCard — rendering", () => {
     );
     expect(getByTestId("pending-reschedule-badge")).toBeTruthy();
   });
+
+  it("renders avatar image when avatarUrl is provided", () => {
+    const { getByTestId, queryByTestId } = render(
+      <PendingRequestCard
+        {...baseProps}
+        avatarUrl="https://cdn.example.com/alice.jpg"
+      />,
+    );
+
+    expect(getByTestId("pending-avatar-image")).toBeTruthy();
+    expect(queryByTestId("pending-avatar-fallback")).toBeNull();
+  });
+
+  it("falls back to initials when avatarUrl is missing", () => {
+    const { getByTestId, queryByTestId, getByText } = render(
+      <PendingRequestCard {...baseProps} />,
+    );
+
+    expect(getByTestId("pending-avatar-fallback")).toBeTruthy();
+    expect(queryByTestId("pending-avatar-image")).toBeNull();
+    expect(getByText("AS")).toBeTruthy();
+  });
 });
 
 describe("PendingRequestCard — interactions", () => {

@@ -1,5 +1,7 @@
 import React from "react";
-import { View, Text, Image, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
+
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 export interface PendingRequestCardProps {
   id: string;
@@ -61,18 +63,12 @@ export function PendingRequestCard({
         onPress={onShowProfile}
         disabled={!onShowProfile}
       >
-        {avatarUrl ? (
-          <Image
-            source={{ uri: avatarUrl }}
-            className="w-[72px] h-[72px] rounded-full"
-          />
-        ) : (
-          <View className="w-[72px] h-[72px] rounded-full bg-surface-active items-center justify-center">
-            <Text className="text-[26px] font-bold text-primary">
-              {name.charAt(0)}
-            </Text>
-          </View>
-        )}
+        <UserAvatar
+          imageUrl={avatarUrl}
+          name={name}
+          size="lg"
+          testIDPrefix="pending-avatar"
+        />
       </TouchableOpacity>
 
       {/* Content */}

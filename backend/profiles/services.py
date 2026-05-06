@@ -41,6 +41,10 @@ class InvalidPrPEventTypeError(Exception):
     """Raised when an unsupported event_type is supplied for a profile post."""
 
 
+class InvalidCoPEventTypeError(Exception):
+    """Raised when an unsupported event_type is supplied for a community post."""
+
+
 def book_availability_slot(*, profile: Profile, slot_id, actor) -> AvailabilitySlot:
     """Book one slot with row-level locking to prevent race conditions."""
     with transaction.atomic():
@@ -123,6 +127,7 @@ def list_profile_feed_events(
     Feed includes:
     - Profile posts (PrP) authored by the profile.
     - MCTE events authored by the profile where show_on_profile=True.
+    - CoP events authored by the profile where show_on_profile=True.
     """
     from timeline.models import TimelineEvent
 
@@ -131,8 +136,13 @@ def list_profile_feed_events(
         .filter(
             Q(category=TimelineEvent.Category.PRP)
             | Q(category=TimelineEvent.Category.MCTE, show_on_profile=True)
+            | Q(category=TimelineEvent.Category.COP, show_on_profile=True)
         )
-        .select_related("author")
+        .select_related(
+            "author",
+            "mentorship__mentor",
+            "mentorship__mentee",
+        )
         .annotate(effective_last_update=Coalesce("last_edited", "created_at"))
         .order_by("-created_at", "-effective_last_update", "-source_id")
     )
@@ -230,5 +240,133 @@ def edit_prp_event(
 
 def soft_delete_prp_event(*, event: Any) -> None:
     """Soft-delete a profile post by setting is_deleted=True."""
+    event.is_deleted = True
+    event.save(update_fields=["is_deleted"])
+
+
+def list_community_feed_events(
+    *,
+    community_tag: Any,
+    offset: int,
+    limit: int,
+    event_type: str | None = None,
+) -> dict[str, Any]:
+    """Return paginated community feed events for a community tag.
+
+    Feed includes all non-deleted CoP events scoped to the given community_id,
+    ordered newest-first by created_at then effective last update tie-breaker.
+    """
+    from timeline.models import TimelineEvent
+
+    queryset = (
+        TimelineEvent.objects.filter(
+            community_id=community_tag.id,
+            category=TimelineEvent.Category.COP,
+            is_deleted=False,
+        )
+        .select_related("author")
+        .annotate(effective_last_update=Coalesce("last_edited", "created_at"))
+        .order_by("-created_at", "-effective_last_update", "-source_id")
+    )
+
+    if event_type is not None:
+        queryset = queryset.filter(event_type=event_type)
+
+    total_count = queryset.count()
+    events = list(queryset[offset : offset + limit])
+
+    return {
+        "count": total_count,
+        "offset": offset,
+        "limit": limit,
+        "results": events,
+    }
+
+
+def create_cop_event(
+    *,
+    author_profile: Profile,
+    community_tag: Any,
+    event_type: str,
+    content: str = "",
+    media_url: str | None = None,
+    show_on_profile: bool = False,
+    timestamp: Any | None = None,
+) -> Any:
+    """Create and persist a community post (CoP).
+
+    If timestamp is omitted, event timestamp is aligned with created_at.
+    """
+    from timeline.models import TimelineEvent
+
+    if event_type not in TimelineEvent.MCTEEventType.values:
+        raise InvalidCoPEventTypeError(
+            f"Invalid CoP event_type: '{event_type}'. "
+            f"Must be one of {TimelineEvent.MCTEEventType.values}."
+        )
+
+    event = TimelineEvent.objects.create(
+        source_id=f"cop:{uuid.uuid4()}",
+        category=TimelineEvent.Category.COP,
+        event_type=event_type,
+        author=author_profile,
+        community_id=community_tag.id,
+        content=content,
+        media_url=media_url,
+        show_on_profile=show_on_profile,
+        timestamp=timestamp if timestamp is not None else timezone.now(),
+        payload={"community_name": community_tag.name},
+    )
+
+    if timestamp is None:
+        event.timestamp = event.created_at
+        event.save(update_fields=["timestamp"])
+
+    return event
+
+
+def edit_cop_event(
+    *,
+    event: Any,
+    content: str | None = None,
+    event_type: str | None = None,
+    media_url: str | None = None,
+    show_on_profile: bool | None = None,
+    update_media_url: bool = False,
+) -> Any:
+    """Partially update a community post and set last_edited."""
+    from timeline.models import TimelineEvent
+
+    if event_type is not None and event_type not in TimelineEvent.MCTEEventType.values:
+        raise InvalidCoPEventTypeError(
+            f"Invalid CoP event_type: '{event_type}'. "
+            f"Must be one of {TimelineEvent.MCTEEventType.values}."
+        )
+
+    update_fields: list[str] = ["last_edited"]
+
+    if content is not None:
+        event.content = content
+        update_fields.append("content")
+
+    if event_type is not None:
+        event.event_type = event_type
+        update_fields.append("event_type")
+
+    if update_media_url:
+        event.media_url = media_url
+        update_fields.append("media_url")
+
+    if show_on_profile is not None:
+        event.show_on_profile = show_on_profile
+        update_fields.append("show_on_profile")
+
+    event.last_edited = timezone.now()
+    event.save(update_fields=update_fields)
+    return event
+
+
+def soft_delete_cop_event(*, event: Any) -> None:
+    """Soft-delete a community post by setting is_deleted=True."""
     event.is_deleted = True
     event.save(update_fields=["is_deleted"])

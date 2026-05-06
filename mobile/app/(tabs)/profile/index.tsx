@@ -4,15 +4,18 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { AvailabilityPreview } from "@/components/profile/AvailabilityPreview";
 import { EditAvailabilityModal } from "@/components/profile/EditAvailabilityModal";
 import {
   EditProfileModal,
-  UserProfileData,
+  type SaveProfileData,
+  type UserProfileData,
 } from "@/components/profile/EditProfileModal";
-import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { ProfilePostComposer } from "@/components/profile/ProfilePostComposer";
+import { ProfilePostsPreview } from "@/components/profile/ProfilePostsPreview";
 import { ProfileReviews } from "@/components/profile/ProfileReviews";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
@@ -33,10 +36,15 @@ import {
 } from "@/lib/queries/mentorship";
 import {
   type ProfileReview,
-  useProfileReviewsQuery,
+  useCreateProfilePostMutation,
   useProfileRatingQuery,
+  useProfileReviewsQuery,
   useUpdateOwnProfileMutation,
 } from "@/lib/queries/profile";
+import {
+  deleteProfilePicture,
+  uploadProfilePicture,
+} from "@/lib/queries/uploads";
 
 const PROFILE_DEFAULTS = {
   skills: [] as string[],
@@ -64,6 +72,203 @@ function isFutureOpenSlot(slot: {
   return new Date(`${slot.date}T${slot.startTime}`) > new Date();
 }
 
+function renderSkillsSection({
+  shouldShowSkills,
+  isMentorMode,
+  skillsTitle,
+  skillsData,
+  openEditModal,
+  openSkillsModal,
+  handleSaveSkills,
+}: {
+  shouldShowSkills: boolean;
+  isMentorMode: boolean;
+  skillsTitle: string;
+  skillsData: string[];
+  openEditModal: (
+    title: string,
+    skills: string[],
+    variant: "mentor" | "mentee",
+    saveHandler: (s: string[]) => void,
+  ) => void;
+  openSkillsModal: (
+    title: string,
+    skills: string[],
+    variant: "mentor" | "mentee",
+  ) => void;
+  handleSaveSkills: (
+    variant: "mentor" | "mentee",
+    nextSkills: string[],
+  ) => Promise<void>;
+}) {
+  if (!shouldShowSkills) {
+    return null;
+  }
+
+  return (
+    <View className="mb-6">
+      <SkillsCloud
+        title={skillsTitle}
+        skills={skillsData}
+        variant={isMentorMode ? "mentor" : "mentee"}
+        onEdit={() =>
+          openEditModal(
+            skillsTitle,
+            skillsData,
+            isMentorMode ? "mentor" : "mentee",
+            (newSkills) => {
+              void handleSaveSkills(
+                isMentorMode ? "mentor" : "mentee",
+                newSkills,
+              );
+            },
+          )
+        }
+        onViewAll={() =>
+          openSkillsModal(
+            skillsTitle,
+            skillsData,
+            isMentorMode ? "mentor" : "mentee",
+          )
+        }
+      />
+    </View>
+  );
+}
+
+function renderCommunitiesSection({
+  communities,
+  openCommunity,
+}: {
+  communities: CommunityTag[] | undefined;
+  openCommunity: (tag: CommunityTag) => void;
+}) {
+  if (!communities?.length) {
+    return null;
+  }
+
+  return (
+    <View className="mb-6">
+      <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
+        Communities
+      </Text>
+      <View
+        testID="profile-community-tags"
+        className="flex-row flex-wrap gap-2"
+      >
+        {communities.map((tag) => (
+          <TouchableOpacity
+            key={tag.id}
+            testID={`profile-community-${tag.slug}`}
+            activeOpacity={0.78}
+            onPress={() => openCommunity(tag)}
+            className="px-3 py-2 rounded-full border border-primary/60 bg-surface-active dark:bg-surface-active-dark"
+          >
+            <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
+              {tag.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function renderPostsSection({
+  currentUsername,
+  onViewAll,
+  onCompose,
+  communityLabelsById,
+}: {
+  currentUsername?: string;
+  onViewAll: () => void;
+  onCompose: () => void;
+  communityLabelsById: Record<string, string>;
+}) {
+  if (!currentUsername) {
+    return null;
+  }
+
+  return (
+    <ProfilePostsPreview
+      username={currentUsername}
+      onViewAll={onViewAll}
+      onCompose={onCompose}
+      communityLabelsById={communityLabelsById}
+    />
+  );
+}
+
+function renderAvailabilitySection({
+  isMentorMode,
+  showAvailability,
+  availabilityData,
+  onEdit,
+}: {
+  isMentorMode: boolean;
+  showAvailability: boolean;
+  availabilityData: ReturnType<typeof mapAvailabilityToSchedule>;
+  onEdit: () => void;
+}) {
+  if (!isMentorMode || !showAvailability) {
+    return null;
+  }
+
+  return <AvailabilityPreview schedule={availabilityData} onEdit={onEdit} />;
+}
+
+function renderReviewsSection({
+  isMentorMode,
+  isProfileHidden,
+  shouldShowReviews,
+  reviews,
+  reviewsQuery,
+  reviewsPage,
+  onLoadMore,
+}: {
+  isMentorMode: boolean;
+  isProfileHidden: boolean | null;
+  shouldShowReviews: boolean;
+  reviews: ProfileReview[];
+  reviewsQuery: ReturnType<typeof useProfileReviewsQuery>;
+  reviewsPage: number;
+  onLoadMore: () => void;
+}) {
+  if (!isMentorMode) {
+    return null;
+  }
+
+  return (
+    <View className="mt-6">
+      <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
+        Reviews
+      </Text>
+      {isProfileHidden === true ? (
+        <View className="rounded-2xl border border-divider/20 bg-surface-card dark:bg-surface-card-dark px-4 py-4">
+          <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
+            Public reviews appear only when your profile is visible.
+          </Text>
+        </View>
+      ) : null}
+      {isProfileHidden !== true && shouldShowReviews ? (
+        <ProfileReviews
+          reviews={reviews}
+          isLoading={reviewsQuery.isLoading && reviewsPage === 1}
+          isLoadingMore={reviewsQuery.isFetching && reviewsPage > 1}
+          errorMessage={
+            reviewsQuery.error instanceof Error
+              ? reviewsQuery.error.message
+              : null
+          }
+          totalCount={reviewsQuery.data?.count ?? reviews.length}
+          onLoadMore={onLoadMore}
+          emptyMessage="No public reviews yet. Reviews appear once privacy thresholds are met."
+        />
+      ) : null}
+    </View>
+  );
+}
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -78,6 +283,8 @@ export default function ProfileScreen() {
     currentUsername || "",
   );
   const updateProfileMutation = useUpdateOwnProfileMutation();
+  const createProfilePostMutation =
+    useCreateProfilePostMutation(currentUsername);
   const profileRatingQuery = useProfileRatingQuery(currentUsername);
   const myCommunitiesQuery = useMyCommunityTagsQuery(currentUsername);
 
@@ -99,6 +306,7 @@ export default function ProfileScreen() {
   const [userData, setUserData] = useState<UserProfileData>({
     name: authUser?.username ?? "User",
     bio: "",
+    pictureUrl: "",
   });
 
   useEffect(() => {
@@ -115,9 +323,9 @@ export default function ProfileScreen() {
   const [isProfileHidden, setIsProfileHidden] = useState<boolean | null>(null);
   const [reviewsPage, setReviewsPage] = useState(1);
   const [reviews, setReviews] = useState<ProfileReview[]>([]);
+  const [isPostComposerOpen, setPostComposerOpen] = useState(false);
 
   const isMentorMode = appUsageMode === "MENTOR";
-  const isMenteeMode = appUsageMode === "MENTEE";
   const shouldShowSkills = isMentorMode ? showExpertise : showEagerToLearn;
   const shouldShowReviews =
     isMentorMode && isProfileHidden === false && Boolean(currentUsername);
@@ -161,6 +369,7 @@ export default function ProfileScreen() {
           ...prev,
           name: payload.full_name || prev.name,
           bio: payload.bio || "",
+          pictureUrl: payload.picture_url || "",
         }));
 
         setIsProfileHidden(Boolean(payload.hidden));
@@ -184,27 +393,25 @@ export default function ProfileScreen() {
       return;
     }
 
-    setReviews((prev) =>
-      {
-        const nextReviews =
-          reviewsPage === 1
-            ? reviewsQuery.data.results
-            : [...prev, ...reviewsQuery.data.results];
+    setReviews((prev) => {
+      const nextReviews =
+        reviewsPage === 1
+          ? reviewsQuery.data.results
+          : [...prev, ...reviewsQuery.data.results];
 
-        const isSameCollection =
-          prev.length === nextReviews.length &&
-          prev.every((review, index) => {
-            const nextReview = nextReviews[index];
-            return (
-              review?.rating === nextReview?.rating &&
-              review?.text === nextReview?.text &&
-              review?.created_at === nextReview?.created_at
-            );
-          });
+      const isSameCollection =
+        prev.length === nextReviews.length &&
+        prev.every((review, index) => {
+          const nextReview = nextReviews[index];
+          return (
+            review?.rating === nextReview?.rating &&
+            review?.text === nextReview?.text &&
+            review?.created_at === nextReview?.created_at
+          );
+        });
 
-        return isSameCollection ? prev : nextReviews;
-      },
-    );
+      return isSameCollection ? prev : nextReviews;
+    });
   }, [reviewsPage, reviewsQuery.data]);
 
   useEffect(() => {
@@ -250,6 +457,13 @@ export default function ProfileScreen() {
   const openSlotsCount = useMemo(
     () => (availabilityQuery.data ?? []).filter(isFutureOpenSlot).length,
     [availabilityQuery.data],
+  );
+  const communityLabelsById = useMemo(
+    () =>
+      Object.fromEntries(
+        (myCommunitiesQuery.data ?? []).map((tag) => [tag.id, tag.name]),
+      ) as Record<string, string>,
+    [myCommunitiesQuery.data],
   );
 
   useEffect(() => {
@@ -299,29 +513,45 @@ export default function ProfileScreen() {
     });
   };
 
-  const handleSaveProfileHeader = async (updatedData: UserProfileData) => {
+  const handleSaveProfileHeader = async (updatedData: SaveProfileData) => {
     if (!currentUsername) {
       setUserData(updatedData);
-      return;
+      return true;
     }
 
     try {
       setPageError(null);
+      let pictureUrl = userData.pictureUrl ?? "";
       const response = await updateProfileMutation.mutateAsync({
         username: currentUsername,
         display_name: updatedData.name,
         bio: updatedData.bio,
+        ...(updatedData.removePicture ? { picture_url: "" } : {}),
       });
+
+      if (updatedData.pictureFile) {
+        const pictureResponse = await uploadProfilePicture(
+          updatedData.pictureFile,
+        );
+        pictureUrl = pictureResponse.picture_url;
+      } else if (updatedData.removePicture) {
+        const pictureResponse = await deleteProfilePicture();
+        pictureUrl = pictureResponse.picture_url;
+      }
+
       setUserData({
         name: response.display_name || updatedData.name,
         bio: response.bio || updatedData.bio,
+        pictureUrl,
       });
+      return true;
     } catch (error) {
       setPageError(
         error instanceof Error
           ? error.message
           : "Could not update profile details.",
       );
+      return false;
     }
   };
 
@@ -349,7 +579,9 @@ export default function ProfileScreen() {
   };
 
   const openCommunity = (tag: CommunityTag) => {
-    router.push(`/(tabs)/community/${encodeURIComponent(tag.id)}?from=community`);
+    router.push(
+      `/(tabs)/community/${encodeURIComponent(tag.id)}?from=community`,
+    );
   };
 
   const openSkillsModal = (
@@ -408,95 +640,51 @@ export default function ProfileScreen() {
           openSlots={isMentorMode ? openSlotsCount : 0}
           menteesHelped={isMentorMode ? menteesCount : 0}
           showStats={isMentorMode}
+          showRating={isMentorMode}
           showMenteesHelped={isMentorMode}
+          imageUrl={userData.pictureUrl || undefined}
           onEdit={() => setEditProfileModalOpen(true)}
         />
 
         <View className="px-4 mt-4">
-          <View className="mb-6">
-            {(isMentorMode || isMenteeMode) && shouldShowSkills && (
-              <SkillsCloud
-                title={skillsTitle}
-                skills={skillsData}
-                variant={isMentorMode ? "mentor" : "mentee"}
-                onEdit={() =>
-                  openEditModal(
-                    skillsTitle,
-                    skillsData,
-                    isMentorMode ? "mentor" : "mentee",
-                    (newSkills) => {
-                      void handleSaveSkills(isMentorMode ? "mentor" : "mentee", newSkills);
-                    },
-                  )
-                }
-                onViewAll={() =>
-                  openSkillsModal(skillsTitle, skillsData, isMentorMode ? "mentor" : "mentee")
-                }
-              />
-            )}
-          </View>
+          {renderSkillsSection({
+            shouldShowSkills,
+            isMentorMode,
+            skillsTitle,
+            skillsData,
+            openEditModal,
+            openSkillsModal,
+            handleSaveSkills,
+          })}
 
-          {myCommunitiesQuery.data?.length ? (
-            <View className="mb-6">
-              <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
-                Communities
-              </Text>
-              <View
-                testID="profile-community-tags"
-                className="flex-row flex-wrap gap-2"
-              >
-                {myCommunitiesQuery.data.map((tag) => (
-                  <TouchableOpacity
-                    key={tag.id}
-                    testID={`profile-community-${tag.slug}`}
-                    activeOpacity={0.78}
-                    onPress={() => openCommunity(tag)}
-                    className="px-3 py-2 rounded-full border border-primary/60 bg-surface-active dark:bg-surface-active-dark"
-                  >
-                    <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
-                      {tag.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          ) : null}
+          {renderCommunitiesSection({
+            communities: myCommunitiesQuery.data,
+            openCommunity,
+          })}
 
-          {isMentorMode && showAvailability && (
-            <AvailabilityPreview
-              schedule={availabilityData}
-              onEdit={() => setAvailabilityModalOpen(true)}
-            />
-          )}
+          {renderPostsSection({
+            currentUsername,
+            onViewAll: () => router.push("/(tabs)/profile/posts" as any),
+            onCompose: () => setPostComposerOpen(true),
+            communityLabelsById,
+          })}
 
-          {isMentorMode ? (
-            <View className="mt-6">
-              <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
-                Reviews
-              </Text>
-              {isProfileHidden === true ? (
-                <View className="rounded-2xl border border-divider/20 bg-surface-card dark:bg-surface-card-dark px-4 py-4">
-                  <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
-                    Public reviews appear only when your profile is visible.
-                  </Text>
-                </View>
-              ) : (
-                <ProfileReviews
-                  reviews={reviews}
-                  isLoading={reviewsQuery.isLoading && reviewsPage === 1}
-                  isLoadingMore={reviewsQuery.isFetching && reviewsPage > 1}
-                  errorMessage={
-                    reviewsQuery.error instanceof Error
-                      ? reviewsQuery.error.message
-                      : null
-                  }
-                  totalCount={reviewsQuery.data?.count ?? reviews.length}
-                  onLoadMore={() => setReviewsPage((prev) => prev + 1)}
-                  emptyMessage="No public reviews yet. Reviews appear once privacy thresholds are met."
-                />
-              )}
-            </View>
-          ) : null}
+          {renderAvailabilitySection({
+            isMentorMode,
+            showAvailability,
+            availabilityData,
+            onEdit: () => setAvailabilityModalOpen(true),
+          })}
+
+          {renderReviewsSection({
+            isMentorMode,
+            isProfileHidden,
+            shouldShowReviews,
+            reviews,
+            reviewsQuery,
+            reviewsPage,
+            onLoadMore: () => setReviewsPage((prev) => prev + 1),
+          })}
         </View>
       </ScrollView>
 
@@ -541,9 +729,22 @@ export default function ProfileScreen() {
         visible={isEditProfileModalOpen}
         onClose={() => setEditProfileModalOpen(false)}
         initialData={userData}
-        onSave={(updatedData) => {
-          void handleSaveProfileHeader(updatedData);
-          setEditProfileModalOpen(false);
+        onSave={handleSaveProfileHeader}
+      />
+      <ProfilePostComposer
+        visible={isPostComposerOpen}
+        isSubmitting={createProfilePostMutation.isPending}
+        onClose={() => setPostComposerOpen(false)}
+        onSubmit={async (payload) => {
+          try {
+            await createProfilePostMutation.mutateAsync(payload);
+            return true;
+          } catch (error) {
+            setPageError(
+              error instanceof Error ? error.message : "Could not create post.",
+            );
+            return false;
+          }
         }}
       />
     </View>

@@ -17,12 +17,15 @@ import {
   AvailabilityPreview,
   type AvailabilitySlot,
 } from "@/components/profile/AvailabilityPreview";
+import { ReportSheet } from "@/components/report/ReportSheet";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { ProfilePostsPreview } from "@/components/profile/ProfilePostsPreview";
 import { ProfileReviews } from "@/components/profile/ProfileReviews";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { useToast } from "@/components/ui/ToastProvider";
 import { API_BASE_URL } from "@/constants/api";
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -41,6 +44,7 @@ import {
   useProfileRatingQuery,
   useProfileReviewsQuery,
 } from "@/lib/queries/profile";
+import { useSubmitReportMutation } from "@/lib/queries/reporting";
 
 interface PublicProfileResponse {
   username: string;
@@ -164,6 +168,10 @@ type BodyContentProps = {
   onResendVerification?: () => void;
   onSubmit: () => void;
   isRequestPending: boolean;
+  /** Username used to load the posts preview strip. */
+  postsUsername: string;
+  /** Called when the user taps "View All Posts". */
+  onViewAllPosts: () => void;
 };
 
 function renderBodyContent({
@@ -196,6 +204,8 @@ function renderBodyContent({
   onResendVerification,
   onSubmit,
   isRequestPending,
+  postsUsername,
+  onViewAllPosts,
 }: BodyContentProps): React.ReactNode {
   if (loading) {
     return (
@@ -261,6 +271,7 @@ function renderBodyContent({
         openSlots={isViewedMentor ? openSlotsCount : 0}
         menteesHelped={isViewedMentor ? menteesHelpedCount : 0}
         showStats={isViewedMentor}
+        showRating={isViewedMentor}
         showMenteesHelped={isViewedMentor}
         imageUrl={profile.picture_url || undefined}
       />
@@ -277,13 +288,11 @@ function renderBodyContent({
           />
         )}
 
-        {isViewedMentor && !canRequestMentorship && (
-          <View className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">
-            <Text className="text-amber-800 text-sm font-semibold">
-              Enable mentee mode in Settings to send requests.
-            </Text>
-          </View>
-        )}
+        {/* Profile posts preview (PrP + public MCTE) — hidden when empty */}
+        <ProfilePostsPreview
+          username={postsUsername}
+          onViewAll={onViewAllPosts}
+        />
 
         {!!requestFeedback && (
           <View className="mb-4">
@@ -389,6 +398,7 @@ const REVIEWS_PAGE_SIZE = 6;
 export default function MentorProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const toast = useToast();
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const currentUsername = useAuthStore((state) => state.user?.username);
   const params = useLocalSearchParams<{ username?: string }>();
@@ -410,6 +420,7 @@ export default function MentorProfileScreen() {
     selfScopedQueryUsername,
   );
   const resendVerificationMutation = useResendEmailVerificationMutation();
+  const submitReportMutation = useSubmitReportMutation();
   const availabilitySlotsQuery = useAvailabilitySlotsQuery(
     username ?? "",
     profile?.app_usage_mode === "MENTOR",
@@ -435,6 +446,8 @@ export default function MentorProfileScreen() {
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
   const [showBookingConfirmation, setShowBookingConfirmation] = useState(false);
+  const [showReportSheet, setShowReportSheet] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
   const [skillsModalConfig, setSkillsModalConfig] = useState<{
     visible: boolean;
     title: string;
@@ -691,8 +704,6 @@ export default function MentorProfileScreen() {
     slotId?: string;
   }) => {
     if (!canRequestMentorship) {
-      setRequestFeedbackVariant("warning");
-      setRequestFeedback("Enable mentee mode in Settings to send requests.");
       return;
     }
 
@@ -791,8 +802,7 @@ export default function MentorProfileScreen() {
       setProfile((prev) => prev);
 
       setSelectedSlot(null);
-      setRequestFeedbackVariant("success");
-      setRequestFeedback("Session booked successfully.");
+      toast.success("Session booked successfully.");
       availabilitySlotsQuery.refetch();
     } catch (mutationError) {
       setRequestFeedbackVariant("error");
@@ -826,6 +836,39 @@ export default function MentorProfileScreen() {
       slotId: selectedSlot.id,
       coverLetter: coverLetter.trim(),
     });
+  };
+
+  const handleSubmitReport = async ({
+    reason,
+    description,
+  }: {
+    reason: "SPAM" | "HARASSMENT" | "INAPPROPRIATE_CONTENT" | "OTHER";
+    description: string;
+  }) => {
+    const reportedUsername = profile?.username ?? username;
+    if (!reportedUsername) {
+      return;
+    }
+
+    setReportError(null);
+    try {
+      await submitReportMutation.mutateAsync({
+        reported_username: reportedUsername,
+        reason,
+        description,
+      });
+      setShowReportSheet(false);
+      setRequestFeedbackVariant("success");
+      setRequestFeedback(
+        "Report submitted. Thank you for helping keep the community safe.",
+      );
+    } catch (reportSubmitError) {
+      setReportError(
+        reportSubmitError instanceof Error
+          ? reportSubmitError.message
+          : "Failed to submit report.",
+      );
+    }
   };
 
   const bodyContent = renderBodyContent({
@@ -870,9 +913,19 @@ export default function MentorProfileScreen() {
     onSubmit: submitCoverLetter,
     isRequestPending:
       createRequestMutation.isPending || bookSlotMutation.isPending,
+    postsUsername: username ?? "",
+    onViewAllPosts: () => {
+      if (username) {
+        router.push(`/(tabs)/user/${encodeURIComponent(username)}/posts` as any);
+      }
+    },
   });
 
   const screenTitle = isViewedMentor ? "Mentor Profile" : "Profile";
+  const canReportProfile =
+    Boolean(profile) &&
+    Boolean(currentUsername) &&
+    profile?.username !== currentUsername;
 
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
@@ -887,9 +940,22 @@ export default function MentorProfileScreen() {
           >
             <Ionicons name="chevron-back" size={20} color="#111827" />
           </TouchableOpacity>
-          <Text className="text-xl font-extrabold text-gray-900">
+          <Text className="text-xl font-extrabold text-gray-900 flex-1">
             {screenTitle}
           </Text>
+          {canReportProfile ? (
+            <TouchableOpacity
+              testID="profile-report-button"
+              activeOpacity={0.8}
+              onPress={() => {
+                setReportError(null);
+                setShowReportSheet(true);
+              }}
+              className="h-10 w-10 items-center justify-center rounded-full bg-red-50"
+            >
+              <Ionicons name="flag-outline" size={19} color="#dc2626" />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
@@ -927,6 +993,21 @@ export default function MentorProfileScreen() {
           if (slot) {
             void handleBookConnectedSession(slot);
           }
+        }}
+      />
+
+      <ReportSheet
+        visible={showReportSheet}
+        title={`Report ${profile?.full_name || profile?.username || "user"}`}
+        isSubmitting={submitReportMutation.isPending}
+        errorMessage={reportError}
+        onClose={() => {
+          if (!submitReportMutation.isPending) {
+            setShowReportSheet(false);
+          }
+        }}
+        onSubmit={(payload) => {
+          void handleSubmitReport(payload);
         }}
       />
     </View>

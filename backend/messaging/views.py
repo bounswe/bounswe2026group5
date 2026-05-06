@@ -35,6 +35,7 @@ class ConversationListAPIView(APIView):
             401: OpenApiResponse(description="Authentication required."),
         },
         description="List all private conversations where the authenticated user is a participant.",
+        operation_id="messages_conversations_list",
         tags=["Messages"],
     )
     def get(self, request: Request) -> Response:

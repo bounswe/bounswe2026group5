@@ -8,10 +8,12 @@ from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import Profile
+from profiles.serializers import LocationField
 from profiles.serializers import resolve_picture_url
 
 from .models import AppUsageMode, AuthProvider, PasswordResetToken, User, UserRole
@@ -94,6 +96,7 @@ class RegisterSerializer(serializers.Serializer):
         write_only=True,
         trim_whitespace=False,
     )
+    location = LocationField(required=False, write_only=True)
 
     def validate_email(self, value: str) -> str:
         email = value.lower()
@@ -117,6 +120,7 @@ class RegisterSerializer(serializers.Serializer):
     @transaction.atomic
     def create(self, validated_data: dict[str, Any]) -> User:
         validated_data.pop("confirm_password", None)
+        location = validated_data.pop("location", None)
         password = validated_data.pop("password")
         email = validated_data["email"]
 
@@ -139,6 +143,7 @@ class RegisterSerializer(serializers.Serializer):
             user=user,
             username=user.username,
             display_name=display_name,
+            location=location,
         )
 
         default_group, _ = Group.objects.get_or_create(name=UserRole.USER)
@@ -235,13 +240,20 @@ class BannedAwareTokenRefreshSerializer(TokenRefreshSerializer):
     """Refresh serializer that blocks token refresh for banned users."""
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        refresh_token = RefreshToken(attrs["refresh"])
+        try:
+            refresh_token = RefreshToken(attrs["refresh"])
+        except TokenError as exc:
+            raise exc
+
         user_id = refresh_token.payload.get("user_id")
 
         if user_id is not None and User.objects.filter(id=user_id, is_banned=True).exists():
             raise PermissionDenied("This account has been banned.")
 
-        return super().validate(attrs)
+        try:
+            return super().validate(attrs)
+        except User.DoesNotExist:
+            raise TokenError("User associated with this token no longer exists.")
 
 
 class OAuthLoginSerializer(serializers.Serializer):

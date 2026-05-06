@@ -726,6 +726,18 @@ class AdminUserUpdateAPIView(APIView):
         )
 
     # Support PUT as well for backward compatibility with E2E tests
+    @extend_schema(
+        request=AdminUserUpdateSerializer,
+        responses={
+            200: UserResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Admin access required."),
+            404: OpenApiResponse(description="User not found."),
+        },
+        description="Admin only: update a user's ban status.",
+        tags=["Admin"],
+    )
     def put(self, request: Request, user_id: str) -> Response:
         return self.patch(request, user_id)
 

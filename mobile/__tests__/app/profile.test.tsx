@@ -1,17 +1,25 @@
-import ProfileScreen from "@/app/(tabs)/profile";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import ProfileScreen from "@/app/(tabs)/profile/index";
+import { fireEvent, render, waitFor, act } from "@testing-library/react-native";
 import React from "react";
 import { Alert } from "react-native";
 
 const mockMatchesQuery = jest.fn();
 const mockAvailabilityQuery = jest.fn();
 const mockMyCommunitiesQuery = jest.fn();
+const mockUpdateProfileMutateAsync = jest.fn();
+const mockUploadProfilePicture = jest.fn();
+const mockDeleteProfilePicture = jest.fn();
 let mockAuthUser = {
   username: "Ali Aydin",
   app_usage_mode: "MENTOR",
 };
+const mockLaunchImageLibraryAsync = jest.fn();
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+jest.mock("expo-image-picker", () => ({
+  launchImageLibraryAsync: (...args: unknown[]) =>
+    mockLaunchImageLibraryAsync(...args),
+}));
 jest.mock("@/components/notifications/NotificationBell", () => ({
   NotificationBell: () => null,
 }));
@@ -72,13 +80,29 @@ jest.mock("@/lib/queries/profile", () => ({
     error: null,
   }),
   useUpdateOwnProfileMutation: () => ({
+    mutateAsync: mockUpdateProfileMutateAsync,
+    isPending: false,
+  }),
+  useCreateProfilePostMutation: () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),
+  useProfilePostsQuery: () => ({
+    data: { count: 0, results: [] },
+    isLoading: false,
+  }),
+}));
+
+jest.mock("@/lib/queries/uploads", () => ({
+  uploadProfilePicture: (...args: unknown[]) =>
+    mockUploadProfilePicture(...args),
+  deleteProfilePicture: (...args: unknown[]) =>
+    mockDeleteProfilePicture(...args),
 }));
 
 jest.mock("@/lib/queries/communityTags", () => ({
-  useMyCommunityTagsQuery: (username?: string) => mockMyCommunitiesQuery(username),
+  useMyCommunityTagsQuery: (username?: string) =>
+    mockMyCommunitiesQuery(username),
 }));
 
 const mockRouterPush = jest.fn();
@@ -93,6 +117,7 @@ jest.spyOn(Alert, "alert");
 
 describe("ProfileScreen Layout", () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     mockAuthUser = {
       username: "Ali Aydin",
       app_usage_mode: "MENTOR",
@@ -100,15 +125,40 @@ describe("ProfileScreen Layout", () => {
     mockAvailabilityQuery.mockReturnValue({ data: undefined });
     mockMatchesQuery.mockReturnValue({ data: [] });
     mockMyCommunitiesQuery.mockReturnValue({ data: [] });
-    mockRouterPush.mockClear();
-    (Alert.alert as jest.Mock).mockClear?.();
+    mockUpdateProfileMutateAsync.mockResolvedValue({
+      display_name: "Ali Aydin",
+      bio: "Profile bio",
+      picture_url: "https://cdn.example.com/current.jpg",
+    });
+    mockUploadProfilePicture.mockResolvedValue({
+      detail: "Profile picture uploaded.",
+      picture_url: "https://cdn.example.com/new-avatar.jpg",
+    });
+    mockDeleteProfilePicture.mockResolvedValue({
+      detail: "Profile picture removed.",
+      picture_url: "",
+    });
+    mockLaunchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [
+        {
+          uri: "file:///tmp/avatar.jpg",
+          fileName: "avatar.jpg",
+          mimeType: "image/jpeg",
+          width: 512,
+          height: 512,
+        },
+      ],
+    });
 
-    (globalThis.fetch as jest.Mock) = jest.fn()
+    (globalThis.fetch as jest.Mock) = jest
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           full_name: "Ali Aydin",
           bio: "Profile bio",
+          picture_url: "https://cdn.example.com/current.jpg",
           skills: ["React", "Testing"],
         }),
       })
@@ -196,6 +246,7 @@ describe("ProfileScreen Layout", () => {
         json: async () => ({
           full_name: "Ece Yilmaz",
           bio: "Profile bio",
+          picture_url: "",
           skills: ["React", "Testing"],
         }),
       })
@@ -225,8 +276,75 @@ describe("ProfileScreen Layout", () => {
     expect(mockRouterPush).toHaveBeenCalledWith("/settings");
   });
 
+  it("loads the current avatar and updates it after profile edit save", async () => {
+    const { findByTestId, getByTestId } = render(<ProfileScreen />);
+
+    expect(await findByTestId("profile-avatar-image")).toBeTruthy();
+
+    fireEvent.press(getByTestId("profile-edit-button"));
+    fireEvent.press(await findByTestId("avatar-picker-button"));
+    expect(await findByTestId("avatar-preview")).toBeTruthy();
+    
+    await act(async () => {
+      fireEvent.press(getByTestId("save-button"));
+    });
+
+    await waitFor(() => {
+      expect(mockUpdateProfileMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          username: "Ali Aydin",
+          display_name: "Ali Aydin",
+          bio: "Profile bio",
+        }),
+      );
+      expect(mockUploadProfilePicture).toHaveBeenCalledWith({
+        uri: "file:///tmp/avatar.jpg",
+        name: "avatar.jpg",
+        type: "image/jpeg",
+      });
+      expect(getByTestId("profile-avatar-image").props.source).toEqual({
+        uri: "https://cdn.example.com/new-avatar.jpg",
+      });
+    });
+  });
+
+  it("removes the current avatar from the edit modal", async () => {
+    const { findByTestId, getByTestId, queryByTestId } = render(
+      <ProfileScreen />,
+    );
+
+    await findByTestId("profile-avatar-image");
+
+    fireEvent.press(getByTestId("profile-edit-button"));
+    fireEvent.press(await findByTestId("avatar-remove-button"));
+
+    // Handle Alert
+    const [title, message, buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+    const removeButton = buttons!.find((b: any) => b.text === "Remove");
+    
+    await act(async () => {
+      removeButton!.onPress!();
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("save-button"));
+    });
+
+    await waitFor(() => {
+      expect(mockUpdateProfileMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          picture_url: "",
+        }),
+      );
+      expect(mockDeleteProfilePicture).toHaveBeenCalledTimes(1);
+      expect(queryByTestId("profile-avatar-image")).toBeNull();
+      expect(getByTestId("profile-avatar-fallback")).toBeTruthy();
+    });
+  });
+
   it("does not crash when profile fetch fails", async () => {
-    (globalThis.fetch as jest.Mock) = jest.fn()
+    (globalThis.fetch as jest.Mock) = jest
+      .fn()
       .mockRejectedValueOnce(new Error("Network error"))
       .mockResolvedValueOnce({
         ok: true,

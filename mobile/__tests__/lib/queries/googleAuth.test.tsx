@@ -1,11 +1,20 @@
 import React from "react";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { fetchWithTimeout } from "@/lib/api/fetchWithTimeout";
-import { useGoogleLoginMutation } from "@/lib/queries/googleAuth";
+import {
+  configureGoogleSignIn,
+  useGoogleLoginMutation,
+} from "@/lib/queries/googleAuth";
 import { renderHook, waitFor } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Mock dependencies
+jest.mock("react-native", () => {
+  const actual = jest.requireActual("react-native");
+  actual.NativeModules.RNGoogleSignin = {};
+  return actual;
+});
+
 jest.mock("@react-native-google-signin/google-signin", () => ({
   GoogleSignin: {
     configure: jest.fn(),
@@ -34,6 +43,16 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 describe("useGoogleLoginMutation", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it("configures Google Sign-In when the native module is available", () => {
+    configureGoogleSignIn();
+
+    expect(GoogleSignin.configure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        offlineAccess: false,
+      }),
+    );
   });
 
   it("successfully logs in with Google and updates auth store", async () => {

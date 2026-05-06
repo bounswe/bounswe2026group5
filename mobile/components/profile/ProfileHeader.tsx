@@ -12,6 +12,7 @@ interface ProfileHeaderProps {
   openSlots?: number;
   menteesHelped?: number;
   showStats?: boolean;
+  showRating?: boolean;
   showMenteesHelped?: boolean;
   imageUrl?: string;
   coverUrl?: string;
@@ -26,6 +27,7 @@ export function ProfileHeader({
   openSlots = 0,
   menteesHelped = 0,
   showStats = true,
+  showRating = true,
   showMenteesHelped = true,
   imageUrl,
   coverUrl,
@@ -64,9 +66,16 @@ export function ProfileHeader({
         <View className="w-24 h-24 bg-surface-card dark:bg-surface-card-dark rounded-full p-1 shadow-sm border border-divider dark:border-divider-dark">
           <View className="w-full h-full bg-surface dark:bg-surface-dark rounded-full items-center justify-center overflow-hidden">
             {imageUrl ? (
-              <Image source={{ uri: imageUrl }} className="w-full h-full" />
+              <Image
+                testID="profile-avatar-image"
+                source={{ uri: imageUrl }}
+                className="w-full h-full"
+              />
             ) : (
-              <Text className="text-3xl font-bold text-on-surface-soft dark:text-on-surface-soft-dark">
+              <Text
+                testID="profile-avatar-fallback"
+                className="text-3xl font-bold text-on-surface-soft dark:text-on-surface-soft-dark"
+              >
                 {name.charAt(0)}
               </Text>
             )}
@@ -75,7 +84,7 @@ export function ProfileHeader({
 
         {/* Right: Rating & Edit Button */}
         <View className="flex-row items-center pt-14 gap-2">
-          {rating !== undefined && rating !== null ? (
+          {showRating && rating !== undefined && rating !== null ? (
             <View className="h-8 flex-row items-center bg-amber-50 dark:bg-amber-950/40 px-2 rounded-lg border border-amber-200 dark:border-amber-800">
               <Ionicons name="star" size={14} color="#f59e0b" />
               <Text className="text-amber-700 dark:text-amber-300 font-bold text-xs ml-1">
@@ -86,6 +95,7 @@ export function ProfileHeader({
 
           {onEdit ? (
             <Pressable
+              testID="profile-edit-button"
               className="h-8 w-8 items-center justify-center bg-surface dark:bg-surface-dark rounded-lg border border-divider dark:border-divider-dark"
               onPress={onEdit}
             >
