@@ -11,6 +11,7 @@ from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema
 from rest_framework import serializers, status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -33,6 +34,8 @@ from .serializers import (
     CommunityTagUpdateSerializer,
     MenteeProfileResponseSerializer,
     MentorProfileResponseSerializer,
+    PostMediaUploadSerializer,
+    ProfilePictureUploadSerializer,
     ProfilePostFeedSerializer,
     ProfilePostListQueryParamsSerializer,
     ProfilePostSerializer,
@@ -44,6 +47,7 @@ from .serializers import (
     PublicMentorProfileSearchListResponseSerializer,
     PublicMentorProfileSearchResultSerializer,
     SkillSerializer,
+    resolve_picture_url,
 )
 from .services import (
     InvalidPrPEventTypeError,
@@ -59,6 +63,8 @@ from .services import (
 NOT_FOUND_DETAIL = {"detail": "Not found."}
 OVERLAP_DETAIL = {"detail": "Availability slot overlaps with an existing slot."}
 PERMISSION_DENIED_DETAIL = {"detail": "You do not have permission to perform this action."}
+LIMIT_NOT_INT_DETAIL = {"detail": "`limit` must be an integer."}
+PAGE_SIZE_NOT_INT_DETAIL = {"detail": "`page` and `pageSize` must be integers."}
 
 
 class ProfileLookupMixin:
@@ -242,7 +248,9 @@ class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
             "Return profile posts for a username. Includes both PrP posts authored by the "
             "profile and MCTE events authored by the profile where `show_on_profile=true`. "
             "If profile is private, only the owner can access this feed. "
-            "Supports optional filtering by `category` and `event_type`."
+            "Supports optional filtering by `category` and `event_type`. "
+            "Results are ordered newest-first by action metadata: `created_at`, then "
+            "`last_edited` as a tie-breaker."
         ),
         tags=["Profiles"],
     )
@@ -286,7 +294,8 @@ class MyProfilePostsCollectionAPIView(ProfileLookupMixin, APIView):
         description=(
             "Create a profile post (PrP) for the authenticated user. "
             "`timestamp` is optional; if omitted, null, or empty, it is set to the event's "
-            "creation time. If provided, it cannot be more than 1 day in the future."
+            "creation time. If provided, it cannot be more than 1 day in the future. "
+            "`timestamp` represents event time, while `created_at` represents action time."
         ),
         tags=["Profiles"],
     )
@@ -664,8 +673,6 @@ class MyAvailabilitySlotDetailAPIView(ProfileLookupMixin, APIView):
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         try:
-                # MentorshipRequest moved to top level
-
             with transaction.atomic():
                 locked_slot = AvailabilitySlot.objects.select_for_update().get(id=slot.id)
 
@@ -783,7 +790,7 @@ class RecentlyAddedMentorsListAPIView(APIView):
             limit = int(request.query_params.get("limit", 10))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`limit` must be an integer."},
+                LIMIT_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -825,7 +832,7 @@ class PopularMentorsListAPIView(APIView):
             limit = int(request.query_params.get("limit", 10))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`limit` must be an integer."},
+                LIMIT_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -971,7 +978,7 @@ class PublicMentorProfilesSearchListAPIView(APIView):
             page_size = int(request.query_params.get("pageSize", 6))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`page` and `pageSize` must be integers."},
+                PAGE_SIZE_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1125,7 +1132,7 @@ class ProfileReviewsByUsernameAPIView(ProfileLookupMixin, APIView):
             page_size = int(request.query_params.get("pageSize", 6))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`page` and `pageSize` must be integers."},
+                PAGE_SIZE_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1189,7 +1196,7 @@ class CommunityTagListCreateAPIView(APIView):
             page_size = int(request.query_params.get("pageSize", 20))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`page` and `pageSize` must be integers."},
+                PAGE_SIZE_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1526,7 +1533,7 @@ class PopularTagsListAPIView(APIView):
             limit = int(request.query_params.get("limit", POPULAR_TAGS_DEFAULT_LIMIT))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`limit` must be an integer."},
+                LIMIT_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
         limit = max(1, min(limit, POPULAR_TAGS_MAX_LIMIT))
@@ -1592,7 +1599,7 @@ class CommunityTagMembersListAPIView(APIView):
             page_size = int(request.query_params.get("pageSize", 20))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`page` and `pageSize` must be integers."},
+                PAGE_SIZE_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1620,3 +1627,130 @@ class CommunityTagMembersListAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ProfilePictureUploadAPIView(ProfileLookupMixin, APIView):
+    """Upload or remove a user's profile picture."""
+
+    permission_classes = [IsUser]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "picture": {"type": "string", "format": "binary"},
+                },
+                "required": ["picture"],
+            }
+        },
+        responses={
+            200: OpenApiResponse(
+                description="Profile picture uploaded.",
+            ),
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "Upload a profile picture for the authenticated user. "
+            "The image is auto-resized to 512×512 px (longest side) and converted to JPEG. "
+            "Accepts JPEG, PNG, GIF, and WebP. Maximum 5 MB."
+        ),
+        tags=["Profiles"],
+    )
+    def post(self, request: Request) -> Response:
+        """Upload a new profile picture."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ProfilePictureUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save_picture(profile)
+
+        profile.refresh_from_db()
+        return Response(
+            {
+                "detail": "Profile picture uploaded.",
+                "picture_url": resolve_picture_url(profile),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: OpenApiResponse(description="Profile picture removed."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Remove the uploaded profile picture. Falls back to OAuth avatar if set.",
+        tags=["Profiles"],
+    )
+    def delete(self, request: Request) -> Response:
+        """Remove uploaded profile picture."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        if profile.picture:
+            try:
+                profile.picture.delete(save=False)
+            except Exception:
+                pass
+            profile.picture = None
+            profile.save(update_fields=["picture", "updated_at"])
+
+        return Response(
+            {
+                "detail": "Profile picture removed.",
+                "picture_url": resolve_picture_url(profile),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PostMediaUploadAPIView(ProfileLookupMixin, APIView):
+    """Upload a media file for use in profile posts or timeline events."""
+
+    permission_classes = [IsUser]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string", "format": "binary"},
+                },
+                "required": ["file"],
+            }
+        },
+        responses={
+            201: OpenApiResponse(
+                description="Media file uploaded. Returns the public URL.",
+            ),
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "Upload a media file (image or PDF) for use in posts. "
+            "Images are auto-resized to 1920 px (longest side). Maximum 10 MB. "
+            "Returns a public URL that can be used as `media_url` when creating or updating posts."
+        ),
+        tags=["Profiles"],
+    )
+    def post(self, request: Request) -> Response:
+        """Upload a media file and return its public URL."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = PostMediaUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        url = serializer.save_file()
+
+        return Response({"url": url}, status=status.HTTP_201_CREATED)

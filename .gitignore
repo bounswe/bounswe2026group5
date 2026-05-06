@@ -44,6 +44,7 @@ backend/db.sqlite3-journal
 backend/media/
 backend/message_attachments/
 backend/staticfiles/
+backend/credentials/
 
 # Testing and Logs
 .pytest_cache/
@@ -104,3 +105,11 @@ mobile/android
 *.pem
 
 credentials/
+
+# Playwright
+web/node_modules/
+web/test-results/
+web/playwright-report/
+web/blob-report/
+web/playwright/.cache/
+web/playwright/.auth/

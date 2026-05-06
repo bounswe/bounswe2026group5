@@ -7,7 +7,7 @@ from typing import Any, cast
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser, Group
+from django.contrib.auth.models import Group
 from django.contrib.gis.geos import Point
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
@@ -39,6 +39,7 @@ from profiles.services import (
     create_prp_event,
 )
 from profiles.views import PublicMentorProfilesSearchListAPIView
+from timeline.models import TimelineEvent
 
 User: Any = get_user_model()
 
@@ -657,6 +658,23 @@ class ProfilePostsAPITests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertIsNotNone(response.data["timestamp"])
 
+    def test_create_prp_with_explicit_past_timestamp_keeps_action_time_distinct(self) -> None:
+        self._auth_owner()
+        explicit_timestamp = timezone.now() - timedelta(days=5)
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "progress",
+                "content": "Backfilled post",
+                "timestamp": explicit_timestamp.isoformat(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertGreater(response.data["created_at"], response.data["timestamp"])
+
     def test_create_prp_empty_timestamp_returns_201(self) -> None:
         self._auth_owner()
 
@@ -694,7 +712,7 @@ class ProfilePostsAPITests(TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_list_profile_posts_includes_prp_and_visible_mcte(self) -> None:
-        create_prp_event(
+        prp_event = create_prp_event(
             author_profile=self.owner_profile,
             event_type="achievement",
             content="PrP entry",
@@ -727,6 +745,9 @@ class ProfilePostsAPITests(TestCase):
         self.assertIn(visible_mcte.source_id, source_ids)
         self.assertNotIn(hidden_mcte.source_id, source_ids)
         self.assertTrue(any(item["category"] == "PrP" for item in results))
+        ordered_ids = [item["source_id"] for item in results]
+        self.assertEqual(ordered_ids[0], visible_mcte.source_id)
+        self.assertIn(prp_event.source_id, ordered_ids[1:])
 
     def test_list_profile_posts_filter_by_category_returns_matching_items(self) -> None:
         prp_event = create_prp_event(
@@ -879,6 +900,42 @@ class ProfilePostsAPITests(TestCase):
         self.assertEqual(list_response.status_code, 200)
         source_ids = {item["id"] for item in list_response.data["results"]}
         self.assertNotIn(event_id, source_ids)
+
+    def test_profile_feed_tiebreaks_with_last_edited_for_same_created_at(self) -> None:
+        match = self._create_match_for_owner()
+
+        first_event = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="progress",
+            content="First visible event",
+            show_on_profile=True,
+        )
+        second_event = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="Second visible event",
+            show_on_profile=True,
+        )
+
+        common_created_at = timezone.now() - timedelta(hours=1)
+        TimelineEvent.objects.filter(id__in=[first_event.id, second_event.id]).update(
+            created_at=common_created_at,
+            last_edited=common_created_at,
+        )
+
+        newer_edit_time = common_created_at + timedelta(minutes=5)
+        TimelineEvent.objects.filter(id=first_event.id).update(last_edited=newer_edit_time)
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url)
+        self.assertEqual(response.status_code, 200)
+
+        result_ids = [item["source_id"] for item in response.data["results"]]
+        self.assertLess(
+            result_ids.index(first_event.source_id), result_ids.index(second_event.source_id)
+        )
 
 
 class SkillListAPIViewTests(TestCase):
@@ -3919,3 +3976,229 @@ class CommunityTagNotificationTests(TestCase):
             Notification.objects.filter(type=NotificationType.TAG_MATCHES_INTEREST).count(),
             0,
         )
+
+
+class ProfilePictureUploadTests(TestCase):
+    """Integration tests for profile picture upload and removal endpoints."""
+
+    PICTURE_URL = "/api/profiles/me/picture/"
+
+    def setUp(self) -> None:
+        self.client: Any = APIClient()
+        self.user = User.objects.create_user(
+            email="pic-upload@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.profile = Profile.objects.create(
+            user=self.user,
+            display_name="Pic Upload User",
+        )
+        self.token = str(RefreshToken.for_user(self.user).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token}")
+
+    def _make_image_file(self, name: str = "test.jpg", size: tuple = (100, 100), fmt: str = "JPEG"):
+        """Create an in-memory image file for testing."""
+        from io import BytesIO
+        from PIL import Image as PILImage
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        img = PILImage.new("RGB", size, color="red")
+        buf = BytesIO()
+        img.save(buf, format=fmt)
+        buf.seek(0)
+        content_type = {"JPEG": "image/jpeg", "PNG": "image/png", "GIF": "image/gif", "WEBP": "image/webp"}.get(fmt, "image/jpeg")
+        return SimpleUploadedFile(name=name, content=buf.read(), content_type=content_type)
+
+    def test_upload_valid_jpeg_returns_200(self) -> None:
+        file = self._make_image_file("avatar.jpg", fmt="JPEG")
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("picture_url", response.data)
+        self.assertTrue(len(response.data["picture_url"]) > 0)
+
+    def test_upload_valid_png_returns_200(self) -> None:
+        file = self._make_image_file("avatar.png", fmt="PNG")
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 200)
+
+    def test_upload_oversized_file_returns_400(self) -> None:
+        """Files exceeding 5 MB should be rejected."""
+        from io import BytesIO
+        from PIL import Image as PILImage
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        # Create a large image (uncompressed)
+        img = PILImage.new("RGB", (4000, 4000), color="blue")
+        buf = BytesIO()
+        img.save(buf, format="BMP")
+        buf.seek(0)
+        content = buf.read()
+        # If BMP is still under 5MB, pad it
+        if len(content) < 5 * 1024 * 1024 + 1:
+            content = content + b"\x00" * (5 * 1024 * 1024 + 1 - len(content))
+        file = SimpleUploadedFile("big.jpg", content, content_type="image/jpeg")
+
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
+    def test_upload_non_image_file_returns_400(self) -> None:
+        """PDF files should be rejected as profile pictures."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        file = SimpleUploadedFile("doc.pdf", b"%PDF-1.4 content", content_type="application/pdf")
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
+    def test_delete_picture_returns_200(self) -> None:
+        """Deleting a profile picture removes the file and returns fallback."""
+        # First upload
+        file = self._make_image_file("to-delete.jpg")
+        self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+
+        # Then delete
+        response = self.client.delete(self.PICTURE_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("picture_url", response.data)
+
+        # Verify the picture field is cleared
+        self.profile.refresh_from_db()
+        self.assertFalse(bool(self.profile.picture))
+
+    def test_delete_without_picture_returns_200(self) -> None:
+        """Deleting when there's no picture should still succeed."""
+        response = self.client.delete(self.PICTURE_URL)
+        self.assertEqual(response.status_code, 200)
+
+    def test_uploaded_picture_takes_priority_over_oauth_url(self) -> None:
+        """After upload, picture_url should return the uploaded file URL, not the OAuth URL."""
+        self.profile.picture_url = "https://lh3.googleusercontent.com/photo.jpg"
+        self.profile.save(update_fields=["picture_url"])
+
+        file = self._make_image_file("avatar.jpg")
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 200)
+
+        # The returned URL should NOT be the Google one
+        self.assertNotEqual(response.data["picture_url"], "https://lh3.googleusercontent.com/photo.jpg")
+
+    def test_after_delete_falls_back_to_oauth_url(self) -> None:
+        """After deleting the uploaded picture, picture_url falls back to OAuth."""
+        self.profile.picture_url = "https://lh3.googleusercontent.com/photo.jpg"
+        self.profile.save(update_fields=["picture_url"])
+
+        file = self._make_image_file("avatar.jpg")
+        self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+
+        response = self.client.delete(self.PICTURE_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["picture_url"], "https://lh3.googleusercontent.com/photo.jpg")
+
+    def test_unauthenticated_upload_returns_401(self) -> None:
+        self.client.credentials()
+        file = self._make_image_file("avatar.jpg")
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 401)
+
+    def test_no_profile_returns_404(self) -> None:
+        """Users without a profile should get 404."""
+        no_profile_user = User.objects.create_user(
+            email="no-profile-pic@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        token = str(RefreshToken.for_user(no_profile_user).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        file = self._make_image_file("avatar.jpg")
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 404)
+
+    def test_profile_me_endpoint_returns_uploaded_picture_url(self) -> None:
+        """The /api/profiles/me/ endpoint should include the uploaded picture URL."""
+        file = self._make_image_file("avatar.jpg")
+        self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+
+        response = self.client.get("/api/profiles/me/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("picture_url", response.data)
+        self.assertTrue(len(response.data["picture_url"]) > 0)
+
+
+class PostMediaUploadTests(TestCase):
+    """Integration tests for post media upload endpoint."""
+
+    UPLOAD_URL = "/api/profiles/me/uploads/"
+
+    def setUp(self) -> None:
+        self.client: Any = APIClient()
+        self.user = User.objects.create_user(
+            email="media-upload@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.profile = Profile.objects.create(
+            user=self.user,
+            display_name="Media Upload User",
+        )
+        self.token = str(RefreshToken.for_user(self.user).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token}")
+
+    def _make_image_file(self, name: str = "post.jpg"):
+        """Create an in-memory image file for testing."""
+        from io import BytesIO
+        from PIL import Image as PILImage
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        img = PILImage.new("RGB", (200, 200), color="green")
+        buf = BytesIO()
+        img.save(buf, format="JPEG")
+        buf.seek(0)
+        return SimpleUploadedFile(name=name, content=buf.read(), content_type="image/jpeg")
+
+    def test_upload_image_returns_201_with_url(self) -> None:
+        file = self._make_image_file("post-image.jpg")
+        response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("url", response.data)
+        self.assertTrue(len(response.data["url"]) > 0)
+
+    def test_upload_pdf_returns_201_with_url(self) -> None:
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        file = SimpleUploadedFile("doc.pdf", b"%PDF-1.4 content", content_type="application/pdf")
+        response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("url", response.data)
+
+    def test_upload_unsupported_type_returns_400(self) -> None:
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        file = SimpleUploadedFile("script.exe", b"MZ\x90\x00", content_type="application/x-msdownload")
+        response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
+    def test_upload_oversized_file_returns_400(self) -> None:
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        large_content = b"A" * (10 * 1024 * 1024 + 1)  # > 10 MB
+        file = SimpleUploadedFile("large.pdf", large_content, content_type="application/pdf")
+        response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
+    def test_unauthenticated_upload_returns_401(self) -> None:
+        self.client.credentials()
+        file = self._make_image_file("post.jpg")
+        response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, 401)
+
+    def test_no_profile_returns_404(self) -> None:
+        no_profile_user = User.objects.create_user(
+            email="no-profile-media@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        token = str(RefreshToken.for_user(no_profile_user).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        file = self._make_image_file("post.jpg")
+        response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, 404)
