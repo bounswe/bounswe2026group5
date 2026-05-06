@@ -1,14 +1,14 @@
-import { useEffect } from "react";
 import {
   DarkTheme,
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { View, ActivityIndicator } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
 import "react-native-reanimated";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "../global.css";
 
 import { ToastProvider } from "@/components/ui/ToastProvider";
@@ -20,8 +20,6 @@ import { configureGoogleSignIn } from "@/lib/queries/googleAuth";
 export const unstable_settings = {
   anchor: "index",
 };
-
-const queryClient = new QueryClient();
 
 function PushNotificationManager({
   children,
@@ -35,6 +33,18 @@ function PushNotificationManager({
 }
 
 export default function RootLayout() {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            retry: false,
+            gcTime: 0,
+          },
+        },
+      }),
+  );
+
   return (
     <QueryClientProvider client={queryClient}>
       <RootLayoutContent />
@@ -73,14 +83,8 @@ function RootLayoutContent() {
       {isAuthenticated ? (
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="notifications"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="verify-email"
-            options={{ headerShown: false }}
-          />
+          <Stack.Screen name="notifications" options={{ headerShown: false }} />
+          <Stack.Screen name="verify-email" options={{ headerShown: false }} />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="messages" options={{ headerShown: false }} />
         </Stack>
@@ -89,27 +93,17 @@ function RootLayoutContent() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="register" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="verify-email"
-            options={{ headerShown: false }}
-          />
+          <Stack.Screen name="verify-email" options={{ headerShown: false }} />
         </Stack>
       )}
       <StatusBar style="auto" />
     </ThemeProvider>
   );
 
-  if (!isAuthenticated) {
-    return navigation;
-  }
-
   return (
-    <PushNotificationManager isAuthenticated={isAuthenticated}>
-      {navigation}
-    </PushNotificationManager>
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <ToastProvider>
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <ToastProvider>
+        <PushNotificationManager isAuthenticated={isAuthenticated}>
           {isAuthenticated ? (
             <Stack>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -135,9 +129,9 @@ function RootLayoutContent() {
               />
             </Stack>
           )}
-          <StatusBar style="auto" />
-        </ToastProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+        </PushNotificationManager>
+        <StatusBar style="auto" />
+      </ToastProvider>
+    </ThemeProvider>
   );
 }

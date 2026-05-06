@@ -152,7 +152,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin-moderation': typeof AuthorizedAdminModerationRoute
   '/communities': typeof AuthorizedCommunitiesRouteWithChildren
-  '/connections': typeof AuthorizedConnectionsRoute
   '/connections': typeof AuthorizedConnectionsRouteWithChildren
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
@@ -197,7 +196,6 @@ export interface FileRoutesById {
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
   '/_authorized/admin-moderation': typeof AuthorizedAdminModerationRoute
   '/_authorized/communities': typeof AuthorizedCommunitiesRouteWithChildren
-  '/_authorized/connections': typeof AuthorizedConnectionsRoute
   '/_authorized/connections': typeof AuthorizedConnectionsRouteWithChildren
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
   '/_authorized/discover': typeof AuthorizedDiscoverRoute
@@ -483,7 +481,6 @@ const AuthorizedConnectionsRouteWithChildren =
 interface AuthorizedRouteRouteChildren {
   AuthorizedAdminModerationRoute: typeof AuthorizedAdminModerationRoute
   AuthorizedCommunitiesRoute: typeof AuthorizedCommunitiesRouteWithChildren
-  AuthorizedConnectionsRoute: typeof AuthorizedConnectionsRoute
   AuthorizedConnectionsRoute: typeof AuthorizedConnectionsRouteWithChildren
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
   AuthorizedDiscoverRoute: typeof AuthorizedDiscoverRoute
@@ -494,7 +491,6 @@ interface AuthorizedRouteRouteChildren {
 const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
   AuthorizedAdminModerationRoute: AuthorizedAdminModerationRoute,
   AuthorizedCommunitiesRoute: AuthorizedCommunitiesRouteWithChildren,
-  AuthorizedConnectionsRoute: AuthorizedConnectionsRoute,
   AuthorizedConnectionsRoute: AuthorizedConnectionsRouteWithChildren,
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,
   AuthorizedDiscoverRoute: AuthorizedDiscoverRoute,

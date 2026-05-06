@@ -39,6 +39,7 @@ function loadNotificationModules() {
     })
     .catch((error) => {
       notificationModulesPromise = null;
+      console.error("Failed to load notification modules:", error);
       throw error;
     });
 
