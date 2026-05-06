@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 
-import { pickPostImageFile } from "@/lib/uploads/picker";
+import { pickPostMediaFile } from "@/lib/uploads/picker";
 import type { LocalUploadFile } from "@/lib/queries/uploads";
 
 interface PostMediaPickerProps {
@@ -16,7 +16,7 @@ function getPickerErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
   }
-  return "Could not open your photo library.";
+  return "Could not open your library.";
 }
 
 export function PostMediaPicker({
@@ -32,7 +32,7 @@ export function PostMediaPicker({
     }
 
     try {
-      const nextMedia = await pickPostImageFile();
+      const nextMedia = await pickPostMediaFile();
       if (nextMedia) {
         onChange(nextMedia);
       }
@@ -41,18 +41,20 @@ export function PostMediaPicker({
     }
   };
 
+  const isImage = media?.type.startsWith("image/");
+
   return (
     <View className="mt-4 rounded-xl border border-dashed border-divider px-3 py-3 dark:border-divider-dark">
       <View className="flex-row items-center justify-between gap-3">
         <View className="min-w-0 flex-1">
           <Text className="text-sm font-bold text-on-surface dark:text-on-surface-dark">
-            Photo
+            Media
           </Text>
           <Text
             numberOfLines={1}
             className="mt-0.5 text-xs text-on-surface-soft dark:text-on-surface-soft-dark"
           >
-            {media ? media.name : "Optional image attachment"}
+            {media ? media.name : "Optional image or PDF attachment"}
           </Text>
         </View>
 
@@ -63,7 +65,11 @@ export function PostMediaPicker({
           onPress={handlePick}
           className="h-10 flex-row items-center justify-center gap-1.5 rounded-full bg-surface-active px-3 dark:bg-surface-active-dark"
         >
-          <Ionicons name="image-outline" size={16} color="#2f7d68" />
+          <Ionicons
+            name={media ? "sync-outline" : "add-circle-outline"}
+            size={16}
+            color="#2f7d68"
+          />
           <Text className="text-xs font-bold text-primary dark:text-primary-dim">
             {media ? "Change" : "Add"}
           </Text>
@@ -72,12 +78,25 @@ export function PostMediaPicker({
 
       {media ? (
         <View className="mt-3">
-          <Image
-            testID={`${testIDPrefix}-media-preview`}
-            source={{ uri: media.uri }}
-            resizeMode="cover"
-            className="h-36 w-full rounded-xl bg-surface-active dark:bg-surface-active-dark"
-          />
+          {isImage ? (
+            <Image
+              testID={`${testIDPrefix}-media-preview`}
+              source={{ uri: media.uri }}
+              resizeMode="cover"
+              className="h-36 w-full rounded-xl bg-surface-active dark:bg-surface-active-dark"
+            />
+          ) : (
+            <View
+              testID={`${testIDPrefix}-document-preview`}
+              className="h-36 w-full items-center justify-center rounded-xl bg-surface-active dark:bg-surface-active-dark"
+            >
+              <Ionicons name="document-text-outline" size={48} color="#6b7280" />
+              <Text className="mt-2 text-xs font-semibold text-on-surface-soft">
+                {media.name}
+              </Text>
+            </View>
+          )}
+
           <TouchableOpacity
             testID={`${testIDPrefix}-media-remove`}
             activeOpacity={0.85}
@@ -86,7 +105,7 @@ export function PostMediaPicker({
             className="mt-2 self-start rounded-full border border-divider px-3 py-1.5 dark:border-divider-dark"
           >
             <Text className="text-xs font-bold text-on-surface-soft dark:text-on-surface-soft-dark">
-              Remove photo
+              Remove attachment
             </Text>
           </TouchableOpacity>
         </View>

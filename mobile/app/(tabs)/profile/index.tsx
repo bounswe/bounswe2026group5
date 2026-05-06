@@ -526,6 +526,7 @@ export default function ProfileScreen() {
         username: currentUsername,
         display_name: updatedData.name,
         bio: updatedData.bio,
+        ...(updatedData.removePicture ? { picture_url: "" } : {}),
       });
 
       if (updatedData.pictureFile) {

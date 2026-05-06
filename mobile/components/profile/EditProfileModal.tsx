@@ -9,6 +9,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -132,7 +133,11 @@ export function EditProfileModal({
             className="bg-gray-900 px-5 py-2 rounded-full"
           >
             <Text className="text-white font-bold text-sm">
-              {isSaving ? "Saving..." : "Save"}
+              {isSaving
+                ? pictureFile
+                  ? "Uploading..."
+                  : "Saving..."
+                : "Save"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -185,8 +190,21 @@ export function EditProfileModal({
                   <TouchableOpacity
                     testID="avatar-remove-button"
                     onPress={() => {
-                      setPictureFile(null);
-                      setRemovePicture(true);
+                      Alert.alert(
+                        "Remove Profile Photo",
+                        "Are you sure you want to remove your current profile picture?",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Remove",
+                            style: "destructive",
+                            onPress: () => {
+                              setPictureFile(null);
+                              setRemovePicture(true);
+                            },
+                          },
+                        ],
+                      );
                     }}
                     className="mt-3 rounded-full border border-gray-200 px-4 py-2"
                   >

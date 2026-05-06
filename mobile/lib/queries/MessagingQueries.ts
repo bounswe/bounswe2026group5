@@ -57,13 +57,13 @@ export function useMessages(conversationId: string) {
 
 export function useSendMessage(conversationId: string) {
   return useMutation({
-    mutationFn: ({ body = "", attachment = null }: SendMessageInput) => {
+    mutationFn: async ({ body = "", attachment = null }: SendMessageInput) => {
       const formData = new FormData();
       if (body) {
         formData.append("body", body);
       }
       if (attachment) {
-        appendUploadFile(formData, "attachment", attachment);
+        await appendUploadFile(formData, "attachment", attachment);
       }
 
       return apiPostMultipart<Message>(

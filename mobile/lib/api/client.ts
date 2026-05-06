@@ -104,7 +104,7 @@ export async function apiPostMultipart<TResponse>(
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
     body: formData,
-  });
+  }, 60000); // Increased timeout to 60s for file uploads
 
   if (!response.ok) {
     const message = await readErrorMessage(response);
