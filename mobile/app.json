@@ -8,11 +8,6 @@
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.bounswe2026group5.neighborship",
-      "googleServicesFile": "./GoogleService-Info.plist"
-    },
     "android": {
       "usesCleartextTraffic": true,
       "adaptiveIcon": {

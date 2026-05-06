@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import firebase_admin
 from django.conf import settings
@@ -20,7 +20,7 @@ def get_firebase_app():
             if not cred_path.exists():
                 logger.warning(f"Firebase service account file not found at {cred_path}")
                 return None
-            
+
             cred = credentials.Certificate(str(cred_path))
             _firebase_app = firebase_admin.initialize_app(cred)
         except Exception as e:
@@ -37,7 +37,7 @@ def send_push_notification(
 ) -> None:
     """Send a push notification to all registered tokens of a user."""
     from .models import FCMToken  # Local import to avoid circular dependency
-    
+
     app = get_firebase_app()
     if not app:
         return
@@ -46,9 +46,21 @@ def send_push_notification(
     if not tokens:
         return
 
-    notification = messaging.Notification(title=title, body=body)
     messages = [
-        messaging.Message(notification=notification, data=data or {}, token=token)
+        messaging.Message(
+            notification=messaging.Notification(title="Neighborship", body=f"{title}: {body}"),
+            data=data or {},
+            token=token,
+            android=messaging.AndroidConfig(
+                priority="normal",
+                notification=messaging.AndroidNotification(
+                    title="Neighborship",
+                    body=f"{title}: {body}",
+                    channel_id="default",
+                    tag="neighborship_global_sync",  # Constant tag ensures they replace each other
+                ),
+            ),
+        )
         for token in tokens
     ]
 
@@ -67,12 +79,15 @@ def send_push_notification(
             for idx, resp in enumerate(response.responses):
                 if not resp.success:
                     # Check if error is related to invalid token
-                    if resp.exception and resp.exception.code in ["registration-token-not-registered", "invalid-registration-token"]:
+                    if resp.exception and resp.exception.code in [
+                        "registration-token-not-registered",
+                        "invalid-registration-token",
+                    ]:
                         invalid_tokens.append(tokens[idx])
 
             if invalid_tokens:
                 FCMToken.objects.filter(token__in=invalid_tokens).delete()
                 logger.info(f"Deleted {len(invalid_tokens)} invalid FCM tokens.")
-                
+
     except Exception as e:
         logger.error(f"Error sending push notification: {e}")
