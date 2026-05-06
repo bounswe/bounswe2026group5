@@ -699,9 +699,10 @@ class ProfilePostListQueryParamsSerializer(serializers.Serializer):
 class ProfilePostSerializer(serializers.Serializer):
     """Read serializer for profile feed items (PrP, visible MCTE, and visible CoP).
 
-    ``community_id``, ``community_name``, and ``tagged_users`` are populated only for
-    CoP posts. ``community_name`` is fetched live; if the community has been deleted it
-    falls back to the name snapshotted in ``payload`` at creation time. ``tagged_users``
+    ``community_id``, ``community_name``, ``community_slug``, and ``tagged_users`` are
+    populated only for CoP posts. ``community_name`` and ``community_slug`` are fetched
+    live; if the community has been deleted they fall back to snapshotted values in
+    ``payload`` at creation time. ``tagged_users``
     is a list of ``{user_id, username}`` dicts; usernames are snapshots captured at
     tag-time and fall back to the stored snapshot if a user was later deleted.
     ``mentorship_partner`` is populated only for MCTE posts and contains the username of
@@ -722,6 +723,7 @@ class ProfilePostSerializer(serializers.Serializer):
     show_on_profile = serializers.BooleanField(read_only=True)
     community_id = serializers.UUIDField(read_only=True, allow_null=True)
     community_name = serializers.SerializerMethodField()
+    community_slug = serializers.SerializerMethodField()
     tagged_users = serializers.SerializerMethodField()
     actor_role = serializers.CharField(read_only=True)
     mentorship_partner = serializers.SerializerMethodField()
@@ -744,6 +746,23 @@ class ProfilePostSerializer(serializers.Serializer):
         # Community was deleted — fall back to snapshot stored at creation time
         payload = obj.payload or {}
         return payload.get("community_name")
+
+    @extend_schema_field({"type": "string", "nullable": True})
+    def get_community_slug(self, obj: TimelineEvent) -> str | None:
+        """Return the community slug for CoP events.
+
+        First tries to fetch the live slug from the database. Falls back to the
+        slug stored in payload at creation time if the community has been deleted.
+        """
+        if obj.category != TimelineEvent.Category.COP or obj.community_id is None:
+            return None
+
+        community = CommunityTag.objects.filter(id=obj.community_id).values("slug").first()
+        if community is not None:
+            return community["slug"]
+
+        payload = obj.payload or {}
+        return payload.get("community_slug")
 
     @extend_schema_field(
         {
@@ -1037,8 +1056,25 @@ class CommunityPostSerializer(serializers.Serializer):
     last_edited = serializers.DateTimeField(read_only=True, allow_null=True)
     show_on_profile = serializers.BooleanField(read_only=True)
     community_id = serializers.UUIDField(read_only=True)
+    community_slug = serializers.SerializerMethodField()
     author = ProfilePostAuthorSerializer(read_only=True)
     tagged_users = serializers.SerializerMethodField()
+
+    @extend_schema_field({"type": "string", "nullable": True})
+    def get_community_slug(self, obj: Any) -> str | None:
+        """Return the community slug for CoP events.
+
+        Falls back to payload snapshot when the community no longer exists.
+        """
+        if obj.community_id is None:
+            return None
+
+        community = CommunityTag.objects.filter(id=obj.community_id).values("slug").first()
+        if community is not None:
+            return community["slug"]
+
+        payload = obj.payload or {}
+        return payload.get("community_slug")
 
     def get_tagged_users(self, obj: Any) -> list[dict[str, str]]:
         """Extract and return tagged users from payload.
