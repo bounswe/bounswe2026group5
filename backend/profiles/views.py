@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.db import IntegrityError, models, transaction
@@ -920,25 +921,6 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         return any((skill or "").lower() in wanted for skill in (skills or []))
 
     @staticmethod
-    def _parse_mode(request: Request) -> list[str]:
-        """Map `mentorshipMode` query param to internal app usage mode values."""
-        raw_mode = (
-            request.query_params.get("mentorshipMode")
-            or request.query_params.get("mentorship_mode")
-            or request.query_params.get("mode")
-        )
-        if not raw_mode:
-            return [AppUsageMode.MENTOR]
-
-        mode = raw_mode.strip().upper()
-        if mode == AppUsageMode.MENTOR:
-            return [AppUsageMode.MENTOR]
-        if mode == AppUsageMode.MENTEE:
-            return [AppUsageMode.MENTEE]
-
-        raise ValueError("Invalid mentorshipMode. Expected MENTOR or MENTEE.")
-
-    @staticmethod
     def _maybe_parse_coordinates(request: Request) -> tuple[float, float] | None:
         """Parse lat/lng query params if present."""
         lat_raw = request.query_params.get("lat") or request.query_params.get("latitude")
@@ -972,18 +954,65 @@ class PublicMentorProfilesSearchListAPIView(APIView):
 
     @extend_schema(
         operation_id="profiles_public_mentor_search",
+        parameters=[
+            OpenApiParameter(
+                "q",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Search by name, title, bio, or skills.",
+            ),
+            OpenApiParameter(
+                "skill",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Filter by specific skill (comma-separated).",
+            ),
+            OpenApiParameter(
+                "tag",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Filter by community tag slug or name (comma-separated).",
+            ),
+            OpenApiParameter(
+                "lat",
+                OpenApiTypes.FLOAT,
+                OpenApiParameter.QUERY,
+                description="Latitude for distance filtering.",
+            ),
+            OpenApiParameter(
+                "lng",
+                OpenApiTypes.FLOAT,
+                OpenApiParameter.QUERY,
+                description="Longitude for distance filtering.",
+            ),
+            OpenApiParameter(
+                "distanceKm",
+                OpenApiTypes.FLOAT,
+                OpenApiParameter.QUERY,
+                description="Radius in km (default 15.0 if lat/lng provided).",
+            ),
+            OpenApiParameter(
+                "page",
+                OpenApiTypes.INT,
+                OpenApiParameter.QUERY,
+                description="Page number (default 1).",
+            ),
+            OpenApiParameter(
+                "pageSize",
+                OpenApiTypes.INT,
+                OpenApiParameter.QUERY,
+                description="Results per page (default 6, max 50).",
+            ),
+        ],
         responses={200: PublicMentorProfileSearchListResponseSerializer},
         description=(
             "Public listing of visible mentor profiles with optional search and filters. "
-            "Supports pagination via `page` and `pageSize` query params."
+            "Supports pagination via `page` and `pageSize` query params. "
+            "If `lat` and `lng` are provided without `distanceKm`, a default radius of 15km is applied."
         ),
         tags=["Profiles"],
     )
     def get(self, request: Request) -> Response:
-        try:
-            mentorship_modes = self._parse_mode(request)
-        except ValueError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         q = (
             request.query_params.get("q")
@@ -1012,7 +1041,7 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         page_size = min(page_size, 50)
 
         qs = Profile.objects.select_related("user").filter(
-            is_visible=True, user__app_usage_mode__in=mentorship_modes
+            is_visible=True, user__app_usage_mode=AppUsageMode.MENTOR
         )
 
         if q:
@@ -1049,10 +1078,18 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        if coords is not None and distance_km is not None:
+        if coords is None and request.user.is_authenticated:
+            profile = getattr(request.user, "profile", None)
+            if profile and profile.location:
+                coords = (profile.location.y, profile.location.x)
+
+        if coords is not None:
             lat, lng = coords
             point = Point(lng, lat, srid=4326)
-            qs = qs.filter(location__distance_lte=(point, D(km=distance_km)))
+            radius = distance_km if distance_km is not None else 15.0
+            qs = qs.annotate(distance=Distance("location", point))
+            qs = qs.filter(location__distance_lte=(point, D(km=radius)))
+            qs = qs.order_by("distance", "id")
 
         # Community tag filtering (matches profiles in ANY of the given tags)
         tag_terms = self._parse_terms(request, keys=["tag", "tags"])

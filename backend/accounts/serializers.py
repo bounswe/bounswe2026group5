@@ -12,6 +12,7 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import Profile
+from profiles.serializers import LocationField
 from profiles.serializers import resolve_picture_url
 
 from .models import AppUsageMode, AuthProvider, PasswordResetToken, User, UserRole
@@ -94,6 +95,7 @@ class RegisterSerializer(serializers.Serializer):
         write_only=True,
         trim_whitespace=False,
     )
+    location = LocationField(required=False, write_only=True)
 
     def validate_email(self, value: str) -> str:
         email = value.lower()
@@ -117,6 +119,7 @@ class RegisterSerializer(serializers.Serializer):
     @transaction.atomic
     def create(self, validated_data: dict[str, Any]) -> User:
         validated_data.pop("confirm_password", None)
+        location = validated_data.pop("location", None)
         password = validated_data.pop("password")
         email = validated_data["email"]
 
@@ -139,6 +142,7 @@ class RegisterSerializer(serializers.Serializer):
             user=user,
             username=user.username,
             display_name=display_name,
+            location=location,
         )
 
         default_group, _ = Group.objects.get_or_create(name=UserRole.USER)

@@ -410,6 +410,51 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.owner_profile.refresh_from_db()
         self.assertIsNone(self.owner_profile.location)
 
+    def test_patch_profile_can_disable_precise_location_sharing(self) -> None:
+        """Users can disable precise location sharing via the me profile endpoint."""
+        self.owner_profile.share_precise_location = True
+        self.owner_profile.save(update_fields=["share_precise_location"])
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.me_url,
+            {"share_precise_location": False},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertFalse(self.owner_profile.share_precise_location)
+
+    def test_patch_profile_can_enable_precise_location_sharing(self) -> None:
+        """Users can re-enable precise location sharing via the me profile endpoint."""
+        self.owner_profile.share_precise_location = False
+        self.owner_profile.save(update_fields=["share_precise_location"])
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.me_url,
+            {"share_precise_location": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertTrue(self.owner_profile.share_precise_location)
+
+    def test_patch_profile_rejects_non_boolean_precise_location_toggle(self) -> None:
+        """Non-boolean share_precise_location values return validation errors."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.me_url,
+            {"share_precise_location": "not-a-bool"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("share_precise_location", response.json())
+
     def test_patch_mentee_profile_skills_with_eager_to_learn(self) -> None:
         """Mentees can patch skills using canonical skills field."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
@@ -2366,33 +2411,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         # Default discovery is mentors only.
         self.assertNotIn("Mentee Person", returned_names)
 
-    def test_mode_filter_can_target_mentee_profiles(self) -> None:
-        """`mentorshipMode=MENTEE` returns visible mentee profiles."""
-        response = self.api_client.get("/api/profiles/", {"mentorshipMode": "MENTEE"})
-        self.assertEqual(response.status_code, 200)
-
-        payload = response.json()
-        returned_names = {p["full_name"] for p in payload["results"]}
-
-        self.assertIn("Mentee Person", returned_names)
-        self.assertNotIn("Alice Mentor", returned_names)
-
-    def test_mode_filter_mentor_returns_mentor_profiles(self) -> None:
-        """Explicit `mentorshipMode=MENTOR` keeps mentor-only discovery behavior."""
-        response = self.api_client.get("/api/profiles/", {"mentorshipMode": "MENTOR"})
-        self.assertEqual(response.status_code, 200)
-
-        payload = response.json()
-        returned_names = {p["full_name"] for p in payload["results"]}
-        self.assertIn("Alice Mentor", returned_names)
-        self.assertNotIn("Mentee Person", returned_names)
-
-    def test_mode_filter_rejects_legacy_both_value(self) -> None:
-        """`mentorshipMode=BOTH` is rejected by strict role filtering."""
-        response = self.api_client.get("/api/profiles/", {"mentorshipMode": "BOTH"})
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("MENTOR or MENTEE", response.json()["detail"])
-
     def test_search_by_q_matches_display_name(self) -> None:
         """`q` filters by name/keyword fields."""
         response = self.api_client.get("/api/profiles/", {"q": "Alice"})
@@ -2562,6 +2580,26 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         response = self.api_client.get(
             "/api/profiles/",
             {"lat": "39.9334", "lng": "32.8597", "distanceKm": "20"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        result_ids = {row["id"] for row in payload["results"]}
+        self.assertIn(str(self.mentor1_profile.id), result_ids)
+        self.assertNotIn(str(self.mentor3_profile.id), result_ids)
+
+    def test_distance_filter_applies_default_radius_when_omitted(self) -> None:
+        """Distance filter applies a default 15km radius if coords are passed without distanceKm."""
+        self.mentor1_profile.location = Point(32.8597, 39.9334, srid=4326)  # Ankara center
+        self.mentor1_profile.save(update_fields=["location"])
+
+        self.mentor3_profile.location = Point(-0.1276, 51.5072, srid=4326)  # London
+        self.mentor3_profile.save(update_fields=["location"])
+
+        # No distanceKm parameter
+        response = self.api_client.get(
+            "/api/profiles/",
+            {"lat": "39.9334", "lng": "32.8597"},
         )
 
         self.assertEqual(response.status_code, 200)
