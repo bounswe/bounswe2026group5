@@ -1,20 +1,35 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CommunityPostComposer } from "@/components/community/CommunityPostComposer";
+import { ProfilePostCard } from "@/components/profile/ProfilePostCard";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
 import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
 import { useAuthStore } from "@/lib/auth/store";
 import {
+  useCommunityPostsQuery,
+  useCreateCommunityPostMutation,
+} from "@/lib/queries/communityPosts";
+import {
   useCommunityTagDetailQuery,
   useJoinCommunityTagMutation,
   useLeaveCommunityTagMutation,
 } from "@/lib/queries/communityTags";
+import type { ProfilePost } from "@/lib/queries/profile";
+
+const PAGE_SIZE = 12;
 
 function formatMemberCount(count: number) {
   if (count === 1) {
@@ -30,6 +45,17 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function getCommunityMembershipLabel(
+  isMember: boolean | undefined,
+  isMutating: boolean,
+) {
+  if (isMutating) {
+    return "Updating...";
+  }
+
+  return isMember ? "Leave Community" : "Join Community";
+}
+
 export default function CommunityDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -43,13 +69,40 @@ export default function CommunityDetailScreen() {
   const detailQuery = useCommunityTagDetailQuery(tagId);
   const joinMutation = useJoinCommunityTagMutation(currentUsername);
   const leaveMutation = useLeaveCommunityTagMutation(currentUsername);
+  const createPostMutation = useCreateCommunityPostMutation(currentUsername);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [posts, setPosts] = useState<ProfilePost[]>([]);
   useAutoClearMessage(successMessage, setSuccessMessage);
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
 
   const tag = detailQuery.data;
   const isMutating = joinMutation.isPending || leaveMutation.isPending;
+  const postsQuery = useCommunityPostsQuery(
+    {
+      tagId: tagId ?? "",
+      limit: PAGE_SIZE,
+      offset,
+    },
+    Boolean(tagId && tag?.is_member),
+  );
+
+  useEffect(() => {
+    if (!postsQuery.data) {
+      return;
+    }
+
+    if (offset === 0) {
+      setPosts(postsQuery.data.results);
+      return;
+    }
+
+    setPosts((previousPosts) => [...previousPosts, ...postsQuery.data.results]);
+  }, [offset, postsQuery.data]);
+
+  const totalCount = postsQuery.data?.count ?? 0;
+  const hasMore = posts.length < totalCount;
 
   useFocusEffect(
     useCallback(
@@ -63,7 +116,9 @@ export default function CommunityDetailScreen() {
   );
 
   const goBackToSource = () => {
-    router.replace(source === "discover" ? "/(tabs)/discover" : "/(tabs)/community");
+    router.replace(
+      source === "discover" ? "/(tabs)/discover" : "/(tabs)/community",
+    );
   };
 
   const openMembers = () => {
@@ -112,6 +167,220 @@ export default function CommunityDetailScreen() {
     void updateMembership("join");
   };
 
+  const handleCreatePost = async (
+    payload: Omit<
+      Parameters<typeof createPostMutation.mutateAsync>[0],
+      "tagId"
+    >,
+  ) => {
+    if (!tagId) {
+      return false;
+    }
+
+    try {
+      setActionError(null);
+      await createPostMutation.mutateAsync({
+        tagId,
+        ...payload,
+      });
+      setSuccessMessage(
+        tag ? `Posted to ${tag.name}.` : "Posted to this community.",
+      );
+      setOffset(0);
+      return true;
+    } catch (error) {
+      setActionError(
+        getErrorMessage(error, "Could not create a community post."),
+      );
+      return false;
+    }
+  };
+
+  const handleLoadMore = () => {
+    if (!postsQuery.isFetching && hasMore) {
+      setOffset((previousOffset) => previousOffset + PAGE_SIZE);
+    }
+  };
+
+  const headerContent = (
+    <View>
+      {successMessage ? (
+        <View className="mb-4">
+          <SuccessCard message={successMessage} />
+        </View>
+      ) : null}
+
+      {actionError ? (
+        <View className="mb-4">
+          <ErrorBanner message={actionError} />
+        </View>
+      ) : null}
+
+      <View className="mb-6 rounded-2xl border border-divider bg-surface-card p-4 dark:border-divider-dark dark:bg-surface-card-dark">
+        <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
+          {tag?.name ?? "Community"}
+        </Text>
+        <TouchableOpacity
+          testID="community-members-link"
+          onPress={openMembers}
+          activeOpacity={0.75}
+          className="self-start mt-2"
+        >
+          <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
+            {tag ? formatMemberCount(tag.member_count) : "0 members"}
+          </Text>
+        </TouchableOpacity>
+        {tag?.description.trim() ? (
+          <Text className="mt-4 text-base leading-6 text-on-surface-soft dark:text-on-surface-soft-dark">
+            {tag.description}
+          </Text>
+        ) : (
+          <Text className="mt-4 text-sm text-on-surface-soft/80 dark:text-on-surface-soft-dark/80">
+            This community does not have a description yet.
+          </Text>
+        )}
+        <TouchableOpacity
+          testID="community-membership-button"
+          activeOpacity={0.9}
+          disabled={isMutating}
+          onPress={handleMembershipPress}
+          className={`mt-5 rounded-xl py-3 items-center ${
+            tag?.is_member
+              ? "border border-error/60 dark:border-red-900/60"
+              : "bg-primary"
+          }`}
+        >
+          <Text
+            className={`font-semibold ${
+              tag?.is_member ? "text-error dark:text-red-200" : "text-white"
+            }`}
+          >
+            {getCommunityMembershipLabel(tag?.is_member, isMutating)}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {tag?.is_member ? (
+        <CommunityPostComposer
+          isSubmitting={createPostMutation.isPending}
+          onSubmit={handleCreatePost}
+        />
+      ) : (
+        <View className="mb-6 rounded-2xl border border-dashed border-divider bg-surface-card/60 px-4 py-4 dark:border-divider-dark dark:bg-surface-card-dark/60">
+          <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
+            Join this community to create posts here.
+          </Text>
+        </View>
+      )}
+
+      <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
+        Community Posts
+      </Text>
+    </View>
+  );
+
+  if (!tagId) {
+    return (
+      <View className="flex-1 bg-surface dark:bg-surface-dark">
+        <View
+          className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
+          style={{ paddingTop: insets.top }}
+        >
+          <View className="flex-row items-center gap-3 px-4 pb-3 pt-2">
+            <TouchableOpacity
+              testID="community-detail-back-button"
+              onPress={goBackToSource}
+              className="h-10 w-10 items-center justify-center rounded-full bg-surface dark:bg-surface-dark"
+            >
+              <Ionicons name="chevron-back" size={20} color="#2f7d68" />
+            </TouchableOpacity>
+            <Text
+              className="text-xl font-extrabold text-on-surface dark:text-on-surface-dark"
+              numberOfLines={1}
+            >
+              Community
+            </Text>
+          </View>
+        </View>
+        <View className="flex-1 px-4 pt-4">
+          <ErrorBanner
+            title="Community unavailable"
+            message="Missing community id."
+          />
+        </View>
+      </View>
+    );
+  }
+
+  if (detailQuery.isLoading) {
+    return (
+      <View className="flex-1 bg-surface dark:bg-surface-dark">
+        <View
+          className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
+          style={{ paddingTop: insets.top }}
+        >
+          <View className="flex-row items-center gap-3 px-4 pb-3 pt-2">
+            <TouchableOpacity
+              testID="community-detail-back-button"
+              onPress={goBackToSource}
+              className="h-10 w-10 items-center justify-center rounded-full bg-surface dark:bg-surface-dark"
+            >
+              <Ionicons name="chevron-back" size={20} color="#2f7d68" />
+            </TouchableOpacity>
+            <Text
+              className="text-xl font-extrabold text-on-surface dark:text-on-surface-dark"
+              numberOfLines={1}
+            >
+              Community
+            </Text>
+          </View>
+        </View>
+        <View
+          testID="community-detail-loading"
+          className="flex-1 items-center justify-center"
+        >
+          <ActivityIndicator />
+          <Text className="mt-3 text-on-surface-soft dark:text-on-surface-soft-dark">
+            Loading community...
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (detailQuery.isError || !tag) {
+    return (
+      <View className="flex-1 bg-surface dark:bg-surface-dark">
+        <View
+          className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
+          style={{ paddingTop: insets.top }}
+        >
+          <View className="flex-row items-center gap-3 px-4 pb-3 pt-2">
+            <TouchableOpacity
+              testID="community-detail-back-button"
+              onPress={goBackToSource}
+              className="h-10 w-10 items-center justify-center rounded-full bg-surface dark:bg-surface-dark"
+            >
+              <Ionicons name="chevron-back" size={20} color="#2f7d68" />
+            </TouchableOpacity>
+            <Text
+              className="text-xl font-extrabold text-on-surface dark:text-on-surface-dark"
+              numberOfLines={1}
+            >
+              Community
+            </Text>
+          </View>
+        </View>
+        <View className="flex-1 px-4 pt-4">
+          <ErrorBanner
+            title="Could not load community"
+            message="Please try again in a moment."
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
       <View
@@ -135,106 +404,55 @@ export default function CommunityDetailScreen() {
         </View>
       </View>
 
-      <ScrollView
-        className="flex-1 px-4 pt-4"
-        contentContainerStyle={{ paddingBottom: 140 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {!tagId ? (
-          <ErrorBanner
-            title="Community unavailable"
-            message="Missing community id."
+      <FlatList
+        className="flex-1"
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 16,
+          paddingBottom: 140,
+        }}
+        data={posts}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <ProfilePostCard
+            post={item}
+            expanded
+            communityLabel={tag?.name ?? null}
           />
-        ) : detailQuery.isLoading ? (
-          <View testID="community-detail-loading" className="py-10 items-center">
-            <ActivityIndicator />
-            <Text className="mt-3 text-on-surface-soft dark:text-on-surface-soft-dark">
-              Loading community...
-            </Text>
-          </View>
-        ) : detailQuery.isError || !tag ? (
-          <ErrorBanner
-            title="Could not load community"
-            message="Please try again in a moment."
-          />
-        ) : (
-          <>
-            {successMessage ? (
-              <View className="mb-4">
-                <SuccessCard message={successMessage} />
-              </View>
-            ) : null}
-
-            {actionError ? (
-              <View className="mb-4">
-                <ErrorBanner message={actionError} />
-              </View>
-            ) : null}
-
-            <View className="mb-6">
-              <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
-                {tag.name}
-              </Text>
-              <TouchableOpacity
-                testID="community-members-link"
-                onPress={openMembers}
-                activeOpacity={0.75}
-                className="self-start mt-2"
-              >
-                <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
-                  {formatMemberCount(tag.member_count)}
-                </Text>
-              </TouchableOpacity>
-              {tag.description.trim() ? (
-                <Text className="mt-4 text-base leading-6 text-on-surface-soft dark:text-on-surface-soft-dark">
-                  {tag.description}
-                </Text>
-              ) : (
-                <Text className="mt-4 text-sm text-on-surface-soft/80 dark:text-on-surface-soft-dark/80">
-                  This community does not have a description yet.
-                </Text>
-              )}
-              <TouchableOpacity
-                testID="community-membership-button"
-                activeOpacity={0.9}
-                disabled={isMutating}
-                onPress={handleMembershipPress}
-                  className={`mt-5 rounded-xl py-3 items-center ${
-                    tag.is_member
-                    ? "border border-error/60 dark:border-red-900/60"
-                    : "bg-primary"
-                }`}
-              >
-                <Text
-                  className={`font-semibold ${
-                    tag.is_member
-                      ? "text-error dark:text-red-200"
-                      : "text-white"
-                  }`}
-                >
-                  {isMutating
-                    ? "Updating..."
-                    : tag.is_member
-                      ? "Leave Community"
-                      : "Join Community"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View>
-              <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark mb-3">
-                Community Posts
-              </Text>
-              <View className="border-l-2 border-divider dark:border-divider-dark pl-4 py-1">
-                {/* TODO: wire up GET /api/profiles/tags/{tag_id}/posts/ when endpoint ships */}
-                <Text className="text-sm text-on-surface-soft/80 dark:text-on-surface-soft-dark/80">
-                  Community posts will appear here once the community posts endpoint (GET /api/profiles/tags/&#123;tag_id&#125;/posts/) is available.
-                </Text>
-              </View>
-            </View>
-          </>
         )}
-      </ScrollView>
+        ListHeaderComponent={headerContent}
+        ListEmptyComponent={
+          postsQuery.isLoading && offset === 0 ? (
+            <View className="py-10 items-center">
+              <ActivityIndicator />
+              <Text className="mt-3 text-on-surface-soft dark:text-on-surface-soft-dark">
+                Loading posts...
+              </Text>
+            </View>
+          ) : (
+            <View className="py-12 items-center">
+              <Ionicons
+                name="document-text-outline"
+                size={40}
+                color="#9ca3af"
+              />
+              <Text className="mt-3 text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
+                No community posts yet.
+              </Text>
+            </View>
+          )
+        }
+        ListFooterComponent={
+          postsQuery.isFetching && offset > 0 ? (
+            <View className="py-4 items-center">
+              <ActivityIndicator size="small" />
+            </View>
+          ) : null
+        }
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.4}
+        showsVerticalScrollIndicator={false}
+      />
 
       <ConfirmationSheet
         visible={showLeaveConfirmation}

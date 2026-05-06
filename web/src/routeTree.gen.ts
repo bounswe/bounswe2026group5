@@ -24,9 +24,9 @@ import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/dis
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 import { Route as AuthorizedConnectionsRouteImport } from './routes/_authorized/connections'
 import { Route as AuthorizedCommunitiesRouteImport } from './routes/_authorized/communities'
+import { Route as AuthorizedAdminModerationRouteImport } from './routes/_authorized/admin-moderation'
 import { Route as AuthorizedCommunitiesIndexRouteImport } from './routes/_authorized/communities.index'
 import { Route as AuthorizedCommunitiesCommunitySlugRouteImport } from './routes/_authorized/communities.$communitySlug'
-import { Route as AuthorizedAdminModerationRouteImport } from './routes/_authorized/admin-moderation'
 
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
   id: '/_unauthorized',
@@ -101,6 +101,12 @@ const AuthorizedCommunitiesRoute = AuthorizedCommunitiesRouteImport.update({
   path: '/communities',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
+const AuthorizedAdminModerationRoute =
+  AuthorizedAdminModerationRouteImport.update({
+    id: '/admin-moderation',
+    path: '/admin-moderation',
+    getParentRoute: () => AuthorizedRouteRoute,
+  } as any)
 const AuthorizedCommunitiesIndexRoute =
   AuthorizedCommunitiesIndexRouteImport.update({
     id: '/',
@@ -112,17 +118,12 @@ const AuthorizedCommunitiesCommunitySlugRoute =
     id: '/$communitySlug',
     path: '/$communitySlug',
     getParentRoute: () => AuthorizedCommunitiesRoute,
-const AuthorizedAdminModerationRoute =
-  AuthorizedAdminModerationRouteImport.update({
-    id: '/admin-moderation',
-    path: '/admin-moderation',
-    getParentRoute: () => AuthorizedRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/admin-moderation': typeof AuthorizedAdminModerationRoute
+  '/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
@@ -158,8 +159,8 @@ export interface FileRoutesById {
   '/_authorized': typeof AuthorizedRouteRouteWithChildren
   '/_onBoarding': typeof OnBoardingRouteRouteWithChildren
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
-  '/_authorized/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/_authorized/admin-moderation': typeof AuthorizedAdminModerationRoute
+  '/_authorized/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/_authorized/connections': typeof AuthorizedConnectionsRoute
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
   '/_authorized/discover': typeof AuthorizedDiscoverRoute
@@ -177,8 +178,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/communities'
     | '/admin-moderation'
+    | '/communities'
     | '/connections'
     | '/dashboard'
     | '/discover'
@@ -213,8 +214,8 @@ export interface FileRouteTypes {
     | '/_authorized'
     | '/_onBoarding'
     | '/_unauthorized'
-    | '/_authorized/communities'
     | '/_authorized/admin-moderation'
+    | '/_authorized/communities'
     | '/_authorized/connections'
     | '/_authorized/dashboard'
     | '/_authorized/discover'
@@ -344,6 +345,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedCommunitiesRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
+    '/_authorized/admin-moderation': {
+      id: '/_authorized/admin-moderation'
+      path: '/admin-moderation'
+      fullPath: '/admin-moderation'
+      preLoaderRoute: typeof AuthorizedAdminModerationRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
     '/_authorized/communities/': {
       id: '/_authorized/communities/'
       path: '/'
@@ -357,13 +365,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/communities/$communitySlug'
       preLoaderRoute: typeof AuthorizedCommunitiesCommunitySlugRouteImport
       parentRoute: typeof AuthorizedCommunitiesRoute
-    }
-    '/_authorized/admin-moderation': {
-      id: '/_authorized/admin-moderation'
-      path: '/admin-moderation'
-      fullPath: '/admin-moderation'
-      preLoaderRoute: typeof AuthorizedAdminModerationRouteImport
-      parentRoute: typeof AuthorizedRouteRoute
     }
   }
 }
@@ -385,8 +386,8 @@ const AuthorizedCommunitiesRouteWithChildren =
   )
 
 interface AuthorizedRouteRouteChildren {
-  AuthorizedCommunitiesRoute: typeof AuthorizedCommunitiesRouteWithChildren
   AuthorizedAdminModerationRoute: typeof AuthorizedAdminModerationRoute
+  AuthorizedCommunitiesRoute: typeof AuthorizedCommunitiesRouteWithChildren
   AuthorizedConnectionsRoute: typeof AuthorizedConnectionsRoute
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
   AuthorizedDiscoverRoute: typeof AuthorizedDiscoverRoute
@@ -395,8 +396,8 @@ interface AuthorizedRouteRouteChildren {
 }
 
 const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
-  AuthorizedCommunitiesRoute: AuthorizedCommunitiesRouteWithChildren,
   AuthorizedAdminModerationRoute: AuthorizedAdminModerationRoute,
+  AuthorizedCommunitiesRoute: AuthorizedCommunitiesRouteWithChildren,
   AuthorizedConnectionsRoute: AuthorizedConnectionsRoute,
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,
   AuthorizedDiscoverRoute: AuthorizedDiscoverRoute,
