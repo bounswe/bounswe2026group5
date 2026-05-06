@@ -39,9 +39,9 @@ export function ResetPasswordPage() {
                     <Muted className="text-ink-soft">
                         This link is missing a reset token. Please request a new one.
                     </Muted>
-                    <Link to="/forgot-password">
-                        <Button className="mt-2">Request New Link</Button>
-                    </Link>
+                    <Button asChild className="mt-2">
+                        <Link to="/forgot-password">Request New Link</Link>
+                    </Button>
                 </div>
             </div>
         )
