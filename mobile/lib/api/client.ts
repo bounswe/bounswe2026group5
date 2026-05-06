@@ -87,6 +87,38 @@ export async function apiPost<TResponse, TPayload = unknown>(
 }
 
 /**
+ * Perform a typed multipart POST request against the backend API.
+ * The caller must provide a FormData body; React Native sets the multipart
+ * boundary automatically when Content-Type is omitted.
+ */
+export async function apiPostMultipart<TResponse>(
+  path: string,
+  formData: FormData,
+): Promise<TResponse> {
+  const accessToken = useAuthStore.getState().accessToken;
+
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  if (response.status === 204) {
+    return undefined as TResponse;
+  }
+
+  return (await response.json()) as TResponse;
+}
+
+/**
  * Perform a typed PATCH request against the backend API.
  * Uses the access token from auth store.
  *

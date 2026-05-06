@@ -1,4 +1,10 @@
-import { ApiError, apiGet, apiPatch, apiPost } from "@/lib/api/client";
+import {
+  ApiError,
+  apiGet,
+  apiPatch,
+  apiPost,
+  apiPostMultipart,
+} from "@/lib/api/client";
 import { API_BASE_URL } from "@/lib/api/config";
 
 const mockGetState = jest.fn();
@@ -152,6 +158,38 @@ describe("api client", () => {
     });
     const noContent = await apiPost<void>("/api/items/1/archive/");
     expect(noContent).toBeUndefined();
+  });
+
+  it("sends multipart POST without a JSON content type", async () => {
+    mockFetchResponse({
+      ok: true,
+      status: 201,
+      json: async () => ({ url: "https://cdn.example.com/file.jpg" }),
+    });
+    const formData = new FormData();
+    formData.append("file", {
+      uri: "file:///tmp/photo.jpg",
+      name: "photo.jpg",
+      type: "image/jpeg",
+    } as unknown as Blob);
+
+    const result = await apiPostMultipart<{ url: string }>(
+      "/api/profiles/me/uploads/",
+      formData,
+    );
+
+    expect(result).toEqual({ url: "https://cdn.example.com/file.jpg" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE_URL}/api/profiles/me/uploads/`,
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: "Bearer token-123",
+        },
+        body: formData,
+      }),
+    );
   });
 
   it("supports PATCH and bubbles parsed API error", async () => {

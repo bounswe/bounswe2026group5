@@ -102,6 +102,26 @@ export default function CommunityScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity
+            testID="create-community-link"
+            activeOpacity={0.88}
+            onPress={() => router.push("/(tabs)/community/create")}
+            className="mb-4 rounded-2xl border border-primary/20 bg-primary/10 p-4 dark:border-primary-dim/25 dark:bg-primary-dim/10"
+          >
+            <View className="flex-row items-center gap-3">
+              <View className="h-11 w-11 items-center justify-center rounded-full bg-primary dark:bg-primary-dim">
+                <Text className="text-xl font-extrabold text-white">+</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-base font-extrabold text-on-surface dark:text-on-surface-dark">
+                  Create your own community
+                </Text>
+                <Text className="mt-1 text-sm leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
+                  Start a focused space around a topic, skill, or shared goal.
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
           {myCommunitiesQuery.isLoading ? (
             <View
               testID="community-loading-state"

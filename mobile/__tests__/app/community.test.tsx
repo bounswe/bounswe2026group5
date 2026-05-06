@@ -82,6 +82,15 @@ describe("CommunityScreen", () => {
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/discover");
   });
 
+  it("opens the create community page from the community prompt", () => {
+    const { getByTestId, getByText } = render(<CommunityScreen />);
+
+    expect(getByText("Create your own community")).toBeTruthy();
+    fireEvent.press(getByTestId("create-community-link"));
+
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/community/create");
+  });
+
   it("renders joined community cards and switches the feed placeholder copy", () => {
     mockMyCommunitiesQuery.mockReturnValue({
       isLoading: false,
