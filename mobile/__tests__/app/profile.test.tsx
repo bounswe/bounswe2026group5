@@ -1,4 +1,4 @@
-import ProfileScreen from "@/app/(tabs)/profile";
+import ProfileScreen from "@/app/(tabs)/profile/index";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 import { Alert } from "react-native";
@@ -75,10 +75,19 @@ jest.mock("@/lib/queries/profile", () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),
+  useCreateProfilePostMutation: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useProfilePostsQuery: () => ({
+    data: { count: 0, results: [] },
+    isLoading: false,
+  }),
 }));
 
 jest.mock("@/lib/queries/communityTags", () => ({
-  useMyCommunityTagsQuery: (username?: string) => mockMyCommunitiesQuery(username),
+  useMyCommunityTagsQuery: (username?: string) =>
+    mockMyCommunitiesQuery(username),
 }));
 
 const mockRouterPush = jest.fn();
@@ -103,7 +112,8 @@ describe("ProfileScreen Layout", () => {
     mockRouterPush.mockClear();
     (Alert.alert as jest.Mock).mockClear?.();
 
-    (globalThis.fetch as jest.Mock) = jest.fn()
+    (globalThis.fetch as jest.Mock) = jest
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -226,7 +236,8 @@ describe("ProfileScreen Layout", () => {
   });
 
   it("does not crash when profile fetch fails", async () => {
-    (globalThis.fetch as jest.Mock) = jest.fn()
+    (globalThis.fetch as jest.Mock) = jest
+      .fn()
       .mockRejectedValueOnce(new Error("Network error"))
       .mockResolvedValueOnce({
         ok: true,

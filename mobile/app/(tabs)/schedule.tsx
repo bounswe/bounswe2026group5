@@ -9,7 +9,7 @@ import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { SuccessCard } from "@/components/ui/SuccessCard";
+import { useToast } from "@/components/ui/ToastProvider";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -58,12 +58,12 @@ const formatFriendlyDate = (dateString: string) => {
 
 export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
+  const toast = useToast();
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [selectedSession, setSelectedSession] =
     useState<ScheduleSession | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
@@ -105,10 +105,11 @@ export default function ScheduleScreen() {
       .mutateAsync({
         sessionId,
         newSlotId,
+        mentorUsername: rescheduleMentorUsername,
       })
       .then(() => {
         setActionError(null);
-        setSuccessMessage("Your session was updated.");
+        toast.success("Your session was updated.");
         setSelectedSession(null);
         setShowRescheduleSheet(false);
         setRescheduleSessionId(null);
@@ -187,12 +188,6 @@ export default function ScheduleScreen() {
         {queryError ? (
           <View className="px-4 mb-4">
             <ErrorBanner message={queryError} />
-          </View>
-        ) : null}
-
-        {successMessage ? (
-          <View className="px-4 mb-4">
-            <SuccessCard message={successMessage} />
           </View>
         ) : null}
 
@@ -291,7 +286,7 @@ export default function ScheduleScreen() {
             .mutateAsync(selectedSession.sessionId)
             .then(() => {
               setActionError(null);
-              setSuccessMessage("The session was cancelled.");
+              toast.success("The session was cancelled.");
               setSelectedSession(null);
             })
             .catch((error) => {

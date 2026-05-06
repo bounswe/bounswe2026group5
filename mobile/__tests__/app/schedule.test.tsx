@@ -8,10 +8,16 @@ const mockMeetingSessionsQuery = jest.fn();
 const mockCancelSessionMutation = jest.fn();
 const mockRescheduleSessionMutation = jest.fn();
 const mockAvailabilitySlotsQuery = jest.fn();
+const mockToastSuccess = jest.fn();
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 jest.mock("@/components/notifications/NotificationBell", () => ({
   NotificationBell: () => null,
+}));
+jest.mock("@/components/ui/ToastProvider", () => ({
+  useToast: () => ({
+    success: mockToastSuccess,
+  }),
 }));
 jest.mock("react-native-calendars", () => ({ Calendar: "View" }));
 jest.mock("@/components/dashboard/RescheduleBottomSheet", () => ({
@@ -105,6 +111,7 @@ describe("ScheduleScreen", () => {
       ],
       isLoading: false,
     });
+    mockCancelSessionMutation.mockResolvedValue({});
     mockRescheduleSessionMutation.mockResolvedValue({});
     mockMeetingSessionsQuery.mockReturnValue({
       data: [
@@ -173,7 +180,9 @@ describe("ScheduleScreen", () => {
     expect(mockRescheduleSessionMutation).toHaveBeenCalledWith({
       sessionId: "session-1",
       newSlotId: "slot-2",
+      mentorUsername: "mentor_ada",
     });
+    expect(mockToastSuccess).toHaveBeenCalledWith("Your session was updated.");
     expect(queryByTestId("reschedule-sheet")).toBeNull();
   });
 
@@ -217,6 +226,25 @@ describe("ScheduleScreen", () => {
     });
 
     expect(await findByText("Cancellation not allowed")).toBeTruthy();
+  });
+
+  it("shows a toast after cancelling a session", async () => {
+    jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
+
+    const { getByTestId, findByTestId, findByText, queryByText } = render(
+      <ScheduleScreen />,
+    );
+
+    fireEvent.press(getByTestId("session-card-Ada Lovelace"));
+    fireEvent.press(await findByTestId("action-cancel"));
+    fireEvent.press(await findByText("Cancel Session"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockCancelSessionMutation).toHaveBeenCalledWith("session-1");
+    expect(mockToastSuccess).toHaveBeenCalledWith("The session was cancelled.");
+    expect(queryByText("The session was cancelled.")).toBeNull();
   });
 
   it("shows empty state when no sessions exist for selected date", () => {
