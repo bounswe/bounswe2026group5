@@ -127,7 +127,12 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "ENUM_NAME_OVERRIDES": {
         "AppUsageModeEnum": "accounts.models.AppUsageMode",
+        "WorkshopStatusEnum": "workshops.models.Workshop.Status",
+        "WorkshopParticipationStatusEnum": "workshops.models.WorkshopParticipation.Status",
     },
+    "TAGS": [
+        {"name": "Workshops", "description": "Group mentorship sessions and workshops."},
+    ],
 }
 
 MIDDLEWARE = [
