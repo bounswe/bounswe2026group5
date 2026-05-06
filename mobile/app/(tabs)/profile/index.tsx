@@ -640,6 +640,7 @@ export default function ProfileScreen() {
           openSlots={isMentorMode ? openSlotsCount : 0}
           menteesHelped={isMentorMode ? menteesCount : 0}
           showStats={isMentorMode}
+          showRating={isMentorMode}
           showMenteesHelped={isMentorMode}
           imageUrl={userData.pictureUrl || undefined}
           onEdit={() => setEditProfileModalOpen(true)}

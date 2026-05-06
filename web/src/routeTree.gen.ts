@@ -24,8 +24,8 @@ import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/dis
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 import { Route as AuthorizedConnectionsRouteImport } from './routes/_authorized/connections'
 import { Route as AuthorizedCommunitiesRouteImport } from './routes/_authorized/communities'
-import { Route as AuthorizedConnectionsIndexRouteImport } from './routes/_authorized/connections.index'
 import { Route as AuthorizedAdminModerationRouteImport } from './routes/_authorized/admin-moderation'
+import { Route as AuthorizedConnectionsIndexRouteImport } from './routes/_authorized/connections.index'
 import { Route as AuthorizedCommunitiesIndexRouteImport } from './routes/_authorized/communities.index'
 import { Route as AuthorizedConnectionsMatchIdRouteImport } from './routes/_authorized/connections.$matchId'
 import { Route as AuthorizedCommunitiesCommunitySlugRouteImport } from './routes/_authorized/communities.$communitySlug'
@@ -103,17 +103,17 @@ const AuthorizedCommunitiesRoute = AuthorizedCommunitiesRouteImport.update({
   path: '/communities',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
-const AuthorizedConnectionsIndexRoute =
-  AuthorizedConnectionsIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthorizedConnectionsRoute,
-  } as any)
 const AuthorizedAdminModerationRoute =
   AuthorizedAdminModerationRouteImport.update({
     id: '/admin-moderation',
     path: '/admin-moderation',
     getParentRoute: () => AuthorizedRouteRoute,
+  } as any)
+const AuthorizedConnectionsIndexRoute =
+  AuthorizedConnectionsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthorizedConnectionsRoute,
   } as any)
 const AuthorizedCommunitiesIndexRoute =
   AuthorizedCommunitiesIndexRouteImport.update({
@@ -156,7 +156,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin-moderation': typeof AuthorizedAdminModerationRoute
-  '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
   '/messages': typeof AuthorizedMessagesRoute
@@ -218,7 +217,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/admin-moderation'
-    | '/connections'
     | '/dashboard'
     | '/discover'
     | '/messages'
@@ -371,19 +369,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedCommunitiesRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
-    '/_authorized/connections/': {
-      id: '/_authorized/connections/'
-      path: '/'
-      fullPath: '/connections/'
-      preLoaderRoute: typeof AuthorizedConnectionsIndexRouteImport
-      parentRoute: typeof AuthorizedConnectionsRoute
-    }
     '/_authorized/admin-moderation': {
       id: '/_authorized/admin-moderation'
       path: '/admin-moderation'
       fullPath: '/admin-moderation'
       preLoaderRoute: typeof AuthorizedAdminModerationRouteImport
       parentRoute: typeof AuthorizedRouteRoute
+    }
+    '/_authorized/connections/': {
+      id: '/_authorized/connections/'
+      path: '/'
+      fullPath: '/connections/'
+      preLoaderRoute: typeof AuthorizedConnectionsIndexRouteImport
+      parentRoute: typeof AuthorizedConnectionsRoute
     }
     '/_authorized/communities/': {
       id: '/_authorized/communities/'

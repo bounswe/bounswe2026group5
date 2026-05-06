@@ -12,6 +12,7 @@ interface ProfileHeaderProps {
   openSlots?: number;
   menteesHelped?: number;
   showStats?: boolean;
+  showRating?: boolean;
   showMenteesHelped?: boolean;
   imageUrl?: string;
   coverUrl?: string;
@@ -26,6 +27,7 @@ export function ProfileHeader({
   openSlots = 0,
   menteesHelped = 0,
   showStats = true,
+  showRating = true,
   showMenteesHelped = true,
   imageUrl,
   coverUrl,
@@ -82,7 +84,7 @@ export function ProfileHeader({
 
         {/* Right: Rating & Edit Button */}
         <View className="flex-row items-center pt-14 gap-2">
-          {rating !== undefined && rating !== null ? (
+          {showRating && rating !== undefined && rating !== null ? (
             <View className="h-8 flex-row items-center bg-amber-50 dark:bg-amber-950/40 px-2 rounded-lg border border-amber-200 dark:border-amber-800">
               <Ionicons name="star" size={14} color="#f59e0b" />
               <Text className="text-amber-700 dark:text-amber-300 font-bold text-xs ml-1">

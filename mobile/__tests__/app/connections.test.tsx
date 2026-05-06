@@ -207,9 +207,11 @@ jest.mock("@/components/connections/ConnectionActionsSheet", () => ({
         <TouchableOpacity testID="action-remove" onPress={onRemoveConnection}>
           <Text>Remove action</Text>
         </TouchableOpacity>
-        <TouchableOpacity testID="action-review" onPress={onLeaveReview}>
-          <Text>Review action</Text>
-        </TouchableOpacity>
+        {onLeaveReview ? (
+          <TouchableOpacity testID="action-review" onPress={onLeaveReview}>
+            <Text>Review action</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     );
   },
@@ -449,7 +451,7 @@ describe("ConnectionsScreen", () => {
     });
   });
 
-  it("manages mentor connections with message, profile, feedback, and removal actions", async () => {
+  it("manages mentor connections with message, profile, and removal actions", async () => {
     mockMatches = [
       mentorMatch,
       {
@@ -472,7 +474,7 @@ describe("ConnectionsScreen", () => {
       },
     ];
 
-    const { getByTestId, findByText } = render(<ConnectionsScreen />);
+    const { getByTestId, findByText, queryByTestId } = render(<ConnectionsScreen />);
 
     fireEvent.press(getByTestId("card-message-Ada Mentee"));
     expect(mockPush).toHaveBeenCalledWith("/messages/conv-1");
@@ -481,17 +483,8 @@ describe("ConnectionsScreen", () => {
     expect(mockPush).toHaveBeenCalledWith("/user/mentee_ada");
 
     fireEvent.press(getByTestId("card-more-Ada Mentee"));
-    fireEvent.press(getByTestId("action-review"));
-    fireEvent.press(getByTestId("submit-feedback"));
-
-    await waitFor(() => {
-      expect(mockSubmitFeedbackMutateAsync).toHaveBeenCalledWith({
-        matchId: "match-1",
-        rating: 5,
-        text: "Great match",
-      });
-    });
-    expect(await findByText("Thank you for your feedback!")).toBeTruthy();
+    expect(queryByTestId("action-review")).toBeNull();
+    expect(mockSubmitFeedbackMutateAsync).not.toHaveBeenCalled();
 
     fireEvent.press(getByTestId("card-more-Ada Mentee"));
     fireEvent.press(getByTestId("action-remove"));

@@ -120,7 +120,7 @@ type ConnectionViewProps = Readonly<{
   onOpenFeedback: (
     matchId: string,
     name: string,
-    myRole: "Mentor" | "Mentee",
+    myRole: "Mentee",
   ) => void;
   onError: (message: string) => void;
   onSuccess: (message: string) => void;
@@ -206,7 +206,6 @@ function MatchJourneyPickerSheet({
 // ---------------------------------------------------------------------------
 
 function MentorConnections({
-  onOpenFeedback,
   onError,
   onSuccess,
 }: ConnectionViewProps) {
@@ -231,16 +230,6 @@ function MentorConnections({
   const respondMutation = useRespondToMentorshipRequestMutation();
   const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
   const { data: conversations = [] } = useConversations();
-
-  // CHECK FEEDBACK FOR SELECTED MENTEE
-  const activeMatchId = managedMentee?.matchIds[0];
-  const matchFeedbackQuery = useMatchFeedbackQuery(activeMatchId);
-  const hasReviewed = useMemo(() => {
-    if (!matchFeedbackQuery.data || !currentUsername) return false;
-    return matchFeedbackQuery.data.some(
-      (feedback: any) => feedback.submitted_by.username === currentUsername,
-    );
-  }, [matchFeedbackQuery.data, currentUsername]);
 
   const requests = requestsQuery.data ?? [];
   const matches = matchesQuery.data ?? [];
@@ -394,14 +383,6 @@ function MentorConnections({
         visible={managedMentee !== null}
         name={managedMentee?.name ?? ""}
         onClose={() => setManagedMentee(null)}
-        isCheckingReview={matchFeedbackQuery.isLoading}
-        hasReviewed={hasReviewed}
-        onLeaveReview={() => {
-          if (activeMatchId && managedMentee) {
-            onOpenFeedback(activeMatchId, managedMentee.name, "Mentor");
-            setManagedMentee(null);
-          }
-        }}
         onViewProfile={() => {
           if (!managedMentee) {
             return;
@@ -874,7 +855,7 @@ export default function ConnectionsScreen() {
   const [feedbackConnection, setFeedbackConnection] = useState<{
     matchId: string;
     userName: string;
-    role: "Mentor" | "Mentee";
+    role: "Mentee";
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);

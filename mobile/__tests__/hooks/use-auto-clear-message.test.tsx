@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Text } from "react-native";
 
 function MessageHarness() {
-  const [message, setMessage] = useState("Saved.");
+  const [message, setMessage] = useState<string | null>("Saved.");
   useAutoClearMessage(message, setMessage, 250);
 
   return <Text>{message ?? "cleared"}</Text>;
