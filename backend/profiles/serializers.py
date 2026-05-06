@@ -699,9 +699,11 @@ class ProfilePostListQueryParamsSerializer(serializers.Serializer):
 class ProfilePostSerializer(serializers.Serializer):
     """Read serializer for profile feed items (PrP, visible MCTE, and visible CoP).
 
-    ``community_id`` and ``community_name`` are populated only for CoP posts.
-    ``community_name`` is fetched live; if the community has been deleted it falls back
-    to the name snapshotted in ``payload`` at creation time.
+    ``community_id``, ``community_name``, and ``tagged_users`` are populated only for
+    CoP posts. ``community_name`` is fetched live; if the community has been deleted it
+    falls back to the name snapshotted in ``payload`` at creation time. ``tagged_users``
+    is a list of ``{user_id, username}`` dicts; usernames are snapshots captured at
+    tag-time and fall back to the stored snapshot if a user was later deleted.
     ``mentorship_partner`` is populated only for MCTE posts and contains the username of
     the mentorship partner (mentor or mentee, depending on the author's role).
     Clients can use ``community_id`` to navigate to ``/api/profiles/tags/{community_id}/`` or link
@@ -720,6 +722,7 @@ class ProfilePostSerializer(serializers.Serializer):
     show_on_profile = serializers.BooleanField(read_only=True)
     community_id = serializers.UUIDField(read_only=True, allow_null=True)
     community_name = serializers.SerializerMethodField()
+    tagged_users = serializers.SerializerMethodField()
     actor_role = serializers.CharField(read_only=True)
     mentorship_partner = serializers.SerializerMethodField()
     author = ProfilePostAuthorSerializer(read_only=True)
@@ -741,6 +744,36 @@ class ProfilePostSerializer(serializers.Serializer):
         # Community was deleted — fall back to snapshot stored at creation time
         payload = obj.payload or {}
         return payload.get("community_name")
+
+    @extend_schema_field(
+        {
+            "type": "array",
+            "nullable": True,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "string", "format": "uuid"},
+                    "username": {"type": "string"},
+                },
+            },
+        }
+    )
+    def get_tagged_users(self, obj: TimelineEvent) -> list[dict[str, str]] | None:
+        """Return tagged users for CoP events.
+
+        Returns a list of ``{user_id, username}`` dicts extracted from the event
+        payload. Usernames are captured as snapshots at tag-time; if a tagged user
+        has since been deleted, the stored snapshot username is returned.
+        Returns ``None`` for non-CoP events.
+        """
+        if obj.category != TimelineEvent.Category.COP:
+            return None
+
+        payload = obj.payload or {}
+        tagged_users_list = payload.get("tagged_users", [])
+        return [
+            {"user_id": tag["user_id"], "username": tag["username"]} for tag in tagged_users_list
+        ]
 
     @extend_schema_field({"type": "string", "nullable": True})
     def get_mentorship_partner(self, obj: TimelineEvent) -> str | None:
@@ -1002,8 +1035,7 @@ class CommunityPostSerializer(serializers.Serializer):
         tagged_users_list = payload.get("tagged_users", [])
 
         return [
-            {"user_id": tag["user_id"], "username": tag["username"]}
-            for tag in tagged_users_list
+            {"user_id": tag["user_id"], "username": tag["username"]} for tag in tagged_users_list
         ]
 
 

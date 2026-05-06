@@ -144,17 +144,13 @@ def validate_tagged_users_list(
     # --- Basic Constraints --------------------------------------------------
 
     if len(tagged_user_ids) > max_tags:
-        raise ValidationError(
-            f"Cannot tag more than {max_tags} users. Got {len(tagged_user_ids)}."
-        )
+        raise ValidationError(f"Cannot tag more than {max_tags} users. Got {len(tagged_user_ids)}.")
 
     if str(author.id) in [str(uid) for uid in tagged_user_ids]:
         raise ValidationError("You cannot tag yourself.")
 
     # Convert to sets of UUIDs for set operations
-    new_tagged_ids = {
-        uuid.UUID(uid) if isinstance(uid, str) else uid for uid in tagged_user_ids
-    }
+    new_tagged_ids = {uuid.UUID(uid) if isinstance(uid, str) else uid for uid in tagged_user_ids}
     prev_tagged_ids = {
         uuid.UUID(uid) if isinstance(uid, str) else uid for uid in previous_tagged_user_ids
     }
@@ -208,9 +204,7 @@ def validate_tagged_users_list(
             user_info = get_tagged_user_info(str(user_id))
             tagged_users_list.append(user_info)
         except Profile.DoesNotExist:
-            raise ValidationError(
-                f"User with ID {user_id} does not exist and cannot be tagged."
-            )
+            raise ValidationError(f"User with ID {user_id} does not exist and cannot be tagged.")
 
     return tagged_users_list
 

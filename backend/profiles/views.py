@@ -277,9 +277,11 @@ class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
             "Supports optional filtering by `category` and `event_type`. "
             "Results are ordered newest-first by action metadata: `created_at`, then "
             "`last_edited` as a tie-breaker. "
-            "For CoP posts, `community_id` and `community_name` are returned; "
+            "For CoP posts, `community_id`, `community_name`, and `tagged_users` are returned; "
             "`community_name` is resolved from the live community and falls back to the "
             "snapshotted payload value if the community has been deleted. "
+            "`tagged_users` is a list of `{user_id, username}` objects; usernames are snapshots "
+            "captured at tag-time and fall back to the stored snapshot if a user was deleted. "
             "For MCTE posts, `mentorship_partner` is resolved from the active mentorship "
             "relation and is `null` for PrP and CoP. Deleting a mentorship cascades to "
             "its timeline events, so deleted mentorship events are not included in this feed."
@@ -1617,7 +1619,9 @@ class CommunityTagPostsListCreateAPIView(ProfileLookupMixin, APIView):
         description=(
             "List community posts for a tag, ordered newest-first. "
             "Authenticated users can view all non-deleted posts. "
-            "Supports filtering by `event_type`. Pagination via `offset` and `limit`."
+            "Supports filtering by `event_type`. Pagination via `offset` and `limit`. "
+            "Each post includes a `tagged_users` array with `user_id` and `username` "
+            "for any users tagged in that post."
         ),
         tags=["Community Tags"],
     )
@@ -1644,7 +1648,16 @@ class CommunityTagPostsListCreateAPIView(ProfileLookupMixin, APIView):
         request=CoPCreateSerializer,
         responses={
             201: CommunityPostSerializer,
-            400: OpenApiResponse(description="Validation error."),
+            400: OpenApiResponse(
+                description=(
+                    "Validation error. Possible causes: "
+                    "(1) invalid `event_type`; "
+                    "(2) `tagged_users` contains more than `COP_MAX_TAGS` (default 5) entries; "
+                    "(3) author attempted to tag themselves; "
+                    "(4) a tagged user ID is not a current mentorship connection "
+                    "or member of this community."
+                )
+            ),
             401: OpenApiResponse(description="Authentication required."),
             403: OpenApiResponse(description="Not a member of this community."),
             404: OpenApiResponse(description="Community tag not found."),
@@ -1653,7 +1666,14 @@ class CommunityTagPostsListCreateAPIView(ProfileLookupMixin, APIView):
             "Create a community post (CoP) in a tag. Requester must be a member. "
             "`show_on_profile` defaults to `false`; set to `true` to also display "
             "this post on the author's profile feed. "
-            "`timestamp` is optional; defaults to creation time."
+            "`timestamp` is optional; defaults to creation time. "
+            "\n\n"
+            "**User Tagging** — optional `tagged_users` field accepts a list of profile UUIDs "
+            "(up to `COP_MAX_TAGS`, currently 5). Only the author's active mentorship connections "
+            "(bidirectional) and members of this community may be tagged. "
+            "The author may not tag themselves. "
+            "The response includes a `tagged_users` array with `user_id` and `username` for "
+            "each tagged user (username captured as a snapshot at creation time)."
         ),
         tags=["Community Tags"],
     )
@@ -1692,7 +1712,8 @@ class CommunityTagPostsListCreateAPIView(ProfileLookupMixin, APIView):
         except InvalidCoPEventTypeError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except ValidationError as exc:
-            return Response({"detail": str(exc.message) if hasattr(exc, "message") else str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            detail = str(exc.message) if hasattr(exc, "message") else str(exc)
+            return Response({"detail": detail}, status=status.HTTP_400_BAD_REQUEST)
 
         event.author = profile
         return Response(CommunityPostSerializer(event).data, status=status.HTTP_201_CREATED)
@@ -1729,13 +1750,35 @@ class CommunityTagPostDetailAPIView(ProfileLookupMixin, APIView):
         request=CoPUpdateSerializer,
         responses={
             200: CommunityPostSerializer,
-            400: OpenApiResponse(description="Validation error."),
+            400: OpenApiResponse(
+                description=(
+                    "Validation error. Possible causes: "
+                    "(1) no editable field provided; "
+                    "(2) invalid `event_type`; "
+                    "(3) `tagged_users` contains more than `COP_MAX_TAGS` (default 5) entries; "
+                    "(4) author attempted to tag themselves; "
+                    "(5) a newly added tagged user is not a current mentorship connection "
+                    "or member of this community."
+                )
+            ),
             401: OpenApiResponse(description="Authentication required."),
             404: OpenApiResponse(description="Post not found."),
         },
         description=(
             "Partially update a community post. Only the original author can edit. "
-            "Editable fields: `content`, `event_type`, `media_url`, `show_on_profile`."
+            "Editable fields: `content`, `event_type`, `media_url`, `show_on_profile`, "
+            "`tagged_users`. "
+            "\n\n"
+            "**Updating Tags** — when `tagged_users` is provided it replaces the current "
+            "tag list subject to the following rules:\n"
+            "- Users newly added to the list must be a current mentorship connection "
+            "(bidirectional) or a current member of this community.\n"
+            "- Previously tagged users who are still included in the new list are accepted "
+            "even if their connection/membership has since lapsed (e.g., mentorship "
+            "deactivated, user left the community).\n"
+            "- Omitting a user from the new list removes their tag. Once removed, an "
+            "untaggable user cannot be re-added.\n"
+            "- Omitting `tagged_users` entirely leaves existing tags unchanged."
         ),
         tags=["Community Tags"],
     )
@@ -1763,7 +1806,8 @@ class CommunityTagPostDetailAPIView(ProfileLookupMixin, APIView):
         except InvalidCoPEventTypeError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except ValidationError as exc:
-            return Response({"detail": str(exc.message) if hasattr(exc, "message") else str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            detail = str(exc.message) if hasattr(exc, "message") else str(exc)
+            return Response({"detail": detail}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(CommunityPostSerializer(updated_event).data, status=status.HTTP_200_OK)
 
