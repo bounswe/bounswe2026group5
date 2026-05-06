@@ -20,6 +20,7 @@ from .models import AvailabilitySlot, CommunityTag, Profile, Skill
 User = get_user_model()
 
 
+@extend_schema_field(OpenApiTypes.OBJECT)
 def resolve_picture_url(profile: Profile) -> str:
     """Return the best available picture URL for a profile.
 
