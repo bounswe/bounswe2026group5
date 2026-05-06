@@ -15,7 +15,7 @@ export function UnauthorizedFooter() {
 
 
                 {/* Links */}
-                <nav className="flex items-center gap-5">
+                <nav aria-label="Footer navigation" className="flex items-center gap-5">
                     {FOOTER_LINKS.map(({ to, label }) => (
                         <NavLink
                             key={to}

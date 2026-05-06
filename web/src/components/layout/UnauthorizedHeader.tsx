@@ -14,7 +14,7 @@ export function UnauthorizedHeader() {
 
 
                 {/* Nav */}
-                <nav className="hidden sm:flex items-center gap-6">
+                <nav aria-label="Main navigation" className="hidden sm:flex items-center gap-6">
                     {NAV_LINKS.map(({ to, label }) => (
                         <NavLink
                             key={to}
