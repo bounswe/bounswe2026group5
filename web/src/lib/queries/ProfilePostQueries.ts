@@ -28,6 +28,7 @@ export interface ProfilePost {
     mentorship_partner: string | null
     community_id: string | null
     community_name: string | null
+    community_slug: string | null
     tagged_users: { user_id: string; username: string }[] | null
     author: ProfilePostAuthor
 }

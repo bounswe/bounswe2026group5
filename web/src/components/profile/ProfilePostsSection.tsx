@@ -205,7 +205,19 @@ function ProfilePostCard({
                 )}
                 {post.category === 'CoP' && post.community_name && (
                     <Muted className="text-xs">
-                        In {post.community_name} community
+                        In{' '}
+                        {post.community_slug ? (
+                            <Link
+                                to="/communities/$communitySlug"
+                                params={{ communitySlug: post.community_slug }}
+                                className="text-accent hover:underline"
+                            >
+                                {post.community_name}
+                            </Link>
+                        ) : (
+                            post.community_name
+                        )}{' '}
+                        community
                         {post.tagged_users && post.tagged_users.length > 0 && (
                             <>, with{' '}
                                 {post.tagged_users.map((u, i) => (

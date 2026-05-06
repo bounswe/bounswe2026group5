@@ -70,6 +70,7 @@ export interface CommunityPost {
     last_edited: string | null
     show_on_profile: boolean
     community_id: string
+    community_slug: string
     author: CommunityPostAuthor
     tagged_users: { user_id: string; username: string }[]
 }
@@ -212,7 +213,7 @@ export async function leaveCommunity(communityId: string): Promise<CommunityMemb
     return res.json()
 }
 
-async function fetchTaggableUsers(communityId: string): Promise<TaggableUser[]> {
+async function fetchTaggableUsers(communityId: string): Promise<{ count: number; results: TaggableUser[] }> {
     const res = await fetch(
         `${API_BASE_URL}/profiles/tags/${communityId}/taggable-users/`,
         { headers: authHeaders() },
@@ -339,6 +340,7 @@ export const taggableUsersQueryOptions = (communityId: string) =>
         queryFn: () => fetchTaggableUsers(communityId),
         enabled: Boolean(communityId),
         staleTime: 60_000,
+        select: (data) => data.results,
     })
 
 export const communityPostsQueryOptions = (communityId: string) =>

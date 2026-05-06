@@ -273,7 +273,7 @@ function TaggableUsersList({
 // ---------------------------------------------------------------------------
 
 function CreatePostDialog({
-    communitySlug,
+    communityId,
     open,
     onOpenChange,
 }: {
@@ -349,7 +349,7 @@ function CreatePostDialog({
                     <div className="flex flex-col gap-1.5">
                         <Label>Tag people <span className="text-ink-soft text-xs">(max 5)</span></Label>
                         <TaggableUsersList
-                            communitySlug={communitySlug}
+                            communityId={communityId}
                             selected={form.tagged_users ?? []}
                             onChange={(usernames) => setForm((f) => ({ ...f, tagged_users: usernames }))}
                         />
@@ -395,7 +395,7 @@ function CreatePostDialog({
 // ---------------------------------------------------------------------------
 
 function EditPostDialog({
-    communitySlug,
+    communityId,
     post,
     open,
     onOpenChange,
@@ -471,7 +471,7 @@ function EditPostDialog({
                     <div className="flex flex-col gap-1.5">
                         <Label>Tag people <span className="text-ink-soft text-xs">(max 5)</span></Label>
                         <TaggableUsersList
-                            communitySlug={communitySlug}
+                            communityId={communityId}
                             selected={form.tagged_users ?? []}
                             onChange={(usernames) => setForm((f) => ({ ...f, tagged_users: usernames }))}
                         />
@@ -517,7 +517,7 @@ function EditPostDialog({
 // ---------------------------------------------------------------------------
 
 function DeletePostDialog({
-    communitySlug,
+    communityId,
     post,
     open,
     onOpenChange,
@@ -595,7 +595,7 @@ export function CommunityDetailPage() {
         communityMembersQueryOptions(communitySlug, membersPage, MEMBERS_PAGE_SIZE),
     )
     const { data: postsData, isLoading: postsLoading } = useCommunityPosts(
-        community?.is_member ? communitySlug : '',
+        community?.is_member ? community.id : '',
     )
 
     const joinMutation = useJoinCommunityMutation()
@@ -882,13 +882,13 @@ export function CommunityDetailPage() {
                 updateMutation={updateMutation}
             />
             <CreatePostDialog
-                communitySlug={communitySlug}
+                communityId={community.id}
                 open={createOpen}
                 onOpenChange={setCreateOpen}
             />
             {editPost && (
                 <EditPostDialog
-                    communitySlug={communitySlug}
+                    communityId={community.id}
                     post={editPost}
                     open={!!editPost}
                     onOpenChange={(open) => { if (!open) setEditPost(null) }}
@@ -896,7 +896,7 @@ export function CommunityDetailPage() {
             )}
             {deletePost && (
                 <DeletePostDialog
-                    communitySlug={communitySlug}
+                    communityId={community.id}
                     post={deletePost}
                     open={!!deletePost}
                     onOpenChange={(open) => { if (!open) setDeletePost(null) }}
