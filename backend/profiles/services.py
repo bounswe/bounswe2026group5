@@ -138,7 +138,11 @@ def list_profile_feed_events(
             | Q(category=TimelineEvent.Category.MCTE, show_on_profile=True)
             | Q(category=TimelineEvent.Category.COP, show_on_profile=True)
         )
-        .select_related("author")
+        .select_related(
+            "author",
+            "mentorship__mentor",
+            "mentorship__mentee",
+        )
         .annotate(effective_last_update=Coalesce("last_edited", "created_at"))
         .order_by("-created_at", "-effective_last_update", "-source_id")
     )
@@ -311,6 +315,7 @@ def create_cop_event(
         media_url=media_url,
         show_on_profile=show_on_profile,
         timestamp=timestamp if timestamp is not None else timezone.now(),
+        payload={"community_name": community_tag.name},
     )
 
     if timestamp is None:

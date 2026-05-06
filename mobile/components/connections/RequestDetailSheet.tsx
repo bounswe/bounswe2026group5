@@ -10,6 +10,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { PendingRequestCardProps } from "./PendingRequestCard";
 
 interface RequestDetailSheetProps {
@@ -20,6 +21,11 @@ interface RequestDetailSheetProps {
   onDecline?: (id: string) => void;
   onShowProfile?: (username?: string) => void;
   disabled?: boolean;
+  acceptanceWarning?: {
+    title: string;
+    message: string;
+    confirmLabel: string;
+  };
 }
 
 export function RequestDetailSheet({
@@ -30,6 +36,7 @@ export function RequestDetailSheet({
   onDecline,
   onShowProfile,
   disabled,
+  acceptanceWarning,
 }: Readonly<RequestDetailSheetProps>) {
   if (!request) return null;
 
@@ -210,6 +217,16 @@ export function RequestDetailSheet({
 
           {/* Footer Actions */}
           <View className="border-t border-divider px-6 pt-4 pb-8">
+            {isIncoming && acceptanceWarning ? (
+              <View className="mb-3">
+                <ErrorBanner
+                  variant="warning"
+                  title={acceptanceWarning.title}
+                  message={acceptanceWarning.message}
+                />
+              </View>
+            ) : null}
+
             {isIncoming ? (
               <View className="flex-row gap-3">
                 <TouchableOpacity
@@ -235,7 +252,7 @@ export function RequestDetailSheet({
                 >
                   <Ionicons name="checkmark-circle" size={16} color="#ffffff" />
                   <Text className="font-bold text-white text-sm">
-                    Accept Request
+                    {acceptanceWarning?.confirmLabel ?? "Accept Request"}
                   </Text>
                 </TouchableOpacity>
               </View>

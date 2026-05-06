@@ -11,6 +11,8 @@ const mockDetailRefetch = jest.fn();
 const mockDetailQuery = jest.fn();
 const mockJoinMutation = jest.fn();
 const mockLeaveMutation = jest.fn();
+const mockCommunityPostsQuery = jest.fn();
+const mockCreateCommunityPostMutation = jest.fn();
 let focusCleanup: (() => void) | undefined;
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
@@ -41,8 +43,17 @@ jest.mock("@/lib/auth/store", () => ({
 
 jest.mock("@/lib/queries/communityTags", () => ({
   useCommunityTagDetailQuery: (tagId?: string) => mockDetailQuery(tagId),
-  useJoinCommunityTagMutation: (username?: string) => mockJoinMutation(username),
-  useLeaveCommunityTagMutation: (username?: string) => mockLeaveMutation(username),
+  useJoinCommunityTagMutation: (username?: string) =>
+    mockJoinMutation(username),
+  useLeaveCommunityTagMutation: (username?: string) =>
+    mockLeaveMutation(username),
+}));
+
+jest.mock("@/lib/queries/communityPosts", () => ({
+  useCommunityPostsQuery: (...args: unknown[]) =>
+    mockCommunityPostsQuery(...args),
+  useCreateCommunityPostMutation: (username?: string) =>
+    mockCreateCommunityPostMutation(username),
 }));
 
 describe("CommunityDetailScreen", () => {
@@ -87,6 +98,14 @@ describe("CommunityDetailScreen", () => {
     });
     mockLeaveMutation.mockReturnValue({
       mutateAsync: leaveMutateAsync,
+      isPending: false,
+    });
+    mockCommunityPostsQuery.mockReturnValue({
+      data: undefined,
+      isFetching: false,
+    });
+    mockCreateCommunityPostMutation.mockReturnValue({
+      mutateAsync: jest.fn(),
       isPending: false,
     });
   });
@@ -199,7 +218,9 @@ describe("CommunityDetailScreen", () => {
 
     fireEvent.press(getByTestId("community-membership-button"));
 
-    expect(await findByText("You are already a member of this tag.")).toBeTruthy();
+    expect(
+      await findByText("You are already a member of this tag."),
+    ).toBeTruthy();
     expect(mockDetailRefetch).not.toHaveBeenCalled();
   });
 

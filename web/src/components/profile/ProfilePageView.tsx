@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Body, Heading, Muted } from '@/components/Typography'
 import { Star, Sparkles, Pencil, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react'
 import { EditProfileModal } from '#/components/profile/EditProfileModal.tsx'
+import { ProfilePostsSection } from '#/components/profile/ProfilePostsSection.tsx'
 import { useState } from 'react'
 import { getInitials } from '#/lib/utils.ts'
 import { AvailabilityCalendar } from "#/components/profile/AvailabilityCalendar.tsx";
@@ -241,6 +242,9 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
               </div>
             </div>
           </section>
+          {isAuthenticatedViewer && (
+              <ProfilePostsSection username={profile.username} isOwner={isOwner} />
+          )}
           {editModal}
         </main>
     )
@@ -340,6 +344,9 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                 )}
 
             </section>
+            {isAuthenticatedViewer && (
+                <ProfilePostsSection username={profile.username} isOwner={isOwner} />
+            )}
             {editModal}
         </main>
     )

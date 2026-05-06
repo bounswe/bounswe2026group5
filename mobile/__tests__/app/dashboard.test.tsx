@@ -9,9 +9,11 @@ const mockResendMutateAsync = jest.fn();
 const mockRespondMutateAsync = jest.fn();
 const mockCancelMutateAsync = jest.fn();
 const mockRescheduleMutateAsync = jest.fn();
+const mockToastSuccess = jest.fn();
 let mockIsEmailVerified: boolean | undefined = true;
 let mockMappedRequests: any[] = [];
 let mockMappedSessions: any[] = [];
+let mockMatches: any[] = [];
 let mockRequestsIsError = false;
 let mockSessionsIsError = false;
 
@@ -185,6 +187,12 @@ jest.mock("@/components/dashboard/SessionCard", () => ({
   },
 }));
 
+jest.mock("@/components/ui/ToastProvider", () => ({
+  useToast: () => ({
+    success: mockToastSuccess,
+  }),
+}));
+
 jest.mock("@/lib/auth/store", () => ({
   useAuthStore: (selector: (state: any) => unknown) =>
     selector({
@@ -216,6 +224,11 @@ jest.mock("@/lib/queries/mentorship", () => {
       isError: mockRequestsIsError,
       refetch: mockRequestsRefetch,
     }),
+    useMentorshipMatchesQuery: () => ({
+      data: mockMatches,
+      isLoading: false,
+      isError: false,
+    }),
     useMentorshipMeetingSessionsQuery: () => ({
       data: mockMappedSessions,
       isError: mockSessionsIsError,
@@ -246,6 +259,7 @@ describe("DashboardScreen session navigation", () => {
     mockIsEmailVerified = true;
     mockMappedRequests = [];
     mockMappedSessions = [defaultSession];
+    mockMatches = [];
     mockRequestsIsError = false;
     mockSessionsIsError = false;
     mockResendMutateAsync.mockResolvedValue({
@@ -355,7 +369,7 @@ describe("DashboardScreen session navigation", () => {
   });
 
   it("cancels selected sessions", async () => {
-    const { getByTestId, findByText } = render(<DashboardScreen />);
+    const { getByTestId, queryByText } = render(<DashboardScreen />);
 
     fireEvent.press(getByTestId("session-card-Ada Lovelace"));
     fireEvent.press(getByTestId("cancel-session"));
@@ -363,7 +377,8 @@ describe("DashboardScreen session navigation", () => {
     await waitFor(() => {
       expect(mockCancelMutateAsync).toHaveBeenCalledWith("session-1");
     });
-    expect(await findByText("The session was cancelled.")).toBeTruthy();
+    expect(mockToastSuccess).toHaveBeenCalledWith("The session was cancelled.");
+    expect(queryByText("The session was cancelled.")).toBeNull();
   });
 
   it("shows cancellation errors", async () => {
@@ -377,7 +392,7 @@ describe("DashboardScreen session navigation", () => {
   });
 
   it("reschedules selected mentee sessions", async () => {
-    const { getByTestId, findByText } = render(<DashboardScreen />);
+    const { getByTestId, queryByText } = render(<DashboardScreen />);
 
     fireEvent.press(getByTestId("session-card-Ada Lovelace"));
     fireEvent.press(getByTestId("reschedule-session"));
@@ -387,9 +402,11 @@ describe("DashboardScreen session navigation", () => {
       expect(mockRescheduleMutateAsync).toHaveBeenCalledWith({
         sessionId: "session-1",
         newSlotId: "slot-2",
+        mentorUsername: "mentor_ada",
       });
     });
-    expect(await findByText("Your session was updated.")).toBeTruthy();
+    expect(mockToastSuccess).toHaveBeenCalledWith("Your session was updated.");
+    expect(queryByText("Your session was updated.")).toBeNull();
   });
 
   it("blocks rescheduling when the selected user is not a mentee", async () => {

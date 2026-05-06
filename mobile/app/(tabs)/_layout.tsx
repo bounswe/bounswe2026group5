@@ -16,8 +16,16 @@ const renderDiscoverIcon = ({ color }: { color: string }) => (
 
 const renderCommunityIcon = ({ color }: { color: string }) => (
   <IconSymbol
+    size={30}
+    name="person.3.fill"
+    color={color}
+  />
+);
+
+const renderConnectionsIcon = ({ color }: { color: string }) => (
+  <IconSymbol
     size={28}
-    name="bubble.left.and.bubble.right.fill"
+    name="point.3.connected.trianglepath.dotted"
     color={color}
   />
 );
@@ -49,9 +57,15 @@ export default function TabLayout() {
         name="connections"
         options={{
           title: "Connections",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="person.2.fill" color={color} />
-          ),
+          tabBarIcon: renderConnectionsIcon,
+        }}
+      />
+
+      <Tabs.Screen
+        name="connections/timeline/[matchId]"
+        options={{
+          href: null,
+          headerShown: false,
         }}
       />
 
@@ -96,7 +110,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="profile"
+        name="profile/index"
         options={{
           title: "Profile",
           headerShown: false,
@@ -105,7 +119,23 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="user/[username]"
+        name="profile/posts"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="user/[username]/index"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="user/[username]/posts"
         options={{
           href: null,
           headerShown: false,

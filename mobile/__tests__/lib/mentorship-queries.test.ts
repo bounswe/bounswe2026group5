@@ -1,4 +1,5 @@
 import {
+  mapJourneyFeedToTimelineEvents,
   mapAvailabilityToSchedule,
   mapMeetingSessionsToDashboard,
   mapRequestsToDashboard,
@@ -23,6 +24,81 @@ function addDays(value: Date, days: number): string {
 }
 
 describe("mentorship query mappers", () => {
+  it("normalizes legacy AGTE journey rows into timeline events", () => {
+    const mapped = mapJourneyFeedToTimelineEvents({
+      ordering: "desc",
+      count: 1,
+      offset: 0,
+      limit: 50,
+      results: [
+        {
+          id: "session_scheduled:session-1",
+          type: "session_scheduled",
+          timestamp: "2026-05-02T10:00:00Z",
+          actor_role: "mentor",
+          payload: {
+            session_id: "session-1",
+          },
+        },
+      ],
+    });
+
+    expect(mapped.results).toEqual([
+      {
+        id: "session_scheduled:session-1",
+        category: "AGTE",
+        event_type: "session_scheduled",
+        timestamp: "2026-05-02T10:00:00Z",
+        actor_role: "mentor",
+        author: null,
+        content: undefined,
+        media_url: null,
+        payload: {
+          session_id: "session-1",
+        },
+        show_on_profile: false,
+        is_editable: false,
+      },
+    ]);
+  });
+
+  it("preserves unified manually created timeline event fields", () => {
+    const mapped = mapJourneyFeedToTimelineEvents({
+      ordering: "desc",
+      count: 1,
+      offset: 0,
+      limit: 50,
+      results: [
+        {
+          id: "event-1",
+          category: "MCTE",
+          event_type: "achievement",
+          timestamp: "2026-05-02T11:00:00Z",
+          author: {
+            id: "profile-1",
+            username: "mentor_user",
+            display_name: "Mentor User",
+            picture_url: "",
+            title: "Mentor",
+          },
+          content: "Finished the first roadmap item.",
+          payload: {},
+          show_on_profile: true,
+          is_editable: true,
+        },
+      ],
+    });
+
+    expect(mapped.results[0]).toMatchObject({
+      id: "event-1",
+      category: "MCTE",
+      event_type: "achievement",
+      content: "Finished the first roadmap item.",
+      show_on_profile: true,
+      is_editable: true,
+    });
+  });
+
   it("maps pending requests into incoming and outgoing dashboard cards", () => {
     const requests: BackendRequestItem[] = [
       {

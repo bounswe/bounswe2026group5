@@ -35,6 +35,7 @@ class ConversationListAPIView(APIView):
             401: OpenApiResponse(description="Authentication required."),
         },
         description="List all private conversations where the authenticated user is a participant.",
+        operation_id="messages_conversations_list",
         tags=["Messages"],
     )
     def get(self, request: Request) -> Response:
@@ -73,6 +74,7 @@ class ConversationDetailAPIView(APIView):
             "List messages in a private conversation."
             "Supports pagination via `page` and `pageSize` query params."
         ),
+        operation_id="messages_conversations_retrieve",
         tags=["Messages"],
         operation_id="messages_conversation_messages_list",
     )
