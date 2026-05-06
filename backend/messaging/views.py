@@ -74,7 +74,6 @@ class ConversationDetailAPIView(APIView):
             "List messages in a private conversation."
             "Supports pagination via `page` and `pageSize` query params."
         ),
-        operation_id="messages_conversations_retrieve",
         tags=["Messages"],
         operation_id="messages_conversation_messages_list",
     )

@@ -1414,6 +1414,23 @@ class IsEmailVerifiedPermissionTests(TestCase):
         request.user = user  # type: ignore[attr-defined]
         self.assertTrue(self.permission.has_permission(request, Mock()))
 
+    @override_settings(REQUIRE_EMAIL_VERIFICATION=False)
+    def test_allows_unverified_user_when_flag_disabled(self) -> None:
+        """Bypass flag lets unverified users through so devs can test gated flows."""
+        user = User.objects.create_user(email="bypass@example.com", password="P!aaabbbb")
+        user.is_email_verified = False
+        user.save(update_fields=["is_email_verified"])
+        request = self.factory.get("/")
+        request.user = user  # type: ignore[attr-defined]
+        self.assertTrue(self.permission.has_permission(request, Mock()))
+
+    @override_settings(REQUIRE_EMAIL_VERIFICATION=False)
+    def test_still_denies_anonymous_when_flag_disabled(self) -> None:
+        """Bypass flag must not weaken authentication; anonymous is still rejected."""
+        request = self.factory.get("/")
+        request.user = AnonymousUser()  # type: ignore[attr-defined]
+        self.assertFalse(self.permission.has_permission(request, Mock()))
+
 
 # ---------------------------------------------------------------------------
 # OAuth2 Login Tests

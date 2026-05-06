@@ -66,9 +66,16 @@ export function ProfileHeader({
         <View className="w-24 h-24 bg-surface-card dark:bg-surface-card-dark rounded-full p-1 shadow-sm border border-divider dark:border-divider-dark">
           <View className="w-full h-full bg-surface dark:bg-surface-dark rounded-full items-center justify-center overflow-hidden">
             {imageUrl ? (
-              <Image source={{ uri: imageUrl }} className="w-full h-full" />
+              <Image
+                testID="profile-avatar-image"
+                source={{ uri: imageUrl }}
+                className="w-full h-full"
+              />
             ) : (
-              <Text className="text-3xl font-bold text-on-surface-soft dark:text-on-surface-soft-dark">
+              <Text
+                testID="profile-avatar-fallback"
+                className="text-3xl font-bold text-on-surface-soft dark:text-on-surface-soft-dark"
+              >
                 {name.charAt(0)}
               </Text>
             )}
@@ -88,6 +95,7 @@ export function ProfileHeader({
 
           {onEdit ? (
             <Pressable
+              testID="profile-edit-button"
               className="h-8 w-8 items-center justify-center bg-surface dark:bg-surface-dark rounded-lg border border-divider dark:border-divider-dark"
               onPress={onEdit}
             >

@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiGet, apiPost } from "@/lib/api/client";
+import { apiGet, apiPostMultipart } from "@/lib/api/client";
+import { appendUploadFile, type LocalUploadFile } from "@/lib/queries/uploads";
 
 export interface ProfileSummary {
   id: string;
@@ -27,6 +28,11 @@ export interface Message {
   created_at: string;
 }
 
+export interface SendMessageInput {
+  body?: string;
+  attachment?: LocalUploadFile | null;
+}
+
 export function useConversations() {
   return useQuery({
     queryKey: ["messaging", "conversations"],
@@ -51,9 +57,19 @@ export function useMessages(conversationId: string) {
 
 export function useSendMessage(conversationId: string) {
   return useMutation({
-    mutationFn: (body: string) =>
-      apiPost<Message>(`/api/messages/conversations/${conversationId}/`, {
-        body,
-      }),
+    mutationFn: async ({ body = "", attachment = null }: SendMessageInput) => {
+      const formData = new FormData();
+      if (body) {
+        formData.append("body", body);
+      }
+      if (attachment) {
+        await appendUploadFile(formData, "attachment", attachment);
+      }
+
+      return apiPostMultipart<Message>(
+        `/api/messages/conversations/${conversationId}/`,
+        formData,
+      );
+    },
   });
 }

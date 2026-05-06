@@ -1,6 +1,8 @@
 import React from "react";
-import { View, Text, Image, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 export interface MentorCardProps {
   id: string;
@@ -28,15 +30,13 @@ export function MentorCard({
         onPress={onPress}
         className="flex-row gap-4 items-center"
       >
-        {avatarUrl ? (
-          <Image source={{ uri: avatarUrl }} className="w-15 h-15 rounded-lg" />
-        ) : (
-          <View className="w-15 h-15 rounded-lg bg-surface-active items-center justify-center">
-            <Text className="text-[22px] font-bold text-primary">
-              {name.charAt(0)}
-            </Text>
-          </View>
-        )}
+        <UserAvatar
+          imageUrl={avatarUrl}
+          name={name}
+          shape="rounded"
+          size="md"
+          testIDPrefix="mentor-avatar"
+        />
 
         <View className="flex-1">
           <Text className="text-base font-bold text-on-surface">{name}</Text>

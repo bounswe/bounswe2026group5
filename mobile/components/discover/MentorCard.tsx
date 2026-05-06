@@ -1,20 +1,12 @@
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { type DiscoverMentorProfile } from "@/lib/discover/types";
 
 interface MentorCardProps {
   profile: DiscoverMentorProfile;
   onPress?: (profile: DiscoverMentorProfile) => void;
-}
-
-function getInitials(name: string): string {
-  const parts = name.split(" ").filter(Boolean);
-  const initials = parts
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-  return initials.slice(0, 2) || "?";
 }
 
 export function MentorCard({ profile, onPress }: Readonly<MentorCardProps>) {
@@ -25,10 +17,13 @@ export function MentorCard({ profile, onPress }: Readonly<MentorCardProps>) {
       className="bg-surface-card dark:bg-surface-card-dark border border-divider dark:border-divider-dark rounded-2xl p-4 mb-3"
     >
       <View className="flex-row items-center mb-3">
-        <View className="w-12 h-12 rounded-full bg-surface-active dark:bg-surface-active-dark items-center justify-center mr-3">
-          <Text className="text-primary dark:text-primary-dim font-bold">
-            {getInitials(profile.full_name)}
-          </Text>
+        <View className="mr-3">
+          <UserAvatar
+            imageUrl={profile.picture_url}
+            name={profile.full_name}
+            size="sm"
+            testIDPrefix={`discover-avatar-${profile.username}`}
+          />
         </View>
         <View className="flex-1">
           <Text

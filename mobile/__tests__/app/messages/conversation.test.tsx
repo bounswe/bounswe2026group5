@@ -1,10 +1,13 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
+import ConversationScreen from "@/app/messages/[conversation_id]";
 
 const mockBack = jest.fn();
 const mockMutateAsync = jest.fn();
 const mockSubmitReportMutateAsync = jest.fn();
 const mockInvalidateQueries = jest.fn();
+const mockPickMessageImageFile = jest.fn();
+const mockPickMessagePdfFile = jest.fn();
 
 let mockConversationId = "conv-1";
 let mockMessagesLoading = false;
@@ -65,7 +68,10 @@ jest.mock("@/lib/queries/reporting", () => ({
   }),
 }));
 
-import ConversationScreen from "@/app/messages/[conversation_id]";
+jest.mock("@/lib/uploads/picker", () => ({
+  pickMessageImageFile: () => mockPickMessageImageFile(),
+  pickMessagePdfFile: () => mockPickMessagePdfFile(),
+}));
 
 function renderScreen() {
   return render(<ConversationScreen />);
@@ -119,6 +125,8 @@ describe("ConversationScreen — message input", () => {
     mockMutateAsync.mockReset();
     mockSubmitReportMutateAsync.mockReset();
     mockInvalidateQueries.mockClear();
+    mockPickMessageImageFile.mockReset();
+    mockPickMessagePdfFile.mockReset();
   });
 
   it("renders message input", () => {
@@ -143,7 +151,10 @@ describe("ConversationScreen — message input", () => {
     fireEvent.changeText(getByTestId("message-input"), "  Hello!  ");
     fireEvent.press(getByTestId("send-button"));
     await waitFor(() => {
-      expect(mockMutateAsync).toHaveBeenCalledWith("Hello!");
+      expect(mockMutateAsync).toHaveBeenCalledWith({
+        body: "Hello!",
+        attachment: null,
+      });
     });
   });
 
@@ -161,6 +172,55 @@ describe("ConversationScreen — message input", () => {
     const { getByTestId } = renderScreen();
     fireEvent.press(getByTestId("send-button"));
     expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("opens attachment options and sends a selected image without text", async () => {
+    const image = {
+      uri: "file:///tmp/photo.jpg",
+      name: "photo.jpg",
+      type: "image/jpeg",
+    };
+    mockPickMessageImageFile.mockResolvedValueOnce(image);
+    mockMutateAsync.mockResolvedValueOnce(undefined);
+
+    const { getByTestId, getByText } = renderScreen();
+
+    fireEvent.press(getByTestId("attachment-plus-button"));
+    fireEvent.press(getByTestId("attach-image-button"));
+
+    await waitFor(() => {
+      expect(getByText("photo.jpg")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("send-button"));
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenCalledWith({
+        body: "",
+        attachment: image,
+      });
+    });
+  });
+
+  it("selects and removes a PDF attachment", async () => {
+    const pdf = {
+      uri: "file:///tmp/report.pdf",
+      name: "report.pdf",
+      type: "application/pdf",
+    };
+    mockPickMessagePdfFile.mockResolvedValueOnce(pdf);
+
+    const { getByTestId, getByText, queryByText } = renderScreen();
+
+    fireEvent.press(getByTestId("attachment-plus-button"));
+    fireEvent.press(getByTestId("attach-pdf-button"));
+
+    await waitFor(() => {
+      expect(getByText("report.pdf")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("selected-attachment-remove"));
+    expect(queryByText("report.pdf")).toBeNull();
   });
 
   it("restores text if send fails", async () => {
@@ -262,7 +322,7 @@ describe("ConversationScreen — message list", () => {
     expect(getByText("Today")).toBeTruthy();
     expect(getByText("Yesterday hello")).toBeTruthy();
     expect(getByText("Today reply")).toBeTruthy();
-    expect(getByText("Attachment")).toBeTruthy();
+    expect(getByText("file.pdf")).toBeTruthy();
     expect(getByPlaceholderText("Message Ada…")).toBeTruthy();
   });
 

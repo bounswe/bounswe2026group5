@@ -9,7 +9,8 @@ import { AvailabilityPreview } from "@/components/profile/AvailabilityPreview";
 import { EditAvailabilityModal } from "@/components/profile/EditAvailabilityModal";
 import {
   EditProfileModal,
-  UserProfileData,
+  type SaveProfileData,
+  type UserProfileData,
 } from "@/components/profile/EditProfileModal";
 import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
@@ -40,6 +41,10 @@ import {
   useProfileReviewsQuery,
   useUpdateOwnProfileMutation,
 } from "@/lib/queries/profile";
+import {
+  deleteProfilePicture,
+  uploadProfilePicture,
+} from "@/lib/queries/uploads";
 
 const PROFILE_DEFAULTS = {
   skills: [] as string[],
@@ -301,6 +306,7 @@ export default function ProfileScreen() {
   const [userData, setUserData] = useState<UserProfileData>({
     name: authUser?.username ?? "User",
     bio: "",
+    pictureUrl: "",
   });
 
   useEffect(() => {
@@ -363,6 +369,7 @@ export default function ProfileScreen() {
           ...prev,
           name: payload.full_name || prev.name,
           bio: payload.bio || "",
+          pictureUrl: payload.picture_url || "",
         }));
 
         setIsProfileHidden(Boolean(payload.hidden));
@@ -506,29 +513,45 @@ export default function ProfileScreen() {
     });
   };
 
-  const handleSaveProfileHeader = async (updatedData: UserProfileData) => {
+  const handleSaveProfileHeader = async (updatedData: SaveProfileData) => {
     if (!currentUsername) {
       setUserData(updatedData);
-      return;
+      return true;
     }
 
     try {
       setPageError(null);
+      let pictureUrl = userData.pictureUrl ?? "";
       const response = await updateProfileMutation.mutateAsync({
         username: currentUsername,
         display_name: updatedData.name,
         bio: updatedData.bio,
+        ...(updatedData.removePicture ? { picture_url: "" } : {}),
       });
+
+      if (updatedData.pictureFile) {
+        const pictureResponse = await uploadProfilePicture(
+          updatedData.pictureFile,
+        );
+        pictureUrl = pictureResponse.picture_url;
+      } else if (updatedData.removePicture) {
+        const pictureResponse = await deleteProfilePicture();
+        pictureUrl = pictureResponse.picture_url;
+      }
+
       setUserData({
         name: response.display_name || updatedData.name,
         bio: response.bio || updatedData.bio,
+        pictureUrl,
       });
+      return true;
     } catch (error) {
       setPageError(
         error instanceof Error
           ? error.message
           : "Could not update profile details.",
       );
+      return false;
     }
   };
 
@@ -619,6 +642,7 @@ export default function ProfileScreen() {
           showStats={isMentorMode}
           showRating={isMentorMode}
           showMenteesHelped={isMentorMode}
+          imageUrl={userData.pictureUrl || undefined}
           onEdit={() => setEditProfileModalOpen(true)}
         />
 
@@ -705,10 +729,7 @@ export default function ProfileScreen() {
         visible={isEditProfileModalOpen}
         onClose={() => setEditProfileModalOpen(false)}
         initialData={userData}
-        onSave={(updatedData) => {
-          void handleSaveProfileHeader(updatedData);
-          setEditProfileModalOpen(false);
-        }}
+        onSave={handleSaveProfileHeader}
       />
       <ProfilePostComposer
         visible={isPostComposerOpen}
