@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ReportSheet } from "@/components/report/ReportSheet";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   useConversations,
@@ -24,6 +25,7 @@ import {
   useSendMessage,
   type Message,
 } from "@/lib/queries/MessagingQueries";
+import { useSubmitReportMutation } from "@/lib/queries/reporting";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -138,10 +140,25 @@ function DateSeparator({ dateStr }: { dateStr: string }) {
   );
 }
 
-function MessageBubble({ message, isMe }: { message: Message; isMe: boolean }) {
+function MessageBubble({
+  message,
+  isMe,
+  onLongPress,
+}: {
+  message: Message;
+  isMe: boolean;
+  onLongPress?: () => void;
+}) {
   return (
     <View className={`w-full mb-1 ${isMe ? "items-end" : "items-start"}`}>
-      <View style={{ maxWidth: "80%" }}>
+      <TouchableOpacity
+        testID={`message-bubble-${message.id}`}
+        activeOpacity={0.85}
+        disabled={!onLongPress}
+        onLongPress={onLongPress}
+        delayLongPress={350}
+        style={{ maxWidth: "80%" }}
+      >
         <View
           className={`rounded-2xl px-4 py-3 ${
             isMe ? "bg-primary rounded-br-sm" : "bg-surface-input rounded-bl-sm"
@@ -178,7 +195,7 @@ function MessageBubble({ message, isMe }: { message: Message; isMe: boolean }) {
         >
           {formatTime(message.created_at)}
         </Text>
-      </View>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -225,7 +242,10 @@ export default function ConversationScreen() {
   } = useMessages(conversation_id ?? "");
 
   const sendMessage = useSendMessage(conversation_id ?? "");
+  const submitReportMutation = useSubmitReportMutation();
   const [text, setText] = useState("");
+  const [messageToReport, setMessageToReport] = useState<Message | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
   const flatListRef = useRef<FlatList<ListItem>>(null);
   const isNearBottomRef = useRef(true);
   const hasInitialScrollDoneRef = useRef(false);
@@ -300,6 +320,38 @@ export default function ConversationScreen() {
     }
   }, [text, sendMessage, queryClient, conversation_id]);
 
+  const handleSubmitReport = useCallback(
+    async ({
+      reason,
+      description,
+    }: {
+      reason: "SPAM" | "HARASSMENT" | "INAPPROPRIATE_CONTENT" | "OTHER";
+      description: string;
+    }) => {
+      if (!messageToReport) {
+        return;
+      }
+
+      setReportError(null);
+      try {
+        await submitReportMutation.mutateAsync({
+          reported_username: messageToReport.sender.username,
+          related_message_id: messageToReport.id,
+          reason,
+          description,
+        });
+        setMessageToReport(null);
+      } catch (reportSubmitError) {
+        setReportError(
+          reportSubmitError instanceof Error
+            ? reportSubmitError.message
+            : "Failed to submit report.",
+        );
+      }
+    },
+    [messageToReport, submitReportMutation],
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: ListItem }) => {
       if (item.type === "separator") {
@@ -309,6 +361,14 @@ export default function ConversationScreen() {
         <MessageBubble
           message={item.message}
           isMe={item.message.sender.username === currentUsername}
+          onLongPress={
+            item.message.sender.username === currentUsername
+              ? undefined
+              : () => {
+                  setReportError(null);
+                  setMessageToReport(item.message);
+                }
+          }
         />
       );
     },
@@ -461,6 +521,21 @@ export default function ConversationScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      <ReportSheet
+        visible={Boolean(messageToReport)}
+        title="Report message"
+        isSubmitting={submitReportMutation.isPending}
+        errorMessage={reportError}
+        onClose={() => {
+          if (!submitReportMutation.isPending) {
+            setMessageToReport(null);
+          }
+        }}
+        onSubmit={(payload) => {
+          void handleSubmitReport(payload);
+        }}
+      />
     </View>
   );
 }

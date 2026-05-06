@@ -5,6 +5,7 @@ import React from "react";
 const mockBack = jest.fn();
 const mockCreateRequestMutateAsync = jest.fn();
 const mockResendMutateAsync = jest.fn();
+const mockSubmitReportMutateAsync = jest.fn();
 const mockAvailabilityRefetch = jest.fn();
 const mockBookSlotMutateAsync = jest.fn();
 let mockUsernameParam: string | undefined = "mentor_ada";
@@ -93,6 +94,13 @@ jest.mock("@/lib/queries/profile", () => ({
     isLoading: false,
     isFetching: false,
     error: null,
+  }),
+}));
+
+jest.mock("@/lib/queries/reporting", () => ({
+  useSubmitReportMutation: () => ({
+    mutateAsync: mockSubmitReportMutateAsync,
+    isPending: false,
   }),
 }));
 
@@ -267,6 +275,7 @@ describe("MentorProfileScreen email verification gate", () => {
       detail: "If your email is unverified, a new verification link has been sent.",
     });
     mockBookSlotMutateAsync.mockResolvedValue({});
+    mockSubmitReportMutateAsync.mockResolvedValue({});
   });
 
   it("shows an error when the username route param is missing", async () => {
@@ -446,6 +455,62 @@ describe("MentorProfileScreen email verification gate", () => {
 
     fireEvent.press(getByTestId("close-skills-modal"));
     expect(queryByTestId("skills-modal")).toBeNull();
+  });
+
+  it("submits a profile report from the flag action", async () => {
+    const { findByText, getByTestId, getByPlaceholderText } = render(
+      <MentorProfileScreen />,
+    );
+
+    expect(await findByText("Ada Mentor")).toBeTruthy();
+
+    fireEvent.press(getByTestId("profile-report-button"));
+    expect(await findByText("Report Ada Mentor")).toBeTruthy();
+
+    fireEvent.press(getByTestId("report-reason-HARASSMENT"));
+    fireEvent.changeText(
+      getByPlaceholderText("Additional details (optional)"),
+      "Repeatedly sending hostile profile messages.",
+    );
+    fireEvent.press(getByTestId("submit-report-button"));
+
+    await waitFor(() => {
+      expect(mockSubmitReportMutateAsync).toHaveBeenCalledWith({
+        reported_username: "mentor_ada",
+        reason: "HARASSMENT",
+        description: "Repeatedly sending hostile profile messages.",
+      });
+    });
+    expect(
+      await findByText(
+        "Report submitted. Thank you for helping keep the community safe.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("does not show the profile report action for your own profile", async () => {
+    mockUsernameParam = "mentee_bora";
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        username: "mentee_bora",
+        full_name: "Bora Mentee",
+        bio: "Learning mobile engineering.",
+        hidden: false,
+        picture_url: "",
+        title: "Learner",
+        show_initials_only: false,
+        app_usage_mode: "MENTEE",
+        skills: ["React Native"],
+        average_rating: "0",
+        total_mentee_count: 0,
+      }),
+    }) as unknown as typeof fetch;
+
+    const { findByText, queryByTestId } = render(<MentorProfileScreen />);
+
+    expect(await findByText("Bora Mentee")).toBeTruthy();
+    expect(queryByTestId("profile-report-button")).toBeNull();
   });
 
   it("books sessions for connected mentees and handles booking failures", async () => {

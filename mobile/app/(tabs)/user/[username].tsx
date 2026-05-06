@@ -17,6 +17,7 @@ import {
   AvailabilityPreview,
   type AvailabilitySlot,
 } from "@/components/profile/AvailabilityPreview";
+import { ReportSheet } from "@/components/report/ReportSheet";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfileReviews } from "@/components/profile/ProfileReviews";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
@@ -41,6 +42,7 @@ import {
   useProfileRatingQuery,
   useProfileReviewsQuery,
 } from "@/lib/queries/profile";
+import { useSubmitReportMutation } from "@/lib/queries/reporting";
 
 interface PublicProfileResponse {
   username: string;
@@ -410,6 +412,7 @@ export default function MentorProfileScreen() {
     selfScopedQueryUsername,
   );
   const resendVerificationMutation = useResendEmailVerificationMutation();
+  const submitReportMutation = useSubmitReportMutation();
   const availabilitySlotsQuery = useAvailabilitySlotsQuery(
     username ?? "",
     profile?.app_usage_mode === "MENTOR",
@@ -435,6 +438,8 @@ export default function MentorProfileScreen() {
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
   const [showBookingConfirmation, setShowBookingConfirmation] = useState(false);
+  const [showReportSheet, setShowReportSheet] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
   const [skillsModalConfig, setSkillsModalConfig] = useState<{
     visible: boolean;
     title: string;
@@ -828,6 +833,39 @@ export default function MentorProfileScreen() {
     });
   };
 
+  const handleSubmitReport = async ({
+    reason,
+    description,
+  }: {
+    reason: "SPAM" | "HARASSMENT" | "INAPPROPRIATE_CONTENT" | "OTHER";
+    description: string;
+  }) => {
+    const reportedUsername = profile?.username ?? username;
+    if (!reportedUsername) {
+      return;
+    }
+
+    setReportError(null);
+    try {
+      await submitReportMutation.mutateAsync({
+        reported_username: reportedUsername,
+        reason,
+        description,
+      });
+      setShowReportSheet(false);
+      setRequestFeedbackVariant("success");
+      setRequestFeedback(
+        "Report submitted. Thank you for helping keep the community safe.",
+      );
+    } catch (reportSubmitError) {
+      setReportError(
+        reportSubmitError instanceof Error
+          ? reportSubmitError.message
+          : "Failed to submit report.",
+      );
+    }
+  };
+
   const bodyContent = renderBodyContent({
     loading,
     error,
@@ -873,6 +911,10 @@ export default function MentorProfileScreen() {
   });
 
   const screenTitle = isViewedMentor ? "Mentor Profile" : "Profile";
+  const canReportProfile =
+    Boolean(profile) &&
+    Boolean(currentUsername) &&
+    profile?.username !== currentUsername;
 
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
@@ -887,9 +929,22 @@ export default function MentorProfileScreen() {
           >
             <Ionicons name="chevron-back" size={20} color="#111827" />
           </TouchableOpacity>
-          <Text className="text-xl font-extrabold text-gray-900">
+          <Text className="text-xl font-extrabold text-gray-900 flex-1">
             {screenTitle}
           </Text>
+          {canReportProfile ? (
+            <TouchableOpacity
+              testID="profile-report-button"
+              activeOpacity={0.8}
+              onPress={() => {
+                setReportError(null);
+                setShowReportSheet(true);
+              }}
+              className="h-10 w-10 items-center justify-center rounded-full bg-red-50"
+            >
+              <Ionicons name="flag-outline" size={19} color="#dc2626" />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
@@ -927,6 +982,21 @@ export default function MentorProfileScreen() {
           if (slot) {
             void handleBookConnectedSession(slot);
           }
+        }}
+      />
+
+      <ReportSheet
+        visible={showReportSheet}
+        title={`Report ${profile?.full_name || profile?.username || "user"}`}
+        isSubmitting={submitReportMutation.isPending}
+        errorMessage={reportError}
+        onClose={() => {
+          if (!submitReportMutation.isPending) {
+            setShowReportSheet(false);
+          }
+        }}
+        onSubmit={(payload) => {
+          void handleSubmitReport(payload);
         }}
       />
     </View>
