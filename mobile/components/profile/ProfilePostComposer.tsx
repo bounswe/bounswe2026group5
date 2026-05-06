@@ -14,6 +14,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { PostMediaPicker } from "@/components/posts/PostMediaPicker";
+import { uploadPostMedia } from "@/lib/queries/uploads";
+import type { LocalUploadFile } from "@/lib/queries/uploads";
 import type { CreateProfilePostPayload } from "@/lib/queries/profile";
 
 const EVENT_TYPES: {
@@ -42,12 +45,18 @@ export function ProfilePostComposer({
   const [eventType, setEventType] =
     useState<CreateProfilePostPayload["event_type"]>("social");
   const [content, setContent] = useState("");
+  const [media, setMedia] = useState<LocalUploadFile | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [isUploadingMedia, setUploadingMedia] = useState(false);
 
-  const canSubmit = content.trim().length > 0 && !isSubmitting;
+  const isBusy = Boolean(isSubmitting) || isUploadingMedia;
+  const canSubmit = content.trim().length > 0 && !isBusy;
 
   const resetForm = () => {
     setContent("");
     setEventType("social");
+    setMedia(null);
+    setMediaError(null);
   };
 
   const handleSubmit = async () => {
@@ -55,9 +64,30 @@ export function ProfilePostComposer({
       return;
     }
 
+    setMediaError(null);
+
+    let mediaUrl: string | null | undefined;
+    if (media) {
+      try {
+        setUploadingMedia(true);
+        const uploadResponse = await uploadPostMedia(media);
+        mediaUrl = uploadResponse.url;
+      } catch (error) {
+        setMediaError(
+          error instanceof Error && error.message.trim()
+            ? error.message
+            : "Could not upload this photo.",
+        );
+        return;
+      } finally {
+        setUploadingMedia(false);
+      }
+    }
+
     const didSubmit = await onSubmit({
       event_type: eventType,
       content: content.trim(),
+      ...(mediaUrl ? { media_url: mediaUrl } : {}),
     });
 
     if (didSubmit === false) {
@@ -155,11 +185,25 @@ export function ProfilePostComposer({
                 className="mt-4 min-h-[140px] rounded-xl border border-divider bg-surface-card px-3 py-3 text-on-surface dark:border-divider-dark dark:bg-surface-card-dark dark:text-on-surface-dark"
               />
 
-              <View className="mt-4 rounded-xl border border-dashed border-divider px-3 py-3 dark:border-divider-dark">
-                <Text className="text-xs font-semibold text-on-surface-soft dark:text-on-surface-soft-dark">
-                  This post will appear in your profile feed.
+              <PostMediaPicker
+                disabled={isBusy}
+                media={media}
+                onChange={(nextMedia) => {
+                  setMediaError(null);
+                  setMedia(nextMedia);
+                }}
+                onError={setMediaError}
+                testIDPrefix="profile-composer"
+              />
+
+              {mediaError ? (
+                <Text
+                  testID="profile-composer-media-error"
+                  className="mt-2 text-xs font-semibold text-error dark:text-red-200"
+                >
+                  {mediaError}
                 </Text>
-              </View>
+              ) : null}
             </ScrollView>
 
             <SafeAreaView
@@ -175,7 +219,7 @@ export function ProfilePostComposer({
                   canSubmit ? "bg-primary dark:bg-primary-dim" : "bg-gray-300"
                 }`}
               >
-                {isSubmitting ? (
+                {isBusy ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
                   <Text className="font-bold text-white">Post to Profile</Text>
