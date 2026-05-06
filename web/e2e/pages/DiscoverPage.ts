@@ -26,6 +26,10 @@ export class DiscoverPage {
     await expect(this.mentorCard(mentorName)).toBeVisible();
   }
 
+  async expectAnyMentorVisible() {
+    await expect(this.page.locator('.island-shell').first()).toBeVisible();
+  }
+
   async expectMentorHidden(mentorName: string) {
     await expect(this.mentorCard(mentorName)).toHaveCount(0);
   }

@@ -26,12 +26,17 @@ from .models import AvailabilitySlot, CommunityTag, CommunityTagMembership, Prof
 from .serializers import (
     AvailabilitySlotSerializer,
     AvailabilitySlotWriteSerializer,
+    CommunityPostFeedSerializer,
+    CommunityPostListQueryParamsSerializer,
+    CommunityPostSerializer,
     CommunityTagCreateSerializer,
     CommunityTagDetailSerializer,
     CommunityTagListResponseSerializer,
     CommunityTagListSerializer,
     CommunityTagMembershipSerializer,
     CommunityTagUpdateSerializer,
+    CoPCreateSerializer,
+    CoPUpdateSerializer,
     MenteeProfileResponseSerializer,
     MentorProfileResponseSerializer,
     PostMediaUploadSerializer,
@@ -50,13 +55,18 @@ from .serializers import (
     resolve_picture_url,
 )
 from .services import (
+    InvalidCoPEventTypeError,
     InvalidPrPEventTypeError,
     OwnSlotBookingError,
     SlotAlreadyBookedError,
     SlotInPastError,
+    create_cop_event,
     create_prp_event,
+    edit_cop_event,
     edit_prp_event,
+    list_community_feed_events,
     list_profile_feed_events,
+    soft_delete_cop_event,
     soft_delete_prp_event,
 )
 
@@ -65,6 +75,18 @@ OVERLAP_DETAIL = {"detail": "Availability slot overlaps with an existing slot."}
 PERMISSION_DENIED_DETAIL = {"detail": "You do not have permission to perform this action."}
 LIMIT_NOT_INT_DETAIL = {"detail": "`limit` must be an integer."}
 PAGE_SIZE_NOT_INT_DETAIL = {"detail": "`page` and `pageSize` must be integers."}
+
+
+def _resolve_community_tag(tag_id: str, qs=None) -> "CommunityTag | None":
+    """Return a CommunityTag by UUID or slug. Pass a custom queryset for select_related etc."""
+    from uuid import UUID
+    if qs is None:
+        qs = CommunityTag.objects
+    try:
+        UUID(tag_id)
+        return qs.filter(id=tag_id).first()
+    except (ValueError, AttributeError):
+        return qs.filter(slug=tag_id).first()
 
 
 class ProfileLookupMixin:
@@ -212,7 +234,7 @@ class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
                 location=OpenApiParameter.QUERY,
                 required=False,
                 type=OpenApiTypes.STR,
-                enum=["PrP", "MCTE"],
+                enum=["PrP", "MCTE", "CoP"],
                 description="Filter by event category.",
             ),
             OpenApiParameter(
@@ -245,12 +267,16 @@ class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
             404: OpenApiResponse(description="Profile not found."),
         },
         description=(
-            "Return profile posts for a username. Includes both PrP posts authored by the "
-            "profile and MCTE events authored by the profile where `show_on_profile=true`. "
-            "If profile is private, only the owner can access this feed. "
+            "Return profile posts for a username. Includes PrP posts authored by the "
+            "profile, MCTE events authored by the profile where `show_on_profile=true`, and "
+            "CoP events authored by the profile where `show_on_profile=true`. "
+            "If the profile is private, only the owner can access this feed. "
             "Supports optional filtering by `category` and `event_type`. "
             "Results are ordered newest-first by action metadata: `created_at`, then "
-            "`last_edited` as a tie-breaker."
+            "`last_edited` as a tie-breaker. "
+            "Each result includes a `community_id` field: populated with the community tag "
+            "UUID for CoP posts (use it to link to `GET /api/profiles/tags/{community_id}/` "
+            "or `GET /api/profiles/tags/{community_id}/posts/`), and `null` for PrP and MCTE."
         ),
         tags=["Profiles"],
     )
@@ -308,7 +334,6 @@ class MyProfilePostsCollectionAPIView(ProfileLookupMixin, APIView):
         serializer = PrPCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         validated = serializer.validated_data
-
         try:
             event = create_prp_event(
                 author_profile=profile,
@@ -1244,7 +1269,12 @@ class CommunityTagListCreateAPIView(APIView):
             context={"profile": profile},
         )
         serializer.is_valid(raise_exception=True)
-        tag = serializer.save()
+
+        with transaction.atomic():
+            tag = serializer.save()
+            CommunityTagMembership.objects.create(profile=profile, tag=tag)
+            CommunityTag.objects.filter(id=tag.id).update(member_count=models.F("member_count") + 1)
+            tag.refresh_from_db()
 
         return Response(
             CommunityTagDetailSerializer(tag, context={"request": request}).data,
@@ -1277,7 +1307,7 @@ class CommunityTagDetailAPIView(APIView):
         tags=["Community Tags"],
     )
     def get(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id, qs=CommunityTag.objects.select_related("created_by"))
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1304,7 +1334,7 @@ class CommunityTagDetailAPIView(APIView):
         tags=["Community Tags"],
     )
     def patch(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id, qs=CommunityTag.objects.select_related("created_by"))
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1343,7 +1373,7 @@ class CommunityTagDetailAPIView(APIView):
         tags=["Community Tags"],
     )
     def delete(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id, qs=CommunityTag.objects.select_related("created_by"))
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1390,7 +1420,7 @@ class CommunityTagJoinAPIView(APIView):
         tags=["Community Tags"],
     )
     def post(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id)
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1441,7 +1471,7 @@ class CommunityTagLeaveAPIView(APIView):
         tags=["Community Tags"],
     )
     def delete(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id)
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1503,6 +1533,211 @@ class MyTagsListAPIView(ProfileLookupMixin, APIView):
             CommunityTagListSerializer(tags, many=True).data,
             status=status.HTTP_200_OK,
         )
+
+
+class CommunityTagPostsListCreateAPIView(ProfileLookupMixin, APIView):
+    """List and create community posts (CoP) for a community tag."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        operation_id="community_tag_posts_list",
+        parameters=[
+            OpenApiParameter(
+                name="event_type",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.STR,
+                enum=["achievement", "social", "progress"],
+                description="Filter by event type.",
+            ),
+            OpenApiParameter(
+                name="offset",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Zero-based index of the first item to include. Default: 0.",
+            ),
+            OpenApiParameter(
+                name="limit",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Maximum number of items to return. Default: 50. Maximum: 200.",
+            ),
+        ],
+        responses={
+            200: CommunityPostFeedSerializer,
+            400: OpenApiResponse(description="Invalid query parameters."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Community tag not found."),
+        },
+        description=(
+            "List community posts for a tag, ordered newest-first. "
+            "Authenticated users can view all non-deleted posts. "
+            "Supports filtering by `event_type`. Pagination via `offset` and `limit`."
+        ),
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request, tag_id: str) -> Response:
+        """Return paginated community feed events for a tag."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        params_serializer = CommunityPostListQueryParamsSerializer(data=request.query_params)
+        params_serializer.is_valid(raise_exception=True)
+        params = params_serializer.validated_data
+
+        payload = list_community_feed_events(
+            community_tag=tag,
+            offset=params["offset"],
+            limit=params["limit"],
+            event_type=params.get("event_type"),
+        )
+        return Response(CommunityPostFeedSerializer(payload).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        operation_id="community_tag_posts_create",
+        request=CoPCreateSerializer,
+        responses={
+            201: CommunityPostSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Not a member of this community."),
+            404: OpenApiResponse(description="Community tag not found."),
+        },
+        description=(
+            "Create a community post (CoP) in a tag. Requester must be a member. "
+            "`show_on_profile` defaults to `false`; set to `true` to also display "
+            "this post on the author's profile feed. "
+            "`timestamp` is optional; defaults to creation time."
+        ),
+        tags=["Community Tags"],
+    )
+    def post(self, request: Request, tag_id: str) -> Response:
+        """Create a new community post authored by request.user's profile."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        is_member = CommunityTagMembership.objects.filter(profile=profile, tag=tag).exists()
+        if not is_member:
+            return Response(
+                {"detail": "You must be a member of this community to post."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = CoPCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+
+        try:
+            event = create_cop_event(
+                author_profile=profile,
+                community_tag=tag,
+                event_type=validated["event_type"],
+                content=validated.get("content", ""),
+                media_url=validated.get("media_url"),
+                show_on_profile=validated.get("show_on_profile", False),
+                timestamp=validated.get("timestamp"),
+            )
+        except InvalidCoPEventTypeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        event.author = profile
+        return Response(CommunityPostSerializer(event).data, status=status.HTTP_201_CREATED)
+
+
+class CommunityTagPostDetailAPIView(ProfileLookupMixin, APIView):
+    """Update or soft-delete a community post owned by the authenticated user."""
+
+    permission_classes = [IsUser]
+
+    def _resolve_owned_post(self, request: Request, tag_id: str, event_id: str):
+        """Return (profile, event) for an owned CoP, or a 404 Response."""
+        from timeline.models import TimelineEvent
+
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            event = TimelineEvent.objects.select_related("author").get(
+                id=event_id,
+                author=profile,
+                community_id=tag_id,
+                category=TimelineEvent.Category.COP,
+                is_deleted=False,
+            )
+        except TimelineEvent.DoesNotExist:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return profile, event
+
+    @extend_schema(
+        operation_id="community_tag_posts_update",
+        request=CoPUpdateSerializer,
+        responses={
+            200: CommunityPostSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Post not found."),
+        },
+        description=(
+            "Partially update a community post. Only the original author can edit. "
+            "Editable fields: `content`, `event_type`, `media_url`, `show_on_profile`."
+        ),
+        tags=["Community Tags"],
+    )
+    def patch(self, request: Request, tag_id: str, event_id: str) -> Response:
+        """Partially update an owned community post."""
+        result = self._resolve_owned_post(request, tag_id, event_id)
+        if isinstance(result, Response):
+            return result
+        _profile, event = result
+
+        serializer = CoPUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+
+        try:
+            updated_event = edit_cop_event(
+                event=event,
+                content=validated.get("content"),
+                event_type=validated.get("event_type"),
+                media_url=validated.get("media_url"),
+                show_on_profile=validated.get("show_on_profile"),
+                update_media_url="media_url" in validated,
+            )
+        except InvalidCoPEventTypeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(CommunityPostSerializer(updated_event).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        operation_id="community_tag_posts_delete",
+        responses={
+            204: OpenApiResponse(description="Post deleted."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Post not found."),
+        },
+        description="Soft-delete a community post. Only the original author can delete.",
+        tags=["Community Tags"],
+    )
+    def delete(self, request: Request, tag_id: str, event_id: str) -> Response:
+        """Soft-delete an owned community post."""
+        result = self._resolve_owned_post(request, tag_id, event_id)
+        if isinstance(result, Response):
+            return result
+        _profile, event = result
+
+        soft_delete_cop_event(event=event)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 POPULAR_TAGS_WINDOWS = {"all": None, "7d": 7, "30d": 30}
@@ -1591,7 +1826,8 @@ class CommunityTagMembersListAPIView(APIView):
         tags=["Community Tags"],
     )
     def get(self, request: Request, tag_id: str) -> Response:
-        if not CommunityTag.objects.filter(id=tag_id).exists():
+        tag = _resolve_community_tag(tag_id)
+        if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         try:
@@ -1607,7 +1843,7 @@ class CommunityTagMembersListAPIView(APIView):
         page_size = max(1, min(page_size, 50))
 
         memberships = (
-            CommunityTagMembership.objects.filter(tag_id=tag_id, profile__is_visible=True)
+            CommunityTagMembership.objects.filter(tag=tag, profile__is_visible=True)
             .select_related("profile__user")
             .order_by("-joined_at")
         )

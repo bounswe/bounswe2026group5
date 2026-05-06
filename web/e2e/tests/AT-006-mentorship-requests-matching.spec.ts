@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { TestDataApi, type UserSeed } from './api/TestDataApi';
-import { ConnectionsPage } from './pages/ConnectionsPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { DiscoverPage } from './pages/DiscoverPage';
-import { ProfilePage } from './pages/ProfilePage';
+import { TestDataApi, type UserSeed } from '../api/TestDataApi';
+import { ConnectionsPage } from '../pages/ConnectionsPage';
+import { DashboardPage } from '../pages/DashboardPage';
+import { DiscoverPage } from '../pages/DiscoverPage';
+import { ProfilePage } from '../pages/ProfilePage';
 
 function toDateString(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;

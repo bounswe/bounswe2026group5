@@ -11,9 +11,8 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from core.utils.image import resize_image
-from core.utils.validators import validate_file_size, validate_image_content_type
-
 from core.utils.timezone import get_project_timezone, to_local_time
+from core.utils.validators import validate_file_size, validate_image_content_type
 from mentorship.models import MeetingSession
 
 from .models import AvailabilitySlot, CommunityTag, Profile, Skill
@@ -35,6 +34,7 @@ def resolve_picture_url(profile: Profile) -> str:
         except ValueError:
             pass
     return profile.picture_url or ""
+
 
 @extend_schema_field(
     {
@@ -133,6 +133,7 @@ class PostMediaUploadSerializer(serializers.Serializer):
     def validate_file(self, file):
         """Validate content-type (image or PDF) and enforce a size limit."""
         from django.conf import settings
+
         from core.utils.validators import validate_media_content_type
 
         validate_media_content_type(file)
@@ -147,6 +148,7 @@ class PostMediaUploadSerializer(serializers.Serializer):
         """Resize (if image) and persist the file, returning the public URL."""
         from django.conf import settings
         from django.core.files.storage import default_storage
+
         from core.utils.validators import IMAGE_CONTENT_TYPES
 
         uploaded = self.validated_data["file"]
@@ -162,14 +164,12 @@ class PostMediaUploadSerializer(serializers.Serializer):
             processed = uploaded
 
         import uuid as _uuid
+
         from django.utils import timezone as _tz
 
         now = _tz.now()
         filename = f"{_uuid.uuid4().hex}_{processed.name}"
-        path = (
-            f"post_media/{now.year}/{now.month:02d}"
-            f"/{now.day:02d}/{filename}"
-        )
+        path = f"post_media/{now.year}/{now.month:02d}" f"/{now.day:02d}/{filename}"
         saved_path = default_storage.save(path, processed)
         return default_storage.url(saved_path)
 
@@ -589,7 +589,7 @@ class PublicMentorProfileSearchListResponseSerializer(serializers.Serializer):
 
 
 _PROFILE_POST_EVENT_TYPE_CHOICES = ["achievement", "social", "progress"]
-_PROFILE_POST_CATEGORY_CHOICES = ["PrP", "MCTE"]
+_PROFILE_POST_CATEGORY_CHOICES = ["PrP", "MCTE", "CoP"]
 
 
 class ProfilePostAuthorSerializer(serializers.ModelSerializer):
@@ -668,7 +668,12 @@ class ProfilePostListQueryParamsSerializer(serializers.Serializer):
 
 
 class ProfilePostSerializer(serializers.Serializer):
-    """Read serializer for profile feed items (PrP + visible MCTE)."""
+    """Read serializer for profile feed items (PrP, visible MCTE, and visible CoP).
+
+    ``community_id`` is populated only for CoP posts and is ``null`` for PrP and MCTE.
+    Clients can use it to navigate to ``/api/profiles/tags/{community_id}/`` or link
+    to the community feed at ``/api/profiles/tags/{community_id}/posts/``.
+    """
 
     id = serializers.UUIDField(read_only=True)
     source_id = serializers.CharField(read_only=True)
@@ -680,6 +685,7 @@ class ProfilePostSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(read_only=True)
     last_edited = serializers.DateTimeField(read_only=True, allow_null=True)
     show_on_profile = serializers.BooleanField(read_only=True)
+    community_id = serializers.UUIDField(read_only=True, allow_null=True)
     actor_role = serializers.CharField(read_only=True)
     author = ProfilePostAuthorSerializer(read_only=True)
 
@@ -799,3 +805,90 @@ class CommunityTagListResponseSerializer(serializers.Serializer):
     page = serializers.IntegerField()
     pageSize = serializers.IntegerField()
     results = CommunityTagListSerializer(many=True)
+
+
+# ---------------------------------------------------------------------------
+# Community Posts (CoP)
+# ---------------------------------------------------------------------------
+
+
+class CoPCreateSerializer(serializers.Serializer):
+    """Write serializer for creating a community post (CoP)."""
+
+    event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES)
+    content = serializers.CharField(required=True, max_length=2000)
+    media_url = serializers.URLField(required=False, allow_null=True, default=None)
+    show_on_profile = serializers.BooleanField(required=False, default=False)
+    timestamp = serializers.DateTimeField(required=False, allow_null=True, default=None)
+
+    def to_internal_value(self, data: Any) -> dict:
+        """Normalize empty timestamp values to null so fallback logic can be applied."""
+        if isinstance(data, dict) and data.get("timestamp") == "":
+            data = {**data, "timestamp": None}
+        return super().to_internal_value(data)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Reject timestamps more than 1 day in the future when provided."""
+        timestamp = attrs.get("timestamp")
+        if timestamp is not None and timestamp > timezone.now() + timedelta(days=1):
+            raise serializers.ValidationError(
+                {"timestamp": "Timestamp cannot be more than 1 day in the future."}
+            )
+        return attrs
+
+
+class CoPUpdateSerializer(serializers.Serializer):
+    """Write serializer for partially updating a community post."""
+
+    content = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES, required=False)
+    media_url = serializers.URLField(required=False, allow_null=True)
+    show_on_profile = serializers.BooleanField(required=False)
+
+    def validate(self, attrs: dict) -> dict:
+        """Require at least one editable field to be provided."""
+        if not attrs:
+            raise serializers.ValidationError(
+                "At least one of 'content', 'event_type', 'media_url', or "
+                "'show_on_profile' must be provided."
+            )
+        return attrs
+
+
+class CommunityPostListQueryParamsSerializer(serializers.Serializer):
+    """Validate query parameters for community post listing endpoint."""
+
+    event_type = serializers.ChoiceField(
+        choices=_PROFILE_POST_EVENT_TYPE_CHOICES,
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+    offset = serializers.IntegerField(required=False, min_value=0, default=0)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=50)
+
+
+class CommunityPostSerializer(serializers.Serializer):
+    """Read serializer for community feed items (CoP)."""
+
+    id = serializers.UUIDField(read_only=True)
+    source_id = serializers.CharField(read_only=True)
+    category = serializers.CharField(read_only=True)
+    event_type = serializers.CharField(read_only=True)
+    content = serializers.CharField(read_only=True)
+    media_url = serializers.URLField(read_only=True, allow_null=True)
+    timestamp = serializers.DateTimeField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    last_edited = serializers.DateTimeField(read_only=True, allow_null=True)
+    show_on_profile = serializers.BooleanField(read_only=True)
+    community_id = serializers.UUIDField(read_only=True)
+    author = ProfilePostAuthorSerializer(read_only=True)
+
+
+class CommunityPostFeedSerializer(serializers.Serializer):
+    """Paginated response wrapper for community posts feed."""
+
+    count = serializers.IntegerField(read_only=True)
+    offset = serializers.IntegerField(read_only=True)
+    limit = serializers.IntegerField(read_only=True)
+    results = CommunityPostSerializer(many=True, read_only=True)
