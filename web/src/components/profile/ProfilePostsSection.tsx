@@ -151,6 +151,9 @@ function ProfilePostCard({
                         {post.category === 'MCTE' && (
                             <Badge variant="secondary" className="text-xs">Mentorship Journey</Badge>
                         )}
+                        {post.category === 'CoP' && (
+                            <Badge variant="secondary" className="text-xs">Community</Badge>
+                        )}
                     </div>
                     {canEdit && (
                         <div className="flex items-center gap-1">
@@ -198,6 +201,27 @@ function ProfilePostCard({
                         >
                             @{post.mentorship_partner}
                         </Link>
+                    </Muted>
+                )}
+                {post.category === 'CoP' && post.community_name && (
+                    <Muted className="text-xs">
+                        In {post.community_name} community
+                        {post.tagged_users && post.tagged_users.length > 0 && (
+                            <>, with{' '}
+                                {post.tagged_users.map((u, i) => (
+                                    <span key={u.user_id}>
+                                        <Link
+                                            to="/profiles/$username"
+                                            params={{ username: u.username }}
+                                            className="text-accent hover:underline"
+                                        >
+                                            @{u.username}
+                                        </Link>
+                                        {i < post.tagged_users!.length - 1 && ', '}
+                                    </span>
+                                ))}
+                            </>
+                        )}
                     </Muted>
                 )}
                 <Muted className="text-xs">{formatTimestamp(post.timestamp)}</Muted>

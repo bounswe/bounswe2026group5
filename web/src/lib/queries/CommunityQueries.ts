@@ -1,4 +1,4 @@
-import { infiniteQueryOptions, queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
+import { infiniteQueryOptions, queryOptions, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { throwApiError } from '#/lib/apiError.ts'
 import type { PublicMentorProfile } from '#/lib/queries/DiscoverQueries.ts'
 
@@ -44,6 +44,58 @@ export interface CommunityMembershipResponse {
 }
 
 export type PopularCommunitiesWindow = 'all' | '7d' | '30d'
+
+export interface TaggableUser {
+    username: string
+    display_name: string
+}
+
+export interface CommunityPostAuthor {
+    id: string
+    username: string
+    display_name: string
+    picture_url: string | null
+    title: string
+}
+
+export interface CommunityPost {
+    id: string
+    source_id: string
+    category: string
+    event_type: 'achievement' | 'social' | 'progress'
+    content: string
+    media_url: string | null
+    timestamp: string
+    created_at: string
+    last_edited: string | null
+    show_on_profile: boolean
+    community_id: string
+    author: CommunityPostAuthor
+    tagged_users: { user_id: string; username: string }[]
+}
+
+export interface CommunityPostFeed {
+    count: number
+    offset: number
+    limit: number
+    results: CommunityPost[]
+}
+
+export interface CommunityPostCreatePayload {
+    event_type: 'achievement' | 'social' | 'progress'
+    content: string
+    media_url?: string
+    show_on_profile?: boolean
+    tagged_users?: string[]
+}
+
+export interface CommunityPostUpdatePayload {
+    content?: string
+    event_type?: 'achievement' | 'social' | 'progress'
+    media_url?: string | null
+    show_on_profile?: boolean
+    tagged_users?: string[]
+}
 
 // ---------------------------------------------------------------------------
 // Auth helper
@@ -130,10 +182,10 @@ export async function createCommunity(payload: {
 }
 
 export async function updateCommunityDescription(payload: {
-    communitySlug: string
+    communityId: string
     description: string
 }): Promise<CommunityTagDetail> {
-    const res = await fetch(`${API_BASE_URL}/profiles/tags/${encodeURIComponent(payload.communitySlug)}/`, {
+    const res = await fetch(`${API_BASE_URL}/profiles/tags/${encodeURIComponent(payload.communityId)}/`, {
         method: 'PATCH',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ description: payload.description.trim() }),
@@ -160,6 +212,65 @@ export async function leaveCommunity(communityId: string): Promise<CommunityMemb
     return res.json()
 }
 
+async function fetchTaggableUsers(communityId: string): Promise<TaggableUser[]> {
+    const res = await fetch(
+        `${API_BASE_URL}/profiles/tags/${communityId}/taggable-users/`,
+        { headers: authHeaders() },
+    )
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
+async function fetchCommunityPosts(communityId: string): Promise<CommunityPostFeed> {
+    const res = await fetch(
+        `${API_BASE_URL}/profiles/tags/${communityId}/posts/`,
+        { headers: authHeaders() },
+    )
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
+async function createCommunityPost(
+    communityId: string,
+    payload: CommunityPostCreatePayload,
+): Promise<CommunityPost> {
+    const res = await fetch(
+        `${API_BASE_URL}/profiles/tags/${communityId}/posts/`,
+        {
+            method: 'POST',
+            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        },
+    )
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
+async function editCommunityPost(
+    communityId: string,
+    postId: string,
+    payload: CommunityPostUpdatePayload,
+): Promise<CommunityPost> {
+    const res = await fetch(
+        `${API_BASE_URL}/profiles/tags/${communityId}/posts/${postId}/`,
+        {
+            method: 'PATCH',
+            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        },
+    )
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
+async function deleteCommunityPost(communityId: string, postId: string): Promise<void> {
+    const res = await fetch(
+        `${API_BASE_URL}/profiles/tags/${communityId}/posts/${postId}/`,
+        { method: 'DELETE', headers: authHeaders() },
+    )
+    if (!res.ok) await throwApiError(res)
+}
+
 // ---------------------------------------------------------------------------
 // Query keys
 // ---------------------------------------------------------------------------
@@ -171,6 +282,8 @@ export const communityQueryKeys = {
     my: () => ['communities', 'me'] as const,
     detail: (communityId?: string) => ['communities', 'detail', communityId ?? ''] as const,
     members: (communityId: string, page: number) => ['communities', 'members', communityId, page] as const,
+    taggableUsers: (communityId: string) => ['communities', communityId, 'taggable-users'] as const,
+    posts: (communityId: string) => ['communities', communityId, 'posts'] as const,
 }
 
 // ---------------------------------------------------------------------------
@@ -208,7 +321,7 @@ export const communityDetailQueryOptions = (communityId: string) =>
     queryOptions({
         queryKey: communityQueryKeys.detail(communityId),
         queryFn: () => fetchCommunityDetail(communityId),
-        enabled: Boolean(communityId),
+        enabled: Boolean(communityId),  
         staleTime: 30_000,
     })
 
@@ -216,6 +329,22 @@ export const communityMembersQueryOptions = (communityId: string, page: number, 
     queryOptions({
         queryKey: communityQueryKeys.members(communityId, page),
         queryFn: () => fetchCommunityMembers({ communityId, page, pageSize }),
+        enabled: Boolean(communityId),
+        staleTime: 30_000,
+    })
+
+export const taggableUsersQueryOptions = (communityId: string) =>
+    queryOptions({
+        queryKey: communityQueryKeys.taggableUsers(communityId),
+        queryFn: () => fetchTaggableUsers(communityId),
+        enabled: Boolean(communityId),
+        staleTime: 60_000,
+    })
+
+export const communityPostsQueryOptions = (communityId: string) =>
+    queryOptions({
+        queryKey: communityQueryKeys.posts(communityId),
+        queryFn: () => fetchCommunityPosts(communityId),
         enabled: Boolean(communityId),
         staleTime: 30_000,
     })
@@ -262,6 +391,45 @@ export function useLeaveCommunityMutation() {
         onSuccess: async (membership) => {
             await queryClient.invalidateQueries({ queryKey: communityQueryKeys.all })
             await queryClient.invalidateQueries({ queryKey: communityQueryKeys.detail(membership.tag_id) })
+        },
+    })
+}
+
+export function useTaggableUsers(communityId: string) {
+    return useQuery(taggableUsersQueryOptions(communityId))
+}
+
+export function useCommunityPosts(communityId: string) {
+    return useQuery(communityPostsQueryOptions(communityId))
+}
+
+export function useCreateCommunityPost(communityId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: (payload: CommunityPostCreatePayload) => createCommunityPost(communityId, payload),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: communityQueryKeys.posts(communityId) })
+        },
+    })
+}
+
+export function useEditCommunityPost(communityId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: ({ postId, payload }: { postId: string; payload: CommunityPostUpdatePayload }) =>
+            editCommunityPost(communityId, postId, payload),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: communityQueryKeys.posts(communityId) })
+        },
+    })
+}
+
+export function useDeleteCommunityPost(communityId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: (postId: string) => deleteCommunityPost(communityId, postId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: communityQueryKeys.posts(communityId) })
         },
     })
 }
