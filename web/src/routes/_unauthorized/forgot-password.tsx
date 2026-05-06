@@ -25,7 +25,7 @@ export function ForgotPasswordPage() {
         },
     })
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
         e.preventDefault()
         forgotPassword.mutate({ email })
     }

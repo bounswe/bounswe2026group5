@@ -17,7 +17,6 @@ export function ResetPasswordPage() {
     // URLSearchParams correctly handles `=` padding characters inside the token value.
     // TanStack Router's default search parser splits on every `=`, truncating base64 tokens.
     const token = new URLSearchParams(globalThis.location.search).get('token') ?? ''
-    console.debug('[reset-password] token from URL:', token)
     const router = useRouter()
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
@@ -48,7 +47,7 @@ export function ResetPasswordPage() {
         )
     }
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
         e.preventDefault()
         setValidationError(null)
 
