@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
+  Image,
   Modal,
   TouchableOpacity,
   ScrollView,
@@ -12,16 +13,25 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { pickImageFile } from "@/lib/uploads/picker";
+import type { LocalUploadFile } from "@/lib/queries/uploads";
+
 export interface UserProfileData {
   name: string;
   bio: string;
+  pictureUrl?: string;
+}
+
+export interface SaveProfileData extends UserProfileData {
+  pictureFile?: LocalUploadFile | null;
+  removePicture?: boolean;
 }
 
 interface EditProfileModalProps {
   visible: boolean;
   onClose: () => void;
   initialData: UserProfileData;
-  onSave: (data: UserProfileData) => void;
+  onSave: (data: SaveProfileData) => Promise<boolean | void> | boolean | void;
 }
 
 export function EditProfileModal({
@@ -34,22 +44,62 @@ export function EditProfileModal({
 
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
+  const [pictureFile, setPictureFile] = useState<LocalUploadFile | null>(null);
+  const [removePicture, setRemovePicture] = useState(false);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const [isSaving, setSaving] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setName(initialData.name);
       setBio(initialData.bio);
+      setPictureFile(null);
+      setRemovePicture(false);
+      setPickerError(null);
     }
   }, [visible, initialData]);
 
-  const handleSave = () => {
+  const handlePickAvatar = async () => {
+    try {
+      setPickerError(null);
+      const nextFile = await pickImageFile();
+      if (nextFile) {
+        setPictureFile(nextFile);
+        setRemovePicture(false);
+      }
+    } catch (error) {
+      setPickerError(
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Could not open your photo library.",
+      );
+    }
+  };
+
+  const handleSave = async () => {
     if (!name.trim()) {
       alert("Name cannot be empty!");
       return;
     }
-    onSave({ name: name.trim(), bio: bio.trim() });
+
+    setSaving(true);
+    const didSave = await onSave({
+      name: name.trim(),
+      bio: bio.trim(),
+      pictureUrl: initialData.pictureUrl,
+      pictureFile,
+      removePicture,
+    });
+    setSaving(false);
+
+    if (didSave === false) {
+      return;
+    }
     onClose();
   };
+
+  const previewUrl =
+    pictureFile?.uri || (!removePicture ? initialData.pictureUrl : "");
 
   return (
     <Modal
@@ -78,9 +128,12 @@ export function EditProfileModal({
           <TouchableOpacity
             testID="save-button"
             onPress={handleSave}
+            disabled={isSaving}
             className="bg-gray-900 px-5 py-2 rounded-full"
           >
-            <Text className="text-white font-bold text-sm">Save</Text>
+            <Text className="text-white font-bold text-sm">
+              {isSaving ? "Saving..." : "Save"}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -116,18 +169,50 @@ export function EditProfileModal({
                       className="w-22 h-22 bg-indigo-100 rounded-full items-center justify-center border-4 border-white overflow-hidden"
                       style={{ width: 88, height: 88 }}
                     >
-                      <Text className="text-3xl font-bold text-indigo-700">
-                        {name ? name.charAt(0).toUpperCase() : "?"}
-                      </Text>
+                      {previewUrl ? (
+                        <Image
+                          testID="avatar-preview"
+                          source={{ uri: previewUrl }}
+                          className="h-full w-full"
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Text className="text-3xl font-bold text-indigo-700">
+                          {name ? name.charAt(0).toUpperCase() : "?"}
+                        </Text>
+                      )}
                     </View>
                   </View>
                   <TouchableOpacity
+                    testID="avatar-picker-button"
                     className="absolute bottom-0 right-0 bg-gray-900 w-8 h-8 rounded-full items-center justify-center border-2 border-white"
-                    onPress={() => console.log("TODO: Change Avatar")}
+                    onPress={handlePickAvatar}
                   >
                     <Ionicons name="camera" size={14} color="white" />
                   </TouchableOpacity>
                 </View>
+                {previewUrl ? (
+                  <TouchableOpacity
+                    testID="avatar-remove-button"
+                    onPress={() => {
+                      setPictureFile(null);
+                      setRemovePicture(true);
+                    }}
+                    className="mt-3 rounded-full border border-gray-200 px-4 py-2"
+                  >
+                    <Text className="text-xs font-bold text-gray-600">
+                      Remove photo
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                {pickerError ? (
+                  <Text
+                    testID="avatar-picker-error"
+                    className="mt-2 text-xs font-semibold text-red-600"
+                  >
+                    {pickerError}
+                  </Text>
+                ) : null}
               </View>
             </View>
 

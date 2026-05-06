@@ -15,7 +15,7 @@ function extensionFromMimeType(mimeType?: string | null): string {
   return "jpg";
 }
 
-export async function pickPostImageFile(): Promise<LocalUploadFile | null> {
+export async function pickImageFile(): Promise<LocalUploadFile | null> {
   const result = await ImagePicker.launchImageLibraryAsync({
     allowsMultipleSelection: false,
     mediaTypes: ["images"],
@@ -40,3 +40,5 @@ export async function pickPostImageFile(): Promise<LocalUploadFile | null> {
     type,
   };
 }
+
+export const pickPostImageFile = pickImageFile;
