@@ -17,6 +17,12 @@ export const messaging = getMessaging(app);
 export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
 export const requestForToken = async () => {
+  if (typeof window !== 'undefined' && 'Notification' in window) {
+    if (Notification.permission === 'denied') {
+      console.log("Push notifications are blocked by the user.");
+      return null;
+    }
+  }
   try {
     const currentToken = await getToken(messaging, { vapidKey: VAPID_KEY });
     if (currentToken) {

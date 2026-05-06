@@ -421,6 +421,7 @@ class MyRequestsListAPIViewTests(MentorshipRequestAPIBaseTestCase):
         )
 
 
+@override_settings(REQUIRE_EMAIL_VERIFICATION=True)
 class CreateRequestAPIViewTests(MentorshipRequestAPIBaseTestCase):
     """Tests for POST /api/mentorship/requests/."""
 

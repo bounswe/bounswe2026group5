@@ -8,15 +8,16 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsRegularUser
+from accounts.models import Report
+from accounts.permissions import IsRegularUser, IsUser
+from accounts.serializers import ReportCreateSerializer
 from notifications.models import Notification, NotificationType
 from profiles.models import Profile
 
-from .models import Conversation, Message, MessageReport
+from .models import Conversation, Message
 from .serializers import (
     ConversationSerializer,
     MessageCreateSerializer,
-    MessageReportSerializer,
     MessageSerializer,
 )
 
@@ -184,39 +185,30 @@ class ConversationDetailAPIView(APIView):
 
 
 class MessageReportAPIView(APIView):
-    """Report a problematic message."""
+    """Report a problematic message using the global reporting system."""
 
-    permission_classes = []  # Allow any authenticated user, check participation inside
+    permission_classes = [IsUser]
 
     @extend_schema(
-        request=MessageReportSerializer,
+        request=ReportCreateSerializer,
         responses={
             201: OpenApiResponse(description="Report created."),
             400: OpenApiResponse(description="Validation error."),
             401: OpenApiResponse(description="Authentication required."),
-            403: OpenApiResponse(description="Admin access required."),
+            403: OpenApiResponse(description="Access denied."),
             404: OpenApiResponse(description="Message not found."),
         },
-        description="Report a problematic message for admin review.",
+        description="Report a problematic message for admin review via the global Report system.",
         tags=["Messages"],
     )
     def post(self, request: Request, message_id: str) -> Response:
         """Create a report for the message."""
-        if not request.user.is_authenticated:
-            return Response(
-                {"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED
-            )
-
         try:
             message = Message.objects.select_related(
-                "conversation__match__mentor", "conversation__match__mentee"
+                "sender__user", "conversation__match__mentor", "conversation__match__mentee"
             ).get(id=message_id)
         except Message.DoesNotExist:
             return Response({"detail": "Message not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = MessageReportSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         # Check if reporter is a participant or admin
         try:
@@ -232,13 +224,33 @@ class MessageReportAPIView(APIView):
         ):
             return Response({"detail": ACCESS_DENIED_MSG}, status=status.HTTP_403_FORBIDDEN)
 
-        # Help type-checker
-        validated_data = getattr(serializer, "validated_data", {})
+        # We inject the message and its sender into the request data if not provided,
+        # or we just use them directly to create the report.
+        data = request.data.copy()
+        data["related_message_id"] = message_id
+        data["reported_user_id"] = str(message.sender.user_id)
 
-        MessageReport.objects.create(
-            message=message,
-            reported_by=profile,
-            reason=validated_data.get("reason", ""),
+        serializer = ReportCreateSerializer(
+            data=data,
+            context={"request": request},
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check for existing report for this message by this user
+        if Report.objects.filter(related_message=message, submitted_by=request.user).exists():
+            return Response(
+                {"detail": "You have already reported this message."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Create the global report
+        Report.objects.create(
+            submitted_by=request.user,
+            reported_user=message.sender.user,
+            related_message=message,
+            reason=serializer.validated_data["reason"],
+            description=serializer.validated_data.get("description", ""),
         )
 
         return Response({"detail": "Report created."}, status=status.HTTP_201_CREATED)

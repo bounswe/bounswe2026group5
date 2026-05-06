@@ -178,7 +178,7 @@ export const myMatchesQueryOptions = queryOptions({
 export const myRequestsQueryOptions = queryOptions({
     queryKey: ['mentorship', 'requests'],
     queryFn: fetchMyRequests,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
     gcTime: Infinity,
 })
 

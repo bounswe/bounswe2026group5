@@ -277,6 +277,10 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
             .filter(r => r.status === 'PENDING')
             .map(r => r.slot_id)
     )
+    const hasPendingRequestForThisMentor = myRequests.some(
+        r => r.status === 'PENDING' && 
+             r.mentor.username.toLowerCase() === username.toLowerCase()
+    )
 
     const monday = getMonday(addDays(new Date(), weekOffset * 7))
     const weekDays = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
@@ -463,8 +467,13 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                                         <span className="text-accent font-medium text-xs">Available ✕</span>
                                                     </div>
                                             } else if (isAuthenticated) {
-                                                cellClass += 'bg-accent/10 border-accent/30 cursor-pointer hover:bg-accent/20'
-                                                cellContent = <div className="flex items-center justify-center h-full text-accent font-medium text-xs">Book</div>
+                                                if (hasPendingRequestForThisMentor) {
+                                                    cellClass += 'bg-accent/10 border-accent/30 opacity-50'
+                                                    cellContent = <div className="flex items-center justify-center h-full text-accent font-medium text-xs">Available</div>
+                                                } else {
+                                                    cellClass += 'bg-accent/10 border-accent/30 cursor-pointer hover:bg-accent/20'
+                                                    cellContent = <div className="flex items-center justify-center h-full text-accent font-medium text-xs">Book</div>
+                                                }
                                             } else {
                                                 cellClass += 'bg-accent/10 border-accent/30'
                                                 cellContent = <div className="flex items-center justify-center h-full text-accent font-medium text-xs">Available</div>
@@ -483,7 +492,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                                 key={key}
                                                 className={cellClass}
                                                 onClick={() => {
-                                                    if (isPast || isPending) return
+                                                    if (isPast || isPending || (!isOwner && hasPendingRequestForThisMentor)) return
                                                     if (isOwner && slot?.status !== 'BOOKED') {
                                                         handleCellClick(dateStr, hour, slot)
                                                     } else if (!isOwner && isAuthenticated && slot && slot.status !== 'BOOKED') {

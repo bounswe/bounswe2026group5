@@ -13,13 +13,13 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts.models import AppUsageMode, UserRole
+from accounts.models import AppUsageMode, Report, UserRole
 from mentorship.models import Match, MentorshipRequest
 from mentorship.services import ensure_match_and_initial_session
 from profiles.models import AvailabilitySlot, Profile
 
 from . import signals
-from .models import Conversation, Message, MessageReport
+from .models import Conversation, Message
 
 User: Any = get_user_model()
 
@@ -420,38 +420,47 @@ class MessageReportAPIViewTests(MessagingAPIBaseTestCase):
 
     def test_unauthenticated_returns_401(self) -> None:
         url = self._message_report_url(self.message.id)
-        response = self.anon_client.post(url, {"reason": "Spam"})
+        response = self.anon_client.post(url, {"reason": "SPAM"})
         self.assertEqual(response.status_code, 401)
 
     def test_non_participant_returns_403(self) -> None:
         url = self._message_report_url(self.message.id)
-        response = self.other_client.post(url, {"reason": "Spam"})
+        response = self.other_client.post(url, {"reason": "SPAM"})
         self.assertEqual(response.status_code, 403)
 
     def test_participant_can_report_message(self) -> None:
         url = self._message_report_url(self.message.id)
-        response = self.mentee_client.post(url, {"reason": "Inappropriate content"})
+        response = self.mentee_client.post(url, {"reason": "SPAM"})
         self.assertEqual(response.status_code, 201)
 
-        # Check report was created
+        # Check report was created in global Report table
         self.assertTrue(
-            MessageReport.objects.filter(
-                message=self.message, reported_by=self.mentee_profile
+            Report.objects.filter(
+                related_message=self.message, submitted_by=self.mentee_user
             ).exists()
         )
+
+    def test_duplicate_report_rejected(self) -> None:
+        url = self._message_report_url(self.message.id)
+        # First report
+        self.mentee_client.post(url, {"reason": "SPAM"})
+        # Second report
+        response = self.mentee_client.post(url, {"reason": "HARASSMENT"})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("already reported", response.data["detail"])
 
     def test_admin_can_report_message(self) -> None:
         # Even though admin can't read messages normally,
         # they can report if they somehow access the message
         # But in practice, admins shouldn't access message IDs without proper channels
         url = self._message_report_url(self.message.id)
-        response = self.admin_client.post(url, {"reason": "Admin review"})
+        response = self.admin_client.post(url, {"reason": "OTHER"})
         self.assertEqual(response.status_code, 201)
 
     def test_message_not_found_returns_404(self) -> None:
         url = self._message_report_url(uuid.uuid4())
 
-        response = self.mentee_client.post(url, {"reason": "Spam"})
+        response = self.mentee_client.post(url, {"reason": "SPAM"})
 
         self.assertEqual(response.status_code, 404)
 
@@ -468,7 +477,7 @@ class MessageReportAPIViewTests(MessagingAPIBaseTestCase):
         )
 
         url = self._message_report_url(self.message.id)
-        response: Any = no_profile_client.post(url, {"reason": "Spam"})
+        response: Any = no_profile_client.post(url, {"reason": "SPAM"})
 
         self.assertEqual(response.status_code, 404)
 
@@ -527,42 +536,6 @@ class MessagingModelTests(TestCase):
         self.assertEqual(message.sender, self.mentor_profile)
         self.assertEqual(message.body, "Test message")
 
-    def test_message_report_creation(self) -> None:
-        conversation = Conversation.objects.get(match=self.match)
-        message = Message.objects.create(
-            conversation=conversation,
-            sender=self.mentor_profile,
-            body="Test message",
-        )
-        report = MessageReport.objects.create(
-            message=message,
-            reported_by=self.mentee_profile,
-            reason="Inappropriate",
-        )
-        self.assertEqual(report.message, message)
-        self.assertEqual(report.reported_by, self.mentee_profile)
-        self.assertEqual(report.reason, "Inappropriate")
-
-    def test_unique_message_report_per_reporter(self) -> None:
-        conversation = Conversation.objects.get(match=self.match)
-        message = Message.objects.create(
-            conversation=conversation,
-            sender=self.mentor_profile,
-            body="Test message",
-        )
-        MessageReport.objects.create(
-            message=message,
-            reported_by=self.mentee_profile,
-            reason="First report",
-        )
-        # Second report from same user should fail with unique constraint violation.
-        with self.assertRaises(IntegrityError):
-            MessageReport.objects.create(
-                message=message,
-                reported_by=self.mentee_profile,
-                reason="Second report",
-            )
-
     def test_model_string_representations(self) -> None:
         conversation = Conversation.objects.get(match=self.match)
         message = Message.objects.create(
@@ -570,15 +543,9 @@ class MessagingModelTests(TestCase):
             sender=self.mentor_profile,
             body="Test message",
         )
-        report = MessageReport.objects.create(
-            message=message,
-            reported_by=self.mentee_profile,
-            reason="Inappropriate",
-        )
 
         self.assertIn(str(self.match.id), str(conversation))
         self.assertIn(str(self.mentor_profile.id), str(message))
-        self.assertIn(str(message.id), str(report))
 
 
 class MessagingSignalsTests(TestCase):
