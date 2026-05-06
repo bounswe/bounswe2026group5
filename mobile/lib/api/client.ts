@@ -1,6 +1,8 @@
 import { API_BASE_URL } from "@/lib/api/config";
 import { useAuthStore } from "@/lib/auth/store";
 import { fetchWithTimeout } from "@/lib/api/fetchWithTimeout";
+import { router } from "expo-router";
+import { Alert } from "react-native";
 
 /**
  * Error type thrown when an API request fails.
@@ -26,6 +28,27 @@ export class ApiValidationError extends ApiError {
   }
 }
 
+let isHandlingBan = false;
+
+function isBanForbiddenResponse(status: number, message: string): boolean {
+  return status === 403 && message.toLowerCase().includes("ban");
+}
+
+async function handleBanForbiddenResponse(message: string): Promise<void> {
+  if (isHandlingBan) {
+    return;
+  }
+
+  isHandlingBan = true;
+  try {
+    await useAuthStore.getState().logout();
+    Alert.alert("Your account is banned", message);
+    router.replace("/login");
+  } finally {
+    isHandlingBan = false;
+  }
+}
+
 /**
  * Perform a typed GET request against the backend API.
  * Uses the access token from auth store.
@@ -45,6 +68,9 @@ export async function apiGet<T>(path: string): Promise<T> {
 
   if (!response.ok) {
     const message = await readErrorMessage(response);
+    if (isBanForbiddenResponse(response.status, message)) {
+      await handleBanForbiddenResponse(message);
+    }
     throw new ApiError(response.status, message);
   }
 
@@ -76,6 +102,9 @@ export async function apiPost<TResponse, TPayload = unknown>(
 
   if (!response.ok) {
     const message = await readErrorMessage(response);
+    if (isBanForbiddenResponse(response.status, message)) {
+      await handleBanForbiddenResponse(message);
+    }
     throw new ApiError(response.status, message);
   }
 
@@ -111,6 +140,9 @@ export async function apiPatch<TResponse, TPayload>(
 
   if (!response.ok) {
     const message = await readErrorMessage(response);
+    if (isBanForbiddenResponse(response.status, message)) {
+      await handleBanForbiddenResponse(message);
+    }
     throw new ApiError(response.status, message);
   }
 
@@ -142,6 +174,9 @@ export async function apiPut<TResponse, TPayload = unknown>(
 
   if (!response.ok) {
     const message = await readErrorMessage(response);
+    if (isBanForbiddenResponse(response.status, message)) {
+      await handleBanForbiddenResponse(message);
+    }
     throw new ApiError(response.status, message);
   }
 
@@ -173,6 +208,9 @@ export async function apiDelete<TResponse = void>(
 
   if (!response.ok) {
     const message = await readErrorMessage(response);
+    if (isBanForbiddenResponse(response.status, message)) {
+      await handleBanForbiddenResponse(message);
+    }
     throw new ApiError(response.status, message);
   }
 
