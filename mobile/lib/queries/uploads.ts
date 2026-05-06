@@ -15,7 +15,7 @@ export interface ProfilePictureUploadResponse {
   picture_url: string;
 }
 
-function appendUploadFile(
+export function appendUploadFile(
   formData: FormData,
   fieldName: string,
   file: LocalUploadFile,

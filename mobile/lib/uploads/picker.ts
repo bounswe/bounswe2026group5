@@ -42,3 +42,31 @@ export async function pickImageFile(): Promise<LocalUploadFile | null> {
 }
 
 export const pickPostImageFile = pickImageFile;
+
+export async function pickMessageImageFile(): Promise<LocalUploadFile | null> {
+  return pickImageFile();
+}
+
+export async function pickMessagePdfFile(): Promise<LocalUploadFile | null> {
+  const DocumentPicker = await import("expo-document-picker");
+  const result = await DocumentPicker.getDocumentAsync({
+    type: "application/pdf",
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+
+  if (result.canceled) {
+    return null;
+  }
+
+  const asset = result.assets[0];
+  if (!asset) {
+    return null;
+  }
+
+  return {
+    uri: asset.uri,
+    name: asset.name || "attachment.pdf",
+    type: asset.mimeType || "application/pdf",
+  };
+}
