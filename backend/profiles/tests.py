@@ -4968,13 +4968,11 @@ class CoPTaggingTests(TestCase):
 
     def test_validate_tagged_users_accepts_community_member(self) -> None:
         """Community members (not mentorship connection) can be tagged."""
-        from django.core.exceptions import ValidationError as DjangoValidationError
-
         from profiles.services import validate_tagged_users_list
 
         result = validate_tagged_users_list(
             author=self.author_profile,
-            tagged_user_ids=[str(self.community_only_profile.id)],
+            tagged_usernames=[self.community_only_profile.username],
             community_id=str(self.community.id),
         )
         self.assertEqual(len(result), 1)
@@ -4987,7 +4985,7 @@ class CoPTaggingTests(TestCase):
 
         result = validate_tagged_users_list(
             author=self.author_profile,
-            tagged_user_ids=[str(self.mentorship_profile.id)],
+            tagged_usernames=[self.mentorship_profile.username],
             community_id=str(self.community.id),
         )
         self.assertEqual(len(result), 1)
@@ -5002,7 +5000,7 @@ class CoPTaggingTests(TestCase):
         with self.assertRaises(DjangoValidationError):
             validate_tagged_users_list(
                 author=self.author_profile,
-                tagged_user_ids=[str(self.author_profile.id)],
+                tagged_usernames=[self.author_profile.username],
                 community_id=str(self.community.id),
             )
 
@@ -5015,7 +5013,7 @@ class CoPTaggingTests(TestCase):
         with self.assertRaises(DjangoValidationError):
             validate_tagged_users_list(
                 author=self.author_profile,
-                tagged_user_ids=[str(self.unrelated_profile.id)],
+                tagged_usernames=[self.unrelated_profile.username],
                 community_id=str(self.community.id),
             )
 
@@ -5040,11 +5038,11 @@ class CoPTaggingTests(TestCase):
             extra_profiles.append(p)
 
         # Try to tag 6 users (exceeds default limit of 5)
-        user_ids = [str(p.id) for p in extra_profiles]
+        usernames = [p.username for p in extra_profiles]
         with self.assertRaises(DjangoValidationError):
             validate_tagged_users_list(
                 author=self.author_profile,
-                tagged_user_ids=user_ids,
+                tagged_usernames=usernames,
                 community_id=str(self.community.id),
             )
 
@@ -5058,10 +5056,10 @@ class CoPTaggingTests(TestCase):
         with self.assertRaises(DjangoValidationError):
             validate_tagged_users_list(
                 author=self.author_profile,
-                tagged_user_ids=[
-                    str(self.community_only_profile.id),
-                    str(self.mentorship_profile.id),
-                    str(self.author_profile.id),  # 3 users, exceeds limit of 2
+                tagged_usernames=[
+                    self.community_only_profile.username,
+                    self.mentorship_profile.username,
+                    self.author_profile.username,  # 3 users, exceeds limit of 2
                 ],
                 community_id=str(self.community.id),
             )
@@ -5073,7 +5071,7 @@ class CoPTaggingTests(TestCase):
             community_tag=self.community,
             event_type="social",
             content="Hello with tags",
-            tagged_users=[str(self.community_only_profile.id)],
+            tagged_users=[self.community_only_profile.username],
         )
 
         self.assertIn("tagged_users", event.payload)
@@ -5090,7 +5088,7 @@ class CoPTaggingTests(TestCase):
             community_tag=self.community,
             event_type="social",
             content="Post with snapshot test",
-            tagged_users=[str(self.community_only_profile.id)],
+            tagged_users=[self.community_only_profile.username],
         )
 
         # Simulate username change after tagging
@@ -5121,13 +5119,13 @@ class CoPTaggingTests(TestCase):
             community_tag=self.community,
             event_type="social",
             content="Original",
-            tagged_users=[str(self.mentorship_profile.id)],
+            tagged_users=[self.mentorship_profile.username],
         )
 
         updated = edit_cop_event(
             event=event,
             content="Updated",
-            tagged_users=[str(self.community_only_profile.id)],
+            tagged_users=[self.community_only_profile.username],
         )
 
         tagged_ids = [t["user_id"] for t in updated.payload["tagged_users"]]
@@ -5145,7 +5143,7 @@ class CoPTaggingTests(TestCase):
             community_tag=self.community,
             event_type="social",
             content="Original",
-            tagged_users=[str(self.mentorship_profile.id)],
+            tagged_users=[self.mentorship_profile.username],
         )
 
         # Remove mentorship_profile from community so only mentorship link is relevant
@@ -5161,7 +5159,7 @@ class CoPTaggingTests(TestCase):
         updated = edit_cop_event(
             event=event,
             content="Edited - kept previously-tagged user",
-            tagged_users=[str(self.mentorship_profile.id)],
+            tagged_users=[self.mentorship_profile.username],
         )
 
         tagged_ids = [t["user_id"] for t in updated.payload["tagged_users"]]
@@ -5180,7 +5178,7 @@ class CoPTaggingTests(TestCase):
             community_tag=self.community,
             event_type="social",
             content="Original",
-            tagged_users=[str(self.mentorship_profile.id)],
+            tagged_users=[self.mentorship_profile.username],
         )
 
         # Remove mentorship_profile from community
@@ -5195,7 +5193,7 @@ class CoPTaggingTests(TestCase):
         updated = edit_cop_event(
             event=event,
             content="Edited - only community_only tagged",
-            tagged_users=[str(self.community_only_profile.id)],
+            tagged_users=[self.community_only_profile.username],
         )
 
         # Only community_only_profile should be tagged; mentorship_profile was omitted
@@ -5215,7 +5213,7 @@ class CoPTaggingTests(TestCase):
             community_tag=self.community,
             event_type="social",
             content="Original",
-            tagged_users=[str(self.mentorship_profile.id)],
+            tagged_users=[self.mentorship_profile.username],
         )
 
         # Remove mentorship_profile from community and deactivate match
@@ -5238,7 +5236,7 @@ class CoPTaggingTests(TestCase):
             edit_cop_event(
                 event=event,
                 content="Re-add attempt",
-                tagged_users=[str(self.mentorship_profile.id)],
+                tagged_users=[self.mentorship_profile.username],
             )
 
     def test_edit_allows_removing_tag(self) -> None:
@@ -5250,7 +5248,7 @@ class CoPTaggingTests(TestCase):
             community_tag=self.community,
             event_type="social",
             content="Original",
-            tagged_users=[str(self.mentorship_profile.id)],
+            tagged_users=[self.mentorship_profile.username],
         )
 
         # Remove the tag by passing an empty list
@@ -5272,7 +5270,7 @@ class CoPTaggingTests(TestCase):
             {
                 "event_type": "social",
                 "content": "API post with tags",
-                "tagged_users": [str(self.community_only_profile.id)],
+                "tagged_users": [self.community_only_profile.username],
             },
             format="json",
         )
@@ -5292,7 +5290,7 @@ class CoPTaggingTests(TestCase):
             {
                 "event_type": "social",
                 "content": "Bad tags",
-                "tagged_users": [str(self.unrelated_profile.id)],
+                "tagged_users": [self.unrelated_profile.username],
             },
             format="json",
         )
@@ -5307,7 +5305,7 @@ class CoPTaggingTests(TestCase):
             {
                 "event_type": "social",
                 "content": "Self tag",
-                "tagged_users": [str(self.author_profile.id)],
+                "tagged_users": [self.author_profile.username],
             },
             format="json",
         )
@@ -5321,7 +5319,7 @@ class CoPTaggingTests(TestCase):
             community_tag=self.community,
             event_type="social",
             content="Listed post with tags",
-            tagged_users=[str(self.community_only_profile.id)],
+            tagged_users=[self.community_only_profile.username],
         )
 
         self._auth_author()
@@ -5345,7 +5343,7 @@ class CoPTaggingTests(TestCase):
             community_tag=self.community,
             event_type="social",
             content="Original with tags",
-            tagged_users=[str(self.mentorship_profile.id)],
+            tagged_users=[self.mentorship_profile.username],
         )
 
         self._auth_author()
@@ -5353,7 +5351,7 @@ class CoPTaggingTests(TestCase):
             self._detail_url(str(event.id)),
             {
                 "content": "Updated with different tags",
-                "tagged_users": [str(self.community_only_profile.id)],
+                "tagged_users": [self.community_only_profile.username],
             },
             format="json",
         )
@@ -5371,7 +5369,7 @@ class CoPTaggingTests(TestCase):
         # Let's validate as mentee tagging the mentor
         result = validate_tagged_users_list(
             author=self.mentorship_profile,
-            tagged_user_ids=[str(self.author_profile.id)],
+            tagged_usernames=[self.author_profile.username],
             community_id=str(self.community.id),
         )
         self.assertEqual(len(result), 1)

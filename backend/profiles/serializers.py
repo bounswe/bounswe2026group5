@@ -952,7 +952,7 @@ class CoPCreateSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
     def validate_tagged_users(self, value: list) -> list:
-        """Validate tagged_users field (user IDs as strings)."""
+        """Validate tagged_users field (usernames as strings)."""
         # Validation logic will be handled in the view/service layer
         # where we have access to author and community context
         return value
@@ -981,7 +981,7 @@ class CoPUpdateSerializer(serializers.Serializer):
     )
 
     def validate_tagged_users(self, value: list) -> list:
-        """Validate tagged_users field (user IDs as strings)."""
+        """Validate tagged_users field (usernames as strings)."""
         # Validation logic will be handled in the view/service layer
         # where we have access to author and community context
         return value

@@ -1668,7 +1668,7 @@ class CommunityTagPostsListCreateAPIView(ProfileLookupMixin, APIView):
             "this post on the author's profile feed. "
             "`timestamp` is optional; defaults to creation time. "
             "\n\n"
-            "**User Tagging** — optional `tagged_users` field accepts a list of profile UUIDs "
+            "**User Tagging** — optional `tagged_users` field accepts a list of usernames "
             "(up to `COP_MAX_TAGS`, currently 5). Only the author's active mentorship connections "
             "(bidirectional) and members of this community may be tagged. "
             "The author may not tag themselves. "
