@@ -3,6 +3,8 @@
 import uuid
 from typing import Any
 
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 from django.db.models.functions import Coalesce
@@ -43,6 +45,174 @@ class InvalidPrPEventTypeError(Exception):
 
 class InvalidCoPEventTypeError(Exception):
     """Raised when an unsupported event_type is supplied for a community post."""
+
+
+# ============================================================================
+# CoP Tagging Utilities
+# ============================================================================
+
+
+def get_taggable_users(author_profile: Profile) -> Any:
+    """Get users who can be tagged in a CoP by the given author.
+
+    Taggable users are active mentorship connections (both directions).
+    Community members are resolved separately in validate_tagged_users_list.
+
+    Args:
+        author_profile: The Profile of the CoP author.
+
+    Returns:
+        A QuerySet of Profile objects that can be tagged via mentorship.
+    """
+    # Get all active mentorship connections (bidirectional) via ORM related names.
+    # mentor_matches / mentee_matches are defined on the Match model.
+    mentorship_connections = Profile.objects.filter(
+        Q(mentor_matches__is_active=True, mentor_matches__mentee=author_profile)
+        | Q(mentee_matches__is_active=True, mentee_matches__mentor=author_profile)
+    ).distinct()
+
+    return mentorship_connections.exclude(id=author_profile.id)
+
+
+def get_tagged_user_info(user_id: str, username_snapshot: str | None = None) -> dict[str, str]:
+    """Get or construct tagged user information.
+
+    If user exists, returns the current username. If user was deleted, uses the
+    provided username_snapshot (from when the tag was created).
+
+    Args:
+        user_id: UUID of the user to tag.
+        username_snapshot: Username at tag-time (used if user was deleted).
+
+    Returns:
+        Dict with 'user_id' and 'username' keys.
+
+    Raises:
+        Profile.DoesNotExist: If user doesn't exist and no snapshot provided.
+    """
+    try:
+        user = Profile.objects.only("id", "username").get(id=user_id)
+        return {
+            "user_id": str(user_id),
+            "username": user.username,
+        }
+    except Profile.DoesNotExist:
+        if username_snapshot is None:
+            raise
+        # Fallback to snapshot if user was deleted
+        return {
+            "user_id": str(user_id),
+            "username": username_snapshot,
+        }
+
+
+def validate_tagged_users_list(
+    author: Profile,
+    tagged_user_ids: list[str] | None,
+    community_id: str | None,
+    previous_tagged_user_ids: list[str] | None = None,
+) -> list[dict[str, str]]:
+    """Validate and build tagged users list for a CoP.
+
+    Validation rules:
+    - No more than COP_MAX_TAGS users (default 5).
+    - All tagged users must exist.
+    - Tagged users must be either mentorship connections or community members.
+    - Author cannot tag themselves.
+    - During editing, users who were previously tagged but are now untaggable
+      are preserved if they are NOT in the new tagged_user_ids list (merge logic).
+      If re-added to the new list, they are rejected.
+
+    Args:
+        author: The Profile of the CoP author.
+        tagged_user_ids: List of user IDs to tag (can be None/empty for new posts).
+        community_id: UUID of the community where the CoP is posted.
+        previous_tagged_user_ids: List of previously tagged user IDs (for editing).
+
+    Returns:
+        List of dicts with 'user_id' and 'username' keys (snapshot at tag-time).
+
+    Raises:
+        ValidationError: If validation fails.
+    """
+    from .models import CommunityTag, CommunityTagMembership
+
+    max_tags = getattr(settings, "COP_MAX_TAGS", 5)
+    tagged_user_ids = tagged_user_ids or []
+    previous_tagged_user_ids = previous_tagged_user_ids or []
+
+    # --- Basic Constraints --------------------------------------------------
+
+    if len(tagged_user_ids) > max_tags:
+        raise ValidationError(
+            f"Cannot tag more than {max_tags} users. Got {len(tagged_user_ids)}."
+        )
+
+    if str(author.id) in [str(uid) for uid in tagged_user_ids]:
+        raise ValidationError("You cannot tag yourself.")
+
+    # Convert to sets of UUIDs for set operations
+    new_tagged_ids = {
+        uuid.UUID(uid) if isinstance(uid, str) else uid for uid in tagged_user_ids
+    }
+    prev_tagged_ids = {
+        uuid.UUID(uid) if isinstance(uid, str) else uid for uid in previous_tagged_user_ids
+    }
+
+    # --- Determine Currently Taggable Users ---------------------------------
+
+    taggable_by_mentorship = set(get_taggable_users(author).values_list("id", flat=True))
+
+    taggable_by_community: set = set()
+    if community_id:
+        try:
+            community = CommunityTag.objects.only("id").get(id=community_id)
+            taggable_by_community = set(
+                CommunityTagMembership.objects.filter(tag=community).values_list(
+                    "profile__id", flat=True
+                )
+            )
+        except CommunityTag.DoesNotExist:
+            raise ValidationError(f"Community with ID {community_id} does not exist.")
+
+    currently_taggable = taggable_by_mentorship | taggable_by_community
+
+    # --- Enforce Permissions (with Merge Logic) -----------------------------
+
+    # Only validate NEWLY added tags (users not previously tagged).
+    # Previously tagged users can remain in the list even if now untaggable,
+    # because the editor is explicitly choosing to keep them (by including them
+    # in the submitted list). Users not in the submitted list are removed.
+    # This means: if the editor wants to keep a now-untaggable user, they must
+    # include them in the new list; if they omit them, they are removed.
+    # Once removed, a now-untaggable user cannot be re-added.
+    newly_tagged = new_tagged_ids - prev_tagged_ids
+    unallowed_new_tags = newly_tagged - currently_taggable
+
+    if unallowed_new_tags:
+        unallowed_names = ", ".join(str(uid) for uid in unallowed_new_tags)
+        raise ValidationError(
+            f"Cannot tag users: {unallowed_names}. "
+            f"They are not in your mentorship connections or the community."
+        )
+
+    # Final state = exactly what the editor submitted (after validation).
+    # No auto-preservation: omitting a user removes them.
+    final_tagged_ids = new_tagged_ids
+
+    # --- Build Snapshot List ------------------------------------------------
+
+    tagged_users_list = []
+    for user_id in final_tagged_ids:
+        try:
+            user_info = get_tagged_user_info(str(user_id))
+            tagged_users_list.append(user_info)
+        except Profile.DoesNotExist:
+            raise ValidationError(
+                f"User with ID {user_id} does not exist and cannot be tagged."
+            )
+
+    return tagged_users_list
 
 
 def book_availability_slot(*, profile: Profile, slot_id, actor) -> AvailabilitySlot:
@@ -292,10 +462,28 @@ def create_cop_event(
     media_url: str | None = None,
     show_on_profile: bool = False,
     timestamp: Any | None = None,
+    tagged_users: list[str] | None = None,
 ) -> Any:
     """Create and persist a community post (CoP).
 
     If timestamp is omitted, event timestamp is aligned with created_at.
+
+    Args:
+        author_profile: The Profile of the CoP author.
+        community_tag: The CommunityTag where the CoP is posted.
+        event_type: Type of event (must be valid TimelineEvent.MCTEEventType).
+        content: The post content text.
+        media_url: Optional URL to media associated with the post.
+        show_on_profile: Whether to show this CoP on the author's profile.
+        timestamp: Optional custom timestamp (defaults to creation time).
+        tagged_users: List of user IDs to tag (will be validated and stored with snapshots).
+
+    Returns:
+        The created TimelineEvent object.
+
+    Raises:
+        InvalidCoPEventTypeError: If event_type is invalid.
+        ValidationError: If tagged_users validation fails.
     """
     from timeline.models import TimelineEvent
 
@@ -304,6 +492,20 @@ def create_cop_event(
             f"Invalid CoP event_type: '{event_type}'. "
             f"Must be one of {TimelineEvent.MCTEEventType.values}."
         )
+
+    # Validate and build tagged users list
+    validated_tagged_users = validate_tagged_users_list(
+        author=author_profile,
+        tagged_user_ids=tagged_users,
+        community_id=str(community_tag.id),
+        previous_tagged_user_ids=None,
+    )
+
+    # Build payload with community name and tagged users
+    payload = {
+        "community_name": community_tag.name,
+        "tagged_users": validated_tagged_users,
+    }
 
     event = TimelineEvent.objects.create(
         source_id=f"cop:{uuid.uuid4()}",
@@ -315,7 +517,7 @@ def create_cop_event(
         media_url=media_url,
         show_on_profile=show_on_profile,
         timestamp=timestamp if timestamp is not None else timezone.now(),
-        payload={"community_name": community_tag.name},
+        payload=payload,
     )
 
     if timestamp is None:
@@ -333,8 +535,31 @@ def edit_cop_event(
     media_url: str | None = None,
     show_on_profile: bool | None = None,
     update_media_url: bool = False,
+    tagged_users: list[str] | None = None,
 ) -> Any:
-    """Partially update a community post and set last_edited."""
+    """Partially update a community post and set last_edited.
+
+    When tagged_users is provided, applies merge logic:
+    - New tags must be currently allowed (mentorship/community member)
+    - Previously tagged users remain tagged even if now unallowed
+    - (per requirements for backward compatibility)
+
+    Args:
+        event: The TimelineEvent to update.
+        content: New content text (if provided).
+        event_type: New event type (if provided).
+        media_url: New media URL (if provided).
+        show_on_profile: New visibility setting (if provided).
+        update_media_url: Whether to actually update media_url.
+        tagged_users: New list of user IDs to tag (None = don't change).
+
+    Returns:
+        The updated TimelineEvent object.
+
+    Raises:
+        InvalidCoPEventTypeError: If event_type is invalid.
+        ValidationError: If tagged_users validation fails.
+    """
     from timeline.models import TimelineEvent
 
     if event_type is not None and event_type not in TimelineEvent.MCTEEventType.values:
@@ -360,6 +585,27 @@ def edit_cop_event(
     if show_on_profile is not None:
         event.show_on_profile = show_on_profile
         update_fields.append("show_on_profile")
+
+    # Handle tagged_users with merge logic
+    if tagged_users is not None:
+        # Get previous tagged users from payload
+        previous_payload = event.payload or {}
+        previous_tagged_users = previous_payload.get("tagged_users", [])
+        previous_tagged_user_ids = [tag["user_id"] for tag in previous_tagged_users]
+
+        # Validate and build new tagged users list (with merge logic)
+        validated_tagged_users = validate_tagged_users_list(
+            author=event.author,
+            tagged_user_ids=tagged_users,
+            community_id=str(event.community_id) if event.community_id else None,
+            previous_tagged_user_ids=previous_tagged_user_ids,
+        )
+
+        # Update payload with new tagged_users
+        if event.payload is None:
+            event.payload = {}
+        event.payload["tagged_users"] = validated_tagged_users
+        update_fields.append("payload")
 
     event.last_edited = timezone.now()
     event.save(update_fields=update_fields)

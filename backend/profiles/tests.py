@@ -4867,3 +4867,512 @@ class ProfileFeedDeletionScenarioTests(TestCase):
             item for item in response.data["results"] if item["source_id"] == event.source_id
         )
         self.assertEqual(result["community_name"], "Renamed Community")
+
+
+class CoPTaggingTests(TestCase):
+    """Tests for CoP user tagging feature."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+
+        # Author of the CoP
+        self.author_user = User.objects.create_user(
+            email="cop-author@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.author_profile = Profile.objects.create(
+            user=self.author_user,
+            username="cop_author_tag",
+            display_name="CoP Author",
+        )
+
+        # User connected via mentorship (as mentee)
+        self.mentorship_user = User.objects.create_user(
+            email="mentorship-user@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentorship_profile = Profile.objects.create(
+            user=self.mentorship_user,
+            username="mentorship_connection",
+            display_name="Mentorship Connection",
+        )
+
+        # User who is only a community member (no mentorship)
+        self.community_only_user = User.objects.create_user(
+            email="community-only@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.community_only_profile = Profile.objects.create(
+            user=self.community_only_user,
+            username="community_only_user",
+            display_name="Community Only",
+        )
+
+        # Unrelated user: no mentorship, not in community
+        self.unrelated_user = User.objects.create_user(
+            email="unrelated@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.unrelated_profile = Profile.objects.create(
+            user=self.unrelated_user,
+            username="unrelated_user",
+            display_name="Unrelated User",
+        )
+
+        # Community setup
+        self.community = CommunityTag.objects.create(
+            name="Tag Test Community",
+            description="Community for tagging tests",
+            created_by=self.author_profile,
+        )
+        CommunityTagMembership.objects.create(
+            profile=self.author_profile,
+            tag=self.community,
+        )
+        CommunityTagMembership.objects.create(
+            profile=self.community_only_profile,
+            tag=self.community,
+        )
+        CommunityTagMembership.objects.create(
+            profile=self.mentorship_profile,
+            tag=self.community,
+        )
+
+        # Active mentorship connection (author is mentor, mentorship_profile is mentee)
+        self.mentorship_request = MentorshipRequest.objects.create(
+            mentor=self.author_profile,
+            mentee=self.mentorship_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        self.active_match = Match.objects.create(
+            mentor=self.author_profile,
+            mentee=self.mentorship_profile,
+            request=self.mentorship_request,
+            is_active=True,
+        )
+
+        self.author_token = str(RefreshToken.for_user(self.author_user).access_token)
+        self.create_url = f"/api/profiles/tags/{self.community.id}/posts/"
+
+    def _auth_author(self) -> None:
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.author_token}")
+
+    def _detail_url(self, event_id: str) -> str:
+        return f"/api/profiles/tags/{self.community.id}/posts/{event_id}/"
+
+    # ------------------------------------------------------------------ service layer
+
+    def test_validate_tagged_users_accepts_community_member(self) -> None:
+        """Community members (not mentorship connection) can be tagged."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from profiles.services import validate_tagged_users_list
+
+        result = validate_tagged_users_list(
+            author=self.author_profile,
+            tagged_user_ids=[str(self.community_only_profile.id)],
+            community_id=str(self.community.id),
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["user_id"], str(self.community_only_profile.id))
+        self.assertEqual(result[0]["username"], self.community_only_profile.username)
+
+    def test_validate_tagged_users_accepts_mentorship_connection(self) -> None:
+        """Active mentorship connections can be tagged."""
+        from profiles.services import validate_tagged_users_list
+
+        result = validate_tagged_users_list(
+            author=self.author_profile,
+            tagged_user_ids=[str(self.mentorship_profile.id)],
+            community_id=str(self.community.id),
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["username"], self.mentorship_profile.username)
+
+    def test_validate_tagged_users_rejects_self_tag(self) -> None:
+        """Author cannot tag themselves."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from profiles.services import validate_tagged_users_list
+
+        with self.assertRaises(DjangoValidationError):
+            validate_tagged_users_list(
+                author=self.author_profile,
+                tagged_user_ids=[str(self.author_profile.id)],
+                community_id=str(self.community.id),
+            )
+
+    def test_validate_tagged_users_rejects_unrelated_user(self) -> None:
+        """Users not in mentorship or community cannot be tagged."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from profiles.services import validate_tagged_users_list
+
+        with self.assertRaises(DjangoValidationError):
+            validate_tagged_users_list(
+                author=self.author_profile,
+                tagged_user_ids=[str(self.unrelated_profile.id)],
+                community_id=str(self.community.id),
+            )
+
+    def test_validate_tagged_users_rejects_exceeding_max_tags(self) -> None:
+        """Tagging more than COP_MAX_TAGS users raises ValidationError."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from profiles.services import validate_tagged_users_list
+
+        # Create enough extra community members to exceed the limit
+        extra_profiles = []
+        for i in range(6):
+            u = User.objects.create_user(
+                email=f"extra-user-{i}@example.com",
+                password="SecurePass123",
+                app_usage_mode=AppUsageMode.MENTEE,
+            )
+            p = Profile.objects.create(
+                user=u, username=f"extra_user_{i}", display_name=f"Extra {i}"
+            )
+            CommunityTagMembership.objects.create(profile=p, tag=self.community)
+            extra_profiles.append(p)
+
+        # Try to tag 6 users (exceeds default limit of 5)
+        user_ids = [str(p.id) for p in extra_profiles]
+        with self.assertRaises(DjangoValidationError):
+            validate_tagged_users_list(
+                author=self.author_profile,
+                tagged_user_ids=user_ids,
+                community_id=str(self.community.id),
+            )
+
+    @override_settings(COP_MAX_TAGS=2)
+    def test_validate_tagged_users_respects_custom_max_tags(self) -> None:
+        """COP_MAX_TAGS setting is respected."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from profiles.services import validate_tagged_users_list
+
+        with self.assertRaises(DjangoValidationError):
+            validate_tagged_users_list(
+                author=self.author_profile,
+                tagged_user_ids=[
+                    str(self.community_only_profile.id),
+                    str(self.mentorship_profile.id),
+                    str(self.author_profile.id),  # 3 users, exceeds limit of 2
+                ],
+                community_id=str(self.community.id),
+            )
+
+    def test_tagged_users_stored_in_payload_on_create(self) -> None:
+        """tagged_users are stored in payload when CoP is created."""
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Hello with tags",
+            tagged_users=[str(self.community_only_profile.id)],
+        )
+
+        self.assertIn("tagged_users", event.payload)
+        tagged = event.payload["tagged_users"]
+        self.assertEqual(len(tagged), 1)
+        self.assertEqual(tagged[0]["user_id"], str(self.community_only_profile.id))
+        self.assertEqual(tagged[0]["username"], self.community_only_profile.username)
+
+    def test_tagged_users_username_snapshot_used(self) -> None:
+        """Username is captured as a snapshot at tag-time."""
+        original_username = self.community_only_profile.username
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Post with snapshot test",
+            tagged_users=[str(self.community_only_profile.id)],
+        )
+
+        # Simulate username change after tagging
+        self.community_only_profile.username = "changed_username"
+        self.community_only_profile.save(update_fields=["username"])
+
+        # The snapshot in the payload should still hold the old name
+        event.refresh_from_db()
+        tagged = event.payload["tagged_users"]
+        self.assertEqual(tagged[0]["username"], original_username)
+
+    def test_no_tags_creates_empty_list(self) -> None:
+        """CoP with no tagged_users has an empty list in payload."""
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="No tags",
+        )
+        self.assertEqual(event.payload.get("tagged_users", []), [])
+
+    def test_edit_cop_updates_tagged_users(self) -> None:
+        """Editing a CoP with a new tagged_users list replaces the tags."""
+        from profiles.services import edit_cop_event
+
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Original",
+            tagged_users=[str(self.mentorship_profile.id)],
+        )
+
+        updated = edit_cop_event(
+            event=event,
+            content="Updated",
+            tagged_users=[str(self.community_only_profile.id)],
+        )
+
+        tagged_ids = [t["user_id"] for t in updated.payload["tagged_users"]]
+        self.assertIn(str(self.community_only_profile.id), tagged_ids)
+        self.assertNotIn(str(self.mentorship_profile.id), tagged_ids)
+
+    def test_edit_preserves_tag_when_mentorship_deactivated(self) -> None:
+        """Previously tagged user can remain when editor explicitly keeps them,
+        even if mentorship is deactivated (since they were already in prev tags)."""
+        from mentorship.services import deactivate_match
+        from profiles.services import edit_cop_event
+
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Original",
+            tagged_users=[str(self.mentorship_profile.id)],
+        )
+
+        # Remove mentorship_profile from community so only mentorship link is relevant
+        CommunityTagMembership.objects.filter(
+            profile=self.mentorship_profile, tag=self.community
+        ).delete()
+
+        # Deactivate the mentorship
+        deactivate_match(match=self.active_match, actor_profile=self.author_profile)
+
+        # Editor explicitly includes mentorship_profile in the new list (keeping them)
+        # This is allowed because they were previously tagged.
+        updated = edit_cop_event(
+            event=event,
+            content="Edited - kept previously-tagged user",
+            tagged_users=[str(self.mentorship_profile.id)],
+        )
+
+        tagged_ids = [t["user_id"] for t in updated.payload["tagged_users"]]
+        self.assertIn(str(self.mentorship_profile.id), tagged_ids)
+
+    def test_edit_removes_tag_when_editor_omits_untaggable_user(self) -> None:
+        """When editor omits a no-longer-taggable user from new list, they are removed.
+
+        Removing them means they cannot be re-added in a subsequent edit.
+        """
+        from mentorship.services import deactivate_match
+        from profiles.services import edit_cop_event
+
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Original",
+            tagged_users=[str(self.mentorship_profile.id)],
+        )
+
+        # Remove mentorship_profile from community
+        CommunityTagMembership.objects.filter(
+            profile=self.mentorship_profile, tag=self.community
+        ).delete()
+
+        # Deactivate the mentorship
+        deactivate_match(match=self.active_match, actor_profile=self.author_profile)
+
+        # Edit with a different tag list that does NOT include mentorship_profile
+        updated = edit_cop_event(
+            event=event,
+            content="Edited - only community_only tagged",
+            tagged_users=[str(self.community_only_profile.id)],
+        )
+
+        # Only community_only_profile should be tagged; mentorship_profile was omitted
+        tagged_ids = [t["user_id"] for t in updated.payload["tagged_users"]]
+        self.assertIn(str(self.community_only_profile.id), tagged_ids)
+        self.assertNotIn(str(self.mentorship_profile.id), tagged_ids)
+
+    def test_cannot_retag_previously_removed_untaggable_user(self) -> None:
+        """After removing a now-untaggable tag, re-adding them in another edit fails."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from mentorship.services import deactivate_match
+        from profiles.services import edit_cop_event
+
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Original",
+            tagged_users=[str(self.mentorship_profile.id)],
+        )
+
+        # Remove mentorship_profile from community and deactivate match
+        CommunityTagMembership.objects.filter(
+            profile=self.mentorship_profile, tag=self.community
+        ).delete()
+        deactivate_match(match=self.active_match, actor_profile=self.author_profile)
+
+        # First edit: explicitly remove mentorship_profile by omitting them
+        event = edit_cop_event(
+            event=event,
+            content="Edited - removed tag",
+            tagged_users=[],
+        )
+        # Confirm tag was removed
+        self.assertEqual(event.payload.get("tagged_users", []), [])
+
+        # Second edit: try to re-add mentorship_profile - should fail
+        with self.assertRaises(DjangoValidationError):
+            edit_cop_event(
+                event=event,
+                content="Re-add attempt",
+                tagged_users=[str(self.mentorship_profile.id)],
+            )
+
+    def test_edit_allows_removing_tag(self) -> None:
+        """Editor can remove a previously tagged user who is still allowed."""
+        from profiles.services import edit_cop_event
+
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Original",
+            tagged_users=[str(self.mentorship_profile.id)],
+        )
+
+        # Remove the tag by passing an empty list
+        updated = edit_cop_event(
+            event=event,
+            content="Edited - no tags",
+            tagged_users=[],
+        )
+
+        self.assertEqual(updated.payload.get("tagged_users", []), [])
+
+    # ------------------------------------------------------------------ API layer
+
+    def test_create_cop_with_tagged_user_via_api(self) -> None:
+        """POST /api/profiles/tags/{id}/posts/ accepts tagged_users."""
+        self._auth_author()
+        response = self.api_client.post(
+            self.create_url,
+            {
+                "event_type": "social",
+                "content": "API post with tags",
+                "tagged_users": [str(self.community_only_profile.id)],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("tagged_users", response.data)
+        tagged = response.data["tagged_users"]
+        self.assertEqual(len(tagged), 1)
+        self.assertEqual(tagged[0]["user_id"], str(self.community_only_profile.id))
+        self.assertEqual(tagged[0]["username"], self.community_only_profile.username)
+
+    def test_create_cop_tagging_unrelated_user_returns_400(self) -> None:
+        """POST fails with 400 when trying to tag an unrelated user."""
+        self._auth_author()
+        response = self.api_client.post(
+            self.create_url,
+            {
+                "event_type": "social",
+                "content": "Bad tags",
+                "tagged_users": [str(self.unrelated_profile.id)],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_cop_tagging_self_returns_400(self) -> None:
+        """POST fails with 400 when author tries to tag themselves."""
+        self._auth_author()
+        response = self.api_client.post(
+            self.create_url,
+            {
+                "event_type": "social",
+                "content": "Self tag",
+                "tagged_users": [str(self.author_profile.id)],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_cop_response_includes_tagged_users_field(self) -> None:
+        """GET /api/profiles/tags/{id}/posts/ returns tagged_users in each CoP."""
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Listed post with tags",
+            tagged_users=[str(self.community_only_profile.id)],
+        )
+
+        self._auth_author()
+        response = self.api_client.get(self.create_url)
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            (item for item in response.data["results"] if item["source_id"] == event.source_id),
+            None,
+        )
+        self.assertIsNotNone(result)
+        self.assertIn("tagged_users", result)
+        tagged = result["tagged_users"]
+        self.assertEqual(len(tagged), 1)
+        self.assertEqual(tagged[0]["username"], self.community_only_profile.username)
+
+    def test_edit_cop_with_new_tags_via_api(self) -> None:
+        """PATCH /api/profiles/tags/{id}/posts/{event_id}/ updates tagged_users."""
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Original with tags",
+            tagged_users=[str(self.mentorship_profile.id)],
+        )
+
+        self._auth_author()
+        response = self.api_client.patch(
+            self._detail_url(str(event.id)),
+            {
+                "content": "Updated with different tags",
+                "tagged_users": [str(self.community_only_profile.id)],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        tagged_ids = [t["user_id"] for t in response.data["tagged_users"]]
+        self.assertIn(str(self.community_only_profile.id), tagged_ids)
+        self.assertNotIn(str(self.mentorship_profile.id), tagged_ids)
+
+    def test_tagged_users_mentorship_direction_bidirectional(self) -> None:
+        """Mentee can also tag their mentor (bidirectional)."""
+        from profiles.services import validate_tagged_users_list
+
+        # author_profile is mentor; mentorship_profile is mentee
+        # Let's validate as mentee tagging the mentor
+        result = validate_tagged_users_list(
+            author=self.mentorship_profile,
+            tagged_user_ids=[str(self.author_profile.id)],
+            community_id=str(self.community.id),
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["user_id"], str(self.author_profile.id))

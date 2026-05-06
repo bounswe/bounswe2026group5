@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
 from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
@@ -1686,9 +1687,12 @@ class CommunityTagPostsListCreateAPIView(ProfileLookupMixin, APIView):
                 media_url=validated.get("media_url"),
                 show_on_profile=validated.get("show_on_profile", False),
                 timestamp=validated.get("timestamp"),
+                tagged_users=validated.get("tagged_users"),
             )
         except InvalidCoPEventTypeError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as exc:
+            return Response({"detail": str(exc.message) if hasattr(exc, "message") else str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         event.author = profile
         return Response(CommunityPostSerializer(event).data, status=status.HTTP_201_CREATED)
@@ -1754,9 +1758,12 @@ class CommunityTagPostDetailAPIView(ProfileLookupMixin, APIView):
                 media_url=validated.get("media_url"),
                 show_on_profile=validated.get("show_on_profile"),
                 update_media_url="media_url" in validated,
+                tagged_users=validated.get("tagged_users"),
             )
         except InvalidCoPEventTypeError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as exc:
+            return Response({"detail": str(exc.message) if hasattr(exc, "message") else str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(CommunityPostSerializer(updated_event).data, status=status.HTTP_200_OK)
 

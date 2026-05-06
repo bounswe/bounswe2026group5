@@ -905,12 +905,24 @@ class CoPCreateSerializer(serializers.Serializer):
     media_url = serializers.URLField(required=False, allow_null=True, default=None)
     show_on_profile = serializers.BooleanField(required=False, default=False)
     timestamp = serializers.DateTimeField(required=False, allow_null=True, default=None)
+    tagged_users = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        default=list,
+    )
 
     def to_internal_value(self, data: Any) -> dict:
         """Normalize empty timestamp values to null so fallback logic can be applied."""
         if isinstance(data, dict) and data.get("timestamp") == "":
             data = {**data, "timestamp": None}
         return super().to_internal_value(data)
+
+    def validate_tagged_users(self, value: list) -> list:
+        """Validate tagged_users field (user IDs as strings)."""
+        # Validation logic will be handled in the view/service layer
+        # where we have access to author and community context
+        return value
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """Reject timestamps more than 1 day in the future when provided."""
@@ -929,13 +941,24 @@ class CoPUpdateSerializer(serializers.Serializer):
     event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES, required=False)
     media_url = serializers.URLField(required=False, allow_null=True)
     show_on_profile = serializers.BooleanField(required=False)
+    tagged_users = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+    )
+
+    def validate_tagged_users(self, value: list) -> list:
+        """Validate tagged_users field (user IDs as strings)."""
+        # Validation logic will be handled in the view/service layer
+        # where we have access to author and community context
+        return value
 
     def validate(self, attrs: dict) -> dict:
         """Require at least one editable field to be provided."""
         if not attrs:
             raise serializers.ValidationError(
-                "At least one of 'content', 'event_type', 'media_url', or "
-                "'show_on_profile' must be provided."
+                "At least one of 'content', 'event_type', 'media_url', "
+                "'show_on_profile', or 'tagged_users' must be provided."
             )
         return attrs
 
@@ -968,6 +991,20 @@ class CommunityPostSerializer(serializers.Serializer):
     show_on_profile = serializers.BooleanField(read_only=True)
     community_id = serializers.UUIDField(read_only=True)
     author = ProfilePostAuthorSerializer(read_only=True)
+    tagged_users = serializers.SerializerMethodField()
+
+    def get_tagged_users(self, obj: Any) -> list[dict[str, str]]:
+        """Extract and return tagged users from payload.
+
+        Returns only user_id and username fields for each tagged user.
+        """
+        payload = obj.payload or {}
+        tagged_users_list = payload.get("tagged_users", [])
+
+        return [
+            {"user_id": tag["user_id"], "username": tag["username"]}
+            for tag in tagged_users_list
+        ]
 
 
 class CommunityPostFeedSerializer(serializers.Serializer):
