@@ -76,6 +76,38 @@ export type Notification = {
   is_read?: boolean;
 };
 
+export type Feedback = {
+  id: string;
+  match: string;
+  submitted_by: {
+    id: string;
+    username: string;
+    display_name: string;
+  };
+  rating: number;
+  text: string;
+  created_at: string;
+};
+
+export type MentorRating = {
+  username: string;
+  average_rating: string;
+  review_count: number;
+};
+
+export type PublicReview = {
+  rating: number;
+  text: string;
+  created_at: string;
+};
+
+export type PublicReviewsResponse = {
+  count: number;
+  page: number;
+  pageSize: number;
+  results: PublicReview[];
+};
+
 export class TestDataApi {
   readonly request: APIRequestContext;
 
@@ -212,6 +244,55 @@ export class TestDataApi {
     });
     expect(response.ok()).toBeTruthy();
     return response.json() as Promise<Notification[]>;
+  }
+
+  async fetchMatchFeedback(auth: AuthResponse, matchId: string) {
+    const response = await this.request.get(`${API_BASE_URL}/mentorship/matches/${matchId}/feedback/`, {
+      headers: this.authHeaders(auth),
+    });
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<Feedback[]>;
+  }
+
+  async submitMatchFeedback(
+    auth: AuthResponse,
+    matchId: string,
+    data: { rating: number; text?: string },
+  ) {
+    const response = await this.trySubmitMatchFeedback(auth, matchId, data);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<Feedback>;
+  }
+
+  async trySubmitMatchFeedback(
+    auth: AuthResponse,
+    matchId: string,
+    data: { rating: number; text?: string },
+  ) {
+    return this.request.post(`${API_BASE_URL}/mentorship/matches/${matchId}/feedback/`, {
+      headers: this.authHeaders(auth),
+      data,
+    });
+  }
+
+  async tryFetchMatchFeedback(auth: AuthResponse, matchId: string) {
+    return this.request.get(`${API_BASE_URL}/mentorship/matches/${matchId}/feedback/`, {
+      headers: this.authHeaders(auth),
+    });
+  }
+
+  async fetchMentorRating(mentorUsername: string) {
+    const response = await this.request.get(`${API_BASE_URL}/profiles/${mentorUsername}/rating/`);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<MentorRating>;
+  }
+
+  async fetchMentorReviews(mentorUsername: string, page = 1, pageSize = 10) {
+    const response = await this.request.get(
+      `${API_BASE_URL}/profiles/${mentorUsername}/reviews/?page=${page}&pageSize=${pageSize}`,
+    );
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<PublicReviewsResponse>;
   }
 
   private async registerOrLogin(email: string): Promise<AuthResponse> {
