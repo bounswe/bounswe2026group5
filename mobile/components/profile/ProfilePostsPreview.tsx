@@ -1,11 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import {
-  ActivityIndicator,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 
 import { ProfilePostCard } from "@/components/profile/ProfilePostCard";
 import { useProfilePostsQuery } from "@/lib/queries/profile";
@@ -13,6 +8,8 @@ import { useProfilePostsQuery } from "@/lib/queries/profile";
 interface ProfilePostsPreviewProps {
   username: string;
   onViewAll: () => void;
+  onCompose?: () => void;
+  communityLabelsById?: Record<string, string>;
 }
 
 /**
@@ -27,6 +24,8 @@ interface ProfilePostsPreviewProps {
 export function ProfilePostsPreview({
   username,
   onViewAll,
+  onCompose,
+  communityLabelsById,
 }: Readonly<ProfilePostsPreviewProps>) {
   const postsQuery = useProfilePostsQuery(username, { limit: 3 });
 
@@ -54,15 +53,36 @@ export function ProfilePostsPreview({
 
   return (
     <View testID="profile-posts-preview" className="mb-6">
-      <View className="mb-3">
+      <View className="mb-3 flex-row items-center justify-between gap-3">
         <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
           Posts
         </Text>
+        {onCompose ? (
+          <TouchableOpacity
+            testID="profile-post-compose-button"
+            activeOpacity={0.8}
+            onPress={onCompose}
+            className="flex-row items-center gap-1 rounded-full border border-primary/50 bg-surface-card px-3 py-2 dark:border-primary-dim/50 dark:bg-surface-card-dark"
+          >
+            <Ionicons name="create-outline" size={14} color="#2f7d68" />
+            <Text className="text-xs font-semibold text-primary dark:text-primary-dim">
+              New Post
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <View className="gap-3">
         {posts.map((post) => (
-          <ProfilePostCard key={post.id} post={post} />
+          <ProfilePostCard
+            key={post.id}
+            post={post}
+            communityLabel={
+              post.community_id
+                ? communityLabelsById?.[post.community_id]
+                : undefined
+            }
+          />
         ))}
       </View>
 

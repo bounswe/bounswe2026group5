@@ -13,7 +13,34 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 const CATEGORY_LABELS: Record<string, string> = {
   PrP: "Post",
   MCTE: "Milestone",
+  CoP: "Community",
 };
+
+function getAccentColor(eventType: string): string {
+  if (eventType === "achievement") {
+    return "text-amber-600 dark:text-amber-400";
+  }
+  if (eventType === "social") {
+    return "text-sky-600 dark:text-sky-400";
+  }
+  return "text-emerald-600 dark:text-emerald-400";
+}
+
+function getIconName(
+  category: string,
+  eventType: string,
+): React.ComponentProps<typeof Ionicons>["name"] {
+  if (category === "CoP") {
+    return "chatbubbles-outline";
+  }
+  if (eventType === "achievement") {
+    return "trophy-outline";
+  }
+  if (eventType === "social") {
+    return "people-outline";
+  }
+  return "trending-up-outline";
+}
 
 function formatPostTimestamp(value: string): string {
   const date = new Date(value);
@@ -43,6 +70,7 @@ interface ProfilePostCardProps {
   post: ProfilePost;
   /** When true, content is not truncated. Default: false (preview mode). */
   expanded?: boolean;
+  communityLabel?: string | null;
 }
 
 /**
@@ -53,6 +81,7 @@ interface ProfilePostCardProps {
 export function ProfilePostCard({
   post,
   expanded = false,
+  communityLabel,
 }: Readonly<ProfilePostCardProps>) {
   const label = EVENT_TYPE_LABELS[post.event_type] ?? post.event_type;
   const categoryLabel = CATEGORY_LABELS[post.category] ?? post.category;
@@ -60,20 +89,8 @@ export function ProfilePostCard({
   const authorName =
     post.author?.display_name || post.author?.username || "Unknown user";
   const authorSubtitle = post.author?.title || post.author?.username || "";
-
-  const isAchievement = post.event_type === "achievement";
-  const accentColor = isAchievement
-    ? "text-amber-600 dark:text-amber-400"
-    : post.event_type === "social"
-      ? "text-sky-600 dark:text-sky-400"
-      : "text-emerald-600 dark:text-emerald-400";
-
-  const iconName: React.ComponentProps<typeof Ionicons>["name"] =
-    isAchievement
-      ? "trophy-outline"
-      : post.event_type === "social"
-        ? "people-outline"
-        : "trending-up-outline";
+  const accentColor = getAccentColor(post.event_type);
+  const iconName = getIconName(post.category, post.event_type);
 
   return (
     <View
@@ -126,6 +143,14 @@ export function ProfilePostCard({
         <Text className={`text-xs font-bold ${accentColor}`}>{label}</Text>
       </View>
 
+      {post.category === "CoP" && post.community_id ? (
+        <View className="mb-2 self-start rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1">
+          <Text className="text-[10px] font-bold uppercase tracking-wide text-primary dark:text-primary-dim">
+            {communityLabel ? `#${communityLabel}` : "Community post"}
+          </Text>
+        </View>
+      ) : null}
+
       {/* Content */}
       {post.content ? (
         <Text
@@ -146,7 +171,6 @@ export function ProfilePostCard({
           resizeMode="cover"
         />
       ) : null}
-
     </View>
   );
 }

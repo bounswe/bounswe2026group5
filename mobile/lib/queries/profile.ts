@@ -1,6 +1,6 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiGet, apiPatch } from "@/lib/api/client";
+import { apiGet, apiPatch, apiPost } from "@/lib/api/client";
 
 /** Minimal author shape embedded in each profile post. */
 export interface ProfilePostAuthor {
@@ -11,12 +11,15 @@ export interface ProfilePostAuthor {
   title: string;
 }
 
+export type ProfilePostCategory = "PrP" | "MCTE" | "CoP";
+
 /**
  * A single item returned by GET /api/profiles/{username}/posts/.
  *
  * Categories:
  *   - "PrP"  — profile post authored directly by the profile owner
  *   - "MCTE" — manually-created timeline event where show_on_profile === true
+ *   - "CoP"  — community post shared by the profile owner
  *
  * AGTE events never appear in this feed (server-side guarantee).
  * Private MCTE (show_on_profile === false) never appear either.
@@ -24,7 +27,7 @@ export interface ProfilePostAuthor {
 export interface ProfilePost {
   id: string;
   source_id: string;
-  category: "PrP" | "MCTE";
+  category: ProfilePostCategory;
   event_type: "achievement" | "social" | "progress";
   content: string;
   media_url: string | null;
@@ -32,8 +35,16 @@ export interface ProfilePost {
   created_at: string;
   last_edited: string | null;
   show_on_profile: boolean;
+  community_id: string | null;
   actor_role: string | null;
   author: ProfilePostAuthor | null;
+}
+
+export interface CreateProfilePostPayload {
+  event_type: ProfilePost["event_type"];
+  content: string;
+  media_url?: string | null;
+  timestamp?: string | null;
 }
 
 export interface ProfilePostFeedResponse {
@@ -124,10 +135,36 @@ export function useUpdateOwnProfileMutation() {
   return useMutation({
     mutationFn: async (payload: UpdateProfilePayload) => {
       const { username: _username, ...body } = payload;
-      return apiPatch<ProfilePatchResponse, Omit<UpdateProfilePayload, "username">>(
-        `/api/profiles/me/`,
-        body,
-      );
+      return apiPatch<
+        ProfilePatchResponse,
+        Omit<UpdateProfilePayload, "username">
+      >(`/api/profiles/me/`, body);
+    },
+  });
+}
+
+/**
+ * Create a new profile post for the authenticated user.
+ */
+export function useCreateProfilePostMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: CreateProfilePostPayload) =>
+      apiPost<ProfilePost, CreateProfilePostPayload>(
+        "/api/profiles/me/posts/",
+        {
+          event_type: payload.event_type,
+          content: payload.content,
+          ...(payload.media_url ? { media_url: payload.media_url } : {}),
+          ...(payload.timestamp ? { timestamp: payload.timestamp } : {}),
+        },
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["profiles", currentUsername ?? "anonymous", "posts"],
+      });
+      await queryClient.invalidateQueries({ queryKey: ["profiles"] });
     },
   });
 }

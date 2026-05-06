@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProfilePostCard } from "@/components/profile/ProfilePostCard";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useAuthStore } from "@/lib/auth/store";
+import { useMyCommunityTagsQuery } from "@/lib/queries/communityTags";
 import type { ProfilePost } from "@/lib/queries/profile";
 import { useProfilePostsQuery } from "@/lib/queries/profile";
 
@@ -27,6 +28,7 @@ export default function OwnPostsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
+  const myCommunitiesQuery = useMyCommunityTagsQuery(currentUsername);
 
   const [offset, setOffset] = useState(0);
   const [allPosts, setAllPosts] = useState<ProfilePost[]>([]);
@@ -50,6 +52,13 @@ export default function OwnPostsScreen() {
 
   const totalCount = postsQuery.data?.count ?? 0;
   const hasMore = allPosts.length < totalCount;
+  const communityLabelsById = React.useMemo(
+    () =>
+      Object.fromEntries(
+        (myCommunitiesQuery.data ?? []).map((tag) => [tag.id, tag.name]),
+      ) as Record<string, string>,
+    [myCommunitiesQuery.data],
+  );
 
   const handleLoadMore = () => {
     if (!postsQuery.isFetching && hasMore) {
@@ -101,14 +110,26 @@ export default function OwnPostsScreen() {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View className="py-16 items-center">
-              <Ionicons name="document-text-outline" size={40} color="#9ca3af" />
+              <Ionicons
+                name="document-text-outline"
+                size={40}
+                color="#9ca3af"
+              />
               <Text className="mt-3 text-on-surface-soft dark:text-on-surface-soft-dark text-sm">
                 No posts yet.
               </Text>
             </View>
           }
           renderItem={({ item }) => (
-            <ProfilePostCard post={item} expanded />
+            <ProfilePostCard
+              post={item}
+              expanded
+              communityLabel={
+                item.community_id
+                  ? communityLabelsById[item.community_id]
+                  : undefined
+              }
+            />
           )}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.4}
