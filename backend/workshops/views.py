@@ -16,18 +16,30 @@ from profiles.models import Profile
 from .models import Workshop
 from .serializers import (
     WorkshopCreateSerializer,
+    WorkshopGroupJoinSerializer,
+    WorkshopParticipationSerializer,
+    WorkshopRespondSerializer,
     WorkshopSerializer,
     WorkshopUpdateSerializer,
 )
 from .services import (
+    AlreadyParticipatingError,
+    OwnWorkshopJoinError,
+    ParticipationNotFoundError,
+    ParticipationNotPendingError,
+    WorkshopFullError,
     WorkshopInPastError,
     WorkshopNotEditableError,
     WorkshopNotFoundError,
+    WorkshopNotJoinableError,
     WorkshopOwnershipRequiredError,
     WorkshopScheduleConflictError,
     create_workshop,
     get_workshop,
+    join_workshop,
     list_workshops,
+    request_group_attendance,
+    respond_to_participation,
     update_workshop,
 )
 
@@ -42,6 +54,12 @@ _SCHEDULE_CONFLICT = {
 }
 _SCHEDULE_PAST = {"detail": "Workshop must be scheduled in the future."}
 _NOT_EDITABLE = {"detail": "This workshop can no longer be edited."}
+_NOT_JOINABLE = {"detail": "This workshop is no longer joinable."}
+_WORKSHOP_FULL = {"detail": "This workshop has reached its maximum participant count."}
+_ALREADY_PARTICIPATING = {"detail": "You already have a participation entry for this workshop."}
+_OWN_WORKSHOP = {"detail": "You cannot join your own workshop."}
+_PARTICIPATION_NOT_FOUND = {"detail": "Participation not found."}
+_PARTICIPATION_NOT_PENDING = {"detail": "Only pending participations can be approved or rejected."}
 
 
 def _get_actor_profile(request: Request) -> Profile | None:
@@ -179,3 +197,154 @@ class WorkshopDetailAPIView(APIView):
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(WorkshopSerializer(workshop).data, status=status.HTTP_200_OK)
+
+
+class WorkshopJoinAPIView(APIView):
+    """Mentee joins a workshop as a single participant."""
+
+    permission_classes = [IsUser, IsEmailVerified]
+
+    @extend_schema(
+        request=None,
+        responses={
+            201: WorkshopParticipationSerializer,
+            400: OpenApiResponse(description="Workshop full or not joinable."),
+            403: OpenApiResponse(description="Cannot join own workshop."),
+            404: OpenApiResponse(description="Workshop not found."),
+            409: OpenApiResponse(description="Already participating."),
+        },
+        description="Join a workshop as a single participant. Adds a CONFIRMED entry.",
+        tags=["Workshops"],
+    )
+    def post(self, request: Request, workshop_id) -> Response:
+        actor = _get_actor_profile(request)
+        if actor is None:
+            return Response(_NO_PROFILE, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            workshop = get_workshop(workshop_id)
+        except WorkshopNotFoundError:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            participation = join_workshop(workshop=workshop, mentee=actor)
+        except OwnWorkshopJoinError:
+            return Response(_OWN_WORKSHOP, status=status.HTTP_403_FORBIDDEN)
+        except WorkshopNotJoinableError:
+            return Response(_NOT_JOINABLE, status=status.HTTP_400_BAD_REQUEST)
+        except AlreadyParticipatingError:
+            return Response(_ALREADY_PARTICIPATING, status=status.HTTP_409_CONFLICT)
+        except WorkshopFullError:
+            return Response(_WORKSHOP_FULL, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            WorkshopParticipationSerializer(participation).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class WorkshopGroupJoinAPIView(APIView):
+    """Mentee requests group attendance pending mentor approval."""
+
+    permission_classes = [IsUser, IsEmailVerified]
+
+    @extend_schema(
+        request=WorkshopGroupJoinSerializer,
+        responses={
+            201: WorkshopParticipationSerializer,
+            400: OpenApiResponse(description="Group exceeds max or workshop not joinable."),
+            403: OpenApiResponse(description="Cannot join own workshop."),
+            404: OpenApiResponse(description="Workshop not found."),
+            409: OpenApiResponse(description="Already participating."),
+        },
+        description=(
+            "Request to attend a workshop as a group (e.g., bringing friends). "
+            "Creates a PENDING_APPROVAL entry that the mentor must approve."
+        ),
+        tags=["Workshops"],
+    )
+    def post(self, request: Request, workshop_id) -> Response:
+        actor = _get_actor_profile(request)
+        if actor is None:
+            return Response(_NO_PROFILE, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            workshop = get_workshop(workshop_id)
+        except WorkshopNotFoundError:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = WorkshopGroupJoinSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            participation = request_group_attendance(
+                workshop=workshop,
+                mentee=actor,
+                group_size=serializer.validated_data["group_size"],
+            )
+        except OwnWorkshopJoinError:
+            return Response(_OWN_WORKSHOP, status=status.HTTP_403_FORBIDDEN)
+        except WorkshopNotJoinableError:
+            return Response(_NOT_JOINABLE, status=status.HTTP_400_BAD_REQUEST)
+        except AlreadyParticipatingError:
+            return Response(_ALREADY_PARTICIPATING, status=status.HTTP_409_CONFLICT)
+        except WorkshopFullError:
+            return Response(_WORKSHOP_FULL, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            WorkshopParticipationSerializer(participation).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class WorkshopParticipationRespondAPIView(APIView):
+    """Mentor approves or rejects a pending group attendance request."""
+
+    permission_classes = [IsUser, IsEmailVerified]
+
+    @extend_schema(
+        request=WorkshopRespondSerializer,
+        responses={
+            200: WorkshopParticipationSerializer,
+            400: OpenApiResponse(
+                description="Participation is not pending or workshop full on accept."
+            ),
+            403: OpenApiResponse(description="Only the workshop owner may respond."),
+            404: OpenApiResponse(description="Workshop or participation not found."),
+        },
+        description="Approve or reject a pending group attendance request.",
+        tags=["Workshops"],
+    )
+    def post(self, request: Request, workshop_id, participation_id) -> Response:
+        actor = _get_actor_profile(request)
+        if actor is None:
+            return Response(_NO_PROFILE, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            workshop = get_workshop(workshop_id)
+        except WorkshopNotFoundError:
+            return Response(_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = WorkshopRespondSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            participation = respond_to_participation(
+                workshop=workshop,
+                actor=actor,
+                participation_id=participation_id,
+                accept=serializer.validated_data["accept"],
+            )
+        except WorkshopOwnershipRequiredError:
+            return Response(_PERMISSION_DENIED, status=status.HTTP_403_FORBIDDEN)
+        except ParticipationNotFoundError:
+            return Response(_PARTICIPATION_NOT_FOUND, status=status.HTTP_404_NOT_FOUND)
+        except ParticipationNotPendingError:
+            return Response(_PARTICIPATION_NOT_PENDING, status=status.HTTP_400_BAD_REQUEST)
+        except WorkshopFullError:
+            return Response(_WORKSHOP_FULL, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            WorkshopParticipationSerializer(participation).data,
+            status=status.HTTP_200_OK,
+        )

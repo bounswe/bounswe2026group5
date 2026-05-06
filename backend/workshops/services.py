@@ -3,12 +3,13 @@
 from datetime import datetime
 from typing import Iterable
 
-from django.db.models import Q, QuerySet
+from django.db import transaction
+from django.db.models import QuerySet, Sum
 from django.utils import timezone
 
 from profiles.models import AvailabilitySlot, Profile
 
-from .models import Workshop
+from .models import Workshop, WorkshopParticipation
 
 
 class WorkshopNotFoundError(Exception):
@@ -29,6 +30,30 @@ class WorkshopInPastError(Exception):
 
 class WorkshopNotEditableError(Exception):
     """Raised when a workshop cannot be modified due to its current state."""
+
+
+class WorkshopNotJoinableError(Exception):
+    """Raised when a workshop cannot be joined (canceled or already started)."""
+
+
+class WorkshopFullError(Exception):
+    """Raised when joining would exceed max_participants."""
+
+
+class AlreadyParticipatingError(Exception):
+    """Raised when the mentee already has a participation entry for the workshop."""
+
+
+class OwnWorkshopJoinError(Exception):
+    """Raised when a mentor tries to join their own workshop."""
+
+
+class ParticipationNotFoundError(Exception):
+    """Raised when a participation cannot be located."""
+
+
+class ParticipationNotPendingError(Exception):
+    """Raised when an action requires PENDING_APPROVAL but the entry has another status."""
 
 
 def _validate_schedule(
@@ -139,3 +164,106 @@ def get_workshop(workshop_id) -> Workshop:
         return Workshop.objects.select_related("mentor").get(id=workshop_id)
     except Workshop.DoesNotExist as exc:
         raise WorkshopNotFoundError() from exc
+
+
+def _confirmed_seat_count(workshop: Workshop) -> int:
+    total = (
+        WorkshopParticipation.objects.filter(
+            workshop=workshop,
+            status=WorkshopParticipation.Status.CONFIRMED,
+        ).aggregate(total=Sum("group_size"))
+    )["total"]
+    return int(total or 0)
+
+
+def _ensure_workshop_joinable(workshop: Workshop, mentee: Profile) -> None:
+    if workshop.status != Workshop.Status.SCHEDULED:
+        raise WorkshopNotJoinableError()
+    if workshop.scheduled_start_at_utc <= timezone.now():
+        raise WorkshopNotJoinableError()
+    if workshop.mentor_id == mentee.id:
+        raise OwnWorkshopJoinError()
+
+
+def join_workshop(*, workshop: Workshop, mentee: Profile) -> WorkshopParticipation:
+    """Create a CONFIRMED participation for a single mentee."""
+    _ensure_workshop_joinable(workshop, mentee)
+
+    with transaction.atomic():
+        if WorkshopParticipation.objects.filter(workshop=workshop, mentee=mentee).exists():
+            raise AlreadyParticipatingError()
+
+        if _confirmed_seat_count(workshop) + 1 > workshop.max_participants:
+            raise WorkshopFullError()
+
+        return WorkshopParticipation.objects.create(
+            workshop=workshop,
+            mentee=mentee,
+            group_size=1,
+            status=WorkshopParticipation.Status.CONFIRMED,
+            decided_at=timezone.now(),
+        )
+
+
+def request_group_attendance(
+    *,
+    workshop: Workshop,
+    mentee: Profile,
+    group_size: int,
+) -> WorkshopParticipation:
+    """Create a PENDING_APPROVAL participation for a mentee bringing companions."""
+    if group_size < 2:
+        raise ValueError("group_size must be at least 2 for a group request.")
+
+    _ensure_workshop_joinable(workshop, mentee)
+
+    with transaction.atomic():
+        if WorkshopParticipation.objects.filter(workshop=workshop, mentee=mentee).exists():
+            raise AlreadyParticipatingError()
+
+        if group_size > workshop.max_participants:
+            raise WorkshopFullError()
+
+        return WorkshopParticipation.objects.create(
+            workshop=workshop,
+            mentee=mentee,
+            group_size=group_size,
+            status=WorkshopParticipation.Status.PENDING_APPROVAL,
+        )
+
+
+def respond_to_participation(
+    *,
+    workshop: Workshop,
+    actor: Profile,
+    participation_id,
+    accept: bool,
+) -> WorkshopParticipation:
+    """Mentor approves or rejects a PENDING_APPROVAL group attendance request."""
+    if workshop.mentor_id != actor.id:
+        raise WorkshopOwnershipRequiredError()
+
+    with transaction.atomic():
+        try:
+            participation = WorkshopParticipation.objects.select_for_update().get(
+                id=participation_id, workshop=workshop
+            )
+        except WorkshopParticipation.DoesNotExist as exc:
+            raise ParticipationNotFoundError() from exc
+
+        if participation.status != WorkshopParticipation.Status.PENDING_APPROVAL:
+            raise ParticipationNotPendingError()
+
+        if accept:
+            if (
+                _confirmed_seat_count(workshop) + participation.group_size
+                > workshop.max_participants
+            ):
+                raise WorkshopFullError()
+            participation.status = WorkshopParticipation.Status.CONFIRMED
+        else:
+            participation.status = WorkshopParticipation.Status.REJECTED
+
+        participation.decided_at = timezone.now()
+        participation.save(update_fields=["status", "decided_at"])
+        return participation

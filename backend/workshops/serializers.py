@@ -98,3 +98,34 @@ class WorkshopUpdateSerializer(serializers.Serializer):
                 {"scheduled_end_at_utc": "End time must be after start time."}
             )
         return attrs
+
+
+class WorkshopParticipationSerializer(serializers.ModelSerializer):
+    """Read serializer for participation entries."""
+
+    mentee = WorkshopMentorSummarySerializer(read_only=True)
+
+    class Meta:
+        model = WorkshopParticipation
+        fields = (
+            "id",
+            "workshop",
+            "mentee",
+            "group_size",
+            "status",
+            "requested_at",
+            "decided_at",
+        )
+        read_only_fields = fields
+
+
+class WorkshopGroupJoinSerializer(serializers.Serializer):
+    """Write serializer for group join requests."""
+
+    group_size = serializers.IntegerField(min_value=2)
+
+
+class WorkshopRespondSerializer(serializers.Serializer):
+    """Write serializer for mentor decisions on pending participations."""
+
+    accept = serializers.BooleanField()
