@@ -1269,7 +1269,12 @@ class CommunityTagListCreateAPIView(APIView):
             context={"profile": profile},
         )
         serializer.is_valid(raise_exception=True)
-        tag = serializer.save()
+
+        with transaction.atomic():
+            tag = serializer.save()
+            CommunityTagMembership.objects.create(profile=profile, tag=tag)
+            CommunityTag.objects.filter(id=tag.id).update(member_count=models.F("member_count") + 1)
+            tag.refresh_from_db()
 
         return Response(
             CommunityTagDetailSerializer(tag, context={"request": request}).data,
