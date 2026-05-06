@@ -3,70 +3,112 @@ import {
   useRegisterFCMTokenMutation,
 } from "@/lib/queries/notifications";
 import Constants from "expo-constants";
-import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
 import { useEffect, useRef } from "react";
+import { Platform } from "react-native";
 
 import { useAuthStore } from "@/lib/auth/store";
 import { useQueryClient } from "@tanstack/react-query";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: false,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+type DeviceModule = typeof import("expo-device");
+type NotificationsModule = typeof import("expo-notifications");
+type NotificationSubscription = import("expo-notifications").Subscription;
+
+let notificationModulesPromise: Promise<{
+  Device: DeviceModule;
+  Notifications: NotificationsModule;
+}> | null = null;
+
+function loadNotificationModules() {
+  notificationModulesPromise ??= Promise.resolve()
+    .then(() => {
+      const Device = require("expo-device") as DeviceModule;
+      const Notifications = require(
+        "expo-notifications",
+      ) as NotificationsModule;
+
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowBanner: false,
+          shouldShowList: false,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        }),
+      });
+
+      return { Device, Notifications };
+    })
+    .catch((error) => {
+      notificationModulesPromise = null;
+      throw error;
+    });
+
+  return notificationModulesPromise;
+}
 
 export function usePushNotifications(isAuthenticated: boolean) {
   const { mutate: registerToken } = useRegisterFCMTokenMutation();
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((state) => state.user);
 
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
+  const notificationListener = useRef<NotificationSubscription | null>(null);
+  const responseListener = useRef<NotificationSubscription | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) return;
+    let isMounted = true;
 
-    registerForPushNotificationsAsync().then((token) => {
-      if (token) {
-        registerToken({
-          token,
-          device_type: "android",
-        });
-      }
-    });
+    loadNotificationModules()
+      .then(async ({ Device, Notifications }) => {
+        if (!isMounted) return;
 
-    notificationListener.current =
-      Notifications.addNotificationReceivedListener((notification) => {
-        // Invalidate notification list instantly
-        if (currentUser?.username) {
-          queryClient.invalidateQueries({
-            queryKey: notificationsQueryKey(currentUser.username),
+        const token = await registerForPushNotificationsAsync(
+          Device,
+          Notifications,
+        );
+        if (token && isMounted) {
+          registerToken({
+            token,
+            device_type: Platform.OS === "ios" ? "ios" : "android",
           });
         }
-      });
 
-    responseListener.current =
-      Notifications.addNotificationResponseReceivedListener((response) => {
-        console.log("Notification response received:", response);
+        notificationListener.current =
+          Notifications.addNotificationReceivedListener(() => {
+            // Invalidate notification list instantly
+            if (currentUser?.username) {
+              queryClient.invalidateQueries({
+                queryKey: notificationsQueryKey(currentUser.username),
+              });
+            }
+          });
+
+        responseListener.current =
+          Notifications.addNotificationResponseReceivedListener((response) => {
+            console.log("Notification response received:", response);
+          });
+      })
+      .catch((error) => {
+        console.warn("Push notifications are unavailable:", error);
       });
 
     return () => {
+      isMounted = false;
       if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(
-          notificationListener.current,
-        );
+        notificationListener.current.remove();
+        notificationListener.current = null;
       }
       if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
+        responseListener.current.remove();
+        responseListener.current = null;
       }
     };
   }, [isAuthenticated, registerToken, currentUser, queryClient]);
 }
 
-async function registerForPushNotificationsAsync() {
+async function registerForPushNotificationsAsync(
+  Device: DeviceModule,
+  Notifications: NotificationsModule,
+) {
   let token;
 
   // Always set up the default channel for Android

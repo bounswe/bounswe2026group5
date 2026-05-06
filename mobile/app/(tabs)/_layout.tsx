@@ -40,6 +40,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          headerShown: false,
           title: "Home",
           tabBarIcon: renderHomeIcon,
         }}
@@ -48,6 +49,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="connections"
         options={{
+          headerShown: false,
           title: "Connections",
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="person.2.fill" color={color} />
@@ -66,6 +68,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="community"
         options={{
+          headerShown: false,
           title: "Community",
           tabBarIcon: renderCommunityIcon,
         }}
@@ -90,6 +93,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="discover"
         options={{
+          headerShown: false,
           title: "Discover",
           tabBarIcon: renderDiscoverIcon,
         }}

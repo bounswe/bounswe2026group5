@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "../global.css";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useAuthStore } from "@/lib/auth/store";
 import { configureGoogleSignIn } from "@/lib/queries/googleAuth";
 
@@ -21,14 +22,26 @@ export const unstable_settings = {
 
 const queryClient = new QueryClient();
 
-import { usePushNotifications } from "@/hooks/usePushNotifications";
-
-function PushNotificationManager({ children, isAuthenticated }: { children: React.ReactNode, isAuthenticated: boolean }) {
+function PushNotificationManager({
+  children,
+  isAuthenticated,
+}: {
+  children: React.ReactNode;
+  isAuthenticated: boolean;
+}) {
   usePushNotifications(isAuthenticated);
   return <>{children}</>;
 }
 
 export default function RootLayout() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RootLayoutContent />
+    </QueryClientProvider>
+  );
+}
+
+function RootLayoutContent() {
   const colorScheme = useColorScheme();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
@@ -54,38 +67,44 @@ export default function RootLayout() {
     );
   }
 
+  const navigation = (
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      {isAuthenticated ? (
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="notifications"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="verify-email"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen name="settings" options={{ headerShown: false }} />
+          <Stack.Screen name="messages" options={{ headerShown: false }} />
+        </Stack>
+      ) : (
+        <Stack>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="register" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="verify-email"
+            options={{ headerShown: false }}
+          />
+        </Stack>
+      )}
+      <StatusBar style="auto" />
+    </ThemeProvider>
+  );
+
+  if (!isAuthenticated) {
+    return navigation;
+  }
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <PushNotificationManager isAuthenticated={isAuthenticated}>
-        <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-          {isAuthenticated ? (
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="notifications"
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="verify-email"
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen name="settings" options={{ headerShown: false }} />
-              <Stack.Screen name="messages" options={{ headerShown: false }} />
-            </Stack>
-          ) : (
-            <Stack>
-              <Stack.Screen name="index" options={{ headerShown: false }} />
-              <Stack.Screen name="login" options={{ headerShown: false }} />
-              <Stack.Screen name="register" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="verify-email"
-                options={{ headerShown: false }}
-              />
-            </Stack>
-          )}
-          <StatusBar style="auto" />
-        </ThemeProvider>
-      </PushNotificationManager>
-    </QueryClientProvider>
+    <PushNotificationManager isAuthenticated={isAuthenticated}>
+      {navigation}
+    </PushNotificationManager>
   );
 }
