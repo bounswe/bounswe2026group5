@@ -14,8 +14,10 @@ import { Route as OnBoardingRouteRouteImport } from './routes/_onBoarding/route'
 import { Route as AuthorizedRouteRouteImport } from './routes/_authorized/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProfilesUsernameRouteImport } from './routes/profiles.$username'
+import { Route as UnauthorizedResetPasswordRouteImport } from './routes/_unauthorized/reset-password'
 import { Route as UnauthorizedRegisterRouteImport } from './routes/_unauthorized/register'
 import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/login'
+import { Route as UnauthorizedForgotPasswordRouteImport } from './routes/_unauthorized/forgot-password'
 import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/about'
 import { Route as OnBoardingGettingToKnowYouRouteImport } from './routes/_onBoarding/gettingToKnowYou'
 import { Route as AuthorizedScheduleRouteImport } from './routes/_authorized/schedule'
@@ -52,6 +54,12 @@ const ProfilesUsernameRoute = ProfilesUsernameRouteImport.update({
   path: '/profiles/$username',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UnauthorizedResetPasswordRoute =
+  UnauthorizedResetPasswordRouteImport.update({
+    id: '/reset-password',
+    path: '/reset-password',
+    getParentRoute: () => UnauthorizedRouteRoute,
+  } as any)
 const UnauthorizedRegisterRoute = UnauthorizedRegisterRouteImport.update({
   id: '/register',
   path: '/register',
@@ -62,6 +70,12 @@ const UnauthorizedLoginRoute = UnauthorizedLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => UnauthorizedRouteRoute,
 } as any)
+const UnauthorizedForgotPasswordRoute =
+  UnauthorizedForgotPasswordRouteImport.update({
+    id: '/forgot-password',
+    path: '/forgot-password',
+    getParentRoute: () => UnauthorizedRouteRoute,
+  } as any)
 const UnauthorizedAboutRoute = UnauthorizedAboutRouteImport.update({
   id: '/about',
   path: '/about',
@@ -145,8 +159,10 @@ export interface FileRoutesByFullPath {
   '/schedule': typeof AuthorizedScheduleRoute
   '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/about': typeof UnauthorizedAboutRoute
+  '/forgot-password': typeof UnauthorizedForgotPasswordRoute
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
+  '/reset-password': typeof UnauthorizedResetPasswordRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
   '/communities/$communitySlug': typeof AuthorizedCommunitiesCommunitySlugRoute
   '/connections/$matchId': typeof AuthorizedConnectionsMatchIdRoute
@@ -162,8 +178,10 @@ export interface FileRoutesByTo {
   '/schedule': typeof AuthorizedScheduleRoute
   '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/about': typeof UnauthorizedAboutRoute
+  '/forgot-password': typeof UnauthorizedForgotPasswordRoute
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
+  '/reset-password': typeof UnauthorizedResetPasswordRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
   '/communities/$communitySlug': typeof AuthorizedCommunitiesCommunitySlugRoute
   '/connections/$matchId': typeof AuthorizedConnectionsMatchIdRoute
@@ -185,8 +203,10 @@ export interface FileRoutesById {
   '/_authorized/schedule': typeof AuthorizedScheduleRoute
   '/_onBoarding/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
   '/_unauthorized/about': typeof UnauthorizedAboutRoute
+  '/_unauthorized/forgot-password': typeof UnauthorizedForgotPasswordRoute
   '/_unauthorized/login': typeof UnauthorizedLoginRoute
   '/_unauthorized/register': typeof UnauthorizedRegisterRoute
+  '/_unauthorized/reset-password': typeof UnauthorizedResetPasswordRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
   '/_authorized/communities/$communitySlug': typeof AuthorizedCommunitiesCommunitySlugRoute
   '/_authorized/connections/$matchId': typeof AuthorizedConnectionsMatchIdRoute
@@ -206,8 +226,10 @@ export interface FileRouteTypes {
     | '/schedule'
     | '/gettingToKnowYou'
     | '/about'
+    | '/forgot-password'
     | '/login'
     | '/register'
+    | '/reset-password'
     | '/profiles/$username'
     | '/communities/$communitySlug'
     | '/connections/$matchId'
@@ -223,8 +245,10 @@ export interface FileRouteTypes {
     | '/schedule'
     | '/gettingToKnowYou'
     | '/about'
+    | '/forgot-password'
     | '/login'
     | '/register'
+    | '/reset-password'
     | '/profiles/$username'
     | '/communities/$communitySlug'
     | '/connections/$matchId'
@@ -245,8 +269,10 @@ export interface FileRouteTypes {
     | '/_authorized/schedule'
     | '/_onBoarding/gettingToKnowYou'
     | '/_unauthorized/about'
+    | '/_unauthorized/forgot-password'
     | '/_unauthorized/login'
     | '/_unauthorized/register'
+    | '/_unauthorized/reset-password'
     | '/profiles/$username'
     | '/_authorized/communities/$communitySlug'
     | '/_authorized/connections/$matchId'
@@ -299,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfilesUsernameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_unauthorized/reset-password': {
+      id: '/_unauthorized/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof UnauthorizedResetPasswordRouteImport
+      parentRoute: typeof UnauthorizedRouteRoute
+    }
     '/_unauthorized/register': {
       id: '/_unauthorized/register'
       path: '/register'
@@ -311,6 +344,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof UnauthorizedLoginRouteImport
+      parentRoute: typeof UnauthorizedRouteRoute
+    }
+    '/_unauthorized/forgot-password': {
+      id: '/_unauthorized/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof UnauthorizedForgotPasswordRouteImport
       parentRoute: typeof UnauthorizedRouteRoute
     }
     '/_unauthorized/about': {
@@ -476,14 +516,18 @@ const OnBoardingRouteRouteWithChildren = OnBoardingRouteRoute._addFileChildren(
 
 interface UnauthorizedRouteRouteChildren {
   UnauthorizedAboutRoute: typeof UnauthorizedAboutRoute
+  UnauthorizedForgotPasswordRoute: typeof UnauthorizedForgotPasswordRoute
   UnauthorizedLoginRoute: typeof UnauthorizedLoginRoute
   UnauthorizedRegisterRoute: typeof UnauthorizedRegisterRoute
+  UnauthorizedResetPasswordRoute: typeof UnauthorizedResetPasswordRoute
 }
 
 const UnauthorizedRouteRouteChildren: UnauthorizedRouteRouteChildren = {
   UnauthorizedAboutRoute: UnauthorizedAboutRoute,
+  UnauthorizedForgotPasswordRoute: UnauthorizedForgotPasswordRoute,
   UnauthorizedLoginRoute: UnauthorizedLoginRoute,
   UnauthorizedRegisterRoute: UnauthorizedRegisterRoute,
+  UnauthorizedResetPasswordRoute: UnauthorizedResetPasswordRoute,
 }
 
 const UnauthorizedRouteRouteWithChildren =
