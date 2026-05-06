@@ -36,6 +36,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/schema/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
 
   frontend:
@@ -55,7 +60,8 @@ services:
       - ./web:/app
       - /app/node_modules
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     command: npm run dev -- --host 0.0.0.0 --port 3000
 
 volumes:

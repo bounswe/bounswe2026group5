@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { NotificationItem } from '@/components/notifications/NotificationItem'
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowRight, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, Star, XCircle, X as XIcon } from 'lucide-react'
+import { ArrowRight, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, Star, XCircle, X as XIcon, ShieldCheck, Users } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo } from "react"
 import type { Notification } from "#/lib/queries/NotificationQueries.ts"
 import { RatingModal } from '#/components/RatingModal.tsx'
@@ -142,15 +142,19 @@ export function DashboardHome() {
     keysToInvalidate.forEach(k => queryClient.invalidateQueries({ queryKey: JSON.parse(k) }))
   }, [notifications, markAllRead, queryClient])
 
-  const mode = (data?.app_usage_mode?.toLowerCase() as 'mentor' | 'mentee') ?? 'mentee'
+  const mode = (data?.app_usage_mode?.toLowerCase() as 'mentor' | 'mentee' | 'admin') ?? 'mentee'
   return (
     <div className="page-wrap py-10 rise-in flex flex-col gap-10">
       <div className="flex items-start justify-between gap-6">
         <div className="flex flex-col gap-2">
-          <Heading as="h2">{mode === 'mentor' ? 'Mentor Dashboard' : 'Mentee Dashboard'}</Heading>
+          <Heading as="h2">
+            {mode === 'mentor' ? 'Mentor Dashboard' : mode === 'admin' ? 'Administrator Dashboard' : 'Mentee Dashboard'}
+          </Heading>
           <Body className="text-ink-soft max-w-xl">
             {mode === 'mentor'
               ? 'Review incoming mentorship requests and manage your upcoming teaching sessions.'
+              : mode === 'admin'
+              ? 'Manage platform users, review reports, and ensure the community stays safe.'
               : 'Track your learning goals, view the status of your requests, and prepare for upcoming sessions.'}
           </Body>
         </div>
@@ -175,7 +179,54 @@ export function DashboardHome() {
         </section>
       )}
 
-      {mode === 'mentor' ? <MentorDashboardView /> : <MenteeDashboardView />}
+      {mode === 'mentor' ? (
+        <MentorDashboardView />
+      ) : mode === 'admin' ? (
+        <AdminDashboardView />
+      ) : (
+        <MenteeDashboardView />
+      )}
+    </div>
+  )
+}
+
+function AdminDashboardView() {
+  return (
+    <div className="flex flex-col gap-10">
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="island-shell border-line bg-white shadow-sm overflow-hidden flex flex-col">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-accent" />
+              Platform Controls
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1">
+            <Body className="text-ink-soft mb-6">
+              Access the moderation panel to manage users, handle reports, and oversee platform activity.
+            </Body>
+            <Link to="/admin-moderation">
+              <Button className="w-full bg-accent hover:bg-accent-dark text-white shadow-sm transition-all active:scale-[0.98]">
+                Open Admin Panel
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="island-shell border-line bg-white shadow-sm overflow-hidden flex flex-col">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Users className="w-5 h-5 text-accent" />
+              Quick Stats
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 flex flex-col justify-center">
+            <Body className="text-ink-soft italic text-center">
+              Stats overview coming soon in the next update.
+            </Body>
+          </CardContent>
+        </Card>
+      </section>
     </div>
   )
 }

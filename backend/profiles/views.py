@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.db import IntegrityError, models, transaction
@@ -11,6 +12,7 @@ from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema
 from rest_framework import serializers, status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -25,14 +27,21 @@ from .models import AvailabilitySlot, CommunityTag, CommunityTagMembership, Prof
 from .serializers import (
     AvailabilitySlotSerializer,
     AvailabilitySlotWriteSerializer,
+    CommunityPostFeedSerializer,
+    CommunityPostListQueryParamsSerializer,
+    CommunityPostSerializer,
     CommunityTagCreateSerializer,
     CommunityTagDetailSerializer,
     CommunityTagListResponseSerializer,
     CommunityTagListSerializer,
     CommunityTagMembershipSerializer,
     CommunityTagUpdateSerializer,
+    CoPCreateSerializer,
+    CoPUpdateSerializer,
     MenteeProfileResponseSerializer,
     MentorProfileResponseSerializer,
+    PostMediaUploadSerializer,
+    ProfilePictureUploadSerializer,
     ProfilePostFeedSerializer,
     ProfilePostListQueryParamsSerializer,
     ProfilePostSerializer,
@@ -44,21 +53,41 @@ from .serializers import (
     PublicMentorProfileSearchListResponseSerializer,
     PublicMentorProfileSearchResultSerializer,
     SkillSerializer,
+    resolve_picture_url,
 )
 from .services import (
+    InvalidCoPEventTypeError,
     InvalidPrPEventTypeError,
     OwnSlotBookingError,
     SlotAlreadyBookedError,
     SlotInPastError,
+    create_cop_event,
     create_prp_event,
+    edit_cop_event,
     edit_prp_event,
+    list_community_feed_events,
     list_profile_feed_events,
+    soft_delete_cop_event,
     soft_delete_prp_event,
 )
 
 NOT_FOUND_DETAIL = {"detail": "Not found."}
 OVERLAP_DETAIL = {"detail": "Availability slot overlaps with an existing slot."}
 PERMISSION_DENIED_DETAIL = {"detail": "You do not have permission to perform this action."}
+LIMIT_NOT_INT_DETAIL = {"detail": "`limit` must be an integer."}
+PAGE_SIZE_NOT_INT_DETAIL = {"detail": "`page` and `pageSize` must be integers."}
+
+
+def _resolve_community_tag(tag_id: str, qs=None) -> "CommunityTag | None":
+    """Return a CommunityTag by UUID or slug. Pass a custom queryset for select_related etc."""
+    from uuid import UUID
+    if qs is None:
+        qs = CommunityTag.objects
+    try:
+        UUID(tag_id)
+        return qs.filter(id=tag_id).first()
+    except (ValueError, AttributeError):
+        return qs.filter(slug=tag_id).first()
 
 
 class ProfileLookupMixin:
@@ -206,7 +235,7 @@ class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
                 location=OpenApiParameter.QUERY,
                 required=False,
                 type=OpenApiTypes.STR,
-                enum=["PrP", "MCTE"],
+                enum=["PrP", "MCTE", "CoP"],
                 description="Filter by event category.",
             ),
             OpenApiParameter(
@@ -239,10 +268,16 @@ class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
             404: OpenApiResponse(description="Profile not found."),
         },
         description=(
-            "Return profile posts for a username. Includes both PrP posts authored by the "
-            "profile and MCTE events authored by the profile where `show_on_profile=true`. "
-            "If profile is private, only the owner can access this feed. "
-            "Supports optional filtering by `category` and `event_type`."
+            "Return profile posts for a username. Includes PrP posts authored by the "
+            "profile, MCTE events authored by the profile where `show_on_profile=true`, and "
+            "CoP events authored by the profile where `show_on_profile=true`. "
+            "If the profile is private, only the owner can access this feed. "
+            "Supports optional filtering by `category` and `event_type`. "
+            "Results are ordered newest-first by action metadata: `created_at`, then "
+            "`last_edited` as a tie-breaker. "
+            "Each result includes a `community_id` field: populated with the community tag "
+            "UUID for CoP posts (use it to link to `GET /api/profiles/tags/{community_id}/` "
+            "or `GET /api/profiles/tags/{community_id}/posts/`), and `null` for PrP and MCTE."
         ),
         tags=["Profiles"],
     )
@@ -286,7 +321,8 @@ class MyProfilePostsCollectionAPIView(ProfileLookupMixin, APIView):
         description=(
             "Create a profile post (PrP) for the authenticated user. "
             "`timestamp` is optional; if omitted, null, or empty, it is set to the event's "
-            "creation time. If provided, it cannot be more than 1 day in the future."
+            "creation time. If provided, it cannot be more than 1 day in the future. "
+            "`timestamp` represents event time, while `created_at` represents action time."
         ),
         tags=["Profiles"],
     )
@@ -299,7 +335,6 @@ class MyProfilePostsCollectionAPIView(ProfileLookupMixin, APIView):
         serializer = PrPCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         validated = serializer.validated_data
-
         try:
             event = create_prp_event(
                 author_profile=profile,
@@ -664,8 +699,6 @@ class MyAvailabilitySlotDetailAPIView(ProfileLookupMixin, APIView):
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         try:
-                # MentorshipRequest moved to top level
-
             with transaction.atomic():
                 locked_slot = AvailabilitySlot.objects.select_for_update().get(id=slot.id)
 
@@ -783,7 +816,7 @@ class RecentlyAddedMentorsListAPIView(APIView):
             limit = int(request.query_params.get("limit", 10))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`limit` must be an integer."},
+                LIMIT_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -825,7 +858,7 @@ class PopularMentorsListAPIView(APIView):
             limit = int(request.query_params.get("limit", 10))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`limit` must be an integer."},
+                LIMIT_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -888,25 +921,6 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         return any((skill or "").lower() in wanted for skill in (skills or []))
 
     @staticmethod
-    def _parse_mode(request: Request) -> list[str]:
-        """Map `mentorshipMode` query param to internal app usage mode values."""
-        raw_mode = (
-            request.query_params.get("mentorshipMode")
-            or request.query_params.get("mentorship_mode")
-            or request.query_params.get("mode")
-        )
-        if not raw_mode:
-            return [AppUsageMode.MENTOR]
-
-        mode = raw_mode.strip().upper()
-        if mode == AppUsageMode.MENTOR:
-            return [AppUsageMode.MENTOR]
-        if mode == AppUsageMode.MENTEE:
-            return [AppUsageMode.MENTEE]
-
-        raise ValueError("Invalid mentorshipMode. Expected MENTOR or MENTEE.")
-
-    @staticmethod
     def _maybe_parse_coordinates(request: Request) -> tuple[float, float] | None:
         """Parse lat/lng query params if present."""
         lat_raw = request.query_params.get("lat") or request.query_params.get("latitude")
@@ -940,18 +954,65 @@ class PublicMentorProfilesSearchListAPIView(APIView):
 
     @extend_schema(
         operation_id="profiles_public_mentor_search",
+        parameters=[
+            OpenApiParameter(
+                "q",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Search by name, title, bio, or skills.",
+            ),
+            OpenApiParameter(
+                "skill",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Filter by specific skill (comma-separated).",
+            ),
+            OpenApiParameter(
+                "tag",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Filter by community tag slug or name (comma-separated).",
+            ),
+            OpenApiParameter(
+                "lat",
+                OpenApiTypes.FLOAT,
+                OpenApiParameter.QUERY,
+                description="Latitude for distance filtering.",
+            ),
+            OpenApiParameter(
+                "lng",
+                OpenApiTypes.FLOAT,
+                OpenApiParameter.QUERY,
+                description="Longitude for distance filtering.",
+            ),
+            OpenApiParameter(
+                "distanceKm",
+                OpenApiTypes.FLOAT,
+                OpenApiParameter.QUERY,
+                description="Radius in km (default 15.0 if lat/lng provided).",
+            ),
+            OpenApiParameter(
+                "page",
+                OpenApiTypes.INT,
+                OpenApiParameter.QUERY,
+                description="Page number (default 1).",
+            ),
+            OpenApiParameter(
+                "pageSize",
+                OpenApiTypes.INT,
+                OpenApiParameter.QUERY,
+                description="Results per page (default 6, max 50).",
+            ),
+        ],
         responses={200: PublicMentorProfileSearchListResponseSerializer},
         description=(
             "Public listing of visible mentor profiles with optional search and filters. "
-            "Supports pagination via `page` and `pageSize` query params."
+            "Supports pagination via `page` and `pageSize` query params. "
+            "If `lat` and `lng` are provided without `distanceKm`, a default radius of 15km is applied."
         ),
         tags=["Profiles"],
     )
     def get(self, request: Request) -> Response:
-        try:
-            mentorship_modes = self._parse_mode(request)
-        except ValueError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         q = (
             request.query_params.get("q")
@@ -971,7 +1032,7 @@ class PublicMentorProfilesSearchListAPIView(APIView):
             page_size = int(request.query_params.get("pageSize", 6))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`page` and `pageSize` must be integers."},
+                PAGE_SIZE_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -980,7 +1041,7 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         page_size = min(page_size, 50)
 
         qs = Profile.objects.select_related("user").filter(
-            is_visible=True, user__app_usage_mode__in=mentorship_modes
+            is_visible=True, user__app_usage_mode=AppUsageMode.MENTOR
         )
 
         if q:
@@ -1017,10 +1078,18 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        if coords is not None and distance_km is not None:
+        if coords is None and request.user.is_authenticated:
+            profile = getattr(request.user, "profile", None)
+            if profile and profile.location:
+                coords = (profile.location.y, profile.location.x)
+
+        if coords is not None:
             lat, lng = coords
             point = Point(lng, lat, srid=4326)
-            qs = qs.filter(location__distance_lte=(point, D(km=distance_km)))
+            radius = distance_km if distance_km is not None else 15.0
+            qs = qs.annotate(distance=Distance("location", point))
+            qs = qs.filter(location__distance_lte=(point, D(km=radius)))
+            qs = qs.order_by("distance", "id")
 
         # Community tag filtering (matches profiles in ANY of the given tags)
         tag_terms = self._parse_terms(request, keys=["tag", "tags"])
@@ -1125,7 +1194,7 @@ class ProfileReviewsByUsernameAPIView(ProfileLookupMixin, APIView):
             page_size = int(request.query_params.get("pageSize", 6))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`page` and `pageSize` must be integers."},
+                PAGE_SIZE_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1189,7 +1258,7 @@ class CommunityTagListCreateAPIView(APIView):
             page_size = int(request.query_params.get("pageSize", 20))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`page` and `pageSize` must be integers."},
+                PAGE_SIZE_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1237,7 +1306,12 @@ class CommunityTagListCreateAPIView(APIView):
             context={"profile": profile},
         )
         serializer.is_valid(raise_exception=True)
-        tag = serializer.save()
+
+        with transaction.atomic():
+            tag = serializer.save()
+            CommunityTagMembership.objects.create(profile=profile, tag=tag)
+            CommunityTag.objects.filter(id=tag.id).update(member_count=models.F("member_count") + 1)
+            tag.refresh_from_db()
 
         return Response(
             CommunityTagDetailSerializer(tag, context={"request": request}).data,
@@ -1270,7 +1344,7 @@ class CommunityTagDetailAPIView(APIView):
         tags=["Community Tags"],
     )
     def get(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id, qs=CommunityTag.objects.select_related("created_by"))
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1297,7 +1371,7 @@ class CommunityTagDetailAPIView(APIView):
         tags=["Community Tags"],
     )
     def patch(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id, qs=CommunityTag.objects.select_related("created_by"))
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1336,7 +1410,7 @@ class CommunityTagDetailAPIView(APIView):
         tags=["Community Tags"],
     )
     def delete(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.select_related("created_by").filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id, qs=CommunityTag.objects.select_related("created_by"))
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1383,7 +1457,7 @@ class CommunityTagJoinAPIView(APIView):
         tags=["Community Tags"],
     )
     def post(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id)
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1434,7 +1508,7 @@ class CommunityTagLeaveAPIView(APIView):
         tags=["Community Tags"],
     )
     def delete(self, request: Request, tag_id: str) -> Response:
-        tag = CommunityTag.objects.filter(id=tag_id).first()
+        tag = _resolve_community_tag(tag_id)
         if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
@@ -1498,6 +1572,211 @@ class MyTagsListAPIView(ProfileLookupMixin, APIView):
         )
 
 
+class CommunityTagPostsListCreateAPIView(ProfileLookupMixin, APIView):
+    """List and create community posts (CoP) for a community tag."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        operation_id="community_tag_posts_list",
+        parameters=[
+            OpenApiParameter(
+                name="event_type",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.STR,
+                enum=["achievement", "social", "progress"],
+                description="Filter by event type.",
+            ),
+            OpenApiParameter(
+                name="offset",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Zero-based index of the first item to include. Default: 0.",
+            ),
+            OpenApiParameter(
+                name="limit",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Maximum number of items to return. Default: 50. Maximum: 200.",
+            ),
+        ],
+        responses={
+            200: CommunityPostFeedSerializer,
+            400: OpenApiResponse(description="Invalid query parameters."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Community tag not found."),
+        },
+        description=(
+            "List community posts for a tag, ordered newest-first. "
+            "Authenticated users can view all non-deleted posts. "
+            "Supports filtering by `event_type`. Pagination via `offset` and `limit`."
+        ),
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request, tag_id: str) -> Response:
+        """Return paginated community feed events for a tag."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        params_serializer = CommunityPostListQueryParamsSerializer(data=request.query_params)
+        params_serializer.is_valid(raise_exception=True)
+        params = params_serializer.validated_data
+
+        payload = list_community_feed_events(
+            community_tag=tag,
+            offset=params["offset"],
+            limit=params["limit"],
+            event_type=params.get("event_type"),
+        )
+        return Response(CommunityPostFeedSerializer(payload).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        operation_id="community_tag_posts_create",
+        request=CoPCreateSerializer,
+        responses={
+            201: CommunityPostSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Not a member of this community."),
+            404: OpenApiResponse(description="Community tag not found."),
+        },
+        description=(
+            "Create a community post (CoP) in a tag. Requester must be a member. "
+            "`show_on_profile` defaults to `false`; set to `true` to also display "
+            "this post on the author's profile feed. "
+            "`timestamp` is optional; defaults to creation time."
+        ),
+        tags=["Community Tags"],
+    )
+    def post(self, request: Request, tag_id: str) -> Response:
+        """Create a new community post authored by request.user's profile."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        is_member = CommunityTagMembership.objects.filter(profile=profile, tag=tag).exists()
+        if not is_member:
+            return Response(
+                {"detail": "You must be a member of this community to post."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = CoPCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+
+        try:
+            event = create_cop_event(
+                author_profile=profile,
+                community_tag=tag,
+                event_type=validated["event_type"],
+                content=validated.get("content", ""),
+                media_url=validated.get("media_url"),
+                show_on_profile=validated.get("show_on_profile", False),
+                timestamp=validated.get("timestamp"),
+            )
+        except InvalidCoPEventTypeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        event.author = profile
+        return Response(CommunityPostSerializer(event).data, status=status.HTTP_201_CREATED)
+
+
+class CommunityTagPostDetailAPIView(ProfileLookupMixin, APIView):
+    """Update or soft-delete a community post owned by the authenticated user."""
+
+    permission_classes = [IsUser]
+
+    def _resolve_owned_post(self, request: Request, tag_id: str, event_id: str):
+        """Return (profile, event) for an owned CoP, or a 404 Response."""
+        from timeline.models import TimelineEvent
+
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            event = TimelineEvent.objects.select_related("author").get(
+                id=event_id,
+                author=profile,
+                community_id=tag_id,
+                category=TimelineEvent.Category.COP,
+                is_deleted=False,
+            )
+        except TimelineEvent.DoesNotExist:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return profile, event
+
+    @extend_schema(
+        operation_id="community_tag_posts_update",
+        request=CoPUpdateSerializer,
+        responses={
+            200: CommunityPostSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Post not found."),
+        },
+        description=(
+            "Partially update a community post. Only the original author can edit. "
+            "Editable fields: `content`, `event_type`, `media_url`, `show_on_profile`."
+        ),
+        tags=["Community Tags"],
+    )
+    def patch(self, request: Request, tag_id: str, event_id: str) -> Response:
+        """Partially update an owned community post."""
+        result = self._resolve_owned_post(request, tag_id, event_id)
+        if isinstance(result, Response):
+            return result
+        _profile, event = result
+
+        serializer = CoPUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+
+        try:
+            updated_event = edit_cop_event(
+                event=event,
+                content=validated.get("content"),
+                event_type=validated.get("event_type"),
+                media_url=validated.get("media_url"),
+                show_on_profile=validated.get("show_on_profile"),
+                update_media_url="media_url" in validated,
+            )
+        except InvalidCoPEventTypeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(CommunityPostSerializer(updated_event).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        operation_id="community_tag_posts_delete",
+        responses={
+            204: OpenApiResponse(description="Post deleted."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Post not found."),
+        },
+        description="Soft-delete a community post. Only the original author can delete.",
+        tags=["Community Tags"],
+    )
+    def delete(self, request: Request, tag_id: str, event_id: str) -> Response:
+        """Soft-delete an owned community post."""
+        result = self._resolve_owned_post(request, tag_id, event_id)
+        if isinstance(result, Response):
+            return result
+        _profile, event = result
+
+        soft_delete_cop_event(event=event)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 POPULAR_TAGS_WINDOWS = {"all": None, "7d": 7, "30d": 30}
 POPULAR_TAGS_DEFAULT_LIMIT = 10
 POPULAR_TAGS_MAX_LIMIT = 50
@@ -1526,7 +1805,7 @@ class PopularTagsListAPIView(APIView):
             limit = int(request.query_params.get("limit", POPULAR_TAGS_DEFAULT_LIMIT))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`limit` must be an integer."},
+                LIMIT_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
         limit = max(1, min(limit, POPULAR_TAGS_MAX_LIMIT))
@@ -1584,7 +1863,8 @@ class CommunityTagMembersListAPIView(APIView):
         tags=["Community Tags"],
     )
     def get(self, request: Request, tag_id: str) -> Response:
-        if not CommunityTag.objects.filter(id=tag_id).exists():
+        tag = _resolve_community_tag(tag_id)
+        if tag is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         try:
@@ -1592,7 +1872,7 @@ class CommunityTagMembersListAPIView(APIView):
             page_size = int(request.query_params.get("pageSize", 20))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "`page` and `pageSize` must be integers."},
+                PAGE_SIZE_NOT_INT_DETAIL,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1600,7 +1880,7 @@ class CommunityTagMembersListAPIView(APIView):
         page_size = max(1, min(page_size, 50))
 
         memberships = (
-            CommunityTagMembership.objects.filter(tag_id=tag_id, profile__is_visible=True)
+            CommunityTagMembership.objects.filter(tag=tag, profile__is_visible=True)
             .select_related("profile__user")
             .order_by("-joined_at")
         )
@@ -1620,3 +1900,130 @@ class CommunityTagMembersListAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ProfilePictureUploadAPIView(ProfileLookupMixin, APIView):
+    """Upload or remove a user's profile picture."""
+
+    permission_classes = [IsUser]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "picture": {"type": "string", "format": "binary"},
+                },
+                "required": ["picture"],
+            }
+        },
+        responses={
+            200: OpenApiResponse(
+                description="Profile picture uploaded.",
+            ),
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "Upload a profile picture for the authenticated user. "
+            "The image is auto-resized to 512×512 px (longest side) and converted to JPEG. "
+            "Accepts JPEG, PNG, GIF, and WebP. Maximum 5 MB."
+        ),
+        tags=["Profiles"],
+    )
+    def post(self, request: Request) -> Response:
+        """Upload a new profile picture."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ProfilePictureUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save_picture(profile)
+
+        profile.refresh_from_db()
+        return Response(
+            {
+                "detail": "Profile picture uploaded.",
+                "picture_url": resolve_picture_url(profile),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: OpenApiResponse(description="Profile picture removed."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Remove the uploaded profile picture. Falls back to OAuth avatar if set.",
+        tags=["Profiles"],
+    )
+    def delete(self, request: Request) -> Response:
+        """Remove uploaded profile picture."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        if profile.picture:
+            try:
+                profile.picture.delete(save=False)
+            except Exception:
+                pass
+            profile.picture = None
+            profile.save(update_fields=["picture", "updated_at"])
+
+        return Response(
+            {
+                "detail": "Profile picture removed.",
+                "picture_url": resolve_picture_url(profile),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PostMediaUploadAPIView(ProfileLookupMixin, APIView):
+    """Upload a media file for use in profile posts or timeline events."""
+
+    permission_classes = [IsUser]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string", "format": "binary"},
+                },
+                "required": ["file"],
+            }
+        },
+        responses={
+            201: OpenApiResponse(
+                description="Media file uploaded. Returns the public URL.",
+            ),
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "Upload a media file (image or PDF) for use in posts. "
+            "Images are auto-resized to 1920 px (longest side). Maximum 10 MB. "
+            "Returns a public URL that can be used as `media_url` when creating or updating posts."
+        ),
+        tags=["Profiles"],
+    )
+    def post(self, request: Request) -> Response:
+        """Upload a media file and return its public URL."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = PostMediaUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        url = serializer.save_file()
+
+        return Response({"url": url}, status=status.HTTP_201_CREATED)

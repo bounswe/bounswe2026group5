@@ -1,12 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import {
-  ActivityIndicator,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 
 import { ProfilePostCard } from "@/components/profile/ProfilePostCard";
 import { useProfilePostsQuery } from "@/lib/queries/profile";
@@ -14,10 +8,12 @@ import { useProfilePostsQuery } from "@/lib/queries/profile";
 interface ProfilePostsPreviewProps {
   username: string;
   onViewAll: () => void;
+  onCompose?: () => void;
+  communityLabelsById?: Record<string, string>;
 }
 
 /**
- * Horizontal scrolling preview strip showing up to 3 profile posts.
+ * Vertical preview stack showing up to 3 profile posts.
  *
  * Data rules:
  *   - Relies on backend to return PrP + public MCTE only.
@@ -28,6 +24,8 @@ interface ProfilePostsPreviewProps {
 export function ProfilePostsPreview({
   username,
   onViewAll,
+  onCompose,
+  communityLabelsById,
 }: Readonly<ProfilePostsPreviewProps>) {
   const postsQuery = useProfilePostsQuery(username, { limit: 3 });
 
@@ -55,38 +53,52 @@ export function ProfilePostsPreview({
 
   return (
     <View testID="profile-posts-preview" className="mb-6">
-      {/* Section header */}
-      <View className="flex-row items-center justify-between mb-3">
+      <View className="mb-3 flex-row items-center justify-between gap-3">
         <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
           Posts
         </Text>
-        {totalCount > 0 ? (
+        {onCompose ? (
           <TouchableOpacity
-            testID="view-all-posts-button"
-            activeOpacity={0.75}
-            onPress={onViewAll}
-            className="flex-row items-center gap-1"
+            testID="profile-post-compose-button"
+            activeOpacity={0.8}
+            onPress={onCompose}
+            className="flex-row items-center gap-1 rounded-full border border-primary/50 bg-surface-card px-3 py-2 dark:border-primary-dim/50 dark:bg-surface-card-dark"
           >
-            <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
-              View All
+            <Ionicons name="create-outline" size={14} color="#2f7d68" />
+            <Text className="text-xs font-semibold text-primary dark:text-primary-dim">
+              New Post
             </Text>
-            <Ionicons name="chevron-forward" size={14} color="#2f7d68" />
           </TouchableOpacity>
         ) : null}
       </View>
 
-      {/* Horizontal card strip */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 12, paddingRight: 4 }}
-      >
+      <View className="gap-3">
         {posts.map((post) => (
-          <View key={post.id} style={{ width: 240 }}>
-            <ProfilePostCard post={post} />
-          </View>
+          <ProfilePostCard
+            key={post.id}
+            post={post}
+            communityLabel={
+              post.community_id
+                ? communityLabelsById?.[post.community_id]
+                : undefined
+            }
+          />
         ))}
-      </ScrollView>
+      </View>
+
+      {totalCount > 0 ? (
+        <TouchableOpacity
+          testID="view-all-posts-button"
+          activeOpacity={0.75}
+          onPress={onViewAll}
+          className="mt-3 flex-row items-center justify-center gap-1 rounded-xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark py-3"
+        >
+          <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
+            View All
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color="#2f7d68" />
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }

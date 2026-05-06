@@ -38,8 +38,8 @@ describe("TimelineEventCard", () => {
     );
 
     expect(getByText("Session scheduled")).toBeTruthy();
-    expect(getByText("System")).toBeTruthy();
     expect(getByText("View details")).toBeTruthy();
+    expect(queryByText("by mentor")).toBeNull();
     expect(queryByText("session_id")).toBeNull();
     expect(queryByText("session-1")).toBeNull();
   });
@@ -62,7 +62,7 @@ describe("TimelineEventCard", () => {
 
   it("renders MCTE content and calls toggle", () => {
     const onToggle = jest.fn();
-    const { getByText, getByTestId } = render(
+    const { getAllByText, getByText, getByTestId } = render(
       <TimelineEventCard
         event={makeEvent({
           id: "mcte-1",
@@ -81,8 +81,8 @@ describe("TimelineEventCard", () => {
       />,
     );
 
-    expect(getByText("Achievement")).toBeTruthy();
-    expect(getByText("Milestone")).toBeTruthy();
+    expect(getAllByText("Achievement").length).toBeGreaterThan(0);
+    expect(getByText("by mentee")).toBeTruthy();
     expect(getByText("Finished React Basics")).toBeTruthy();
     expect(getByText("Shown on profile")).toBeTruthy();
 
@@ -109,9 +109,8 @@ describe("TimelineEventCard", () => {
     );
 
     expect(getByText("Progress update")).toBeTruthy();
-    expect(getByText("Milestone")).toBeTruthy();
+    expect(getByText("Progress")).toBeTruthy();
     expect(getByText("Private progress update")).toBeTruthy();
     expect(queryByText("Shown on profile")).toBeNull();
   });
 });
-

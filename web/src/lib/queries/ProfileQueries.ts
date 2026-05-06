@@ -16,7 +16,7 @@ export interface MenteeProfile {
     hidden: boolean
     picture_url: string
     skills: string[] | null
-    app_usage_mode: "MENTOR" | "MENTEE"
+    app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
 }
 
 export interface MentorProfile {
@@ -29,7 +29,7 @@ export interface MentorProfile {
     skills: string[] | null
     average_rating: number
     total_mentee_count: number
-    app_usage_mode: "MENTOR" | "MENTEE"
+    app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
 }
 
 export type ProfileResponse = MenteeProfile | MentorProfile

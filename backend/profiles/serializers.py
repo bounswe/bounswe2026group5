@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
@@ -10,20 +10,43 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from core.utils.image import resize_image
 from core.utils.timezone import get_project_timezone, to_local_time
+from core.utils.validators import validate_file_size, validate_image_content_type
 from mentorship.models import MeetingSession
 
 from .models import AvailabilitySlot, CommunityTag, Profile, Skill
-
-if TYPE_CHECKING:
-    from accounts.models import User as UserType
-else:
-    UserType = Any
 
 User = get_user_model()
 
 
 @extend_schema_field(OpenApiTypes.OBJECT)
+def resolve_picture_url(profile: Profile) -> str:
+    """Return the best available picture URL for a profile.
+
+    Priority:
+    1. Uploaded picture file (ImageField) — when present, return its URL.
+    2. External picture_url (URLField) — e.g. Google OAuth avatar.
+    3. Empty string — no picture available.
+    """
+    if profile.picture and hasattr(profile.picture, "url"):
+        try:
+            return profile.picture.url
+        except ValueError:
+            pass
+    return profile.picture_url or ""
+
+
+@extend_schema_field(
+    {
+        "type": "object",
+        "properties": {
+            "latitude": {"type": "number", "format": "float"},
+            "longitude": {"type": "number", "format": "float"},
+        },
+        "nullable": True,
+    }
+)
 class LocationField(serializers.Field):
     """Serialize a PointField as {latitude, longitude} and accept the same on input."""
 
@@ -62,6 +85,94 @@ class SkillSerializer(serializers.ModelSerializer):
         model = Skill
         fields = ("id", "name")
         read_only_fields = fields
+
+
+class ProfilePictureUploadSerializer(serializers.Serializer):
+    """Write serializer for uploading a profile picture."""
+
+    picture = serializers.ImageField(required=True)
+
+    def validate_picture(self, picture):
+        """Validate image content-type and enforce a size limit."""
+        from django.conf import settings
+
+        validate_image_content_type(picture)
+        validate_file_size(
+            picture,
+            settings.MAX_PROFILE_PICTURE_SIZE_BYTES,
+            label="Profile picture",
+        )
+        return picture
+
+    def save_picture(self, profile: Profile):
+        """Resize the image and persist it on the profile."""
+        from django.conf import settings
+
+        picture = self.validated_data["picture"]
+        resized = resize_image(
+            picture,
+            max_dimension=settings.PROFILE_PICTURE_MAX_DIMENSION,
+            output_format="JPEG",
+        )
+
+        # Delete old uploaded picture file if it exists
+        if profile.picture:
+            try:
+                profile.picture.delete(save=False)
+            except Exception:
+                pass
+
+        profile.picture.save(resized.name, resized, save=True)
+        return profile
+
+
+class PostMediaUploadSerializer(serializers.Serializer):
+    """Write serializer for uploading media files attached to posts."""
+
+    file = serializers.FileField(required=True)
+
+    def validate_file(self, file):
+        """Validate content-type (image or PDF) and enforce a size limit."""
+        from django.conf import settings
+
+        from core.utils.validators import validate_media_content_type
+
+        validate_media_content_type(file)
+        validate_file_size(
+            file,
+            settings.MAX_POST_MEDIA_SIZE_BYTES,
+            label="Post media",
+        )
+        return file
+
+    def save_file(self):
+        """Resize (if image) and persist the file, returning the public URL."""
+        from django.conf import settings
+        from django.core.files.storage import default_storage
+
+        from core.utils.validators import IMAGE_CONTENT_TYPES
+
+        uploaded = self.validated_data["file"]
+
+        # If it's an image, resize; otherwise save as-is
+        if uploaded.content_type in IMAGE_CONTENT_TYPES:
+            processed = resize_image(
+                uploaded,
+                max_dimension=settings.POST_MEDIA_MAX_DIMENSION,
+                output_format="JPEG",
+            )
+        else:
+            processed = uploaded
+
+        import uuid as _uuid
+
+        from django.utils import timezone as _tz
+
+        now = _tz.now()
+        filename = f"{_uuid.uuid4().hex}_{processed.name}"
+        path = f"post_media/{now.year}/{now.month:02d}" f"/{now.day:02d}/{filename}"
+        saved_path = default_storage.save(path, processed)
+        return default_storage.url(saved_path)
 
 
 class AvailabilitySlotSerializer(serializers.ModelSerializer):
@@ -136,7 +247,7 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
 
     full_name = serializers.CharField(source="display_name", read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
-    picture_url = serializers.URLField(read_only=True)
+    picture_url = serializers.SerializerMethodField()
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
 
     class Meta:
@@ -152,6 +263,11 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_picture_url(self, obj: Profile) -> str:
+        """Return uploaded picture URL or external URL fallback."""
+        return resolve_picture_url(obj)
+
     def to_representation(self, instance: Profile) -> dict[str, Any]:
         """Add 'hidden' field to the output representation."""
         ret = super().to_representation(instance)
@@ -166,7 +282,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="display_name", read_only=True)
     title = serializers.CharField(read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
-    picture_url = serializers.URLField(read_only=True)
+    picture_url = serializers.SerializerMethodField()
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     average_rating = serializers.DecimalField(max_digits=3, decimal_places=2, read_only=True)
     total_mentee_count = serializers.IntegerField(read_only=True)
@@ -187,6 +303,11 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_picture_url(self, obj: Profile) -> str:
+        """Return uploaded picture URL or external URL fallback."""
+        return resolve_picture_url(obj)
+
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         # Invert is_visible to get "hidden" semantics
@@ -199,6 +320,7 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
 
     location = LocationField(read_only=True)
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
+    picture_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -217,6 +339,11 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_picture_url(self, obj: Profile) -> str:
+        """Return uploaded picture URL or external URL fallback."""
+        return resolve_picture_url(obj)
 
 
 class UsernameUpdateMixin:
@@ -244,6 +371,7 @@ class ProfileUpdateSerializer(UsernameUpdateMixin, serializers.ModelSerializer):
     """Partial update serializer for authenticated user's profile."""
 
     location = LocationField(required=False, allow_null=True)
+    share_precise_location = serializers.BooleanField(required=False)
     skills = serializers.ListField(
         child=serializers.CharField(),
         required=False,
@@ -269,6 +397,7 @@ class ProfileUpdateSerializer(UsernameUpdateMixin, serializers.ModelSerializer):
             "picture_url",
             "title",
             "location",
+            "share_precise_location",
             "is_visible",
             "show_initials_only",
             "skills",
@@ -412,9 +541,10 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
     username = serializers.CharField(read_only=True)
     hidden = serializers.BooleanField(source="is_visible", read_only=True)
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
-    picture_url = serializers.URLField(read_only=True)
-    location = LocationField(read_only=True)
+    location = serializers.SerializerMethodField()
+    picture_url = serializers.SerializerMethodField()
     show_initials_only = serializers.BooleanField(read_only=True)
+    distance_km = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -431,6 +561,7 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
             "skills",
             "average_rating",
             "total_mentee_count",
+            "distance_km",
         )
         read_only_fields = fields
 
@@ -440,12 +571,40 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
             return _get_display_initials(obj.display_name or "")
         return obj.display_name
 
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_picture_url(self, obj: Profile) -> str:
+        """Return uploaded picture URL or external URL fallback."""
+        return resolve_picture_url(obj)
+
     def to_representation(self, instance: Profile) -> dict[str, Any]:
         """Add 'hidden' field to the output representation."""
         ret = super().to_representation(instance)
         # Invert is_visible to get "hidden" semantics.
         ret["hidden"] = not instance.is_visible
         return ret
+
+    @extend_schema_field(LocationField)
+    def get_location(self, obj: Profile) -> dict[str, float] | None:
+        """Return location with privacy jitter if precise location is not shared."""
+        if not obj.location:
+            return None
+        lat = obj.location.y
+        lng = obj.location.x
+        if not obj.share_precise_location:
+            import random
+
+            # Apply a random shift of up to ~4km (roughly 0.04 degrees)
+            lat += random.uniform(-0.04, 0.04)
+            lng += random.uniform(-0.04, 0.04)
+        return {"latitude": lat, "longitude": lng}
+
+    @extend_schema_field(OpenApiTypes.FLOAT)
+    def get_distance_km(self, obj: Profile) -> float | None:
+        """Return distance annotated by the view."""
+        distance = getattr(obj, "distance", None)
+        if distance is not None:
+            return round(distance.km, 2)
+        return None
 
 
 class PublicMentorProfileSearchListResponseSerializer(serializers.Serializer):
@@ -458,16 +617,23 @@ class PublicMentorProfileSearchListResponseSerializer(serializers.Serializer):
 
 
 _PROFILE_POST_EVENT_TYPE_CHOICES = ["achievement", "social", "progress"]
-_PROFILE_POST_CATEGORY_CHOICES = ["PrP", "MCTE"]
+_PROFILE_POST_CATEGORY_CHOICES = ["PrP", "MCTE", "CoP"]
 
 
 class ProfilePostAuthorSerializer(serializers.ModelSerializer):
     """Compact profile representation for profile post responses."""
 
+    picture_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Profile
         fields = ("id", "username", "display_name", "picture_url", "title")
         read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_picture_url(self, obj: Profile) -> str:
+        """Return uploaded picture URL or external URL fallback."""
+        return resolve_picture_url(obj)
 
 
 class PrPCreateSerializer(serializers.Serializer):
@@ -530,7 +696,12 @@ class ProfilePostListQueryParamsSerializer(serializers.Serializer):
 
 
 class ProfilePostSerializer(serializers.Serializer):
-    """Read serializer for profile feed items (PrP + visible MCTE)."""
+    """Read serializer for profile feed items (PrP, visible MCTE, and visible CoP).
+
+    ``community_id`` is populated only for CoP posts and is ``null`` for PrP and MCTE.
+    Clients can use it to navigate to ``/api/profiles/tags/{community_id}/`` or link
+    to the community feed at ``/api/profiles/tags/{community_id}/posts/``.
+    """
 
     id = serializers.UUIDField(read_only=True)
     source_id = serializers.CharField(read_only=True)
@@ -542,6 +713,7 @@ class ProfilePostSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(read_only=True)
     last_edited = serializers.DateTimeField(read_only=True, allow_null=True)
     show_on_profile = serializers.BooleanField(read_only=True)
+    community_id = serializers.UUIDField(read_only=True, allow_null=True)
     actor_role = serializers.CharField(read_only=True)
     author = ProfilePostAuthorSerializer(read_only=True)
 
@@ -563,9 +735,11 @@ class ProfilePostFeedSerializer(serializers.Serializer):
 class CommunityTagListSerializer(serializers.ModelSerializer):
     """Read serializer for community tag list items."""
 
+    location = LocationField(read_only=True)
+
     class Meta:
         model = CommunityTag
-        fields = ("id", "name", "slug", "description", "member_count", "created_at")
+        fields = ("id", "name", "slug", "description", "location", "member_count", "created_at")
         read_only_fields = fields
 
 
@@ -574,6 +748,7 @@ class CommunityTagDetailSerializer(serializers.ModelSerializer):
 
     created_by_username = serializers.SerializerMethodField()
     is_member = serializers.SerializerMethodField()
+    location = LocationField(read_only=True)
 
     class Meta:
         model = CommunityTag
@@ -582,6 +757,7 @@ class CommunityTagDetailSerializer(serializers.ModelSerializer):
             "name",
             "slug",
             "description",
+            "location",
             "member_count",
             "created_by_username",
             "is_member",
@@ -622,10 +798,12 @@ class CommunityTagCreateSerializer(serializers.Serializer):
 
     def create(self, validated_data: dict) -> "CommunityTag":
         profile = self.context.get("profile")
+        location = profile.location if profile else None
         return CommunityTag.objects.create(
             name=validated_data["name"],
             description=validated_data.get("description", ""),
             created_by=profile,
+            location=location,
         )
 
 
@@ -661,3 +839,90 @@ class CommunityTagListResponseSerializer(serializers.Serializer):
     page = serializers.IntegerField()
     pageSize = serializers.IntegerField()
     results = CommunityTagListSerializer(many=True)
+
+
+# ---------------------------------------------------------------------------
+# Community Posts (CoP)
+# ---------------------------------------------------------------------------
+
+
+class CoPCreateSerializer(serializers.Serializer):
+    """Write serializer for creating a community post (CoP)."""
+
+    event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES)
+    content = serializers.CharField(required=True, max_length=2000)
+    media_url = serializers.URLField(required=False, allow_null=True, default=None)
+    show_on_profile = serializers.BooleanField(required=False, default=False)
+    timestamp = serializers.DateTimeField(required=False, allow_null=True, default=None)
+
+    def to_internal_value(self, data: Any) -> dict:
+        """Normalize empty timestamp values to null so fallback logic can be applied."""
+        if isinstance(data, dict) and data.get("timestamp") == "":
+            data = {**data, "timestamp": None}
+        return super().to_internal_value(data)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Reject timestamps more than 1 day in the future when provided."""
+        timestamp = attrs.get("timestamp")
+        if timestamp is not None and timestamp > timezone.now() + timedelta(days=1):
+            raise serializers.ValidationError(
+                {"timestamp": "Timestamp cannot be more than 1 day in the future."}
+            )
+        return attrs
+
+
+class CoPUpdateSerializer(serializers.Serializer):
+    """Write serializer for partially updating a community post."""
+
+    content = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES, required=False)
+    media_url = serializers.URLField(required=False, allow_null=True)
+    show_on_profile = serializers.BooleanField(required=False)
+
+    def validate(self, attrs: dict) -> dict:
+        """Require at least one editable field to be provided."""
+        if not attrs:
+            raise serializers.ValidationError(
+                "At least one of 'content', 'event_type', 'media_url', or "
+                "'show_on_profile' must be provided."
+            )
+        return attrs
+
+
+class CommunityPostListQueryParamsSerializer(serializers.Serializer):
+    """Validate query parameters for community post listing endpoint."""
+
+    event_type = serializers.ChoiceField(
+        choices=_PROFILE_POST_EVENT_TYPE_CHOICES,
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+    offset = serializers.IntegerField(required=False, min_value=0, default=0)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=50)
+
+
+class CommunityPostSerializer(serializers.Serializer):
+    """Read serializer for community feed items (CoP)."""
+
+    id = serializers.UUIDField(read_only=True)
+    source_id = serializers.CharField(read_only=True)
+    category = serializers.CharField(read_only=True)
+    event_type = serializers.CharField(read_only=True)
+    content = serializers.CharField(read_only=True)
+    media_url = serializers.URLField(read_only=True, allow_null=True)
+    timestamp = serializers.DateTimeField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    last_edited = serializers.DateTimeField(read_only=True, allow_null=True)
+    show_on_profile = serializers.BooleanField(read_only=True)
+    community_id = serializers.UUIDField(read_only=True)
+    author = ProfilePostAuthorSerializer(read_only=True)
+
+
+class CommunityPostFeedSerializer(serializers.Serializer):
+    """Paginated response wrapper for community posts feed."""
+
+    count = serializers.IntegerField(read_only=True)
+    offset = serializers.IntegerField(read_only=True)
+    limit = serializers.IntegerField(read_only=True)
+    results = CommunityPostSerializer(many=True, read_only=True)

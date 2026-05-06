@@ -49,8 +49,9 @@ jest.mock("@/components/ui/ToastProvider", () => ({
 }));
 
 jest.mock("@/lib/auth/store", () => ({
-  useAuthStore: (selector: (state: { user: { username: string } }) => unknown) =>
-    selector({ user: { username: "current_user" } }),
+  useAuthStore: (
+    selector: (state: { user: { username: string } }) => unknown,
+  ) => selector({ user: { username: "current_user" } }),
 }));
 
 jest.mock("@/lib/queries/mentorship", () => ({
@@ -112,10 +113,11 @@ describe("MatchJourneyScreen", () => {
       error: null,
     };
 
-    const { getByText, getByTestId, queryByText } = render(<MatchJourneyScreen />);
+    const { getByText, getByTestId, queryByText } = render(
+      <MatchJourneyScreen />,
+    );
 
     expect(getByText("Session scheduled")).toBeTruthy();
-    expect(getByText("System")).toBeTruthy();
     expect(getByText("View details")).toBeTruthy();
     expect(queryByText("session_id")).toBeNull();
     expect(queryByText("session-1")).toBeNull();
@@ -126,7 +128,9 @@ describe("MatchJourneyScreen", () => {
 
     expect(getByText("Starts")).toBeTruthy();
     expect(queryByText("scheduled_start_at_utc")).toBeNull();
-    expect(getByTestId("journey-event-session_scheduled:session-1")).toBeTruthy();
+    expect(
+      getByTestId("journey-event-session_scheduled:session-1"),
+    ).toBeTruthy();
   });
 
   it("does not render profile or community posts in the private journey", () => {
@@ -209,10 +213,11 @@ describe("MatchJourneyScreen", () => {
       error: null,
     };
 
-    const { getByText, getByTestId } = render(<MatchJourneyScreen />);
+    const { getAllByText, getByText, getByTestId } = render(
+      <MatchJourneyScreen />,
+    );
 
-    expect(getByText("Achievement")).toBeTruthy();
-    expect(getByText("Milestone")).toBeTruthy();
+    expect(getAllByText("Achievement").length).toBeGreaterThan(1);
     expect(getByText("View details")).toBeTruthy();
 
     fireEvent.press(getByTestId("journey-event-toggle-mcte-1"));
@@ -220,4 +225,3 @@ describe("MatchJourneyScreen", () => {
     expect(getByTestId("journey-event-mcte-1")).toBeTruthy();
   });
 });
-

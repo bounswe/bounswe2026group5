@@ -23,6 +23,10 @@ import { Route as AuthorizedMessagesRouteImport } from './routes/_authorized/mes
 import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/discover'
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 import { Route as AuthorizedConnectionsRouteImport } from './routes/_authorized/connections'
+import { Route as AuthorizedCommunitiesRouteImport } from './routes/_authorized/communities'
+import { Route as AuthorizedAdminModerationRouteImport } from './routes/_authorized/admin-moderation'
+import { Route as AuthorizedCommunitiesIndexRouteImport } from './routes/_authorized/communities.index'
+import { Route as AuthorizedCommunitiesCommunitySlugRouteImport } from './routes/_authorized/communities.$communitySlug'
 
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
   id: '/_unauthorized',
@@ -92,9 +96,34 @@ const AuthorizedConnectionsRoute = AuthorizedConnectionsRouteImport.update({
   path: '/connections',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
+const AuthorizedCommunitiesRoute = AuthorizedCommunitiesRouteImport.update({
+  id: '/communities',
+  path: '/communities',
+  getParentRoute: () => AuthorizedRouteRoute,
+} as any)
+const AuthorizedAdminModerationRoute =
+  AuthorizedAdminModerationRouteImport.update({
+    id: '/admin-moderation',
+    path: '/admin-moderation',
+    getParentRoute: () => AuthorizedRouteRoute,
+  } as any)
+const AuthorizedCommunitiesIndexRoute =
+  AuthorizedCommunitiesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthorizedCommunitiesRoute,
+  } as any)
+const AuthorizedCommunitiesCommunitySlugRoute =
+  AuthorizedCommunitiesCommunitySlugRouteImport.update({
+    id: '/$communitySlug',
+    path: '/$communitySlug',
+    getParentRoute: () => AuthorizedCommunitiesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin-moderation': typeof AuthorizedAdminModerationRoute
+  '/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
@@ -105,9 +134,12 @@ export interface FileRoutesByFullPath {
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
+  '/communities/$communitySlug': typeof AuthorizedCommunitiesCommunitySlugRoute
+  '/communities/': typeof AuthorizedCommunitiesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin-moderation': typeof AuthorizedAdminModerationRoute
   '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
@@ -118,6 +150,8 @@ export interface FileRoutesByTo {
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
+  '/communities/$communitySlug': typeof AuthorizedCommunitiesCommunitySlugRoute
+  '/communities': typeof AuthorizedCommunitiesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,6 +159,8 @@ export interface FileRoutesById {
   '/_authorized': typeof AuthorizedRouteRouteWithChildren
   '/_onBoarding': typeof OnBoardingRouteRouteWithChildren
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
+  '/_authorized/admin-moderation': typeof AuthorizedAdminModerationRoute
+  '/_authorized/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/_authorized/connections': typeof AuthorizedConnectionsRoute
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
   '/_authorized/discover': typeof AuthorizedDiscoverRoute
@@ -135,11 +171,15 @@ export interface FileRoutesById {
   '/_unauthorized/login': typeof UnauthorizedLoginRoute
   '/_unauthorized/register': typeof UnauthorizedRegisterRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
+  '/_authorized/communities/$communitySlug': typeof AuthorizedCommunitiesCommunitySlugRoute
+  '/_authorized/communities/': typeof AuthorizedCommunitiesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin-moderation'
+    | '/communities'
     | '/connections'
     | '/dashboard'
     | '/discover'
@@ -150,9 +190,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/profiles/$username'
+    | '/communities/$communitySlug'
+    | '/communities/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin-moderation'
     | '/connections'
     | '/dashboard'
     | '/discover'
@@ -163,12 +206,16 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/profiles/$username'
+    | '/communities/$communitySlug'
+    | '/communities'
   id:
     | '__root__'
     | '/'
     | '/_authorized'
     | '/_onBoarding'
     | '/_unauthorized'
+    | '/_authorized/admin-moderation'
+    | '/_authorized/communities'
     | '/_authorized/connections'
     | '/_authorized/dashboard'
     | '/_authorized/discover'
@@ -179,6 +226,8 @@ export interface FileRouteTypes {
     | '/_unauthorized/login'
     | '/_unauthorized/register'
     | '/profiles/$username'
+    | '/_authorized/communities/$communitySlug'
+    | '/_authorized/communities/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -289,10 +338,56 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedConnectionsRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
+    '/_authorized/communities': {
+      id: '/_authorized/communities'
+      path: '/communities'
+      fullPath: '/communities'
+      preLoaderRoute: typeof AuthorizedCommunitiesRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
+    '/_authorized/admin-moderation': {
+      id: '/_authorized/admin-moderation'
+      path: '/admin-moderation'
+      fullPath: '/admin-moderation'
+      preLoaderRoute: typeof AuthorizedAdminModerationRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
+    '/_authorized/communities/': {
+      id: '/_authorized/communities/'
+      path: '/'
+      fullPath: '/communities/'
+      preLoaderRoute: typeof AuthorizedCommunitiesIndexRouteImport
+      parentRoute: typeof AuthorizedCommunitiesRoute
+    }
+    '/_authorized/communities/$communitySlug': {
+      id: '/_authorized/communities/$communitySlug'
+      path: '/$communitySlug'
+      fullPath: '/communities/$communitySlug'
+      preLoaderRoute: typeof AuthorizedCommunitiesCommunitySlugRouteImport
+      parentRoute: typeof AuthorizedCommunitiesRoute
+    }
   }
 }
 
+interface AuthorizedCommunitiesRouteChildren {
+  AuthorizedCommunitiesCommunitySlugRoute: typeof AuthorizedCommunitiesCommunitySlugRoute
+  AuthorizedCommunitiesIndexRoute: typeof AuthorizedCommunitiesIndexRoute
+}
+
+const AuthorizedCommunitiesRouteChildren: AuthorizedCommunitiesRouteChildren = {
+  AuthorizedCommunitiesCommunitySlugRoute:
+    AuthorizedCommunitiesCommunitySlugRoute,
+  AuthorizedCommunitiesIndexRoute: AuthorizedCommunitiesIndexRoute,
+}
+
+const AuthorizedCommunitiesRouteWithChildren =
+  AuthorizedCommunitiesRoute._addFileChildren(
+    AuthorizedCommunitiesRouteChildren,
+  )
+
 interface AuthorizedRouteRouteChildren {
+  AuthorizedAdminModerationRoute: typeof AuthorizedAdminModerationRoute
+  AuthorizedCommunitiesRoute: typeof AuthorizedCommunitiesRouteWithChildren
   AuthorizedConnectionsRoute: typeof AuthorizedConnectionsRoute
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
   AuthorizedDiscoverRoute: typeof AuthorizedDiscoverRoute
@@ -301,6 +396,8 @@ interface AuthorizedRouteRouteChildren {
 }
 
 const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
+  AuthorizedAdminModerationRoute: AuthorizedAdminModerationRoute,
+  AuthorizedCommunitiesRoute: AuthorizedCommunitiesRouteWithChildren,
   AuthorizedConnectionsRoute: AuthorizedConnectionsRoute,
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,
   AuthorizedDiscoverRoute: AuthorizedDiscoverRoute,

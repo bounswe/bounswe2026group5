@@ -42,7 +42,7 @@ describe("ProfilePostsPreview", () => {
     expect(queryByTestId("profile-posts-preview")).toBeNull();
   });
 
-  it("renders up to 3 posts horizontally", () => {
+  it("renders up to 3 posts in the preview stack", () => {
     useProfilePostsQueryMock.mockReturnValue({
       data: {
         count: 3,
