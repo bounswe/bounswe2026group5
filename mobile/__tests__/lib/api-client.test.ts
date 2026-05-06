@@ -1,12 +1,5 @@
 import { Alert } from "react-native";
 
-import {
-  ApiError,
-  apiGet,
-  apiPatch,
-  apiPost,
-  apiPostMultipart,
-} from "@/lib/api/client";
 import { API_BASE_URL } from "@/lib/api/config";
 
 const mockGetState = jest.fn();
@@ -25,7 +18,7 @@ jest.mock("expo-router", () => ({
   },
 }));
 
-const { ApiError, apiGet, apiPatch, apiPost } = jest.requireActual(
+const { ApiError, apiGet, apiPatch, apiPost, apiPostMultipart } = jest.requireActual(
   "@/lib/api/client",
 ) as typeof import("@/lib/api/client");
 

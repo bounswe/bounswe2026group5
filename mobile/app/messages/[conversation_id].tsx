@@ -166,6 +166,7 @@ function MessageBubble({
   isMe: boolean;
   onLongPress?: () => void;
 }) {
+  const attachmentUrl = message.attachment_url;
   return (
     <View className={`w-full mb-1 ${isMe ? "items-end" : "items-start"}`}>
       <TouchableOpacity
