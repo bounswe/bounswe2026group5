@@ -1174,6 +1174,8 @@ class CommunityTagPostsAPITests(TestCase):
         result = next(i for i in response.data["results"] if i["source_id"] == event.source_id)
         self.assertEqual(result["category"], "CoP")
         self.assertIn("community_id", result)
+        self.assertIn("community_slug", result)
+        self.assertEqual(result["community_slug"], self.tag.slug)
 
     def test_list_community_posts_excludes_deleted(self) -> None:
         from timeline.models import TimelineEvent
@@ -1246,6 +1248,7 @@ class CommunityTagPostsAPITests(TestCase):
         self.assertEqual(response.data["content"], "We did it!")
         self.assertFalse(response.data["show_on_profile"])
         self.assertIsNotNone(response.data["community_id"])
+        self.assertEqual(response.data["community_slug"], self.tag.slug)
 
     def test_create_community_post_with_show_on_profile_true(self) -> None:
         self._auth_member()
@@ -4806,6 +4809,7 @@ class ProfileFeedDeletionScenarioTests(TestCase):
         )
         self.assertEqual(result["community_id"], str(community.id))
         self.assertEqual(result["community_name"], "Active Community")
+        self.assertEqual(result["community_slug"], community.slug)
 
     # ------------------------------------------------------------------
     # CoP: deleted community
@@ -4837,6 +4841,7 @@ class ProfileFeedDeletionScenarioTests(TestCase):
         )
         self.assertEqual(str(result["community_id"]), str(community_id))
         self.assertEqual(result["community_name"], "Soon Deleted Community")
+        self.assertEqual(result["community_slug"], community.slug)
 
     # ------------------------------------------------------------------
     # CoP: community_name reflects live renames

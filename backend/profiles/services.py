@@ -626,9 +626,10 @@ def create_cop_event(
         previous_tagged_users=None,
     )
 
-    # Build payload with community name and tagged users
+    # Build payload with community metadata and tagged users
     payload = {
         "community_name": community_tag.name,
+        "community_slug": community_tag.slug,
         "tagged_users": validated_tagged_users,
     }
 
