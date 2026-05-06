@@ -10,7 +10,8 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bounswe2026group5.neighborship"
+      "bundleIdentifier": "com.bounswe2026group5.neighborship",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "usesCleartextTraffic": true,
@@ -22,7 +23,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.bounswe2026group5.neighborship"
+      "package": "com.bounswe2026group5.neighborship",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -47,7 +49,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/notification-icon.png",
+          "icon": "./assets/images/icon.png",
           "color": "#ffffff"
         }
       ]
