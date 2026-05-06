@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     "timeline",
     "notifications",
     "messaging",
+    "workshops",
 ]
 
 REST_FRAMEWORK = {
