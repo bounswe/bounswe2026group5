@@ -699,9 +699,11 @@ class ProfilePostListQueryParamsSerializer(serializers.Serializer):
 class ProfilePostSerializer(serializers.Serializer):
     """Read serializer for profile feed items (PrP, visible MCTE, and visible CoP).
 
-    ``community_id`` and ``community_name`` are populated only for CoP posts.
-    ``community_name`` is fetched live; if the community has been deleted it falls back
-    to the name snapshotted in ``payload`` at creation time.
+    ``community_id``, ``community_name``, and ``tagged_users`` are populated only for
+    CoP posts. ``community_name`` is fetched live; if the community has been deleted it
+    falls back to the name snapshotted in ``payload`` at creation time. ``tagged_users``
+    is a list of ``{user_id, username}`` dicts; usernames are snapshots captured at
+    tag-time and fall back to the stored snapshot if a user was later deleted.
     ``mentorship_partner`` is populated only for MCTE posts and contains the username of
     the mentorship partner (mentor or mentee, depending on the author's role).
     Clients can use ``community_id`` to navigate to ``/api/profiles/tags/{community_id}/`` or link
@@ -720,6 +722,7 @@ class ProfilePostSerializer(serializers.Serializer):
     show_on_profile = serializers.BooleanField(read_only=True)
     community_id = serializers.UUIDField(read_only=True, allow_null=True)
     community_name = serializers.SerializerMethodField()
+    tagged_users = serializers.SerializerMethodField()
     actor_role = serializers.CharField(read_only=True)
     mentorship_partner = serializers.SerializerMethodField()
     author = ProfilePostAuthorSerializer(read_only=True)
@@ -741,6 +744,36 @@ class ProfilePostSerializer(serializers.Serializer):
         # Community was deleted — fall back to snapshot stored at creation time
         payload = obj.payload or {}
         return payload.get("community_name")
+
+    @extend_schema_field(
+        {
+            "type": "array",
+            "nullable": True,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "string", "format": "uuid"},
+                    "username": {"type": "string"},
+                },
+            },
+        }
+    )
+    def get_tagged_users(self, obj: TimelineEvent) -> list[dict[str, str]] | None:
+        """Return tagged users for CoP events.
+
+        Returns a list of ``{user_id, username}`` dicts extracted from the event
+        payload. Usernames are captured as snapshots at tag-time; if a tagged user
+        has since been deleted, the stored snapshot username is returned.
+        Returns ``None`` for non-CoP events.
+        """
+        if obj.category != TimelineEvent.Category.COP:
+            return None
+
+        payload = obj.payload or {}
+        tagged_users_list = payload.get("tagged_users", [])
+        return [
+            {"user_id": tag["user_id"], "username": tag["username"]} for tag in tagged_users_list
+        ]
 
     @extend_schema_field({"type": "string", "nullable": True})
     def get_mentorship_partner(self, obj: TimelineEvent) -> str | None:
@@ -892,6 +925,20 @@ class CommunityTagListResponseSerializer(serializers.Serializer):
     results = CommunityTagListSerializer(many=True)
 
 
+class TaggableUserSerializer(serializers.Serializer):
+    """Response item for a user taggable in a community post."""
+
+    username = serializers.CharField(read_only=True)
+    display_name = serializers.CharField(read_only=True)
+
+
+class TaggableUsersResponseSerializer(serializers.Serializer):
+    """Response wrapper for taggable users in a community."""
+
+    count = serializers.IntegerField(read_only=True)
+    results = TaggableUserSerializer(many=True, read_only=True)
+
+
 # ---------------------------------------------------------------------------
 # Community Posts (CoP)
 # ---------------------------------------------------------------------------
@@ -905,12 +952,24 @@ class CoPCreateSerializer(serializers.Serializer):
     media_url = serializers.URLField(required=False, allow_null=True, default=None)
     show_on_profile = serializers.BooleanField(required=False, default=False)
     timestamp = serializers.DateTimeField(required=False, allow_null=True, default=None)
+    tagged_users = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        default=list,
+    )
 
     def to_internal_value(self, data: Any) -> dict:
         """Normalize empty timestamp values to null so fallback logic can be applied."""
         if isinstance(data, dict) and data.get("timestamp") == "":
             data = {**data, "timestamp": None}
         return super().to_internal_value(data)
+
+    def validate_tagged_users(self, value: list) -> list:
+        """Validate tagged_users field (usernames as strings)."""
+        # Validation logic will be handled in the view/service layer
+        # where we have access to author and community context
+        return value
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """Reject timestamps more than 1 day in the future when provided."""
@@ -929,13 +988,24 @@ class CoPUpdateSerializer(serializers.Serializer):
     event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES, required=False)
     media_url = serializers.URLField(required=False, allow_null=True)
     show_on_profile = serializers.BooleanField(required=False)
+    tagged_users = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+    )
+
+    def validate_tagged_users(self, value: list) -> list:
+        """Validate tagged_users field (usernames as strings)."""
+        # Validation logic will be handled in the view/service layer
+        # where we have access to author and community context
+        return value
 
     def validate(self, attrs: dict) -> dict:
         """Require at least one editable field to be provided."""
         if not attrs:
             raise serializers.ValidationError(
-                "At least one of 'content', 'event_type', 'media_url', or "
-                "'show_on_profile' must be provided."
+                "At least one of 'content', 'event_type', 'media_url', "
+                "'show_on_profile', or 'tagged_users' must be provided."
             )
         return attrs
 
@@ -968,6 +1038,19 @@ class CommunityPostSerializer(serializers.Serializer):
     show_on_profile = serializers.BooleanField(read_only=True)
     community_id = serializers.UUIDField(read_only=True)
     author = ProfilePostAuthorSerializer(read_only=True)
+    tagged_users = serializers.SerializerMethodField()
+
+    def get_tagged_users(self, obj: Any) -> list[dict[str, str]]:
+        """Extract and return tagged users from payload.
+
+        Returns only user_id and username fields for each tagged user.
+        """
+        payload = obj.payload or {}
+        tagged_users_list = payload.get("tagged_users", [])
+
+        return [
+            {"user_id": tag["user_id"], "username": tag["username"]} for tag in tagged_users_list
+        ]
 
 
 class CommunityPostFeedSerializer(serializers.Serializer):

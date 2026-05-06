@@ -107,6 +107,9 @@ MAX_POST_MEDIA_SIZE_MB = 10
 MAX_POST_MEDIA_SIZE_BYTES = MAX_POST_MEDIA_SIZE_MB * 1024 * 1024
 POST_MEDIA_MAX_DIMENSION = 1920  # px — longest side after resize
 
+# Community Post (CoP) tagging settings
+COP_MAX_TAGS = 5  # Maximum number of users that can be tagged in a CoP
+
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1440),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
