@@ -94,6 +94,14 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="community/create"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
         name="community/[tagId]/members"
         options={{
           href: null,

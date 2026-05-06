@@ -1,6 +1,8 @@
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { ProfilePostCard } from "@/components/profile/ProfilePostCard";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useAuthStore } from "@/lib/auth/store";
+import { useMyCommunityPostsFeedQuery } from "@/lib/queries/communityPosts";
 import {
   type CommunityTag,
   useMyCommunityTagsQuery,
@@ -16,9 +18,8 @@ import {
 } from "react-native";
 
 const plannedFeedItems = [
-  "Community discussions",
-  "Recommended posts",
-  "Member updates",
+  "Join communities to see their latest posts here.",
+  "Posts from every community you join will be collected in this feed.",
 ];
 
 function formatMemberCount(count: number) {
@@ -65,6 +66,12 @@ export default function CommunityScreen() {
   const myCommunitiesQuery = useMyCommunityTagsQuery(currentUsername);
   const communities = myCommunitiesQuery.data ?? [];
   const hasCommunities = communities.length > 0;
+  const communityFeedQuery = useMyCommunityPostsFeedQuery(
+    communities.map((tag) => tag.id),
+    5,
+    hasCommunities,
+  );
+  const communityFeedPosts = communityFeedQuery.data ?? [];
   const openCommunity = (tag: CommunityTag) => {
     router.push(`/(tabs)/community/${encodeURIComponent(tag.id)}?from=community`);
   };
@@ -102,26 +109,6 @@ export default function CommunityScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            testID="create-community-link"
-            activeOpacity={0.88}
-            onPress={() => router.push("/(tabs)/community/create")}
-            className="mb-4 rounded-2xl border border-primary/20 bg-primary/10 p-4 dark:border-primary-dim/25 dark:bg-primary-dim/10"
-          >
-            <View className="flex-row items-center gap-3">
-              <View className="h-11 w-11 items-center justify-center rounded-full bg-primary dark:bg-primary-dim">
-                <Text className="text-xl font-extrabold text-white">+</Text>
-              </View>
-              <View className="flex-1">
-                <Text className="text-base font-extrabold text-on-surface dark:text-on-surface-dark">
-                  Create your own community
-                </Text>
-                <Text className="mt-1 text-sm leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
-                  Start a focused space around a topic, skill, or shared goal.
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
           {myCommunitiesQuery.isLoading ? (
             <View
               testID="community-loading-state"
@@ -158,27 +145,78 @@ export default function CommunityScreen() {
               </Text>
             </View>
           )}
+          <TouchableOpacity
+            testID="create-community-link"
+            activeOpacity={0.88}
+            onPress={() => router.push("/(tabs)/community/create")}
+            className="mt-4 rounded-2xl border border-primary/20 bg-primary/10 p-4 dark:border-primary-dim/25 dark:bg-primary-dim/10"
+          >
+            <View className="flex-row items-center gap-3">
+              <View className="h-11 w-11 items-center justify-center rounded-full bg-primary dark:bg-primary-dim">
+                <Text className="text-xl font-extrabold text-white">+</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-base font-extrabold text-on-surface dark:text-on-surface-dark">
+                  Create your own community
+                </Text>
+                <Text className="mt-1 text-sm leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
+                  Start a focused space around a topic, skill, or shared goal.
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
         </View>
 
         <View>
           <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark mb-3">
             Community Feed
           </Text>
-          <View className="border-l-2 border-divider dark:border-divider-dark pl-4 py-1">
-            <Text className="text-sm font-semibold text-on-surface dark:text-on-surface-dark mb-2">
-              {hasCommunities
-                ? "Posts from your communities will appear here"
-                : "Join communities to build your feed"}
-            </Text>
-            {plannedFeedItems.map((item) => (
-              <Text
-                key={item}
-                className="text-sm text-on-surface-soft/80 dark:text-on-surface-soft-dark/80 mb-1"
-              >
-                {item}
+          {communityFeedQuery.isLoading ? (
+            <View
+              testID="community-feed-loading"
+              className="rounded-xl border border-divider bg-surface-card p-6 items-center dark:border-divider-dark dark:bg-surface-card-dark"
+            >
+              <ActivityIndicator />
+              <Text className="mt-3 text-sm font-medium text-on-surface-soft dark:text-on-surface-soft-dark">
+                Loading community posts...
               </Text>
-            ))}
-          </View>
+            </View>
+          ) : communityFeedQuery.isError ? (
+            <ErrorBanner
+              title="Could not load community feed"
+              message="Posts from your communities are temporarily unavailable."
+            />
+          ) : communityFeedPosts.length > 0 ? (
+            <View testID="community-feed-posts" className="gap-3">
+              {communityFeedPosts.map((post) => (
+                <ProfilePostCard
+                  key={`${post.community_id}-${post.id}`}
+                  post={post}
+                  expanded
+                  communityLabel={
+                    communities.find((tag) => tag.id === post.community_id)
+                      ?.name ?? null
+                  }
+                />
+              ))}
+            </View>
+          ) : (
+            <View className="border-l-2 border-divider dark:border-divider-dark pl-4 py-1">
+              <Text className="text-sm font-semibold text-on-surface dark:text-on-surface-dark mb-2">
+                {hasCommunities
+                  ? "No posts in your communities yet"
+                  : "Join communities to build your feed"}
+              </Text>
+              {plannedFeedItems.map((item) => (
+                <Text
+                  key={item}
+                  className="text-sm text-on-surface-soft/80 dark:text-on-surface-soft-dark/80 mb-1"
+                >
+                  {item}
+                </Text>
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
