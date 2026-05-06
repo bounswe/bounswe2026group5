@@ -114,4 +114,3 @@ web/playwright/.cache/
 web/playwright/.auth/
 
 mobile/google-services.json
-mobile/GoogleService-Info.plist
