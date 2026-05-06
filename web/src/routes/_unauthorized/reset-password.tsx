@@ -2,7 +2,6 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle, KeyRound, XCircle } from 'lucide-react'
-import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,17 +9,15 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Display, Heading, Body, Muted } from '@/components/Typography'
 import { resetPasswordFn, clearAuthState } from '#/lib/queries/AuthQueries.ts'
 
-const searchSchema = z.object({
-    token: z.string().catch(''),
-})
-
 export const Route = createFileRoute('/_unauthorized/reset-password')({
-    validateSearch: searchSchema,
     component: ResetPasswordPage,
 })
 
 export function ResetPasswordPage() {
-    const { token } = Route.useSearch()
+    // URLSearchParams correctly handles `=` padding characters inside the token value.
+    // TanStack Router's default search parser splits on every `=`, truncating base64 tokens.
+    const token = new URLSearchParams(globalThis.location.search).get('token') ?? ''
+    console.debug('[reset-password] token from URL:', token)
     const router = useRouter()
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
@@ -167,17 +164,19 @@ export function ResetPasswordPage() {
                                 <div className="flex items-start gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20 mt-4">
                                     <XCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
                                     <div className="text-sm text-destructive">
-                                        <p className="font-medium">Link expired or already used.</p>
-                                        <p className="mt-0.5 text-xs">
-                                            Please{' '}
-                                            <Link
-                                                to="/forgot-password"
-                                                className="underline underline-offset-4 hover:text-destructive/80 transition-colors"
-                                            >
-                                                request a new reset link
-                                            </Link>
-                                            .
-                                        </p>
+                                        <p className="font-medium">{resetPassword.error?.message ?? 'Something went wrong.'}</p>
+                                        {resetPassword.error?.message?.toLowerCase().includes('token') && (
+                                            <p className="mt-0.5 text-xs">
+                                                Please{' '}
+                                                <Link
+                                                    to="/forgot-password"
+                                                    className="underline underline-offset-4 hover:text-destructive/80 transition-colors"
+                                                >
+                                                    request a new reset link
+                                                </Link>
+                                                .
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             )}
