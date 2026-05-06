@@ -7,6 +7,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Linking,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -24,6 +25,11 @@ import {
   useSendMessage,
   type Message,
 } from "@/lib/queries/MessagingQueries";
+import type { LocalUploadFile } from "@/lib/queries/uploads";
+import {
+  pickMessageImageFile,
+  pickMessagePdfFile,
+} from "@/lib/uploads/picker";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,6 +67,17 @@ function formatDateLabel(dateStr: string): string {
 
 function isDifferentDay(a: string, b: string): boolean {
   return new Date(a).toDateString() !== new Date(b).toDateString();
+}
+
+function isImageAttachment(url: string): boolean {
+  const path = url.split("?")[0]?.toLowerCase() ?? "";
+  return /\.(jpe?g|png|gif|webp)$/.test(path);
+}
+
+function getAttachmentLabel(url: string): string {
+  const path = url.split("?")[0] ?? "";
+  const fileName = decodeURIComponent(path.split("/").pop() || "");
+  return fileName || "Attachment";
 }
 
 // ---------------------------------------------------------------------------
@@ -139,6 +156,8 @@ function DateSeparator({ dateStr }: { dateStr: string }) {
 }
 
 function MessageBubble({ message, isMe }: { message: Message; isMe: boolean }) {
+  const attachmentUrl = message.attachment_url;
+
   return (
     <View className={`w-full mb-1 ${isMe ? "items-end" : "items-start"}`}>
       <View style={{ maxWidth: "80%" }}>
@@ -154,21 +173,56 @@ function MessageBubble({ message, isMe }: { message: Message; isMe: boolean }) {
             elevation: 1,
           }}
         >
-          <Text
-            className={`text-[14px] leading-5 ${
-              isMe ? "text-white" : "text-on-surface"
-            }`}
-          >
-            {message.body}
-          </Text>
-          {message.attachment_url ? (
+          {message.body ? (
             <Text
-              className={`text-[12px] mt-1 underline ${
-                isMe ? "text-white/70" : "text-primary"
+              className={`text-[14px] leading-5 ${
+                isMe ? "text-white" : "text-on-surface"
               }`}
             >
-              Attachment
+              {message.body}
             </Text>
+          ) : null}
+          {attachmentUrl ? (
+            <TouchableOpacity
+              testID={`message-attachment-${message.id}`}
+              activeOpacity={0.85}
+              onPress={() => {
+                void Linking.openURL(attachmentUrl);
+              }}
+              className={message.body ? "mt-2" : ""}
+            >
+              {isImageAttachment(attachmentUrl) ? (
+                <Image
+                  source={{ uri: attachmentUrl }}
+                  className="rounded-xl mb-2"
+                  style={{ width: 180, height: 130 }}
+                  resizeMode="cover"
+                />
+              ) : null}
+              <View
+                className={`flex-row items-center rounded-xl px-3 py-2 ${
+                  isMe ? "bg-white/15" : "bg-white"
+                }`}
+              >
+                <Ionicons
+                  name={
+                    isImageAttachment(attachmentUrl)
+                      ? "image"
+                      : "document-text"
+                  }
+                  size={16}
+                  color={isMe ? "#ffffff" : "#4a7c6f"}
+                />
+                <Text
+                  className={`text-[12px] font-semibold ml-2 flex-1 ${
+                    isMe ? "text-white" : "text-primary"
+                  }`}
+                  numberOfLines={1}
+                >
+                  {getAttachmentLabel(attachmentUrl)}
+                </Text>
+              </View>
+            </TouchableOpacity>
           ) : null}
         </View>
         <Text
@@ -226,6 +280,9 @@ export default function ConversationScreen() {
 
   const sendMessage = useSendMessage(conversation_id ?? "");
   const [text, setText] = useState("");
+  const [attachment, setAttachment] = useState<LocalUploadFile | null>(null);
+  const [showAttachOptions, setShowAttachOptions] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const flatListRef = useRef<FlatList<ListItem>>(null);
   const isNearBottomRef = useRef(true);
   const hasInitialScrollDoneRef = useRef(false);
@@ -284,10 +341,14 @@ export default function ConversationScreen() {
 
   const handleSend = useCallback(async () => {
     const body = text.trim();
-    if (!body || sendMessage.isPending || !conversation_id) return;
+    const currentAttachment = attachment;
+    if ((!body && !currentAttachment) || sendMessage.isPending || !conversation_id) return;
     setText("");
+    setAttachment(null);
+    setShowAttachOptions(false);
+    setAttachmentError(null);
     try {
-      await sendMessage.mutateAsync(body);
+      await sendMessage.mutateAsync({ body, attachment: currentAttachment });
       queryClient.invalidateQueries({
         queryKey: ["messaging", "messages", conversation_id],
       });
@@ -295,10 +356,37 @@ export default function ConversationScreen() {
         queryKey: ["messaging", "conversations"],
       });
     } catch {
-      // Restore text if send failed
+      // Restore draft if send failed
       setText(body);
+      setAttachment(currentAttachment);
     }
-  }, [text, sendMessage, queryClient, conversation_id]);
+  }, [text, attachment, sendMessage, queryClient, conversation_id]);
+
+  const handlePickImage = useCallback(async () => {
+    setAttachmentError(null);
+    try {
+      const file = await pickMessageImageFile();
+      if (file) {
+        setAttachment(file);
+        setShowAttachOptions(false);
+      }
+    } catch {
+      setAttachmentError("Could not attach that image.");
+    }
+  }, []);
+
+  const handlePickPdf = useCallback(async () => {
+    setAttachmentError(null);
+    try {
+      const file = await pickMessagePdfFile();
+      if (file) {
+        setAttachment(file);
+        setShowAttachOptions(false);
+      }
+    } catch {
+      setAttachmentError("Could not attach that PDF.");
+    }
+  }, []);
 
   const renderItem = useCallback(
     ({ item }: { item: ListItem }) => {
@@ -417,7 +505,89 @@ export default function ConversationScreen() {
           className="bg-surface-card border-t border-divider px-4 pt-3"
           style={{ paddingBottom: Math.max(insets.bottom, 12) }}
         >
+          {showAttachOptions ? (
+            <View className="flex-row gap-2 mb-3">
+              <TouchableOpacity
+                testID="attach-image-button"
+                activeOpacity={0.85}
+                onPress={handlePickImage}
+                className="flex-row items-center bg-surface-input rounded-xl px-3 py-2"
+              >
+                <Ionicons name="image-outline" size={18} color="#4a7c6f" />
+                <Text className="text-[13px] font-semibold text-on-surface ml-2">
+                  Image
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="attach-pdf-button"
+                activeOpacity={0.85}
+                onPress={handlePickPdf}
+                className="flex-row items-center bg-surface-input rounded-xl px-3 py-2"
+              >
+                <Ionicons
+                  name="document-text-outline"
+                  size={18}
+                  color="#4a7c6f"
+                />
+                <Text className="text-[13px] font-semibold text-on-surface ml-2">
+                  PDF
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {attachment ? (
+            <View
+              testID="selected-attachment"
+              className="flex-row items-center bg-surface-input rounded-xl px-3 py-2 mb-3"
+            >
+              <Ionicons
+                name={
+                  attachment.type.startsWith("image/")
+                    ? "image"
+                    : "document-text"
+                }
+                size={18}
+                color="#4a7c6f"
+              />
+              <Text
+                className="text-[13px] font-semibold text-on-surface ml-2 flex-1"
+                numberOfLines={1}
+              >
+                {attachment.name}
+              </Text>
+              <TouchableOpacity
+                testID="selected-attachment-remove"
+                activeOpacity={0.7}
+                onPress={() => setAttachment(null)}
+              >
+                <Ionicons name="close-circle" size={20} color="#8a8172" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {attachmentError ? (
+            <Text className="text-[12px] text-red-700 mb-2">
+              {attachmentError}
+            </Text>
+          ) : null}
+
           <View className="flex-row items-end" style={{ gap: 10 }}>
+            <TouchableOpacity
+              testID="attachment-plus-button"
+              onPress={() => setShowAttachOptions((current) => !current)}
+              activeOpacity={0.8}
+              disabled={sendMessage.isPending}
+              className="items-center justify-center rounded-xl bg-surface-input"
+              style={{
+                width: 48,
+                height: 48,
+                opacity: sendMessage.isPending ? 0.45 : 1,
+              }}
+            >
+              <Ionicons name="add" size={24} color="#4a7c6f" />
+            </TouchableOpacity>
+
             <View
               className="flex-1 bg-surface-input rounded-xl px-4 py-3"
               style={{ minHeight: 48 }}
@@ -444,12 +614,15 @@ export default function ConversationScreen() {
               testID="send-button"
               onPress={handleSend}
               activeOpacity={0.8}
-              disabled={!text.trim() || sendMessage.isPending}
+              disabled={(!text.trim() && !attachment) || sendMessage.isPending}
               className="items-center justify-center rounded-xl bg-primary"
               style={{
                 width: 48,
                 height: 48,
-                opacity: !text.trim() || sendMessage.isPending ? 0.45 : 1,
+                opacity:
+                  (!text.trim() && !attachment) || sendMessage.isPending
+                    ? 0.45
+                    : 1,
               }}
             >
               {sendMessage.isPending ? (

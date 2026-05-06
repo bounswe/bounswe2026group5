@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api/client";
 import {
@@ -60,6 +65,8 @@ export const communityPostsQueryKeys = {
     offset: number,
     eventType?: CommunityPostEventType,
   ) => ["community-posts", tagId, limit, offset, eventType ?? "all"] as const,
+  myFeed: (tagIds: string[], limit: number) =>
+    ["community-posts", "me", "feed", tagIds.join(","), limit] as const,
 };
 
 function buildQueryString(params: Record<string, string | number | undefined>) {
@@ -107,6 +114,42 @@ export function useCommunityPostsQuery(
     enabled: Boolean(params.tagId) && enabled,
     staleTime: 30_000,
   });
+}
+
+export function useMyCommunityPostsFeedQuery(
+  tagIds: string[],
+  limitPerCommunity = 5,
+  enabled = true,
+) {
+  const uniqueTagIds = [...new Set(tagIds.filter(Boolean))];
+  const queries = useQueries({
+    queries: uniqueTagIds.map((tagId) => ({
+      queryKey: communityPostsQueryKeys.list(tagId, limitPerCommunity, 0),
+      queryFn: () =>
+        fetchCommunityPosts({
+          tagId,
+          limit: limitPerCommunity,
+          offset: 0,
+        }),
+      enabled: enabled && uniqueTagIds.length > 0,
+      staleTime: 30_000,
+    })),
+  });
+
+  const posts = queries
+    .flatMap((query) => query.data?.results ?? [])
+    .sort(
+      (left, right) =>
+        new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+    );
+
+  return {
+    data: posts,
+    isLoading: queries.some((query) => query.isLoading),
+    isFetching: queries.some((query) => query.isFetching),
+    isError: queries.some((query) => query.isError),
+    error: queries.find((query) => query.error)?.error,
+  };
 }
 
 export function useCreateCommunityPostMutation(currentUsername?: string) {

@@ -59,6 +59,7 @@ interface UpdateProfilePayload {
   display_name?: string;
   bio?: string;
   skills?: string[];
+  picture_url?: string;
 }
 
 interface ProfilePatchResponse {

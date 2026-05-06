@@ -15,6 +15,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { PostMediaPicker } from "@/components/posts/PostMediaPicker";
+import { uploadPostMedia } from "@/lib/queries/uploads";
+import type { LocalUploadFile } from "@/lib/queries/uploads";
 import type { MCTEEventType } from "@/lib/queries/mentorship";
 
 const EVENT_TYPES: {
@@ -46,13 +49,19 @@ export function TimelineEventComposer({
   const [eventType, setEventType] = useState<MCTEEventType>("achievement");
   const [content, setContent] = useState("");
   const [showOnProfile, setShowOnProfile] = useState(false);
+  const [media, setMedia] = useState<LocalUploadFile | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [isUploadingMedia, setUploadingMedia] = useState(false);
 
-  const canSubmit = content.trim().length > 0 && !isSubmitting;
+  const isBusy = Boolean(isSubmitting) || isUploadingMedia;
+  const canSubmit = content.trim().length > 0 && !isBusy;
 
   const resetForm = () => {
     setContent("");
     setShowOnProfile(false);
     setEventType("achievement");
+    setMedia(null);
+    setMediaError(null);
   };
 
   const handleSubmit = async () => {
@@ -60,9 +69,30 @@ export function TimelineEventComposer({
       return;
     }
 
+    setMediaError(null);
+
+    let mediaUrl: string | null | undefined;
+    if (media) {
+      try {
+        setUploadingMedia(true);
+        const uploadResponse = await uploadPostMedia(media);
+        mediaUrl = uploadResponse.url;
+      } catch (error) {
+        setMediaError(
+          error instanceof Error && error.message.trim()
+            ? error.message
+            : "Could not upload this photo.",
+        );
+        return;
+      } finally {
+        setUploadingMedia(false);
+      }
+    }
+
     const didSubmit = await onSubmit({
       event_type: eventType,
       content: content.trim(),
+      ...(mediaUrl ? { media_url: mediaUrl } : {}),
       show_on_profile: showOnProfile,
     });
 
@@ -163,6 +193,26 @@ export function TimelineEventComposer({
                 className="mt-4 min-h-[112px] rounded-xl border border-divider bg-surface-card px-3 py-3 text-on-surface dark:border-divider-dark dark:bg-surface-card-dark dark:text-on-surface-dark"
               />
 
+              <PostMediaPicker
+                disabled={isBusy}
+                media={media}
+                onChange={(nextMedia) => {
+                  setMediaError(null);
+                  setMedia(nextMedia);
+                }}
+                onError={setMediaError}
+                testIDPrefix="timeline-composer"
+              />
+
+              {mediaError ? (
+                <Text
+                  testID="timeline-composer-media-error"
+                  className="mt-2 text-xs font-semibold text-error dark:text-red-200"
+                >
+                  {mediaError}
+                </Text>
+              ) : null}
+
               <View className="mt-4 flex-row items-center justify-between gap-3 pb-4">
                 <View className="flex-1">
                   <Text className="text-sm font-bold text-on-surface dark:text-on-surface-dark">
@@ -197,7 +247,7 @@ export function TimelineEventComposer({
                   canSubmit ? "bg-primary dark:bg-primary-dim" : "bg-gray-300"
                 }`}
               >
-                {isSubmitting ? (
+                {isBusy ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
                   <Text className="font-bold text-white">Save Milestone</Text>

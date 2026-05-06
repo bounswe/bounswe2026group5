@@ -74,12 +74,14 @@ describe("TabLayout", () => {
     expect(getByTestId("tab-screen-user/[username]/posts")).toBeTruthy();
     expect(getByTestId("tab-screen-profile/posts")).toBeTruthy();
     expect(getByTestId("tab-screen-community/[tagId]/index")).toBeTruthy();
+    expect(getByTestId("tab-screen-community/create")).toBeTruthy();
     expect(getByTestId("tab-screen-community/[tagId]/members")).toBeTruthy();
-    
+
     expect(queryByTestId("visible-tab-user/[username]/index")).toBeNull();
     expect(queryByTestId("visible-tab-user/[username]/posts")).toBeNull();
     expect(queryByTestId("visible-tab-profile/posts")).toBeNull();
     expect(queryByTestId("visible-tab-community/[tagId]/index")).toBeNull();
+    expect(queryByTestId("visible-tab-community/create")).toBeNull();
     expect(queryByTestId("visible-tab-community/[tagId]/members")).toBeNull();
   });
 
