@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { Loader2, Plus, Pencil, Trash2, Trophy, Users, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -188,7 +189,16 @@ function ProfilePostCard({
                     </a>
                 )}
                 {post.category === 'MCTE' && post.mentorship_partner && (
-                    <Muted className="text-xs">From the mentorship journey with @{post.mentorship_partner}</Muted>
+                    <Muted className="text-xs">
+                        From the mentorship journey with{' '}
+                        <Link
+                            to="/profiles/$username"
+                            params={{ username: post.mentorship_partner }}
+                            className="text-accent hover:underline"
+                        >
+                            @{post.mentorship_partner}
+                        </Link>
+                    </Muted>
                 )}
                 <Muted className="text-xs">{formatTimestamp(post.timestamp)}</Muted>
             </CardContent>
