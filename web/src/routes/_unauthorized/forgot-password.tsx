@@ -16,17 +16,24 @@ export const Route = createFileRoute('/_unauthorized/forgot-password')({
 export function ForgotPasswordPage() {
     const [email, setEmail] = useState('')
     const [submitted, setSubmitted] = useState(false)
+    const [networkError, setNetworkError] = useState(false)
 
     const forgotPassword = useMutation({
         mutationFn: forgotPasswordFn,
-        onSettled: () => {
-            // Always show success regardless of outcome — prevent account enumeration
+        onSuccess: () => {
+            // Show success regardless of whether the email exists — prevent account enumeration
+            setNetworkError(false)
             setSubmitted(true)
+        },
+        onError: () => {
+            // Network/server failure: let user retry without leaking account existence
+            setNetworkError(true)
         },
     })
 
     const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
         e.preventDefault()
+        setNetworkError(false)
         forgotPassword.mutate({ email })
     }
 
@@ -82,6 +89,13 @@ export function ForgotPasswordPage() {
                         </CardHeader>
 
                         <CardContent>
+                            {networkError && (
+                                <div className="flex items-start gap-3 p-4 mb-4 rounded-lg bg-destructive/10 border border-destructive/20">
+                                    <p className="text-sm text-destructive">
+                                        Something went wrong. Please check your connection and try again.
+                                    </p>
+                                </div>
+                            )}
                             {submitted ? (
                                 <div className="flex items-start gap-3 p-4 rounded-lg bg-accent-muted border border-accent/20">
                                     <CheckCircle className="w-5 h-5 text-accent shrink-0 mt-0.5" />
