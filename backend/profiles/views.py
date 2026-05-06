@@ -54,6 +54,7 @@ from .serializers import (
     PublicMentorProfileSearchListResponseSerializer,
     PublicMentorProfileSearchResultSerializer,
     SkillSerializer,
+    TaggableUsersResponseSerializer,
     resolve_picture_url,
 )
 from .services import (
@@ -66,6 +67,7 @@ from .services import (
     create_prp_event,
     edit_cop_event,
     edit_prp_event,
+    get_taggable_users_for_community,
     list_community_feed_events,
     list_profile_feed_events,
     soft_delete_cop_event,
@@ -1654,7 +1656,7 @@ class CommunityTagPostsListCreateAPIView(ProfileLookupMixin, APIView):
                     "(1) invalid `event_type`; "
                     "(2) `tagged_users` contains more than `COP_MAX_TAGS` (default 5) entries; "
                     "(3) author attempted to tag themselves; "
-                    "(4) a tagged user ID is not a current mentorship connection "
+                    "(4) a tagged username is not a current mentorship connection "
                     "or member of this community."
                 )
             ),
@@ -1717,6 +1719,72 @@ class CommunityTagPostsListCreateAPIView(ProfileLookupMixin, APIView):
 
         event.author = profile
         return Response(CommunityPostSerializer(event).data, status=status.HTTP_201_CREATED)
+
+
+class CommunityTagTaggableUsersAPIView(ProfileLookupMixin, APIView):
+    """List taggable users for authenticated author within a community."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        operation_id="community_tag_taggable_users_list",
+        responses={
+            200: TaggableUsersResponseSerializer,
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Not a member of this community."),
+            404: OpenApiResponse(description="Community tag not found."),
+        },
+        description=(
+            "Return users the authenticated author can tag in CoP posts for this community. "
+            "Includes active mentorship connections (bidirectional) and community members. "
+            "The requester is excluded from results. Use `username` values from this response "
+            "when sending `tagged_users` in CoP create/update payloads."
+        ),
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request, tag_id: str) -> Response:
+        """Return taggable users for the requester in a given community."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        is_member = CommunityTagMembership.objects.filter(profile=profile, tag=tag).exists()
+        if not is_member:
+            return Response(
+                {"detail": "You must be a member of this community to view taggable users."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            taggable_profiles = (
+                get_taggable_users_for_community(profile, str(tag.id))
+                .only("username", "display_name")
+                .order_by("username")
+            )
+        except ValidationError as exc:
+            detail = str(exc.message) if hasattr(exc, "message") else str(exc)
+            return Response({"detail": detail}, status=status.HTTP_404_NOT_FOUND)
+
+        results = [
+            {
+                "username": taggable_profile.username,
+                "display_name": taggable_profile.display_name,
+            }
+            for taggable_profile in taggable_profiles
+        ]
+        return Response(
+            TaggableUsersResponseSerializer(
+                {
+                    "count": len(results),
+                    "results": results,
+                }
+            ).data,
+            status=status.HTTP_200_OK,
+        )
 
 
 class CommunityTagPostDetailAPIView(ProfileLookupMixin, APIView):

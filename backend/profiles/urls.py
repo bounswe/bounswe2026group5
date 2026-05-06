@@ -12,6 +12,7 @@ from .views import (
     CommunityTagMembersListAPIView,
     CommunityTagPostDetailAPIView,
     CommunityTagPostsListCreateAPIView,
+    CommunityTagTaggableUsersAPIView,
     MentorPublicAverageRatingAPIView,
     MyAvailabilitySlotDetailAPIView,
     MyAvailabilitySlotListCreateAPIView,
@@ -104,6 +105,11 @@ urlpatterns = [
         "tags/<str:tag_id>/members/",
         CommunityTagMembersListAPIView.as_view(),
         name="community-tag-members",
+    ),
+    path(
+        "tags/<uuid:tag_id>/taggable-users/",
+        CommunityTagTaggableUsersAPIView.as_view(),
+        name="community-tag-taggable-users",
     ),
     path(
         "tags/<uuid:tag_id>/posts/",

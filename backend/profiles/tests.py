@@ -5361,6 +5361,47 @@ class CoPTaggingTests(TestCase):
         self.assertIn(str(self.community_only_profile.id), tagged_ids)
         self.assertNotIn(str(self.mentorship_profile.id), tagged_ids)
 
+    def test_list_taggable_users_helper_returns_expected_users(self) -> None:
+        """GET helper returns mentorship/community taggable users by username."""
+        self._auth_author()
+        url = f"/api/profiles/tags/{self.community.id}/taggable-users/"
+
+        response = self.api_client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        usernames = [item["username"] for item in response.data["results"]]
+        self.assertIn(self.mentorship_profile.username, usernames)
+        self.assertIn(self.community_only_profile.username, usernames)
+        self.assertNotIn(self.author_profile.username, usernames)
+        self.assertNotIn(self.unrelated_profile.username, usernames)
+
+    def test_list_taggable_users_helper_requires_membership(self) -> None:
+        """GET helper returns 403 when requester is not a community member."""
+        outsider_user = User.objects.create_user(
+            email="outsider@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        outsider_profile = Profile.objects.create(
+            user=outsider_user,
+            username="outsider_user",
+            display_name="Outsider",
+        )
+        outsider_token = str(RefreshToken.for_user(outsider_user).access_token)
+
+        # Ensure outsider is not a member but can still be connected to exercise auth path.
+        self.assertFalse(
+            CommunityTagMembership.objects.filter(
+                profile=outsider_profile, tag=self.community
+            ).exists()
+        )
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {outsider_token}")
+        url = f"/api/profiles/tags/{self.community.id}/taggable-users/"
+        response = self.api_client.get(url)
+
+        self.assertEqual(response.status_code, 403)
+
     def test_tagged_users_mentorship_direction_bidirectional(self) -> None:
         """Mentee can also tag their mentor (bidirectional)."""
         from profiles.services import validate_tagged_users_list

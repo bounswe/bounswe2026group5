@@ -74,6 +74,39 @@ def get_taggable_users(author_profile: Profile) -> Any:
     return mentorship_connections.exclude(id=author_profile.id)
 
 
+def get_taggable_users_for_community(author_profile: Profile, community_id: str) -> Any:
+    """Get taggable users for an author in a given community.
+
+    A user is taggable when they are either an active mentorship connection of
+    the author (bidirectional) or a member of the given community. The author
+    is always excluded from results.
+
+    Args:
+        author_profile: The profile of the CoP author.
+        community_id: Community UUID where tagging is being performed.
+
+    Returns:
+        QuerySet of Profile objects taggable by username.
+
+    Raises:
+        ValidationError: If community does not exist.
+    """
+    from .models import CommunityTag, CommunityTagMembership
+
+    try:
+        community = CommunityTag.objects.only("id").get(id=community_id)
+    except CommunityTag.DoesNotExist:
+        raise ValidationError(f"Community with ID {community_id} does not exist.")
+
+    mentorship_ids = set(get_taggable_users(author_profile).values_list("id", flat=True))
+    community_member_ids = set(
+        CommunityTagMembership.objects.filter(tag=community).values_list("profile_id", flat=True)
+    )
+
+    taggable_ids = mentorship_ids | community_member_ids
+    return Profile.objects.filter(id__in=taggable_ids).exclude(id=author_profile.id)
+
+
 def get_tagged_user_info(user_id: str, username_snapshot: str | None = None) -> dict[str, str]:
     """Get or construct tagged user information.
 

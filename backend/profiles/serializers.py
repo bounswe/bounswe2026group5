@@ -925,6 +925,20 @@ class CommunityTagListResponseSerializer(serializers.Serializer):
     results = CommunityTagListSerializer(many=True)
 
 
+class TaggableUserSerializer(serializers.Serializer):
+    """Response item for a user taggable in a community post."""
+
+    username = serializers.CharField(read_only=True)
+    display_name = serializers.CharField(read_only=True)
+
+
+class TaggableUsersResponseSerializer(serializers.Serializer):
+    """Response wrapper for taggable users in a community."""
+
+    count = serializers.IntegerField(read_only=True)
+    results = TaggableUserSerializer(many=True, read_only=True)
+
+
 # ---------------------------------------------------------------------------
 # Community Posts (CoP)
 # ---------------------------------------------------------------------------
