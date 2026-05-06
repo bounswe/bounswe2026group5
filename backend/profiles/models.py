@@ -14,6 +14,8 @@ from django.db.models import F, Func, Q, Value
 from django.utils import timezone
 from django.utils.text import slugify
 
+_PROFILE_REF = "profiles.Profile"
+
 
 class Skill(models.Model):
     """Catalog of skills available in the system."""
@@ -41,6 +43,12 @@ class Profile(models.Model):
     display_name = models.CharField(max_length=120)
     bio = models.TextField(blank=True, default="")
     picture_url = models.URLField(blank=True, default="")
+    picture = models.ImageField(
+        upload_to="profile_pictures/%Y/%m/",
+        null=True,
+        blank=True,
+        help_text="User-uploaded profile picture. Takes priority over picture_url.",
+    )
     title = models.CharField(max_length=120, blank=True, default="")
     location = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     share_precise_location = models.BooleanField(default=True)
@@ -196,7 +204,7 @@ class CommunityTag(models.Model):
     slug = models.SlugField(max_length=130, unique=True)
     description = models.TextField(blank=True, default="")
     created_by = models.ForeignKey(
-        "profiles.Profile",
+        _PROFILE_REF,
         on_delete=models.SET_NULL,
         related_name="created_tags",
         null=True,
@@ -204,7 +212,7 @@ class CommunityTag(models.Model):
     )
     location = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     members = models.ManyToManyField(
-        "profiles.Profile",
+        _PROFILE_REF,
         through="CommunityTagMembership",
         related_name="community_tags",
         blank=True,
@@ -236,7 +244,7 @@ class CommunityTagMembership(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     profile = models.ForeignKey(
-        "profiles.Profile",
+        _PROFILE_REF,
         on_delete=models.CASCADE,
         related_name="tag_memberships",
     )

@@ -1,6 +1,9 @@
 from django.urls import path
 
 from .views import (
+    AdminReportListAPIView,
+    AdminReportUpdateAPIView,
+    AdminUserUpdateAPIView,
     AdminUsersListAPIView,
     AuthMeAPIView,
     ForgotPasswordAPIView,
@@ -8,6 +11,7 @@ from .views import (
     LoginAPIView,
     LogoutAPIView,
     RegisterAPIView,
+    ReportCreateAPIView,
     ResendVerificationAPIView,
     ResetPasswordAPIView,
     TokenRefreshAPIView,
@@ -29,9 +33,24 @@ urlpatterns = [
         name="resend-verification",
     ),
     path("admin/users/", AdminUsersListAPIView.as_view(), name="admin-users-list"),
+    path(
+        "admin/users/<uuid:user_id>/",
+        AdminUserUpdateAPIView.as_view(),
+        name="admin-user-update",
+    ),
+    path(
+        "admin/reports/",
+        AdminReportListAPIView.as_view(),
+        name="admin-reports-list",
+    ),
+    path(
+        "admin/reports/<uuid:report_id>/",
+        AdminReportUpdateAPIView.as_view(),
+        name="admin-report-update",
+    ),
+    path("reports/", ReportCreateAPIView.as_view(), name="report-create"),
     path("me/", AuthMeAPIView.as_view(), name="auth-me"),
     path("me/role/", UserAppUsageModeMeAPIView.as_view(), name="auth-me-role"),
     # OAuth2 providers
     path("google/", GoogleOAuthLoginAPIView.as_view(), name="google-oauth-login"),
 ]
-

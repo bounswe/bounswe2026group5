@@ -83,6 +83,13 @@ const makeMentor = (n: number) => ({
 // 8 mentors so Load More tests work (> PAGE_SIZE of 6)
 const MOCK_MENTORS = Array.from({ length: 8 }, (_, i) => makeMentor(i + 1))
 
+vi.mock('@/lib/queries/MessagingQueries.ts', () => ({
+  useMessaging: () => ({
+    matchedUsernames: new Set<string>(),
+    sendMessageTo: vi.fn(),
+  }),
+}))
+
 vi.mock('@/lib/queries/DiscoverQueries.ts', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {

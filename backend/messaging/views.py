@@ -3,6 +3,7 @@
 from django.db.models import Q
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -59,6 +60,7 @@ class ConversationDetailAPIView(APIView):
     """List messages in a conversation with pagination, and send messages."""
 
     permission_classes = [IsRegularUser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @extend_schema(
         responses={
@@ -72,6 +74,7 @@ class ConversationDetailAPIView(APIView):
             "Supports pagination via `page` and `pageSize` query params."
         ),
         tags=["Messages"],
+        operation_id="messages_conversation_messages_list",
     )
     def get(self, request: Request, conversation_id: str) -> Response:
         """Return paginated messages for the conversation if user is a participant."""
@@ -103,7 +106,15 @@ class ConversationDetailAPIView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
-        request=MessageCreateSerializer,
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "body": {"type": "string"},
+                    "attachment": {"type": "string", "format": "binary"},
+                },
+            }
+        },
         responses={
             201: MessageSerializer,
             400: OpenApiResponse(description="Validation error."),
@@ -111,7 +122,10 @@ class ConversationDetailAPIView(APIView):
             403: OpenApiResponse(description="Access denied."),
             404: OpenApiResponse(description="Conversation not found."),
         },
-        description="Send a new message in a private conversation.",
+        description=(
+            "Send a new message in a private conversation. "
+            "Supports text, file attachments, or both."
+        ),
         tags=["Messages"],
     )
     def post(self, request: Request, conversation_id: str) -> Response:

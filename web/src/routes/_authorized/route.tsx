@@ -11,7 +11,7 @@ export const Route = createFileRoute('/_authorized')({
     },
     loader: async ({ context }) => {
         const me = await context.queryClient.ensureQueryData(meQueryOptions)
-        if (me && !me.app_usage_mode) {
+        if (me && !me.app_usage_mode && me.role !== 'ADMIN') {
             throw redirect({ to: '/gettingToKnowYou' })
         }
         return me
