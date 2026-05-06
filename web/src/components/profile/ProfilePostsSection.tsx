@@ -148,7 +148,7 @@ function ProfilePostCard({
                             {label}
                         </span>
                         {post.category === 'MCTE' && (
-                            <Badge variant="secondary" className="text-xs">Milestone</Badge>
+                            <Badge variant="secondary" className="text-xs">Mentorship Journey</Badge>
                         )}
                     </div>
                     {canEdit && (
@@ -186,6 +186,9 @@ function ProfilePostCard({
                     >
                         {post.media_url}
                     </a>
+                )}
+                {post.category === 'MCTE' && post.mentorship_partner && (
+                    <Muted className="text-xs">From the mentorship journey with @{post.mentorship_partner}</Muted>
                 )}
                 <Muted className="text-xs">{formatTimestamp(post.timestamp)}</Muted>
             </CardContent>

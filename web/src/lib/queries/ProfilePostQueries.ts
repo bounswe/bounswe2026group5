@@ -25,6 +25,7 @@ export interface ProfilePost {
     last_edited: string | null
     show_on_profile: boolean
     actor_role: string
+    mentorship_partner: string | null
     author: ProfilePostAuthor
 }
 
