@@ -263,6 +263,7 @@ function renderBodyContent({
         openSlots={isViewedMentor ? openSlotsCount : 0}
         menteesHelped={isViewedMentor ? menteesHelpedCount : 0}
         showStats={isViewedMentor}
+        showRating={isViewedMentor}
         showMenteesHelped={isViewedMentor}
         imageUrl={profile.picture_url || undefined}
       />
