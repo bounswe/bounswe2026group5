@@ -410,6 +410,51 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.owner_profile.refresh_from_db()
         self.assertIsNone(self.owner_profile.location)
 
+    def test_patch_profile_can_disable_precise_location_sharing(self) -> None:
+        """Users can disable precise location sharing via the me profile endpoint."""
+        self.owner_profile.share_precise_location = True
+        self.owner_profile.save(update_fields=["share_precise_location"])
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.me_url,
+            {"share_precise_location": False},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertFalse(self.owner_profile.share_precise_location)
+
+    def test_patch_profile_can_enable_precise_location_sharing(self) -> None:
+        """Users can re-enable precise location sharing via the me profile endpoint."""
+        self.owner_profile.share_precise_location = False
+        self.owner_profile.save(update_fields=["share_precise_location"])
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.me_url,
+            {"share_precise_location": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertTrue(self.owner_profile.share_precise_location)
+
+    def test_patch_profile_rejects_non_boolean_precise_location_toggle(self) -> None:
+        """Non-boolean share_precise_location values return validation errors."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.me_url,
+            {"share_precise_location": "not-a-bool"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("share_precise_location", response.json())
+
     def test_patch_mentee_profile_skills_with_eager_to_learn(self) -> None:
         """Mentees can patch skills using canonical skills field."""
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")

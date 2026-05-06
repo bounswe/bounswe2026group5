@@ -253,6 +253,7 @@ class ProfileUpdateSerializer(UsernameUpdateMixin, serializers.ModelSerializer):
     """Partial update serializer for authenticated user's profile."""
 
     location = LocationField(required=False, allow_null=True)
+    share_precise_location = serializers.BooleanField(required=False)
     skills = serializers.ListField(
         child=serializers.CharField(),
         required=False,
@@ -278,6 +279,7 @@ class ProfileUpdateSerializer(UsernameUpdateMixin, serializers.ModelSerializer):
             "picture_url",
             "title",
             "location",
+            "share_precise_location",
             "is_visible",
             "show_initials_only",
             "skills",
@@ -467,6 +469,7 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
         lng = obj.location.x
         if not obj.share_precise_location:
             import random
+
             # Apply a random shift of up to ~4km (roughly 0.04 degrees)
             lat += random.uniform(-0.04, 0.04)
             lng += random.uniform(-0.04, 0.04)
