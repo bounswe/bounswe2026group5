@@ -119,6 +119,7 @@ def create_mcte_event(
     source_id = f"mcte:{uuid.uuid4()}"
 
     effective_timestamp = timestamp if timestamp is not None else timezone.now()
+
     event = TimelineEvent.objects.create(
         source_id=source_id,
         category=TimelineEvent.Category.MCTE,

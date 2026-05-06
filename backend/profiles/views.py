@@ -81,6 +81,7 @@ PAGE_SIZE_NOT_INT_DETAIL = {"detail": "`page` and `pageSize` must be integers."}
 def _resolve_community_tag(tag_id: str, qs=None) -> "CommunityTag | None":
     """Return a CommunityTag by UUID or slug. Pass a custom queryset for select_related etc."""
     from uuid import UUID
+
     if qs is None:
         qs = CommunityTag.objects
     try:
@@ -275,9 +276,12 @@ class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
             "Supports optional filtering by `category` and `event_type`. "
             "Results are ordered newest-first by action metadata: `created_at`, then "
             "`last_edited` as a tie-breaker. "
-            "Each result includes a `community_id` field: populated with the community tag "
-            "UUID for CoP posts (use it to link to `GET /api/profiles/tags/{community_id}/` "
-            "or `GET /api/profiles/tags/{community_id}/posts/`), and `null` for PrP and MCTE."
+            "For CoP posts, `community_id` and `community_name` are returned; "
+            "`community_name` is resolved from the live community and falls back to the "
+            "snapshotted payload value if the community has been deleted. "
+            "For MCTE posts, `mentorship_partner` is resolved from the active mentorship "
+            "relation and is `null` for PrP and CoP. Deleting a mentorship cascades to "
+            "its timeline events, so deleted mentorship events are not included in this feed."
         ),
         tags=["Profiles"],
     )
