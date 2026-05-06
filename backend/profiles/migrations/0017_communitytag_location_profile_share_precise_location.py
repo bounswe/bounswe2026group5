@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("profiles", "0015_backfill_total_mentee_count_from_matches"),
+        ("profiles", "0016_profile_picture"),
     ]
 
     operations = [
