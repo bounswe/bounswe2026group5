@@ -148,17 +148,7 @@ export function EditProfileModal({
           >
             <View className="mb-8">
               {/* 1. The Cover Photo Area */}
-              <View className="h-32 bg-indigo-50 relative -mx-6">
-                <TouchableOpacity
-                  className="absolute bottom-3 right-4 bg-gray-900/60 px-3 py-1.5 rounded-full flex-row items-center"
-                  onPress={() => console.log("TODO: Change Cover Photo")}
-                >
-                  <Ionicons name="camera" size={16} color="white" />
-                  <Text className="text-white text-xs font-bold ml-1.5">
-                    Edit Cover
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              <View className="h-32 bg-indigo-50 relative -mx-6" />
 
               {/* 2. The Overlapping Avatar */}
               <View className="items-center -mt-12">

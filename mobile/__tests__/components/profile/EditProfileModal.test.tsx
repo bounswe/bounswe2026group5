@@ -95,6 +95,19 @@ describe("EditProfileModal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("does not render an unsupported cover photo edit button", () => {
+    const { queryByText } = render(
+      <EditProfileModal
+        visible
+        onClose={jest.fn()}
+        initialData={{ name: "Ali", bio: "Initial bio" }}
+        onSave={jest.fn()}
+      />,
+    );
+
+    expect(queryByText("Edit Cover")).toBeNull();
+  });
+
   it("previews a picked avatar and includes it in save data", async () => {
     const onSave = jest.fn().mockResolvedValue(true);
 
