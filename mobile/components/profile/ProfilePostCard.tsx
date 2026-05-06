@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Image, Text, View } from "react-native";
+import { Image, Linking, Text, TouchableOpacity, View } from "react-native";
 
 import type { ProfilePost } from "@/lib/queries/profile";
 
@@ -66,6 +66,16 @@ function getInitials(name: string): string {
   return initials || "?";
 }
 
+function isImageMediaUrl(mediaUrl: string): boolean {
+  const normalized = mediaUrl.split("?")[0]?.toLowerCase() ?? "";
+  const filename = normalized.split("/").pop() ?? "";
+  if (filename.endsWith(".pdf")) {
+    return false;
+  }
+
+  return /\.(jpe?g|png|gif|webp)$/.test(filename) || !filename.includes(".");
+}
+
 interface ProfilePostCardProps {
   post: ProfilePost;
   /** When true, content is not truncated. Default: false (preview mode). */
@@ -91,6 +101,7 @@ export function ProfilePostCard({
   const authorSubtitle = post.author?.title || post.author?.username || "";
   const accentColor = getAccentColor(post.event_type);
   const iconName = getIconName(post.category, post.event_type);
+  const hasImageMedia = post.media_url ? isImageMediaUrl(post.media_url) : false;
 
   return (
     <View
@@ -162,14 +173,41 @@ export function ProfilePostCard({
         </Text>
       ) : null}
 
-      {/* Media thumbnail */}
-      {post.media_url ? (
+      {post.media_url && hasImageMedia ? (
         <Image
           testID={`post-card-media-${post.id}`}
           source={{ uri: post.media_url }}
-          className="mt-3 h-36 w-full rounded-xl bg-surface-active dark:bg-surface-active-dark"
+          className={`mt-3 w-full rounded-xl bg-surface-active dark:bg-surface-active-dark ${
+            expanded ? "h-72" : "h-52"
+          }`}
           resizeMode="cover"
         />
+      ) : null}
+
+      {post.media_url && !hasImageMedia ? (
+        <TouchableOpacity
+          testID={`post-card-attachment-${post.id}`}
+          activeOpacity={0.82}
+          onPress={() => {
+            void Linking.openURL(post.media_url ?? "");
+          }}
+          className="mt-3 flex-row items-center gap-3 rounded-xl border border-divider bg-surface-active px-3 py-3 dark:border-divider-dark dark:bg-surface-active-dark"
+        >
+          <View className="h-10 w-10 items-center justify-center rounded-full bg-surface-card dark:bg-surface-card-dark">
+            <Ionicons name="document-attach-outline" size={20} color="#2f7d68" />
+          </View>
+          <View className="min-w-0 flex-1">
+            <Text className="text-sm font-bold text-on-surface dark:text-on-surface-dark">
+              Attachment
+            </Text>
+            <Text
+              numberOfLines={1}
+              className="text-xs text-on-surface-soft dark:text-on-surface-soft-dark"
+            >
+              Open file
+            </Text>
+          </View>
+        </TouchableOpacity>
       ) : null}
     </View>
   );
