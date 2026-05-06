@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "rest_framework_simplejwt.token_blacklist",
+    "storages",
     # Local Apps
     "accounts",
     "profiles",
@@ -85,11 +86,26 @@ INSTALLED_APPS = [
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": ("accounts.authentication.CookieOrHeaderJWTAuthentication",),
+    "DEFAULT_PARSER_CLASSES": (
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.MultiPartParser",
+        "rest_framework.parsers.FormParser",
+    ),
 }
 
 # Messaging settings
 MAX_MESSAGE_ATTACHMENT_SIZE_MB = 20
 MAX_MESSAGE_ATTACHMENT_SIZE_BYTES = MAX_MESSAGE_ATTACHMENT_SIZE_MB * 1024 * 1024
+
+# Profile picture upload settings
+MAX_PROFILE_PICTURE_SIZE_MB = 5
+MAX_PROFILE_PICTURE_SIZE_BYTES = MAX_PROFILE_PICTURE_SIZE_MB * 1024 * 1024
+PROFILE_PICTURE_MAX_DIMENSION = 512  # px — longest side after resize
+
+# Post / timeline media upload settings
+MAX_POST_MEDIA_SIZE_MB = 10
+MAX_POST_MEDIA_SIZE_BYTES = MAX_POST_MEDIA_SIZE_MB * 1024 * 1024
+POST_MEDIA_MAX_DIMENSION = 1920  # px — longest side after resize
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1440),
@@ -108,6 +124,9 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Neighborship App API Documentation",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {
+        "AppUsageModeEnum": "accounts.models.AppUsageMode",
+    },
 }
 
 MIDDLEWARE = [
@@ -187,6 +206,35 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# ---------------------------------------------------------------------------
+# Media / file upload storage
+# ---------------------------------------------------------------------------
+# When GS_BUCKET_NAME is set, use Google Cloud Storage for all uploaded media.
+# Otherwise fall back to local filesystem (useful for running tests locally).
+
+GS_BUCKET_NAME = os.getenv("GS_BUCKET_NAME", "")
+
+if GS_BUCKET_NAME:
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
+            "OPTIONS": {
+                "bucket_name": GS_BUCKET_NAME,
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+    GS_DEFAULT_ACL = os.getenv("GS_DEFAULT_ACL", None)
+    GS_QUERYSTRING_AUTH = env.bool("GS_QUERYSTRING_AUTH", default=False)
+    GS_FILE_OVERWRITE = env.bool("GS_FILE_OVERWRITE", default=False)
+    MEDIA_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/"
+else:
+    # Local filesystem fallback (tests, CI, offline dev)
+    MEDIA_ROOT = BASE_DIR / "media"
+    MEDIA_URL = "/media/"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Feedback & rating
@@ -223,3 +271,7 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@neighborship.app")
+
+# Initial Admin Seeding
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@test.com")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "AdminPass123!")

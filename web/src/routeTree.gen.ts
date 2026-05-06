@@ -25,6 +25,7 @@ import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/da
 import { Route as AuthorizedConnectionsRouteImport } from './routes/_authorized/connections'
 import { Route as AuthorizedCommunitiesRouteImport } from './routes/_authorized/communities'
 import { Route as AuthorizedConnectionsIndexRouteImport } from './routes/_authorized/connections.index'
+import { Route as AuthorizedAdminModerationRouteImport } from './routes/_authorized/admin-moderation'
 import { Route as AuthorizedCommunitiesIndexRouteImport } from './routes/_authorized/communities.index'
 import { Route as AuthorizedConnectionsMatchIdRouteImport } from './routes/_authorized/connections.$matchId'
 import { Route as AuthorizedCommunitiesCommunitySlugRouteImport } from './routes/_authorized/communities.$communitySlug'
@@ -108,6 +109,12 @@ const AuthorizedConnectionsIndexRoute =
     path: '/',
     getParentRoute: () => AuthorizedConnectionsRoute,
   } as any)
+const AuthorizedAdminModerationRoute =
+  AuthorizedAdminModerationRouteImport.update({
+    id: '/admin-moderation',
+    path: '/admin-moderation',
+    getParentRoute: () => AuthorizedRouteRoute,
+  } as any)
 const AuthorizedCommunitiesIndexRoute =
   AuthorizedCommunitiesIndexRouteImport.update({
     id: '/',
@@ -129,6 +136,7 @@ const AuthorizedCommunitiesCommunitySlugRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin-moderation': typeof AuthorizedAdminModerationRoute
   '/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/connections': typeof AuthorizedConnectionsRouteWithChildren
   '/dashboard': typeof AuthorizedDashboardRoute
@@ -147,6 +155,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin-moderation': typeof AuthorizedAdminModerationRoute
+  '/connections': typeof AuthorizedConnectionsRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
   '/messages': typeof AuthorizedMessagesRoute
@@ -167,6 +177,7 @@ export interface FileRoutesById {
   '/_authorized': typeof AuthorizedRouteRouteWithChildren
   '/_onBoarding': typeof OnBoardingRouteRouteWithChildren
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
+  '/_authorized/admin-moderation': typeof AuthorizedAdminModerationRoute
   '/_authorized/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/_authorized/connections': typeof AuthorizedConnectionsRouteWithChildren
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin-moderation'
     | '/communities'
     | '/connections'
     | '/dashboard'
@@ -205,6 +217,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin-moderation'
+    | '/connections'
     | '/dashboard'
     | '/discover'
     | '/messages'
@@ -224,6 +238,7 @@ export interface FileRouteTypes {
     | '/_authorized'
     | '/_onBoarding'
     | '/_unauthorized'
+    | '/_authorized/admin-moderation'
     | '/_authorized/communities'
     | '/_authorized/connections'
     | '/_authorized/dashboard'
@@ -363,6 +378,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedConnectionsIndexRouteImport
       parentRoute: typeof AuthorizedConnectionsRoute
     }
+    '/_authorized/admin-moderation': {
+      id: '/_authorized/admin-moderation'
+      path: '/admin-moderation'
+      fullPath: '/admin-moderation'
+      preLoaderRoute: typeof AuthorizedAdminModerationRouteImport
+      parentRoute: typeof AuthorizedRouteRoute
+    }
     '/_authorized/communities/': {
       id: '/_authorized/communities/'
       path: '/'
@@ -419,6 +441,7 @@ const AuthorizedConnectionsRouteWithChildren =
   )
 
 interface AuthorizedRouteRouteChildren {
+  AuthorizedAdminModerationRoute: typeof AuthorizedAdminModerationRoute
   AuthorizedCommunitiesRoute: typeof AuthorizedCommunitiesRouteWithChildren
   AuthorizedConnectionsRoute: typeof AuthorizedConnectionsRouteWithChildren
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
@@ -428,6 +451,7 @@ interface AuthorizedRouteRouteChildren {
 }
 
 const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
+  AuthorizedAdminModerationRoute: AuthorizedAdminModerationRoute,
   AuthorizedCommunitiesRoute: AuthorizedCommunitiesRouteWithChildren,
   AuthorizedConnectionsRoute: AuthorizedConnectionsRouteWithChildren,
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,

@@ -15,14 +15,21 @@ import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal"
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
+import { useToast } from "@/components/ui/ToastProvider";
 
 import { useAuthStore } from "@/lib/auth/store";
+import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
+import {
+  MENTOR_MENTEE_CAPACITY_WARNING,
+  shouldWarnBeforeAcceptingMentee,
+} from "@/lib/mentorship/capacity";
 import { useResendEmailVerificationMutation } from "@/lib/queries/auth";
 import {
   mapMeetingSessionsToDashboard,
   mapRequestsToDashboard,
   useAvailabilitySlotsQuery,
   useCancelSessionMutation,
+  useMentorshipMatchesQuery,
   useMentorshipMeetingSessionsQuery,
   useMentorshipRequestsQuery,
   useRescheduleSessionMutation,
@@ -53,8 +60,10 @@ function mapDashboardRequestToCardProps(
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const toast = useToast();
 
   const currentUsername = useAuthStore((state) => state.user?.username);
+  const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const isEmailVerified = useAuthStore(
     (state) => state.user?.is_email_verified,
   );
@@ -64,6 +73,7 @@ export default function DashboardScreen() {
     currentUsername,
     { status: "upcoming" },
   );
+  const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const respondMutation = useRespondToMentorshipRequestMutation();
   const cancelSessionMutation = useCancelSessionMutation(currentUsername);
   const rescheduleSessionMutation =
@@ -82,6 +92,19 @@ export default function DashboardScreen() {
     () => mapMeetingSessionsToDashboard(meetingSessionsQuery.data ?? []),
     [meetingSessionsQuery.data],
   );
+  const activeMenteeCount = useMemo(() => {
+    if (appUsageMode !== "MENTOR") {
+      return 0;
+    }
+
+    return new Set(
+      (matchesQuery.data ?? [])
+        .filter((match) => match.is_active !== false)
+        .map((match) => match.mentee.username),
+    ).size;
+  }, [appUsageMode, matchesQuery.data]);
+  const shouldShowCapacityWarning =
+    shouldWarnBeforeAcceptingMentee(activeMenteeCount);
   const queryError =
     (requestsQuery.isError && "Failed to load mentorship requests.") ||
     (meetingSessionsQuery.isError && "Failed to load upcoming sessions.") ||
@@ -95,6 +118,7 @@ export default function DashboardScreen() {
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  useAutoClearMessage(successMessage, setSuccessMessage);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
@@ -149,6 +173,19 @@ export default function DashboardScreen() {
     router.push(`/user/${encodeURIComponent(targetUsername)}`);
   };
 
+  const handleRequestCardAccept = (cardProps: PendingRequestCardProps) => {
+    if (
+      cardProps.requestType !== "outgoing" &&
+      appUsageMode === "MENTOR" &&
+      shouldShowCapacityWarning
+    ) {
+      setSelectedRequest(cardProps);
+      return;
+    }
+
+    void handleRespond("accept", cardProps.id);
+  };
+
   const handleResendVerification = async () => {
     try {
       setActionError(null);
@@ -174,7 +211,7 @@ export default function DashboardScreen() {
       setSuccessMessage(null);
       await cancelSessionMutation.mutateAsync(selectedSession.sessionId);
       setSelectedSession(null);
-      setSuccessMessage("The session was cancelled.");
+      toast.success("The session was cancelled.");
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -301,9 +338,7 @@ export default function DashboardScreen() {
                 {...cardProps}
                 onPress={() => setSelectedRequest(cardProps)}
                 onShowProfile={() => handleOpenRequestProfile(cardProps.username)}
-                onAccept={() => {
-                  void handleRespond("accept", cardProps.id);
-                }}
+                onAccept={() => handleRequestCardAccept(cardProps)}
                 onDecline={() => {
                   void handleRespond("reject", cardProps.id);
                 }}
@@ -356,6 +391,13 @@ export default function DashboardScreen() {
         onDecline={() => void handleRespond("reject")}
         onShowProfile={handleOpenRequestProfile}
         disabled={respondMutation.isPending}
+        acceptanceWarning={
+          selectedRequest?.requestType !== "outgoing" &&
+          appUsageMode === "MENTOR" &&
+          shouldShowCapacityWarning
+            ? MENTOR_MENTEE_CAPACITY_WARNING
+            : undefined
+        }
       />
 
       <SessionDetailsModal
@@ -384,10 +426,11 @@ export default function DashboardScreen() {
               .mutateAsync({
                 sessionId: rescheduleSessionId,
                 newSlotId,
+                mentorUsername: rescheduleSessionMentorUsername ?? undefined,
               })
               .then(() => {
                 setActionError(null);
-                setSuccessMessage("Your session was updated.");
+                toast.success("Your session was updated.");
                 setSelectedSession(null);
                 setShowRescheduleSheet(false);
               })

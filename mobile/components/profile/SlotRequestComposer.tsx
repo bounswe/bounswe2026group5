@@ -53,14 +53,6 @@ export function SlotRequestComposer({
     <View className="mb-6">
       <Text className="text-lg font-bold text-gray-900 mb-3">Request a Session</Text>
 
-      {!canRequest && (
-        <View className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-3">
-          <Text className="text-amber-800 text-sm font-semibold">
-            Enable mentee mode in Settings to send requests.
-          </Text>
-        </View>
-      )}
-
       {slotCards.length === 0 ? (
         <View className="bg-gray-50 border border-gray-200 rounded-xl p-3">
           <Text className="text-gray-600 text-sm">No upcoming slots available.</Text>

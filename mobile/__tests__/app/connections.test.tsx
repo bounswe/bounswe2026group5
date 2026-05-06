@@ -114,18 +114,21 @@ jest.mock("@/components/connections/RequestDetailSheet", () => ({
     onAccept,
     onDecline,
     onShowProfile,
+    acceptanceWarning,
   }: {
     visible: boolean;
     request: { id?: string; name?: string; username?: string } | null;
     onAccept?: (id: string) => void;
     onDecline?: (id: string) => void;
     onShowProfile?: (username?: string) => void;
+    acceptanceWarning?: { message: string };
   }) => {
     if (!visible) return null;
     const { Text, TouchableOpacity, View } = jest.requireActual("react-native");
     return (
       <View testID="request-detail-sheet">
         <Text>{request?.name}</Text>
+        {acceptanceWarning ? <Text>{acceptanceWarning.message}</Text> : null}
         <TouchableOpacity
           testID="detail-accept"
           onPress={() => onAccept?.(request?.id ?? "")}
@@ -179,12 +182,14 @@ jest.mock("@/components/connections/ConnectionActionsSheet", () => ({
     visible,
     name,
     onViewProfile,
+    onViewJourney,
     onRemoveConnection,
     onLeaveReview,
   }: {
     visible: boolean;
     name: string;
     onViewProfile: () => void;
+    onViewJourney?: () => void;
     onRemoveConnection: () => void;
     onLeaveReview?: () => void;
   }) => {
@@ -195,6 +200,9 @@ jest.mock("@/components/connections/ConnectionActionsSheet", () => ({
         <Text>{name}</Text>
         <TouchableOpacity testID="action-profile" onPress={onViewProfile}>
           <Text>Profile action</Text>
+        </TouchableOpacity>
+        <TouchableOpacity testID="action-journey" onPress={onViewJourney}>
+          <Text>Journey action</Text>
         </TouchableOpacity>
         <TouchableOpacity testID="action-remove" onPress={onRemoveConnection}>
           <Text>Remove action</Text>
@@ -406,6 +414,41 @@ describe("ConnectionsScreen", () => {
     expect(queryByTestId("decline-confirm")).toBeNull();
   });
 
+  it("asks mentors to confirm before accepting when they already have several mentees", async () => {
+    mockRequests = [pendingRawRequest];
+    mockMatches = Array.from({ length: 5 }, (_, index) => ({
+      ...mentorMatch,
+      id: `match-${index + 1}`,
+      mentee: {
+        username: `mentee_${index + 1}`,
+        display_name: `Mentee ${index + 1}`,
+        title: "Learner",
+        picture_url: "",
+      },
+    }));
+
+    const { getByTestId, getByText } = render(<ConnectionsScreen />);
+
+    fireEvent.press(getByTestId("accept-Ada Mentee"));
+
+    expect(mockRespondMutateAsync).not.toHaveBeenCalled();
+    expect(getByTestId("request-detail-sheet")).toBeTruthy();
+    expect(
+      getByText(
+        "You already have several active mentees. Make sure you have enough time to support another learner before accepting.",
+      ),
+    ).toBeTruthy();
+
+    fireEvent.press(getByTestId("detail-accept"));
+
+    await waitFor(() => {
+      expect(mockRespondMutateAsync).toHaveBeenCalledWith({
+        requestId: "request-1",
+        action: "accept",
+      });
+    });
+  });
+
   it("manages mentor connections with message, profile, feedback, and removal actions", async () => {
     mockMatches = [
       mentorMatch,
@@ -458,6 +501,44 @@ describe("ConnectionsScreen", () => {
       expect(mockDeactivateMutateAsync).toHaveBeenCalledWith("match-2");
     });
     expect(await findByText("Ada Mentee has been removed.")).toBeTruthy();
+  });
+
+  it("opens a single mentor-side match journey directly", () => {
+    mockMatches = [mentorMatch];
+
+    const { getByTestId } = render(<ConnectionsScreen />);
+
+    fireEvent.press(getByTestId("card-more-Ada Mentee"));
+    fireEvent.press(getByTestId("action-journey"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/connections/timeline/match-1",
+    );
+  });
+
+  it("shows a journey picker instead of silently opening the first match", () => {
+    mockMatches = [
+      mentorMatch,
+      {
+        ...mentorMatch,
+        id: "match-2",
+      },
+    ];
+
+    const { getByTestId } = render(<ConnectionsScreen />);
+
+    fireEvent.press(getByTestId("card-more-Ada Mentee"));
+    fireEvent.press(getByTestId("action-journey"));
+
+    expect(mockPush).not.toHaveBeenCalledWith(
+      "/(tabs)/connections/timeline/match-1",
+    );
+
+    fireEvent.press(getByTestId("journey-match-match-2"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/connections/timeline/match-2",
+    );
   });
 
   it("toggles the mentor mentee preview and ignores missing conversations", () => {

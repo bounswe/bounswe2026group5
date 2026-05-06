@@ -18,11 +18,13 @@ import {
   type AvailabilitySlot,
 } from "@/components/profile/AvailabilityPreview";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { ProfilePostsPreview } from "@/components/profile/ProfilePostsPreview";
 import { ProfileReviews } from "@/components/profile/ProfileReviews";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { useToast } from "@/components/ui/ToastProvider";
 import { API_BASE_URL } from "@/constants/api";
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -164,6 +166,10 @@ type BodyContentProps = {
   onResendVerification?: () => void;
   onSubmit: () => void;
   isRequestPending: boolean;
+  /** Username used to load the posts preview strip. */
+  postsUsername: string;
+  /** Called when the user taps "View All Posts". */
+  onViewAllPosts: () => void;
 };
 
 function renderBodyContent({
@@ -196,6 +202,8 @@ function renderBodyContent({
   onResendVerification,
   onSubmit,
   isRequestPending,
+  postsUsername,
+  onViewAllPosts,
 }: BodyContentProps): React.ReactNode {
   if (loading) {
     return (
@@ -277,13 +285,11 @@ function renderBodyContent({
           />
         )}
 
-        {isViewedMentor && !canRequestMentorship && (
-          <View className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">
-            <Text className="text-amber-800 text-sm font-semibold">
-              Enable mentee mode in Settings to send requests.
-            </Text>
-          </View>
-        )}
+        {/* Profile posts preview (PrP + public MCTE) — hidden when empty */}
+        <ProfilePostsPreview
+          username={postsUsername}
+          onViewAll={onViewAllPosts}
+        />
 
         {!!requestFeedback && (
           <View className="mb-4">
@@ -389,6 +395,7 @@ const REVIEWS_PAGE_SIZE = 6;
 export default function MentorProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const toast = useToast();
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const currentUsername = useAuthStore((state) => state.user?.username);
   const params = useLocalSearchParams<{ username?: string }>();
@@ -691,8 +698,6 @@ export default function MentorProfileScreen() {
     slotId?: string;
   }) => {
     if (!canRequestMentorship) {
-      setRequestFeedbackVariant("warning");
-      setRequestFeedback("Enable mentee mode in Settings to send requests.");
       return;
     }
 
@@ -791,8 +796,7 @@ export default function MentorProfileScreen() {
       setProfile((prev) => prev);
 
       setSelectedSlot(null);
-      setRequestFeedbackVariant("success");
-      setRequestFeedback("Session booked successfully.");
+      toast.success("Session booked successfully.");
       availabilitySlotsQuery.refetch();
     } catch (mutationError) {
       setRequestFeedbackVariant("error");
@@ -870,6 +874,12 @@ export default function MentorProfileScreen() {
     onSubmit: submitCoverLetter,
     isRequestPending:
       createRequestMutation.isPending || bookSlotMutation.isPending,
+    postsUsername: username ?? "",
+    onViewAllPosts: () => {
+      if (username) {
+        router.push(`/(tabs)/user/${encodeURIComponent(username)}/posts` as any);
+      }
+    },
   });
 
   const screenTitle = isViewedMentor ? "Mentor Profile" : "Profile";

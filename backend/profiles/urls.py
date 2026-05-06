@@ -10,6 +10,8 @@ from .views import (
     CommunityTagLeaveAPIView,
     CommunityTagListCreateAPIView,
     CommunityTagMembersListAPIView,
+    CommunityTagPostDetailAPIView,
+    CommunityTagPostsListCreateAPIView,
     MentorPublicAverageRatingAPIView,
     MyAvailabilitySlotDetailAPIView,
     MyAvailabilitySlotListCreateAPIView,
@@ -18,8 +20,10 @@ from .views import (
     MyTagsListAPIView,
     PopularMentorsListAPIView,
     PopularTagsListAPIView,
+    PostMediaUploadAPIView,
     ProfileByUsernameAPIView,
     ProfileMeAPIView,
+    ProfilePictureUploadAPIView,
     ProfilePostsListAPIView,
     ProfileReviewsByUsernameAPIView,
     ProfileUsernameUpdateAPIView,
@@ -31,6 +35,8 @@ from .views import (
 urlpatterns = [
     path("", PublicMentorProfilesSearchListAPIView.as_view(), name="mentor-profiles-search"),
     path("me/", ProfileMeAPIView.as_view(), name="profile-me"),
+    path("me/picture/", ProfilePictureUploadAPIView.as_view(), name="profile-picture-upload"),
+    path("me/uploads/", PostMediaUploadAPIView.as_view(), name="post-media-upload"),
     path("me/posts/", MyProfilePostsCollectionAPIView.as_view(), name="profile-posts-me-create"),
     path(
         "me/posts/<uuid:event_id>/",
@@ -98,6 +104,16 @@ urlpatterns = [
         "tags/<str:tag_id>/members/",
         CommunityTagMembersListAPIView.as_view(),
         name="community-tag-members",
+    ),
+    path(
+        "tags/<uuid:tag_id>/posts/",
+        CommunityTagPostsListCreateAPIView.as_view(),
+        name="community-tag-posts-list-create",
+    ),
+    path(
+        "tags/<uuid:tag_id>/posts/<uuid:event_id>/",
+        CommunityTagPostDetailAPIView.as_view(),
+        name="community-tag-posts-detail",
     ),
     path("me/tags/", MyTagsListAPIView.as_view(), name="my-tags-list"),
     # Catch-all username route (must stay last)

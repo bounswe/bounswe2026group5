@@ -3,6 +3,8 @@ import { useRouter, type Href } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
+  Pressable,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -24,6 +26,11 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
 
 import { useAuthStore } from "@/lib/auth/store";
+import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
+import {
+  MENTOR_MENTEE_CAPACITY_WARNING,
+  shouldWarnBeforeAcceptingMentee,
+} from "@/lib/mentorship/capacity";
 import { useConversations } from "@/lib/queries/MessagingQueries";
 import {
   mapRequestsToDashboard,
@@ -126,8 +133,72 @@ function pushUserProfile(
   router.push(`/user/${encodeURIComponent(username)}` as Href);
 }
 
+function pushMatchJourney(
+  router: ReturnType<typeof useRouter>,
+  matchId: string,
+): void {
+  router.push(
+    `/(tabs)/connections/timeline/${encodeURIComponent(matchId)}` as Href,
+  );
+}
+
 function getQueryErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
+}
+
+function MatchJourneyPickerSheet({
+  visible,
+  name,
+  matchIds,
+  onClose,
+  onSelect,
+}: Readonly<{
+  visible: boolean;
+  name: string;
+  matchIds: string[];
+  onClose: () => void;
+  onSelect: (matchId: string) => void;
+}>) {
+  return (
+    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
+      <View className="flex-1 justify-end">
+        <Pressable className="absolute inset-0 bg-black/40" onPress={onClose} />
+        <View className="bg-surface dark:bg-surface-dark rounded-t-3xl px-5 pt-3 pb-8 border-t border-divider/20">
+          <View className="items-center pb-3">
+            <View className="w-12 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600" />
+          </View>
+          <Text className="text-xs font-bold uppercase tracking-wider text-on-surface-muted mb-1">
+            Select Journey
+          </Text>
+          <Text className="text-[22px] font-extrabold text-on-surface dark:text-white mb-2">
+            {name}
+          </Text>
+          <Text className="text-[13px] text-on-surface-soft mb-4">
+            This connection has multiple mentorship records. Choose which journey to view.
+          </Text>
+          {matchIds.map((matchId, index) => (
+            <TouchableOpacity
+              key={matchId}
+              testID={`journey-match-${matchId}`}
+              activeOpacity={0.85}
+              onPress={() => onSelect(matchId)}
+              className="flex-row items-center justify-between px-4 py-3.5 rounded-lg bg-gray-100 dark:bg-gray-800 mb-3"
+            >
+              <Text className="text-base font-semibold text-gray-700 dark:text-gray-300">
+                Journey {index + 1}
+              </Text>
+              <Text className="text-xs font-semibold text-on-surface-muted">
+                {matchId.slice(0, 8)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity activeOpacity={0.8} onPress={onClose} className="items-center justify-center py-4">
+            <Text className="text-on-surface-soft dark:text-gray-400 font-bold">Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -148,6 +219,10 @@ function MentorConnections({
   const [managedMentee, setManagedMentee] = useState<{
     name: string;
     username: string;
+    matchIds: string[];
+  } | null>(null);
+  const [journeyPicker, setJourneyPicker] = useState<{
+    name: string;
     matchIds: string[];
   } | null>(null);
 
@@ -232,6 +307,21 @@ function MentorConnections({
     setManagedMentee({ name, username, matchIds });
   };
 
+  const handleViewJourney = () => {
+    if (!managedMentee) {
+      return;
+    }
+
+    const target = managedMentee;
+    setManagedMentee(null);
+    if (target.matchIds.length === 1) {
+      pushMatchJourney(router, target.matchIds[0]);
+      return;
+    }
+
+    setJourneyPicker({ name: target.name, matchIds: target.matchIds });
+  };
+
   const handleAccept = async (id: string) => {
     try {
       await respondMutation.mutateAsync({ requestId: id, action: "accept" });
@@ -266,6 +356,18 @@ function MentorConnections({
   const displayedMentees = showAllMentees
     ? mentees
     : mentees.slice(0, MENTEES_PREVIEW_COUNT);
+  const shouldShowCapacityWarning = shouldWarnBeforeAcceptingMentee(
+    mentees.length,
+  );
+
+  const handleRequestCardAccept = (cardProps: PendingRequestCardProps) => {
+    if (shouldShowCapacityWarning) {
+      setSelectedRequest(cardProps);
+      return;
+    }
+
+    void handleAccept(cardProps.id);
+  };
 
   return (
     <>
@@ -283,6 +385,9 @@ function MentorConnections({
         onAccept={handleAccept}
         onDecline={(id) => setDeclineTargetId(id)}
         disabled={respondMutation.isPending}
+        acceptanceWarning={
+          shouldShowCapacityWarning ? MENTOR_MENTEE_CAPACITY_WARNING : undefined
+        }
       />
 
       <ConnectionActionsSheet
@@ -305,6 +410,7 @@ function MentorConnections({
           setManagedMentee(null);
           pushUserProfile(router, target.username);
         }}
+        onViewJourney={handleViewJourney}
         onRemoveConnection={() => {
           if (!managedMentee) {
             return;
@@ -318,6 +424,17 @@ function MentorConnections({
             onError,
             onSuccess,
           });
+        }}
+      />
+
+      <MatchJourneyPickerSheet
+        visible={journeyPicker !== null}
+        name={journeyPicker?.name ?? ""}
+        matchIds={journeyPicker?.matchIds ?? []}
+        onClose={() => setJourneyPicker(null)}
+        onSelect={(matchId) => {
+          setJourneyPicker(null);
+          pushMatchJourney(router, matchId);
         }}
       />
 
@@ -355,7 +472,7 @@ function MentorConnections({
                   <PendingRequestCard
                     {...cardProps}
                     onPress={() => setSelectedRequest(cardProps)}
-                    onAccept={() => handleAccept(req.id)}
+                    onAccept={() => handleRequestCardAccept(cardProps)}
                     onDecline={() => setDeclineTargetId(req.id)}
                     disabled={respondMutation.isPending}
                   />
@@ -448,6 +565,10 @@ function MenteeConnections({
   const [managedMentor, setManagedMentor] = useState<{
     name: string;
     username: string;
+    matchIds: string[];
+  } | null>(null);
+  const [journeyPicker, setJourneyPicker] = useState<{
+    name: string;
     matchIds: string[];
   } | null>(null);
 
@@ -547,6 +668,21 @@ function MenteeConnections({
     setManagedMentor({ name, username, matchIds });
   };
 
+  const handleViewJourney = () => {
+    if (!managedMentor) {
+      return;
+    }
+
+    const target = managedMentor;
+    setManagedMentor(null);
+    if (target.matchIds.length === 1) {
+      pushMatchJourney(router, target.matchIds[0]);
+      return;
+    }
+
+    setJourneyPicker({ name: target.name, matchIds: target.matchIds });
+  };
+
   const displayedMentors = showAllMentors
     ? mentors
     : mentors.slice(0, MENTORS_PREVIEW_COUNT);
@@ -585,6 +721,7 @@ function MenteeConnections({
           setManagedMentor(null);
           pushUserProfile(router, target.username);
         }}
+        onViewJourney={handleViewJourney}
         onRemoveConnection={() => {
           if (!managedMentor) {
             return;
@@ -598,6 +735,17 @@ function MenteeConnections({
             onError,
             onSuccess,
           });
+        }}
+      />
+
+      <MatchJourneyPickerSheet
+        visible={journeyPicker !== null}
+        name={journeyPicker?.name ?? ""}
+        matchIds={journeyPicker?.matchIds ?? []}
+        onClose={() => setJourneyPicker(null)}
+        onSelect={(matchId) => {
+          setJourneyPicker(null);
+          pushMatchJourney(router, matchId);
         }}
       />
 
@@ -730,6 +878,7 @@ export default function ConnectionsScreen() {
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  useAutoClearMessage(successMessage, setSuccessMessage);
 
   const handleFeedbackSubmit = async (rating: number, text?: string) => {
     if (!feedbackConnection?.matchId) return;

@@ -1,5 +1,6 @@
 """Domain services for mentorship lifecycle operations."""
 
+import logging
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -7,6 +8,7 @@ from typing import Any
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, F
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from core.utils.timezone import to_local_time
@@ -25,25 +27,31 @@ from timeline.models import TimelineEvent
 
 from .models import Feedback, Match, MeetingSession, MentorshipRequest
 
-import logging
 logger = logging.getLogger(__name__)
 
 
 def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[str, Any]:
     """Return a paginated journey timeline from stored AGTE and MCTE timeline events."""
-    queryset = TimelineEvent.objects.filter(
-        mentorship=match,
-        category__in=[TimelineEvent.Category.AGTE, TimelineEvent.Category.MCTE],
-        is_deleted=False,
-    ).order_by("-timestamp", "-source_id")
+    queryset = (
+        TimelineEvent.objects.filter(
+            mentorship=match,
+            category__in=[TimelineEvent.Category.AGTE, TimelineEvent.Category.MCTE],
+            is_deleted=False,
+        )
+        .annotate(effective_last_update=Coalesce("last_edited", "created_at"))
+        .order_by("-created_at", "-effective_last_update", "-source_id")
+    )
 
     total_count = queryset.count()
     event_rows = list(
         queryset[offset : offset + limit].values(
+            "id",
             "source_id",
             "event_type",
             "category",
             "timestamp",
+            "created_at",
+            "last_edited",
             "actor_role",
             "payload",
             "content",
@@ -55,10 +63,13 @@ def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[
 
     results = [
         {
-            "id": row["source_id"],
+            "id": row["id"],
+            "source_id": row["source_id"],
             "type": row["event_type"],
             "category": row["category"],
             "timestamp": row["timestamp"],
+            "created_at": row["created_at"],
+            "last_edited": row["last_edited"],
             "actor_role": row["actor_role"],
             "payload": row["payload"] or {},
             "content": row["content"],
