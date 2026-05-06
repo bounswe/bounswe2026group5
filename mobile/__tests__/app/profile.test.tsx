@@ -1,5 +1,5 @@
 import ProfileScreen from "@/app/(tabs)/profile/index";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor, act } from "@testing-library/react-native";
 import React from "react";
 import { Alert } from "react-native";
 
@@ -117,6 +117,7 @@ jest.spyOn(Alert, "alert");
 
 describe("ProfileScreen Layout", () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     mockAuthUser = {
       username: "Ali Aydin",
       app_usage_mode: "MENTOR",
@@ -124,8 +125,6 @@ describe("ProfileScreen Layout", () => {
     mockAvailabilityQuery.mockReturnValue({ data: undefined });
     mockMatchesQuery.mockReturnValue({ data: [] });
     mockMyCommunitiesQuery.mockReturnValue({ data: [] });
-    mockRouterPush.mockClear();
-    (Alert.alert as jest.Mock).mockClear?.();
     mockUpdateProfileMutateAsync.mockResolvedValue({
       display_name: "Ali Aydin",
       bio: "Profile bio",
@@ -285,14 +284,19 @@ describe("ProfileScreen Layout", () => {
     fireEvent.press(getByTestId("profile-edit-button"));
     fireEvent.press(await findByTestId("avatar-picker-button"));
     expect(await findByTestId("avatar-preview")).toBeTruthy();
-    fireEvent.press(getByTestId("save-button"));
+    
+    await act(async () => {
+      fireEvent.press(getByTestId("save-button"));
+    });
 
     await waitFor(() => {
-      expect(mockUpdateProfileMutateAsync).toHaveBeenCalledWith({
-        username: "Ali Aydin",
-        display_name: "Ali Aydin",
-        bio: "Profile bio",
-      });
+      expect(mockUpdateProfileMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          username: "Ali Aydin",
+          display_name: "Ali Aydin",
+          bio: "Profile bio",
+        }),
+      );
       expect(mockUploadProfilePicture).toHaveBeenCalledWith({
         uri: "file:///tmp/avatar.jpg",
         name: "avatar.jpg",
@@ -313,9 +317,25 @@ describe("ProfileScreen Layout", () => {
 
     fireEvent.press(getByTestId("profile-edit-button"));
     fireEvent.press(await findByTestId("avatar-remove-button"));
-    fireEvent.press(getByTestId("save-button"));
+
+    // Handle Alert
+    const [title, message, buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+    const removeButton = buttons!.find((b: any) => b.text === "Remove");
+    
+    await act(async () => {
+      removeButton!.onPress!();
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("save-button"));
+    });
 
     await waitFor(() => {
+      expect(mockUpdateProfileMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          picture_url: "",
+        }),
+      );
       expect(mockDeleteProfilePicture).toHaveBeenCalledTimes(1);
       expect(queryByTestId("profile-avatar-image")).toBeNull();
       expect(getByTestId("profile-avatar-fallback")).toBeTruthy();

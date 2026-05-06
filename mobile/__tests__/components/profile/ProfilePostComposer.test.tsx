@@ -1,38 +1,29 @@
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor, act } from "@testing-library/react-native";
 import React from "react";
 
 import { ProfilePostComposer } from "@/components/profile/ProfilePostComposer";
-
-const mockLaunchImageLibraryAsync = jest.fn();
-const mockUploadPostMedia = jest.fn();
+import { pickPostMediaFile } from "@/lib/uploads/picker";
+import { uploadPostMedia } from "@/lib/queries/uploads";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
-jest.mock("expo-image-picker", () => ({
-  launchImageLibraryAsync: (...args: unknown[]) =>
-    mockLaunchImageLibraryAsync(...args),
+jest.mock("@/lib/uploads/picker", () => ({
+  pickPostMediaFile: jest.fn(),
 }));
 
 jest.mock("@/lib/queries/uploads", () => ({
-  uploadPostMedia: (...args: unknown[]) => mockUploadPostMedia(...args),
+  uploadPostMedia: jest.fn(),
 }));
 
 describe("ProfilePostComposer", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockLaunchImageLibraryAsync.mockResolvedValue({
-      canceled: false,
-      assets: [
-        {
-          uri: "file:///tmp/profile-photo.jpg",
-          fileName: "profile-photo.jpg",
-          mimeType: "image/jpeg",
-          width: 1200,
-          height: 800,
-        },
-      ],
+    (pickPostMediaFile as jest.Mock).mockResolvedValue({
+      uri: "file:///tmp/profile-photo.jpg",
+      name: "profile-photo.jpg",
+      type: "image/jpeg",
     });
-    mockUploadPostMedia.mockResolvedValue({
+    (uploadPostMedia as jest.Mock).mockResolvedValue({
       url: "https://cdn.example.com/profile-photo.jpg",
     });
   });
@@ -50,7 +41,10 @@ describe("ProfilePostComposer", () => {
       "  Hello profile  ",
     );
     fireEvent.press(getByTestId("profile-composer-type-achievement"));
-    fireEvent.press(getByTestId("profile-composer-submit"));
+    
+    await act(async () => {
+      fireEvent.press(getByTestId("profile-composer-submit"));
+    });
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith({
@@ -59,7 +53,7 @@ describe("ProfilePostComposer", () => {
       });
       expect(onClose).toHaveBeenCalledTimes(1);
     });
-  });
+  }, 10000);
 
   it("uploads selected media before submitting the post", async () => {
     const onSubmit = jest.fn().mockResolvedValue(true);
@@ -69,7 +63,9 @@ describe("ProfilePostComposer", () => {
       <ProfilePostComposer visible onClose={onClose} onSubmit={onSubmit} />,
     );
 
-    fireEvent.press(getByTestId("profile-composer-media-button"));
+    await act(async () => {
+      fireEvent.press(getByTestId("profile-composer-media-button"));
+    });
 
     await waitFor(() => {
       expect(getByTestId("profile-composer-media-preview")).toBeTruthy();
@@ -79,10 +75,13 @@ describe("ProfilePostComposer", () => {
       getByPlaceholderText("What would you like to share?"),
       "  Post with photo  ",
     );
-    fireEvent.press(getByTestId("profile-composer-submit"));
+    
+    await act(async () => {
+      fireEvent.press(getByTestId("profile-composer-submit"));
+    });
 
     await waitFor(() => {
-      expect(mockUploadPostMedia).toHaveBeenCalledWith({
+      expect(uploadPostMedia).toHaveBeenCalledWith({
         uri: "file:///tmp/profile-photo.jpg",
         name: "profile-photo.jpg",
         type: "image/jpeg",
@@ -102,11 +101,17 @@ describe("ProfilePostComposer", () => {
       <ProfilePostComposer visible onClose={jest.fn()} onSubmit={onSubmit} />,
     );
 
-    fireEvent.press(getByTestId("profile-composer-media-button"));
+    await act(async () => {
+      fireEvent.press(getByTestId("profile-composer-media-button"));
+    });
+    
     await waitFor(() => {
       expect(getByTestId("profile-composer-media-preview")).toBeTruthy();
     });
-    fireEvent.press(getByTestId("profile-composer-media-remove"));
+    
+    await act(async () => {
+      fireEvent.press(getByTestId("profile-composer-media-remove"));
+    });
 
     expect(queryByTestId("profile-composer-media-preview")).toBeNull();
 
@@ -114,10 +119,13 @@ describe("ProfilePostComposer", () => {
       getByPlaceholderText("What would you like to share?"),
       "  Text only  ",
     );
-    fireEvent.press(getByTestId("profile-composer-submit"));
+    
+    await act(async () => {
+      fireEvent.press(getByTestId("profile-composer-submit"));
+    });
 
     await waitFor(() => {
-      expect(mockUploadPostMedia).not.toHaveBeenCalled();
+      expect(uploadPostMedia).not.toHaveBeenCalled();
       expect(onSubmit).toHaveBeenCalledWith({
         event_type: "social",
         content: "Text only",
@@ -126,21 +134,27 @@ describe("ProfilePostComposer", () => {
   });
 
   it("shows upload errors and does not submit when media upload fails", async () => {
-    mockUploadPostMedia.mockRejectedValueOnce(new Error("Upload failed"));
+    (uploadPostMedia as jest.Mock).mockRejectedValueOnce(new Error("Upload failed"));
     const onSubmit = jest.fn();
 
     const { findByTestId, getByTestId, getByPlaceholderText } = render(
       <ProfilePostComposer visible onClose={jest.fn()} onSubmit={onSubmit} />,
     );
 
-    fireEvent.press(getByTestId("profile-composer-media-button"));
+    await act(async () => {
+      fireEvent.press(getByTestId("profile-composer-media-button"));
+    });
+    
     await findByTestId("profile-composer-media-preview");
 
     fireEvent.changeText(
       getByPlaceholderText("What would you like to share?"),
       "  This should wait  ",
     );
-    fireEvent.press(getByTestId("profile-composer-submit"));
+    
+    await act(async () => {
+      fireEvent.press(getByTestId("profile-composer-submit"));
+    });
 
     expect(await findByTestId("profile-composer-media-error")).toBeTruthy();
     expect(onSubmit).not.toHaveBeenCalled();

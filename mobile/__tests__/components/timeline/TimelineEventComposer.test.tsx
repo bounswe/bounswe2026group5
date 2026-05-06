@@ -1,38 +1,29 @@
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor, act } from "@testing-library/react-native";
 import React from "react";
 
 import { TimelineEventComposer } from "@/components/timeline/TimelineEventComposer";
-
-const mockLaunchImageLibraryAsync = jest.fn();
-const mockUploadPostMedia = jest.fn();
+import { pickPostMediaFile } from "@/lib/uploads/picker";
+import { uploadPostMedia } from "@/lib/queries/uploads";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
-jest.mock("expo-image-picker", () => ({
-  launchImageLibraryAsync: (...args: unknown[]) =>
-    mockLaunchImageLibraryAsync(...args),
+jest.mock("@/lib/uploads/picker", () => ({
+  pickPostMediaFile: jest.fn(),
 }));
 
 jest.mock("@/lib/queries/uploads", () => ({
-  uploadPostMedia: (...args: unknown[]) => mockUploadPostMedia(...args),
+  uploadPostMedia: jest.fn(),
 }));
 
 describe("TimelineEventComposer", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockLaunchImageLibraryAsync.mockResolvedValue({
-      canceled: false,
-      assets: [
-        {
-          uri: "file:///tmp/milestone.webp",
-          fileName: "milestone.webp",
-          mimeType: "image/webp",
-          width: 900,
-          height: 600,
-        },
-      ],
+    (pickPostMediaFile as jest.Mock).mockResolvedValue({
+      uri: "file:///tmp/milestone.webp",
+      name: "milestone.webp",
+      type: "image/webp",
     });
-    mockUploadPostMedia.mockResolvedValue({
+    (uploadPostMedia as jest.Mock).mockResolvedValue({
       url: "https://cdn.example.com/milestone.jpg",
     });
   });
@@ -55,7 +46,10 @@ describe("TimelineEventComposer", () => {
     );
     fireEvent.press(getByTestId("timeline-composer-type-progress"));
     fireEvent(getByTestId("timeline-composer-profile-toggle"), "valueChange", true);
-    fireEvent.press(getByTestId("timeline-composer-submit"));
+    
+    await act(async () => {
+      fireEvent.press(getByTestId("timeline-composer-submit"));
+    });
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith({
@@ -74,7 +68,10 @@ describe("TimelineEventComposer", () => {
       <TimelineEventComposer visible onClose={jest.fn()} onSubmit={onSubmit} />,
     );
 
-    fireEvent.press(getByTestId("timeline-composer-media-button"));
+    await act(async () => {
+      fireEvent.press(getByTestId("timeline-composer-media-button"));
+    });
+    
     await waitFor(() => {
       expect(getByTestId("timeline-composer-media-preview")).toBeTruthy();
     });
@@ -83,10 +80,13 @@ describe("TimelineEventComposer", () => {
       getByPlaceholderText("What happened on this journey?"),
       "  Added a diagram  ",
     );
-    fireEvent.press(getByTestId("timeline-composer-submit"));
+    
+    await act(async () => {
+      fireEvent.press(getByTestId("timeline-composer-submit"));
+    });
 
     await waitFor(() => {
-      expect(mockUploadPostMedia).toHaveBeenCalledWith({
+      expect(uploadPostMedia).toHaveBeenCalledWith({
         uri: "file:///tmp/milestone.webp",
         name: "milestone.webp",
         type: "image/webp",

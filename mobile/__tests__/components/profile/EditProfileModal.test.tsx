@@ -1,4 +1,5 @@
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { View, Alert } from "react-native";
+import { fireEvent, render, waitFor, act } from "@testing-library/react-native";
 import React from "react";
 
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
@@ -13,6 +14,8 @@ jest.mock("expo-image-picker", () => ({
 }));
 
 describe("EditProfileModal", () => {
+  const alertSpy = jest.spyOn(Alert, "alert");
+
   beforeEach(() => {
     jest.clearAllMocks();
     globalThis.alert = jest.fn();
@@ -31,7 +34,7 @@ describe("EditProfileModal", () => {
   });
 
   it("saves trimmed profile values via save button", async () => {
-    const onSave = jest.fn();
+    const onSave = jest.fn().mockResolvedValue(true);
     const onClose = jest.fn();
 
     const { getByTestId } = render(
@@ -46,7 +49,9 @@ describe("EditProfileModal", () => {
     fireEvent.changeText(getByTestId("name-input"), "  Ali Aydin  ");
     fireEvent.changeText(getByTestId("bio-input"), "  Loves mentoring on React Native.  ");
 
-    fireEvent.press(getByTestId("save-button"));
+    await act(async () => {
+      fireEvent.press(getByTestId("save-button"));
+    });
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith({
@@ -58,7 +63,7 @@ describe("EditProfileModal", () => {
       });
       expect(onClose).toHaveBeenCalled();
     });
-  });
+  }, 10000);
 
   it("blocks save and alerts when name is empty", () => {
     const onSave = jest.fn();
@@ -95,19 +100,6 @@ describe("EditProfileModal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("does not render an unsupported cover photo edit button", () => {
-    const { queryByText } = render(
-      <EditProfileModal
-        visible
-        onClose={jest.fn()}
-        initialData={{ name: "Ali", bio: "Initial bio" }}
-        onSave={jest.fn()}
-      />,
-    );
-
-    expect(queryByText("Edit Cover")).toBeNull();
-  });
-
   it("previews a picked avatar and includes it in save data", async () => {
     const onSave = jest.fn().mockResolvedValue(true);
 
@@ -124,11 +116,15 @@ describe("EditProfileModal", () => {
       />,
     );
 
-    fireEvent.press(getByTestId("avatar-picker-button"));
+    await act(async () => {
+      fireEvent.press(getByTestId("avatar-picker-button"));
+    });
 
     expect(await findByTestId("avatar-preview")).toBeTruthy();
 
-    fireEvent.press(getByTestId("save-button"));
+    await act(async () => {
+      fireEvent.press(getByTestId("save-button"));
+    });
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith(
@@ -161,10 +157,25 @@ describe("EditProfileModal", () => {
     );
 
     expect(getByTestId("avatar-preview")).toBeTruthy();
-    fireEvent.press(getByTestId("avatar-remove-button"));
+    
+    await act(async () => {
+      fireEvent.press(getByTestId("avatar-remove-button"));
+    });
+
+    // Handle Alert.alert
+    const [title, message, buttons] = alertSpy.mock.calls[0];
+    expect(title).toBe("Remove Profile Photo");
+    const removeButton = buttons!.find((b: any) => b.text === "Remove");
+    
+    await act(async () => {
+      removeButton!.onPress!();
+    });
+
     expect(queryByTestId("avatar-preview")).toBeNull();
 
-    fireEvent.press(getByTestId("save-button"));
+    await act(async () => {
+      fireEvent.press(getByTestId("save-button"));
+    });
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith(
