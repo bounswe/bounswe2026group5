@@ -273,7 +273,12 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_picture_url(self, obj: Profile) -> str:
-        """Return uploaded picture URL or external URL fallback."""
+        """Return uploaded picture URL or external URL fallback, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_picture_url(obj)
+            return ""
         return resolve_picture_url(obj)
 
 
@@ -313,7 +318,12 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_picture_url(self, obj: Profile) -> str:
-        """Return uploaded picture URL or external URL fallback."""
+        """Return uploaded picture URL or external URL fallback, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_picture_url(obj)
+            return ""
         return resolve_picture_url(obj)
 
 
@@ -343,7 +353,12 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_picture_url(self, obj: Profile) -> str:
-        """Return uploaded picture URL or external URL fallback."""
+        """Return uploaded picture URL or external URL fallback, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_picture_url(obj)
+            return ""
         return resolve_picture_url(obj)
 
 
@@ -567,8 +582,14 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
             return _get_display_initials(obj.display_name or "")
         return obj.display_name
 
+    @extend_schema_field(OpenApiTypes.URI)
     def get_picture_url(self, obj: Profile) -> str:
-        """Return uploaded picture URL or external URL fallback."""
+        """Return uploaded picture URL or external URL fallback, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_picture_url(obj)
+            return ""
         return resolve_picture_url(obj)
 
     @extend_schema_field(LocationField)
@@ -628,7 +649,12 @@ class ProfilePostAuthorSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_picture_url(self, obj: Profile) -> str:
-        """Return uploaded picture URL or external URL fallback."""
+        """Return uploaded picture URL or external URL fallback, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_picture_url(obj)
+            return ""
         return resolve_picture_url(obj)
 
 

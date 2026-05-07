@@ -21,6 +21,7 @@ const AVATAR_COLORS = [
 function ProfileAvatar({
                          displayName,
                          pictureUrl,
+                         showInitialsOnly,
                        }: Readonly<{ displayName: string; pictureUrl: string | null; showInitialsOnly: boolean }>) {
   const initials = (displayName || '?')
       .split(' ')
