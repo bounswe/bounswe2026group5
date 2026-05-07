@@ -24,6 +24,7 @@ import {
 } from "@/lib/queries/communityPosts";
 import {
   useCommunityTagDetailQuery,
+  useCommunityTaggableUsersQuery,
   useJoinCommunityTagMutation,
   useLeaveCommunityTagMutation,
 } from "@/lib/queries/communityTags";
@@ -67,6 +68,10 @@ export default function CommunityDetailScreen() {
   const source = Array.isArray(params.from) ? params.from[0] : params.from;
   const currentUsername = useAuthStore((state) => state.user?.username);
   const detailQuery = useCommunityTagDetailQuery(tagId);
+  const taggableUsersQuery = useCommunityTaggableUsersQuery(
+    tagId,
+    Boolean(tagId && detailQuery.data?.is_member),
+  );
   const joinMutation = useJoinCommunityTagMutation(currentUsername);
   const leaveMutation = useLeaveCommunityTagMutation(currentUsername);
   const createPostMutation = useCreateCommunityPostMutation(currentUsername);
@@ -263,7 +268,9 @@ export default function CommunityDetailScreen() {
       {tag?.is_member ? (
         <CommunityPostComposer
           isSubmitting={createPostMutation.isPending}
+          isLoadingTaggableUsers={taggableUsersQuery.isLoading}
           onSubmit={handleCreatePost}
+          taggableUsers={taggableUsersQuery.data?.results ?? []}
         />
       ) : (
         <View className="mb-6 rounded-2xl border border-dashed border-divider bg-surface-card/60 px-4 py-4 dark:border-divider-dark dark:bg-surface-card-dark/60">
@@ -418,6 +425,7 @@ export default function CommunityDetailScreen() {
             post={item}
             expanded
             communityLabel={tag?.name ?? null}
+            mentionSourceCommunityId={tag?.id ?? null}
             onCommunityPress={() => {
               if (tag) {
                 router.push(
@@ -427,6 +435,7 @@ export default function CommunityDetailScreen() {
             }}
           />
         )}
+        ItemSeparatorComponent={() => <View className="h-3" />}
         ListHeaderComponent={headerContent}
         ListEmptyComponent={
           postsQuery.isLoading && offset === 0 ? (

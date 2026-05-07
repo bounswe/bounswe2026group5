@@ -33,6 +33,7 @@ export interface CreateCommunityPostPayload {
   media_url?: string | null;
   show_on_profile?: boolean;
   timestamp?: string | null;
+  tagged_users?: string[];
 }
 
 export interface UpdateCommunityPostPayload {
@@ -42,6 +43,7 @@ export interface UpdateCommunityPostPayload {
   event_type?: CommunityPostEventType;
   media_url?: string | null;
   show_on_profile?: boolean;
+  tagged_users?: string[];
 }
 
 export interface DeleteCommunityPostPayload {
@@ -163,6 +165,7 @@ export function useCreateCommunityPostMutation(currentUsername?: string) {
       media_url,
       show_on_profile,
       timestamp,
+      tagged_users,
     }: CreateCommunityPostPayload) =>
       apiPost<CommunityPost, Omit<CreateCommunityPostPayload, "tagId">>(
         `/api/profiles/tags/${encodeURIComponent(tagId)}/posts/`,
@@ -172,6 +175,7 @@ export function useCreateCommunityPostMutation(currentUsername?: string) {
           ...(media_url ? { media_url } : {}),
           ...(show_on_profile ? { show_on_profile } : {}),
           ...(timestamp ? { timestamp } : {}),
+          ...(tagged_users !== undefined ? { tagged_users } : {}),
         },
       ),
     onSuccess: async (_data, variables) => {

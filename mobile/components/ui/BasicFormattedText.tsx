@@ -6,10 +6,11 @@ type FormattedToken =
   | { type: "bold"; value: string }
   | { type: "italic"; value: string }
   | { type: "strike"; value: string }
-  | { type: "link"; value: string; href: string };
+  | { type: "link"; value: string; href: string }
+  | { type: "mention"; value: string; username: string };
 
 const TOKEN_REGEX =
-  /(\*\*[\s\S]+?\*\*|__[\s\S]+?__|\*[^*\n]+?\*|_[^_\n]+?_|~~[\s\S]+?~~|--[\s\S]+?--|—[\s\S]+?—|–[\s\S]+?–|https?:\/\/[^\s]+|www\.[^\s]+)/g;
+  /(\*\*[\s\S]+?\*\*|__[\s\S]+?__|\*[^*\n]+?\*|_[^_\n]+?_|~~[\s\S]+?~~|--[\s\S]+?--|—[\s\S]+?—|–[\s\S]+?–|https?:\/\/[^\s]+|www\.[^\s]+|@[a-zA-Z0-9_]+)/g;
 
 function trimTrailingLinkPunctuation(value: string): {
   hrefText: string;
@@ -48,6 +49,12 @@ function parseFormattedText(value: string): FormattedToken[] {
       if (trailingText) {
         tokens.push({ type: "text", value: trailingText });
       }
+    } else if (raw.startsWith("@")) {
+      tokens.push({
+        type: "mention",
+        value: raw,
+        username: raw.slice(1),
+      });
     } else if (raw.startsWith("**") || raw.startsWith("__")) {
       tokens.push({ type: "bold", value: raw.slice(2, -2) });
     } else if (raw.startsWith("*") || raw.startsWith("_")) {
@@ -81,11 +88,15 @@ function parseFormattedText(value: string): FormattedToken[] {
 interface BasicFormattedTextProps extends Omit<TextProps, "children"> {
   children: string;
   linkColor?: string;
+  mentionColor?: string;
+  onMentionPress?: (username: string) => void;
 }
 
 export function BasicFormattedText({
   children,
   linkColor = "#2563eb",
+  mentionColor = "#2f7d68",
+  onMentionPress,
   ...textProps
 }: Readonly<BasicFormattedTextProps>) {
   const lines = children.split("\n");
@@ -98,6 +109,8 @@ export function BasicFormattedText({
         const formattedLine = renderFormattedTokens(
           parseFormattedText(lineContent),
           linkColor,
+          mentionColor,
+          onMentionPress,
           lineIndex,
         );
         const content = quoteMatch ? (
@@ -122,6 +135,8 @@ export function BasicFormattedText({
 function renderFormattedTokens(
   tokens: FormattedToken[],
   linkColor: string,
+  mentionColor: string,
+  onMentionPress: ((username: string) => void) | undefined,
   lineIndex: number,
 ) {
   return tokens.map((token, tokenIndex) => {
@@ -136,7 +151,12 @@ function renderFormattedTokens(
         : token.type === "italic"
           ? { fontStyle: "italic" }
           : token.type === "strike"
-            ? { textDecorationLine: "line-through" }
+          ? { textDecorationLine: "line-through" }
+          : token.type === "mention"
+            ? {
+                color: mentionColor,
+                fontWeight: "700",
+              }
             : {
                 color: linkColor,
                 textDecorationLine: "underline",
@@ -152,9 +172,15 @@ function renderFormattedTokens(
             ? () => {
                 void Linking.openURL(token.href);
               }
+            : token.type === "mention" && onMentionPress
+              ? () => onMentionPress(token.username)
             : undefined
         }
-        accessibilityRole={token.type === "link" ? "link" : undefined}
+        accessibilityRole={
+          token.type === "link" || token.type === "mention"
+            ? "link"
+            : undefined
+        }
       >
         {token.value}
       </Text>

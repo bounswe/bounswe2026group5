@@ -6,6 +6,14 @@ import { Linking } from "react-native";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
+const mockPush = jest.fn();
+
+jest.mock("expo-router", () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
+}));
+
 const openUrlSpy = jest
   .spyOn(Linking, "openURL")
   .mockImplementation(() => Promise.resolve({} as never));
@@ -38,6 +46,7 @@ function buildPost(overrides: Partial<ProfilePost> = {}): ProfilePost {
 describe("ProfilePostCard", () => {
   beforeEach(() => {
     openUrlSpy.mockClear();
+    mockPush.mockClear();
   });
 
   it("renders image media in a larger filled preview", () => {
@@ -129,5 +138,58 @@ describe("ProfilePostCard", () => {
     );
 
     expect(queryByText("Milestone")).toBeNull();
+  });
+
+  it("renders tagged usernames and uses returned community names", () => {
+    const { getByText, getByTestId } = render(
+      <ProfilePostCard
+        post={buildPost({
+          community_name: "Backend Guild",
+          tagged_users: [
+            { user_id: "profile-2", username: "ayse" },
+            { user_id: "profile-3", username: "mehmet" },
+          ],
+        })}
+      />,
+    );
+
+    expect(getByText("Backend Guild")).toBeTruthy();
+    expect(getByTestId("post-card-tagged-users-post-1")).toBeTruthy();
+    fireEvent.press(getByTestId("post-card-tagged-user-post-1-ayse"));
+    expect(mockPush).toHaveBeenCalledWith("/user/ayse");
+  });
+
+  it("links inline mentions to user profiles without duplicating tag chips", () => {
+    const { getByText, queryByTestId } = render(
+      <ProfilePostCard
+        post={buildPost({
+          content: "Great pairing with @ayse",
+          tagged_users: [{ user_id: "profile-2", username: "ayse" }],
+        })}
+      />,
+    );
+
+    fireEvent.press(getByText("@ayse"));
+
+    expect(queryByTestId("post-card-tagged-users-post-1")).toBeNull();
+    expect(mockPush).toHaveBeenCalledWith("/user/ayse");
+  });
+
+  it("includes community source context when opening mentions from a community", () => {
+    const { getByText } = render(
+      <ProfilePostCard
+        mentionSourceCommunityId="tag-1"
+        post={buildPost({
+          content: "Great pairing with @ayse",
+          tagged_users: [{ user_id: "profile-2", username: "ayse" }],
+        })}
+      />,
+    );
+
+    fireEvent.press(getByText("@ayse"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/user/ayse?from=community&tagId=tag-1",
+    );
   });
 });

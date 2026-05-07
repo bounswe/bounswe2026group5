@@ -9,6 +9,7 @@ let mockTagId: string | undefined = "tag-1";
 let mockFrom: string | undefined = undefined;
 const mockDetailRefetch = jest.fn();
 const mockDetailQuery = jest.fn();
+const mockTaggableUsersQuery = jest.fn();
 const mockJoinMutation = jest.fn();
 const mockLeaveMutation = jest.fn();
 const mockCommunityPostsQuery = jest.fn();
@@ -43,6 +44,8 @@ jest.mock("@/lib/auth/store", () => ({
 
 jest.mock("@/lib/queries/communityTags", () => ({
   useCommunityTagDetailQuery: (tagId?: string) => mockDetailQuery(tagId),
+  useCommunityTaggableUsersQuery: (...args: unknown[]) =>
+    mockTaggableUsersQuery(...args),
   useJoinCommunityTagMutation: (username?: string) =>
     mockJoinMutation(username),
   useLeaveCommunityTagMutation: (username?: string) =>
@@ -103,6 +106,10 @@ describe("CommunityDetailScreen", () => {
     mockCommunityPostsQuery.mockReturnValue({
       data: undefined,
       isFetching: false,
+    });
+    mockTaggableUsersQuery.mockReturnValue({
+      data: { count: 0, results: [] },
+      isLoading: false,
     });
     mockCreateCommunityPostMutation.mockReturnValue({
       mutateAsync: jest.fn(),

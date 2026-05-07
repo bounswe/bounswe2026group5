@@ -11,6 +11,11 @@ export interface ProfilePostAuthor {
   title: string;
 }
 
+export interface ProfilePostTaggedUser {
+  user_id: string;
+  username: string;
+}
+
 export type ProfilePostCategory = "PrP" | "MCTE" | "CoP";
 
 /**
@@ -36,6 +41,9 @@ export interface ProfilePost {
   last_edited: string | null;
   show_on_profile: boolean;
   community_id: string | null;
+  community_name?: string | null;
+  community_slug?: string | null;
+  tagged_users?: ProfilePostTaggedUser[];
   actor_role: string | null;
   author: ProfilePostAuthor | null;
 }

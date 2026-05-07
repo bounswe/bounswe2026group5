@@ -3,6 +3,7 @@ import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 
 const mockBack = jest.fn();
+const mockReplace = jest.fn();
 const mockCreateRequestMutateAsync = jest.fn();
 const mockResendMutateAsync = jest.fn();
 const mockSubmitReportMutateAsync = jest.fn();
@@ -10,6 +11,8 @@ const mockAvailabilityRefetch = jest.fn();
 const mockBookSlotMutateAsync = jest.fn();
 const mockToastSuccess = jest.fn();
 let mockUsernameParam: string | undefined = "mentor_ada";
+let mockSourceParam: string | undefined;
+let mockTagIdParam: string | undefined;
 let mockAuthUser = {
   username: "mentee_bora",
   app_usage_mode: "MENTEE",
@@ -36,10 +39,15 @@ let mockReviewsData: any = {
 const mockPush = jest.fn();
 
 jest.mock("expo-router", () => ({
-  useLocalSearchParams: () => ({ username: mockUsernameParam }),
+  useLocalSearchParams: () => ({
+    username: mockUsernameParam,
+    from: mockSourceParam,
+    tagId: mockTagIdParam,
+  }),
   useRouter: () => ({
     back: mockBack,
     push: mockPush,
+    replace: mockReplace,
   }),
 }));
 
@@ -245,6 +253,8 @@ describe("MentorProfileScreen email verification gate", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUsernameParam = "mentor_ada";
+    mockSourceParam = undefined;
+    mockTagIdParam = undefined;
     mockAuthUser = {
       username: "mentee_bora",
       app_usage_mode: "MENTEE",
@@ -301,6 +311,22 @@ describe("MentorProfileScreen email verification gate", () => {
     const { findByText } = render(<MentorProfileScreen />);
 
     expect(await findByText("Missing mentor username.")).toBeTruthy();
+  });
+
+  it("returns to the source community when opened from a community mention", async () => {
+    mockSourceParam = "community";
+    mockTagIdParam = "tag-1";
+
+    const { findByText, getByTestId } = render(<MentorProfileScreen />);
+
+    expect(await findByText("Ada Mentor")).toBeTruthy();
+
+    fireEvent.press(getByTestId("user-profile-back-button"));
+
+    expect(mockReplace).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1?from=community",
+    );
+    expect(mockBack).not.toHaveBeenCalled();
   });
 
   it("shows profile load failures", async () => {

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { type Href, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Image, Linking, Text, TouchableOpacity, View } from "react-native";
 
@@ -72,11 +73,25 @@ function isImageMediaUrl(mediaUrl: string): boolean {
   return /\.(jpe?g|png|gif|webp)$/.test(filename) || !filename.includes(".");
 }
 
+function getUnmentionedTaggedUsers(post: ProfilePost) {
+  const mentionedUsernames = new Set(
+    Array.from(post.content.matchAll(/(^|\s)@([a-zA-Z0-9_]+)/g)).map((match) =>
+      (match[2] ?? "").toLowerCase(),
+    ),
+  );
+
+  return (post.tagged_users ?? []).filter((user) => {
+    const username = user.username.trim();
+    return username && !mentionedUsernames.has(username.toLowerCase());
+  });
+}
+
 interface ProfilePostCardProps {
   post: ProfilePost;
   /** When true, content is not truncated. Default: false (preview mode). */
   expanded?: boolean;
   communityLabel?: string | null;
+  mentionSourceCommunityId?: string | null;
   onCommunityPress?: (communityId: string) => void;
 }
 
@@ -89,17 +104,28 @@ export function ProfilePostCard({
   post,
   expanded = false,
   communityLabel,
+  mentionSourceCommunityId,
   onCommunityPress,
 }: Readonly<ProfilePostCardProps>) {
+  const router = useRouter();
   const label = EVENT_TYPE_LABELS[post.event_type] ?? post.event_type;
   const dateLabel = formatPostTimestamp(post.timestamp);
+  const effectiveCommunityLabel = communityLabel ?? post.community_name ?? null;
   const authorName =
     post.author?.display_name || post.author?.username || "Unknown user";
   const authorSubtitle = post.author?.title || post.author?.username || "";
   const accentColor = getAccentColor(post.event_type);
   const iconName = getIconName(post.category, post.event_type);
   const hasImageMedia = post.media_url ? isImageMediaUrl(post.media_url) : false;
+  const unmentionedTaggedUsers = getUnmentionedTaggedUsers(post);
   const [focusedImageUrl, setFocusedImageUrl] = useState<string | null>(null);
+  const openUserProfile = (username: string) => {
+    const encodedUsername = encodeURIComponent(username);
+    const route = mentionSourceCommunityId
+      ? `/(tabs)/user/${encodedUsername}?from=community&tagId=${encodeURIComponent(mentionSourceCommunityId)}`
+      : `/user/${encodedUsername}`;
+    router.push(route as Href);
+  };
 
   return (
     <View
@@ -138,7 +164,7 @@ export function ProfilePostCard({
             >
               {authorSubtitle ? `${authorSubtitle} - ${dateLabel}` : dateLabel}
             </Text>
-            {post.category === "CoP" && communityLabel ? (
+            {post.category === "CoP" && effectiveCommunityLabel ? (
               <TouchableOpacity
                 testID={`post-card-community-${post.id}`}
                 activeOpacity={post.community_id ? 0.75 : 1}
@@ -157,7 +183,7 @@ export function ProfilePostCard({
                   color="#6b7280"
                 />
                 <Text className="text-[11px] text-on-surface-muted dark:text-on-surface-muted-dark">
-                  {communityLabel}
+                  {effectiveCommunityLabel}
                 </Text>
               </TouchableOpacity>
             ) : null}
@@ -183,9 +209,33 @@ export function ProfilePostCard({
           testID={`post-card-content-${post.id}`}
           numberOfLines={expanded ? undefined : 3}
           className="text-sm leading-5 text-on-surface dark:text-on-surface-dark"
+          onMentionPress={openUserProfile}
         >
           {post.content}
         </BasicFormattedText>
+      ) : null}
+
+      {unmentionedTaggedUsers.length > 0 ? (
+        <View
+          testID={`post-card-tagged-users-${post.id}`}
+          className="mt-3 flex-row flex-wrap items-center gap-2"
+        >
+          <Text className="text-xs font-semibold text-on-surface-muted dark:text-on-surface-muted-dark">
+            With
+          </Text>
+          {unmentionedTaggedUsers.map((user) => (
+            <TouchableOpacity
+              key={`${user.user_id}-${user.username}`}
+              testID={`post-card-tagged-user-${post.id}-${user.username}`}
+              activeOpacity={0.75}
+              onPress={() => openUserProfile(user.username)}
+            >
+              <Text className="text-xs font-bold text-primary dark:text-primary-dim">
+                @{user.username}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       ) : null}
 
       {post.media_url && hasImageMedia ? (
