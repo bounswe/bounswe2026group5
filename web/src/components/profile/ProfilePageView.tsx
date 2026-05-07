@@ -249,7 +249,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
         </main>
     )
   }
-  const openSlots = slots.filter(s => !s.is_booked)
+  const openSlots = slots.filter(s => s.status !== 'BOOKED')
 
     // MENTOR layout — restructure to put calendar full width below
     return (

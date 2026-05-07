@@ -29,7 +29,7 @@ class SkillAdmin(admin.ModelAdmin):
 
 @admin.register(AvailabilitySlot)
 class AvailabilitySlotAdmin(admin.ModelAdmin):
-    list_display = ("profile", "start_at", "end_at", "is_booked", "created_at")
-    list_filter = ("is_booked",)
+    list_display = ("profile", "start_at", "end_at", "status", "created_at")
+    list_filter = ("status",)
     search_fields = ("profile__display_name", "profile__user__email")
     ordering = ("start_at",)

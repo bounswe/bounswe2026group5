@@ -434,6 +434,7 @@ class CreateRequestAPIViewTests(MentorshipRequestAPIBaseTestCase):
         )
         self.assertEqual(response.status_code, 401)
 
+    @override_settings(REQUIRE_EMAIL_VERIFICATION=True)
     def test_unverified_email_mentee_cannot_create_request(self) -> None:
         """Issue #228: gated endpoints must reject users with unverified email."""
         self.mentee_user.is_email_verified = False
@@ -562,7 +563,7 @@ class RespondToRequestAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], "ACCEPTED")
         self.mentor_slot.refresh_from_db(from_queryset=None)
-        self.assertTrue(self.mentor_slot.is_booked)
+        self.assertEqual(self.mentor_slot.status, AvailabilitySlot.Status.BOOKED)
         self.assertEqual(self.mentor_slot.booked_by, self.mentee_user)
         self.assertTrue(Match.objects.filter(request=self.pending_request).exists())
 
@@ -1245,14 +1246,14 @@ class CancelSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
         response = self.mentee_client.post(self._cancel_url(session.id))
         self.assertEqual(response.status_code, 200)
         self.mentor_slot.refresh_from_db()
-        self.assertFalse(self.mentor_slot.is_booked)
+        self.assertEqual(self.mentor_slot.status, AvailabilitySlot.Status.AVAILABLE)
 
     def test_mentor_can_cancel(self) -> None:
         match, session = self._setup_active_match_with_booking()
         response = self.mentor_client.post(self._cancel_url(session.id))
         self.assertEqual(response.status_code, 200)
         self.mentor_slot.refresh_from_db()
-        self.assertFalse(self.mentor_slot.is_booked)
+        self.assertEqual(self.mentor_slot.status, AvailabilitySlot.Status.AVAILABLE)
 
     def test_slot_reference_cleared_after_cancel(self) -> None:
         match, session = self._setup_active_match_with_booking()
@@ -1340,14 +1341,14 @@ class CancelSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
         slot_c_payload = next(
             item for item in availability_response.data if str(item["id"]) == str(slot_c.id)
         )
-        self.assertTrue(slot_c_payload["is_booked"])
+        self.assertEqual(slot_c_payload["status"], "BOOKED")
         self.assertIsNotNone(slot_c_payload["sessionId"])
         self.assertEqual(slot_c_payload["sessionId"], str(session_c.id))
 
         third_cancel_response = self.mentee_client.post(self._cancel_url(session_c.id))
         self.assertEqual(third_cancel_response.status_code, 200)
         slot_c.refresh_from_db()
-        self.assertFalse(slot_c.is_booked)
+        self.assertEqual(slot_c.status, AvailabilitySlot.Status.AVAILABLE)
 
 
 class RescheduleSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
@@ -1392,7 +1393,7 @@ class RescheduleSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
             {"new_slot_id": str(self.mentor_slot_2.id)},
         )
         self.mentor_slot.refresh_from_db()
-        self.assertFalse(self.mentor_slot.is_booked)
+        self.assertEqual(self.mentor_slot.status, AvailabilitySlot.Status.AVAILABLE)
 
     def test_new_slot_booked_after_reschedule(self) -> None:
         _, _, session = self._setup_active_match_with_booking()
@@ -1401,7 +1402,7 @@ class RescheduleSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
             {"new_slot_id": str(self.mentor_slot_2.id)},
         )
         self.mentor_slot_2.refresh_from_db()
-        self.assertTrue(self.mentor_slot_2.is_booked)
+        self.assertEqual(self.mentor_slot_2.status, AvailabilitySlot.Status.BOOKED)
 
     def test_request_slot_updated_after_reschedule(self) -> None:
         _, request_obj, session = self._setup_active_match_with_booking()
@@ -1468,11 +1469,11 @@ class RescheduleSessionAPIViewTests(MentorshipRequestAPIBaseTestCase):
         self.assertEqual(response.status_code, 400)
 
         self.mentor_slot.refresh_from_db()
-        self.assertTrue(self.mentor_slot.is_booked)
+        self.assertEqual(self.mentor_slot.status, AvailabilitySlot.Status.BOOKED)
         self.assertEqual(self.mentor_slot.booked_by, self.mentee_user)
 
         self.mentor_slot_2.refresh_from_db()
-        self.assertTrue(self.mentor_slot_2.is_booked)
+        self.assertEqual(self.mentor_slot_2.status, AvailabilitySlot.Status.BOOKED)
         self.assertEqual(self.mentor_slot_2.booked_by, self.other_user)
 
         request_obj.refresh_from_db()
@@ -1535,7 +1536,7 @@ class MentorshipServiceTests(TestCase):
         )
 
         # 4. Assert sync
-        self.assertTrue(slot.is_booked)
+        self.assertEqual(slot.status, AvailabilitySlot.Status.BOOKED)
         self.assertEqual(slot.booked_by, self.mentee_user)
 
         session = MeetingSession.objects.filter(match=match, source_slot=slot).first()
@@ -1589,7 +1590,7 @@ class MentorshipServiceTests(TestCase):
         )
 
         booked_slot.refresh_from_db(from_queryset=None)
-        self.assertTrue(booked_slot.is_booked)
+        self.assertEqual(booked_slot.status, AvailabilitySlot.Status.BOOKED)
         self.assertEqual(booked_slot.booked_by, actor_without_profile)
         self.assertFalse(MeetingSession.objects.filter(source_slot=booked_slot).exists())
 
@@ -2060,8 +2061,8 @@ class MentorshipSerializerBranchTests(TestCase):
             password="SecurePass123",
         )
         self.future_slot.booked_by = unprofiled_user
-        self.future_slot.is_booked = True
-        self.future_slot.save(update_fields=["booked_by", "is_booked"])
+        self.future_slot.status = AvailabilitySlot.Status.BOOKED
+        self.future_slot.save(update_fields=["booked_by", "status"])
 
         serialized = cast(dict[str, Any], UpcomingMentorSessionSerializer(self.future_slot).data)
         self.assertIsNone(serialized["mentee"])

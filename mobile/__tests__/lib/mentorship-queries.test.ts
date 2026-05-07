@@ -204,21 +204,21 @@ describe("mentorship query mappers", () => {
         date: "2026-04-06",
         startTime: "10:00:00",
         endTime: "11:00:00",
-        is_booked: false,
+        status: "AVAILABLE",
       },
       {
         id: "slot-2",
         date: "2026-04-06",
         startTime: "15:00:00",
         endTime: "16:30:00",
-        is_booked: false,
+        status: "AVAILABLE",
       },
       {
         id: "slot-3",
         date: "2026-04-07",
         startTime: "09:00:00",
         endTime: "10:00:00",
-        is_booked: true,
+        status: "BOOKED",
       },
     ];
 

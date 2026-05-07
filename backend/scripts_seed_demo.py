@@ -220,9 +220,7 @@ def seed_availability(profile, offset_days: int) -> None:
             profile=profile,
             start_at=start_at,
             end_at=end_at,
-            is_booked=False,
         )
-
 
 def hide_non_scenario_mentors(active_usernames: set[str]) -> None:
     """Keep discover clean by hiding mentor profiles outside the active scenario."""
@@ -340,7 +338,6 @@ def seed_demo_data() -> None:
         profile = upsert_profile(user, seed)
         profile_map[seed.username] = profile
         user_map[seed.username] = user
-
     hide_non_scenario_mentors(active_usernames={seed.username for seed in MENTORS})
     seed_requests_and_matches(profile_map=profile_map, user_map=user_map)
 
