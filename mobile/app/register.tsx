@@ -535,7 +535,7 @@ export default function RegisterScreen() {
             <View className="gap-1.5">
               <Pressable
                 onPress={() => setShareRegistrationLocation((value) => !value)}
-                className="flex-row items-start gap-3 rounded-xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4"
+                className="flex-row items-start gap-3"
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: shareRegistrationLocation }}
                 accessibilityLabel="Use my location to find nearby mentors"
@@ -555,16 +555,9 @@ export default function RegisterScreen() {
                     <Ionicons name="checkmark" size={13} color="white" />
                   )}
                 </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-bold text-on-surface dark:text-on-surface-dark">
-                    Use my location to find nearby mentors
-                  </Text>
-                  <Text className="mt-1 text-xs leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
-                    We will ask your device for permission during signup. You
-                    can skip this now and change precise sharing later in
-                    Settings.
-                  </Text>
-                </View>
+                <Text className="flex-1 text-sm font-medium text-on-surface dark:text-on-surface-dark leading-snug">
+                  Use my location to find nearby mentors.
+                </Text>
               </Pressable>
             </View>
 
