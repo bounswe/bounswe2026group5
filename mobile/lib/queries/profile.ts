@@ -55,11 +55,12 @@ export interface ProfilePostFeedResponse {
 }
 
 interface UpdateProfilePayload {
-  username: string;
+  username?: string;
   display_name?: string;
   bio?: string;
   skills?: string[];
   picture_url?: string;
+  share_precise_location?: boolean;
 }
 
 interface ProfilePatchResponse {
@@ -71,8 +72,16 @@ interface ProfilePatchResponse {
   title: string;
   is_visible: boolean;
   show_initials_only: boolean;
+  share_precise_location: boolean;
   created_at: string;
   updated_at: string;
+}
+
+interface OwnProfileSettingsResponse {
+  id: string;
+  username: string;
+  display_name: string;
+  share_precise_location: boolean;
 }
 
 interface PublicProfileRatingResponse {
@@ -141,6 +150,17 @@ export function useUpdateOwnProfileMutation() {
         Omit<UpdateProfilePayload, "username">
       >(`/api/profiles/me/`, body);
     },
+  });
+}
+
+/**
+ * Retrieve own profile fields needed by settings.
+ */
+export function useOwnProfileSettingsQuery() {
+  return useQuery({
+    queryKey: ["profiles", "me", "settings"],
+    queryFn: () => apiGet<OwnProfileSettingsResponse>("/api/profiles/me/"),
+    staleTime: 60_000,
   });
 }
 
