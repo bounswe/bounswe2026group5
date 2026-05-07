@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useState } from "react";
 import { Image, Linking, Text, TouchableOpacity, View } from "react-native";
 
+import { BasicFormattedText } from "@/components/ui/BasicFormattedText";
+import { FocusedImageModal } from "@/components/ui/FocusedImageModal";
 import type { ProfilePost } from "@/lib/queries/profile";
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
@@ -97,6 +99,7 @@ export function ProfilePostCard({
   const accentColor = getAccentColor(post.event_type);
   const iconName = getIconName(post.category, post.event_type);
   const hasImageMedia = post.media_url ? isImageMediaUrl(post.media_url) : false;
+  const [focusedImageUrl, setFocusedImageUrl] = useState<string | null>(null);
 
   return (
     <View
@@ -176,24 +179,30 @@ export function ProfilePostCard({
 
       {/* Content */}
       {post.content ? (
-        <Text
+        <BasicFormattedText
           testID={`post-card-content-${post.id}`}
           numberOfLines={expanded ? undefined : 3}
           className="text-sm leading-5 text-on-surface dark:text-on-surface-dark"
         >
           {post.content}
-        </Text>
+        </BasicFormattedText>
       ) : null}
 
       {post.media_url && hasImageMedia ? (
-        <Image
-          testID={`post-card-media-${post.id}`}
-          source={{ uri: post.media_url }}
-          className={`mt-3 w-full rounded-xl bg-surface-active dark:bg-surface-active-dark ${
-            expanded ? "h-72" : "h-52"
-          }`}
-          resizeMode="cover"
-        />
+        <TouchableOpacity
+          testID={`post-card-media-button-${post.id}`}
+          activeOpacity={0.9}
+          onPress={() => setFocusedImageUrl(post.media_url ?? null)}
+        >
+          <Image
+            testID={`post-card-media-${post.id}`}
+            source={{ uri: post.media_url }}
+            className={`mt-3 w-full rounded-xl bg-surface-active dark:bg-surface-active-dark ${
+              expanded ? "h-72" : "h-52"
+            }`}
+            resizeMode="cover"
+          />
+        </TouchableOpacity>
       ) : null}
 
       {post.media_url && !hasImageMedia ? (
@@ -221,6 +230,11 @@ export function ProfilePostCard({
           </View>
         </TouchableOpacity>
       ) : null}
+      <FocusedImageModal
+        visible={Boolean(focusedImageUrl)}
+        imageUrl={focusedImageUrl}
+        onClose={() => setFocusedImageUrl(null)}
+      />
     </View>
   );
 }
