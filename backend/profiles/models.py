@@ -52,7 +52,6 @@ class Profile(models.Model):
     title = models.CharField(max_length=120, blank=True, default="")
     location = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     share_precise_location = models.BooleanField(default=True)
-    is_visible = models.BooleanField(default=True)
     show_initials_only = models.BooleanField(default=False)
     skills = ArrayField(
         models.CharField(max_length=120),
@@ -73,7 +72,7 @@ class Profile(models.Model):
         db_table = "profiles"
         ordering = ["display_name", "-created_at"]
         indexes = [
-            models.Index(fields=["is_visible", "show_initials_only"]),
+            models.Index(fields=["show_initials_only"]),
         ]
 
     def __str__(self) -> str:
