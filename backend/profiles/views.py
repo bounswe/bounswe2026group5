@@ -1219,7 +1219,7 @@ class ProfileReviewsByUsernameAPIView(ProfileLookupMixin, APIView):
             Feedback.objects.filter(match__mentor=profile)
             .exclude(submitted_by=profile)
             .exclude(text="")
-            .order_by("id")
+            .order_by("created_at", "id")
         )
 
         total = min(feedback_qs.count(), allowed_reviews_count)

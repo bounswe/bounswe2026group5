@@ -52,6 +52,42 @@ export class DashboardPage {
     await expect(this.page.getByText(`Session with ${peerName}`).first()).toBeVisible();
   }
 
+  async expectRateMentorCard(mentorName: string) {
+    await expect(this.page.getByRole('heading', { name: 'Rate Your Mentors' })).toBeVisible();
+    const ratingCard = this.findRatingCard(mentorName);
+    await expect(ratingCard).toBeVisible();
+    await expect(ratingCard.getByRole('button', { name: /^Rate$/i })).toBeVisible();
+  }
+
+  async openRatingModal(mentorName: string) {
+    const ratingCard = this.findRatingCard(mentorName);
+    await expect(ratingCard).toBeVisible();
+    await ratingCard.getByRole('button', { name: /^Rate$/i }).click();
+    await expect(this.page.getByRole('dialog')).toBeVisible();
+    await expect(this.page.getByRole('heading', { name: `Rate your session with ${mentorName}` })).toBeVisible();
+  }
+
+  async expectRatingSubmitDisabled() {
+    await expect(this.page.getByRole('button', { name: 'Submit Rating' })).toBeDisabled();
+  }
+
+  async selectRating(stars: number, expectedLabel: string) {
+    await this.page.getByRole('button', { name: `Rate ${stars} stars` }).click();
+    await expect(this.page.getByText(expectedLabel)).toBeVisible();
+    await expect(this.page.getByRole('button', { name: 'Submit Rating' })).toBeEnabled();
+  }
+
+  async submitRating(reviewText: string) {
+    await this.page.getByPlaceholder('Share your experience with this mentor...').fill(reviewText);
+    await this.page.getByRole('button', { name: 'Submit Rating' }).click();
+    await expect(this.page.getByText('Rating submitted!').first()).toBeVisible();
+    await expect(this.page.getByRole('dialog')).toHaveCount(0);
+  }
+
+  async expectMentorNotPendingRating(mentorName: string) {
+    await expect(this.findRatingCard(mentorName)).toHaveCount(0);
+  }
+
   async openSessionManager(peerName: string) {
     const sessionCard = this.page.locator('.island-shell', {
       has: this.page.getByText(`Session with ${peerName}`),
@@ -96,5 +132,13 @@ export class DashboardPage {
       await expect(requestCard.getByText(coverLetter)).toBeVisible();
     }
     return requestCard;
+  }
+
+  private findRatingCard(mentorName: string) {
+    return this.page.locator('.island-shell', {
+      has: this.page.getByText(mentorName),
+    }).filter({
+      has: this.page.getByRole('button', { name: /^Rate$/i }),
+    }).first();
   }
 }
