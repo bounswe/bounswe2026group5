@@ -192,4 +192,18 @@ describe("ProfilePostCard", () => {
       "/(tabs)/user/ayse?from=community&tagId=tag-1",
     );
   });
+
+  it("shows owner actions only when the card can be managed", () => {
+    const onEdit = jest.fn();
+    const { getByTestId, queryByTestId, rerender } = render(
+      <ProfilePostCard post={buildPost()} onEdit={onEdit} />,
+    );
+
+    expect(queryByTestId("post-card-actions-post-1")).toBeNull();
+
+    rerender(<ProfilePostCard post={buildPost()} canManage onEdit={onEdit} />);
+    fireEvent.press(getByTestId("post-card-actions-post-1"));
+
+    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "post-1" }));
+  });
 });

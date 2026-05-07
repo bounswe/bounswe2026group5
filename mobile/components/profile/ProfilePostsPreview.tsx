@@ -3,14 +3,16 @@ import React from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 
 import { ProfilePostCard } from "@/components/profile/ProfilePostCard";
-import { useProfilePostsQuery } from "@/lib/queries/profile";
+import { type ProfilePost, useProfilePostsQuery } from "@/lib/queries/profile";
 
 interface ProfilePostsPreviewProps {
   username: string;
   onViewAll: () => void;
   onCompose?: () => void;
   communityLabelsById?: Record<string, string>;
+  canManagePosts?: boolean;
   onOpenCommunity?: (communityId: string) => void;
+  onEditPost?: (post: ProfilePost) => void;
 }
 
 /**
@@ -27,7 +29,9 @@ export function ProfilePostsPreview({
   onViewAll,
   onCompose,
   communityLabelsById,
+  canManagePosts = false,
   onOpenCommunity,
+  onEditPost,
 }: Readonly<ProfilePostsPreviewProps>) {
   const postsQuery = useProfilePostsQuery(username, { limit: 3 });
 
@@ -82,11 +86,16 @@ export function ProfilePostsPreview({
           <ProfilePostCard
             key={post.id}
             post={post}
+            canManage={
+              canManagePosts &&
+              (post.category === "PrP" || post.category === "CoP")
+            }
             communityLabel={
               post.community_id
                 ? communityLabelsById?.[post.community_id]
                 : undefined
             }
+            onEdit={onEditPost}
             onCommunityPress={onOpenCommunity}
           />
         ))}

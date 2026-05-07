@@ -14,6 +14,8 @@ const mockJoinMutation = jest.fn();
 const mockLeaveMutation = jest.fn();
 const mockCommunityPostsQuery = jest.fn();
 const mockCreateCommunityPostMutation = jest.fn();
+const mockUpdateCommunityPostMutation = jest.fn();
+const mockDeleteCommunityPostMutation = jest.fn();
 let focusCleanup: (() => void) | undefined;
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
@@ -57,6 +59,10 @@ jest.mock("@/lib/queries/communityPosts", () => ({
     mockCommunityPostsQuery(...args),
   useCreateCommunityPostMutation: (username?: string) =>
     mockCreateCommunityPostMutation(username),
+  useUpdateCommunityPostMutation: (username?: string) =>
+    mockUpdateCommunityPostMutation(username),
+  useDeleteCommunityPostMutation: (username?: string) =>
+    mockDeleteCommunityPostMutation(username),
 }));
 
 describe("CommunityDetailScreen", () => {
@@ -112,6 +118,14 @@ describe("CommunityDetailScreen", () => {
       isLoading: false,
     });
     mockCreateCommunityPostMutation.mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
+    mockUpdateCommunityPostMutation.mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
+    mockDeleteCommunityPostMutation.mockReturnValue({
       mutateAsync: jest.fn(),
       isPending: false,
     });

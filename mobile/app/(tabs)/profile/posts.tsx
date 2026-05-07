@@ -11,11 +11,23 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProfilePostCard } from "@/components/profile/ProfilePostCard";
+import { ProfilePostEditSheet } from "@/components/profile/ProfilePostEditSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useAuthStore } from "@/lib/auth/store";
-import { useMyCommunityTagsQuery } from "@/lib/queries/communityTags";
-import type { ProfilePost } from "@/lib/queries/profile";
-import { useProfilePostsQuery } from "@/lib/queries/profile";
+import {
+  useDeleteCommunityPostMutation,
+  useUpdateCommunityPostMutation,
+} from "@/lib/queries/communityPosts";
+import {
+  useCommunityTaggableUsersQuery,
+  useMyCommunityTagsQuery,
+} from "@/lib/queries/communityTags";
+import {
+  type ProfilePost,
+  useDeleteProfilePostMutation,
+  useProfilePostsQuery,
+  useUpdateProfilePostMutation,
+} from "@/lib/queries/profile";
 
 const PAGE_SIZE = 20;
 
@@ -29,9 +41,25 @@ export default function OwnPostsScreen() {
   const router = useRouter();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const myCommunitiesQuery = useMyCommunityTagsQuery(currentUsername);
+  const updateProfilePostMutation =
+    useUpdateProfilePostMutation(currentUsername);
+  const deleteProfilePostMutation =
+    useDeleteProfilePostMutation(currentUsername);
+  const updateCommunityPostMutation =
+    useUpdateCommunityPostMutation(currentUsername);
+  const deleteCommunityPostMutation =
+    useDeleteCommunityPostMutation(currentUsername);
 
   const [offset, setOffset] = useState(0);
   const [allPosts, setAllPosts] = useState<ProfilePost[]>([]);
+  const [selectedPost, setSelectedPost] = useState<ProfilePost | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const selectedCommunityPostTagId =
+    selectedPost?.category === "CoP" ? selectedPost.community_id : null;
+  const taggableUsersQuery = useCommunityTaggableUsersQuery(
+    selectedCommunityPostTagId ?? undefined,
+    Boolean(selectedCommunityPostTagId),
+  );
 
   const postsQuery = useProfilePostsQuery(currentUsername, {
     limit: PAGE_SIZE,
@@ -63,6 +91,78 @@ export default function OwnPostsScreen() {
   const handleLoadMore = () => {
     if (!postsQuery.isFetching && hasMore) {
       setOffset((prev) => prev + PAGE_SIZE);
+    }
+  };
+
+  const handleSavePost = async (
+    post: ProfilePost,
+    payload: {
+      content: string;
+      event_type: ProfilePost["event_type"];
+      show_on_profile?: boolean;
+      tagged_users?: string[];
+    },
+  ) => {
+    try {
+      setActionError(null);
+
+      if (post.category === "PrP") {
+        const updatedPost = await updateProfilePostMutation.mutateAsync({
+          eventId: post.id,
+          content: payload.content,
+          event_type: payload.event_type,
+        });
+        setAllPosts((previousPosts) =>
+          previousPosts.map((item) =>
+            item.id === updatedPost.id ? updatedPost : item,
+          ),
+        );
+      } else if (post.category === "CoP" && post.community_id) {
+        const updatedPost = await updateCommunityPostMutation.mutateAsync({
+          tagId: post.community_id,
+          eventId: post.id,
+          content: payload.content,
+          event_type: payload.event_type,
+          show_on_profile: payload.show_on_profile,
+          tagged_users: payload.tagged_users,
+        });
+        setAllPosts((previousPosts) =>
+          previousPosts.map((item) =>
+            item.id === updatedPost.id ? updatedPost : item,
+          ),
+        );
+      }
+
+      setSelectedPost(null);
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : "Could not update post.",
+      );
+    }
+  };
+
+  const handleDeletePost = async (post: ProfilePost) => {
+    try {
+      setActionError(null);
+
+      if (post.category === "PrP") {
+        await deleteProfilePostMutation.mutateAsync({ eventId: post.id });
+      } else if (post.category === "CoP" && post.community_id) {
+        await deleteCommunityPostMutation.mutateAsync({
+          tagId: post.community_id,
+          eventId: post.id,
+          show_on_profile: post.show_on_profile,
+        });
+      }
+
+      setAllPosts((previousPosts) =>
+        previousPosts.filter((item) => item.id !== post.id),
+      );
+      setSelectedPost(null);
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : "Could not delete post.",
+      );
     }
   };
 
@@ -120,15 +220,24 @@ export default function OwnPostsScreen() {
               </Text>
             </View>
           }
+          ListHeaderComponent={
+            actionError ? (
+              <View className="mb-4">
+                <ErrorBanner message={actionError} />
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => (
             <ProfilePostCard
               post={item}
               expanded
+              canManage={item.category === "PrP" || item.category === "CoP"}
               communityLabel={
                 item.community_id
                   ? communityLabelsById[item.community_id]
                   : undefined
               }
+              onEdit={setSelectedPost}
               onCommunityPress={(communityId) =>
                 router.push(
                   `/(tabs)/community/${encodeURIComponent(communityId)}?from=profile`,
@@ -147,6 +256,22 @@ export default function OwnPostsScreen() {
           }
         />
       )}
+      <ProfilePostEditSheet
+        post={selectedPost}
+        isDeleting={
+          deleteProfilePostMutation.isPending ||
+          deleteCommunityPostMutation.isPending
+        }
+        isLoadingTaggableUsers={taggableUsersQuery.isLoading}
+        isSaving={
+          updateProfilePostMutation.isPending ||
+          updateCommunityPostMutation.isPending
+        }
+        onClose={() => setSelectedPost(null)}
+        onDelete={handleDeletePost}
+        onSave={handleSavePost}
+        taggableUsers={taggableUsersQuery.data?.results ?? []}
+      />
     </View>
   );
 }

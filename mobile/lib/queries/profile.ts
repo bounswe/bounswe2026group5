@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiGet, apiPatch, apiPost } from "@/lib/api/client";
+import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api/client";
 
 /** Minimal author shape embedded in each profile post. */
 export interface ProfilePostAuthor {
@@ -53,6 +53,17 @@ export interface CreateProfilePostPayload {
   content: string;
   media_url?: string | null;
   timestamp?: string | null;
+}
+
+export interface UpdateProfilePostPayload {
+  eventId: string;
+  event_type?: ProfilePost["event_type"];
+  content?: string;
+  media_url?: string | null;
+}
+
+export interface DeleteProfilePostPayload {
+  eventId: string;
 }
 
 export interface ProfilePostFeedResponse {
@@ -189,6 +200,39 @@ export function useCreateProfilePostMutation(currentUsername?: string) {
           ...(payload.timestamp ? { timestamp: payload.timestamp } : {}),
         },
       ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["profiles", currentUsername ?? "anonymous", "posts"],
+      });
+      await queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    },
+  });
+}
+
+export function useUpdateProfilePostMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ eventId, ...payload }: UpdateProfilePostPayload) =>
+      apiPatch<ProfilePost, Omit<UpdateProfilePostPayload, "eventId">>(
+        `/api/profiles/me/posts/${encodeURIComponent(eventId)}/`,
+        payload,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["profiles", currentUsername ?? "anonymous", "posts"],
+      });
+      await queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    },
+  });
+}
+
+export function useDeleteProfilePostMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ eventId }: DeleteProfilePostPayload) =>
+      apiDelete<void>(`/api/profiles/me/posts/${encodeURIComponent(eventId)}/`),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ["profiles", currentUsername ?? "anonymous", "posts"],

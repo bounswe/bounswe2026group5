@@ -90,9 +90,11 @@ interface ProfilePostCardProps {
   post: ProfilePost;
   /** When true, content is not truncated. Default: false (preview mode). */
   expanded?: boolean;
+  canManage?: boolean;
   communityLabel?: string | null;
   mentionSourceCommunityId?: string | null;
   onCommunityPress?: (communityId: string) => void;
+  onEdit?: (post: ProfilePost) => void;
 }
 
 /**
@@ -103,9 +105,11 @@ interface ProfilePostCardProps {
 export function ProfilePostCard({
   post,
   expanded = false,
+  canManage = false,
   communityLabel,
   mentionSourceCommunityId,
   onCommunityPress,
+  onEdit,
 }: Readonly<ProfilePostCardProps>) {
   const router = useRouter();
   const label = EVENT_TYPE_LABELS[post.event_type] ?? post.event_type;
@@ -189,6 +193,16 @@ export function ProfilePostCard({
             ) : null}
           </View>
         </View>
+        {canManage ? (
+          <TouchableOpacity
+            testID={`post-card-actions-${post.id}`}
+            activeOpacity={0.75}
+            onPress={() => onEdit?.(post)}
+            className="h-8 w-8 items-center justify-center rounded-lg bg-surface-active dark:bg-surface-active-dark"
+          >
+            <Ionicons name="pencil-outline" size={15} color="#6b7280" />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <View className="mb-2">
