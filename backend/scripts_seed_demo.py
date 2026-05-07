@@ -156,7 +156,6 @@ def upsert_profile(user, seed: SeedUser):
     profile.bio = seed.bio
     profile.title = seed.title
     profile.picture_url = ""
-    profile.is_visible = True
     profile.show_initials_only = seed.show_initials_only
     profile.skills = seed.skills
     profile.rating = seed.rating
@@ -222,17 +221,6 @@ def seed_availability(profile, offset_days: int) -> None:
             end_at=end_at,
             is_booked=False,
         )
-
-
-def hide_non_scenario_mentors(active_usernames: set[str]) -> None:
-    """Keep discover clean by hiding mentor profiles outside the active scenario."""
-
-    from accounts.models import AppUsageMode
-    from profiles.models import Profile
-
-    Profile.objects.filter(user__app_usage_mode=AppUsageMode.MENTOR).exclude(
-        username__in=active_usernames
-    ).update(is_visible=False)
 
 
 def seed_requests_and_matches(profile_map: dict[str, object], user_map: dict[str, object]) -> None:
@@ -341,7 +329,6 @@ def seed_demo_data() -> None:
         profile_map[seed.username] = profile
         user_map[seed.username] = user
 
-    hide_non_scenario_mentors(active_usernames={seed.username for seed in MENTORS})
     seed_requests_and_matches(profile_map=profile_map, user_map=user_map)
 
     print("\n--- Demo Seed Complete (Two-Phone Scenario) ---")

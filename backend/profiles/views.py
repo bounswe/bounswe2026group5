@@ -868,7 +868,6 @@ class PopularMentorsListAPIView(APIView):
         qs = (
             Profile.objects.select_related("user")
             .filter(
-                is_visible=True,
                 user__app_usage_mode=AppUsageMode.MENTOR,
                 user__is_active=True,
             )
@@ -1136,7 +1135,7 @@ class MentorPublicAverageRatingAPIView(ProfileLookupMixin, APIView):
     def get(self, request: Request, username: str) -> Response:
         """Return average_rating and review_count for the named profile."""
         profile = self._get_profile_or_404(username)
-        if profile is None or not profile.is_visible:
+        if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         return Response(

@@ -334,7 +334,6 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
             "picture_url",
             "title",
             "location",
-            "is_visible",
             "show_initials_only",
             "skills",
             "created_at",
@@ -400,7 +399,6 @@ class ProfileUpdateSerializer(UsernameUpdateMixin, serializers.ModelSerializer):
             "title",
             "location",
             "share_precise_location",
-            "is_visible",
             "show_initials_only",
             "skills",
         )
@@ -535,13 +533,10 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
 
     Notes:
     - Enforces `show_initials_only` by replacing `full_name` with initials.
-    - Includes `hidden` (inverse of `is_visible`) for compatibility with the
-      existing profile detail endpoints.
     """
 
     full_name = serializers.SerializerMethodField()
     username = serializers.CharField(read_only=True)
-    hidden = serializers.BooleanField(source="is_visible", read_only=True)
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     location = serializers.SerializerMethodField()
     picture_url = serializers.SerializerMethodField()
@@ -555,7 +550,6 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
             "username",
             "full_name",
             "bio",
-            "hidden",
             "picture_url",
             "title",
             "location",
@@ -573,17 +567,9 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
             return _get_display_initials(obj.display_name or "")
         return obj.display_name
 
-    @extend_schema_field(OpenApiTypes.URI)
     def get_picture_url(self, obj: Profile) -> str:
         """Return uploaded picture URL or external URL fallback."""
         return resolve_picture_url(obj)
-
-    def to_representation(self, instance: Profile) -> dict[str, Any]:
-        """Add 'hidden' field to the output representation."""
-        ret = super().to_representation(instance)
-        # Invert is_visible to get "hidden" semantics.
-        ret["hidden"] = not instance.is_visible
-        return ret
 
     @extend_schema_field(LocationField)
     def get_location(self, obj: Profile) -> dict[str, float] | None:

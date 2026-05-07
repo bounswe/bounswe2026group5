@@ -226,7 +226,6 @@ class ProfileByUsernameAPIViewTests(TestCase):
             user=self.other_user,
             username="other_user",
             display_name="Other User",
-            is_visible=False,
         )
 
         self.public_user = User.objects.create_user(
@@ -238,7 +237,6 @@ class ProfileByUsernameAPIViewTests(TestCase):
             user=self.public_user,
             username="public_user",
             display_name="Public User",
-            is_visible=True,
         )
 
         owner_refresh = RefreshToken.for_user(self.owner_user)
@@ -291,7 +289,6 @@ class ProfileByUsernameAPIViewTests(TestCase):
 
     def test_get_mentor_profile_returns_mentor_shape(self) -> None:
         """Mentor profile returns mentor-specific fields."""
-        self.other_profile.is_visible = True
         self.other_profile.title = "Senior Backend Mentor"
         self.other_profile.save()
 
@@ -308,9 +305,8 @@ class ProfileByUsernameAPIViewTests(TestCase):
 
     def test_mentor_total_mentee_count_consistent_between_me_and_public(self) -> None:
         """Mentor count remains consistent for /me and public username profile."""
-        self.other_profile.is_visible = True
         self.other_profile.total_mentee_count = 0
-        self.other_profile.save(update_fields=["is_visible", "total_mentee_count"])
+        self.other_profile.save(update_fields=["total_mentee_count"])
 
         request_obj = MentorshipRequest.objects.create(
             mentor=self.other_profile,
@@ -349,20 +345,6 @@ class ProfileByUsernameAPIViewTests(TestCase):
         payload = response.json()
         # Mentee profile shape
         self.assertIn("full_name", payload)
-
-    def test_get_profile_private_returns_404_without_authentication(self) -> None:
-        """Private profile remains hidden for unauthenticated requests."""
-        response = self.api_client.get(self.other_url)
-
-        self.assertEqual(response.status_code, 404)
-
-    def test_get_profile_returns_404_for_non_owner(self) -> None:
-        """Authenticated users cannot fetch another private profile by username."""
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
-
-        response = self.api_client.get(self.other_url)
-
-        self.assertEqual(response.status_code, 404)
 
     def test_get_profile_returns_200_for_other_public_profile(self) -> None:
         """Authenticated users can fetch another user's public profile."""
@@ -628,7 +610,6 @@ class ProfilePostsAPITests(TestCase):
             user=self.owner_user,
             username="posts_owner",
             display_name="Posts Owner",
-            is_visible=True,
         )
 
         self.viewer_user = User.objects.create_user(
@@ -640,7 +621,6 @@ class ProfilePostsAPITests(TestCase):
             user=self.viewer_user,
             username="posts_viewer",
             display_name="Posts Viewer",
-            is_visible=True,
         )
 
         self.partner_user = User.objects.create_user(
@@ -957,30 +937,6 @@ class ProfilePostsAPITests(TestCase):
         source_ids = {item["source_id"] for item in results}
         self.assertIn(progress_prp.source_id, source_ids)
         self.assertIn(progress_mcte.source_id, source_ids)
-
-    def test_list_private_profile_posts_returns_404_for_non_owner(self) -> None:
-        private_user = User.objects.create_user(
-            email="posts-private@example.com",
-            password="SecurePass123",
-            app_usage_mode=AppUsageMode.MENTEE,
-        )
-        private_profile = Profile.objects.create(
-            user=private_user,
-            username="posts_private",
-            display_name="Posts Private",
-            is_visible=False,
-        )
-        create_prp_event(
-            author_profile=private_profile,
-            event_type="achievement",
-            content="private post",
-            timestamp=timezone.now() - timedelta(minutes=30),
-        )
-
-        self._auth_viewer()
-        response = self.api_client.get(f"/api/profiles/{private_profile.username}/posts/")
-
-        self.assertEqual(response.status_code, 404)
 
     def test_patch_prp_by_owner_returns_200(self) -> None:
         self._auth_owner()
@@ -2328,7 +2284,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.mentor1_profile = Profile.objects.create(
             user=self.mentor1_user,
             display_name="Alice Mentor",
-            is_visible=True,
             show_initials_only=False,
             skills=["Python", "Django"],
             title="Backend Mentor",
@@ -2343,7 +2298,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.mentor2_profile = Profile.objects.create(
             user=self.mentor2_user,
             display_name="John Doe",
-            is_visible=True,
             show_initials_only=True,
             skills=["React"],
             title="Frontend Mentor",
@@ -2358,7 +2312,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.mentor3_profile = Profile.objects.create(
             user=self.mentor3_user,
             display_name="Bob Zed",
-            is_visible=True,
             show_initials_only=False,
             skills=["Go"],
             title="Go Mentor",
@@ -2373,7 +2326,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.private_mentor_profile = Profile.objects.create(
             user=self.private_mentor_user,
             display_name="Private Mentor",
-            is_visible=False,
             show_initials_only=False,
             skills=["Python"],
             title="Hidden",
@@ -2387,7 +2339,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.mentee_profile = Profile.objects.create(
             user=self.mentee_user,
             display_name="Mentee Person",
-            is_visible=True,
             show_initials_only=False,
             skills=["Python"],
             title="Mentee",
@@ -2403,15 +2354,15 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
 
         returned_names = {p["full_name"] for p in payload["results"]}
         returned_usernames = {p["username"] for p in payload["results"]}
-        # Only visible mentors should be included.
+        # All mentors should be included.
         self.assertIn("Alice Mentor", returned_names)
         self.assertIn("JD", returned_names)  # initials due to show_initials_only
         self.assertIn("Bob Zed", returned_names)
-        self.assertNotIn("Private Mentor", returned_names)
+        self.assertIn("Private Mentor", returned_names)
         self.assertIn(self.mentor1_profile.username, returned_usernames)
         self.assertIn(self.mentor2_profile.username, returned_usernames)
         self.assertIn(self.mentor3_profile.username, returned_usernames)
-        self.assertNotIn(self.private_mentor_profile.username, returned_usernames)
+        self.assertIn(self.private_mentor_profile.username, returned_usernames)
         # Default discovery is mentors only.
         self.assertNotIn("Mentee Person", returned_names)
 
@@ -2454,7 +2405,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         Profile.objects.create(
             user=dup_user,
             display_name="Unique Dup Expertise Holder",
-            is_visible=True,
             show_initials_only=False,
             skills=["Python Basics", "Python Advanced"],
             title="Mentor",
@@ -2491,7 +2441,7 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["count"], 3)  # visible mentors only
+        self.assertEqual(payload["count"], 4)  # all mentors now
         self.assertEqual(payload["page"], 1)
         self.assertEqual(payload["pageSize"], 1)
         self.assertEqual(len(payload["results"]), 1)
@@ -2524,7 +2474,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
             Profile.objects.create(
                 user=u,
                 display_name=f"Bounds Mentor {i}",
-                is_visible=True,
                 show_initials_only=False,
             )
 
@@ -2621,9 +2570,10 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         names = {p["full_name"] for p in payload["results"]}
-        self.assertEqual(payload["count"], 2)
+        self.assertEqual(payload["count"], 3)
         self.assertIn("Alice Mentor", names)
         self.assertIn("JD", names)
+        self.assertIn("Private Mentor", names)
 
     def test_public_search_helper_branch_edges(self) -> None:
         """Direct helper checks cover empty query/term branches in search utilities."""
@@ -2659,7 +2609,6 @@ class MentorPublicAverageRatingAPITests(TestCase):
         self.mentor_profile = Profile.objects.create(
             user=self.mentor_user,
             display_name="Rating Mentor",
-            is_visible=True,
         )
         self.api_client: Any = APIClient()
 
@@ -2685,11 +2634,8 @@ class MentorPublicAverageRatingAPITests(TestCase):
     def test_nonexistent_profile_returns_404(self) -> None:
         response = self.api_client.get(self._url("does_not_exist"))
         self.assertEqual(response.status_code, 404)
-
-    def test_invisible_profile_returns_404(self) -> None:
-        self.mentor_profile.is_visible = False
-        self.mentor_profile.save()
-        response = self.api_client.get(self._url(self.mentor_profile.username))
+    def test_missing_profile_returns_404(self) -> None:
+        response = self.api_client.get(self._url("missing-user"))
         self.assertEqual(response.status_code, 404)
 
     def test_accessible_without_authentication(self) -> None:
@@ -2722,7 +2668,6 @@ class ProfilePublicReviewsAPITests(TestCase):
         self.mentor_profile = Profile.objects.create(
             user=self.mentor_user,
             display_name="Reviews Mentor",
-            is_visible=True,
         )
         self.url = f"/api/profiles/{self.mentor_profile.username}/reviews/"
 
@@ -2780,13 +2725,6 @@ class ProfilePublicReviewsAPITests(TestCase):
 
     def test_returns_404_for_missing_profile(self) -> None:
         response = self.api_client.get("/api/profiles/missing-user/reviews/")
-        self.assertEqual(response.status_code, 404)
-
-    def test_returns_404_for_invisible_profile(self) -> None:
-        self.mentor_profile.is_visible = False
-        self.mentor_profile.save(update_fields=["is_visible"])
-
-        response = self.api_client.get(self.url)
         self.assertEqual(response.status_code, 404)
 
     def test_returns_only_public_text_review_fields(self) -> None:
@@ -2924,7 +2862,6 @@ class RecentlyAddedMentorsAPITests(TestCase):
         self.mentor1_profile = Profile.objects.create(
             user=self.mentor1_user,
             display_name="First Mentor",
-            is_visible=True,
             average_rating=Decimal("3.00"),
         )
 
@@ -2936,7 +2873,6 @@ class RecentlyAddedMentorsAPITests(TestCase):
         self.mentor2_profile = Profile.objects.create(
             user=self.mentor2_user,
             display_name="Second Mentor",
-            is_visible=True,
             average_rating=Decimal("5.00"),
         )
 
@@ -2948,7 +2884,6 @@ class RecentlyAddedMentorsAPITests(TestCase):
         self.hidden_mentor_profile = Profile.objects.create(
             user=self.hidden_mentor_user,
             display_name="Hidden Mentor",
-            is_visible=False,
         )
 
         self.mentee_user = User.objects.create_user(
@@ -2959,7 +2894,6 @@ class RecentlyAddedMentorsAPITests(TestCase):
         self.mentee_profile = Profile.objects.create(
             user=self.mentee_user,
             display_name="Mentee Person",
-            is_visible=True,
         )
 
     def test_returns_200(self) -> None:
@@ -2973,7 +2907,7 @@ class RecentlyAddedMentorsAPITests(TestCase):
     def test_only_visible_mentors_returned(self) -> None:
         response = self.client.get("/api/profiles/recently-added/")
         names = [p["full_name"] for p in response.json()["results"]]
-        self.assertNotIn("Hidden Mentor", names)
+        self.assertIn("Hidden Mentor", names)
         self.assertNotIn("Mentee Person", names)
 
     def test_sorted_by_created_at_descending(self) -> None:
@@ -2994,7 +2928,7 @@ class RecentlyAddedMentorsAPITests(TestCase):
                 password="SecurePass123",
                 app_usage_mode=AppUsageMode.MENTOR,
             )
-            Profile.objects.create(user=u, display_name=f"Extra {i}", is_visible=True)
+            Profile.objects.create(user=u, display_name=f"Extra {i}")
 
         response = self.client.get("/api/profiles/recently-added/")
         self.assertEqual(len(response.json()["results"]), 10)
@@ -3010,7 +2944,7 @@ class RecentlyAddedMentorsAPITests(TestCase):
                 password="SecurePass123",
                 app_usage_mode=AppUsageMode.MENTOR,
             )
-            Profile.objects.create(user=u, display_name=f"Cap {i}", is_visible=True)
+            Profile.objects.create(user=u, display_name=f"Cap {i}")
 
         response = self.client.get("/api/profiles/recently-added/", {"limit": 100})
         self.assertLessEqual(len(response.json()["results"]), 50)
@@ -3038,7 +2972,6 @@ class PopularMentorsAPITests(TestCase):
         self.low_rated_profile = Profile.objects.create(
             user=self.low_rated_user,
             display_name="Low Rated",
-            is_visible=True,
             average_rating=Decimal("1.00"),
             total_mentee_count=5,
         )
@@ -3051,7 +2984,6 @@ class PopularMentorsAPITests(TestCase):
         self.high_rated_profile = Profile.objects.create(
             user=self.high_rated_user,
             display_name="High Rated",
-            is_visible=True,
             average_rating=Decimal("5.00"),
             total_mentee_count=10,
         )
@@ -3064,7 +2996,6 @@ class PopularMentorsAPITests(TestCase):
         self.hidden_profile = Profile.objects.create(
             user=self.hidden_user,
             display_name="Hidden Popular",
-            is_visible=False,
             average_rating=Decimal("5.00"),
         )
 
@@ -3076,7 +3007,6 @@ class PopularMentorsAPITests(TestCase):
         self.mentee_profile = Profile.objects.create(
             user=self.mentee_user,
             display_name="Mentee Pop",
-            is_visible=True,
             average_rating=Decimal("5.00"),
         )
 
@@ -3091,7 +3021,7 @@ class PopularMentorsAPITests(TestCase):
     def test_only_visible_mentors_returned(self) -> None:
         response = self.client.get("/api/profiles/popular/")
         names = [p["full_name"] for p in response.json()["results"]]
-        self.assertNotIn("Hidden Popular", names)
+        self.assertIn("Hidden Popular", names)
         self.assertNotIn("Mentee Pop", names)
 
     def test_sorted_by_average_rating_descending(self) -> None:
@@ -3114,7 +3044,6 @@ class PopularMentorsAPITests(TestCase):
         tied_low = Profile.objects.create(
             user=tied_low_user,
             display_name="Tied Low Mentees",
-            is_visible=True,
             average_rating=Decimal("3.00"),
             total_mentee_count=2,
         )
@@ -3126,7 +3055,6 @@ class PopularMentorsAPITests(TestCase):
         tied_high = Profile.objects.create(
             user=tied_high_user,
             display_name="Tied High Mentees",
-            is_visible=True,
             average_rating=Decimal("3.00"),
             total_mentee_count=20,
         )
@@ -3450,7 +3378,6 @@ class CommunityTagsAPITests(TestCase):
         self.profile = Profile.objects.create(
             user=self.user,
             display_name="Tag User",
-            is_visible=True,
         )
         self.access_token = str(RefreshToken.for_user(self.user).access_token)
 
@@ -3463,7 +3390,6 @@ class CommunityTagsAPITests(TestCase):
         self.profile2 = Profile.objects.create(
             user=self.user2,
             display_name="Tag User 2",
-            is_visible=True,
         )
         self.access_token2 = str(RefreshToken.for_user(self.user2).access_token)
 
@@ -3962,7 +3888,7 @@ class CommunityTagsAPITests(TestCase):
                 app_usage_mode=AppUsageMode.MENTOR,
             )
             profile = Profile.objects.create(
-                user=user, display_name=f"PM {name} {i}", is_visible=True
+                user=user, display_name=f"PM {name} {i}"
             )
             membership = CommunityTagMembership.objects.create(profile=profile, tag=tag)
             if joined_at is not None:
@@ -4134,7 +4060,7 @@ class CommunityTagsAPITests(TestCase):
             password="SecurePass123",
             app_usage_mode=AppUsageMode.MENTOR,
         )
-        Profile.objects.create(user=user3, display_name="Tag User 3", is_visible=True)
+        Profile.objects.create(user=user3, display_name="Tag User 3")
         token3 = str(RefreshToken.for_user(user3).access_token)
         self._auth(token3)
         self.client.post(f"/api/profiles/tags/{tag_id}/join/")
@@ -4153,7 +4079,7 @@ class CommunityTagsAPITests(TestCase):
         self.assertEqual(data["pageSize"], 2)
 
     def test_members_list_excludes_hidden_profiles(self) -> None:
-        """Profiles with is_visible=False are not included in the response."""
+        """Profiles with is_visible=False are no longer excluded as field is removed."""
         create_resp = self._create_tag("Hidden Tag")
         tag_id = create_resp.json()["id"]
 
@@ -4162,19 +4088,15 @@ class CommunityTagsAPITests(TestCase):
         self._auth(self.access_token2)
         self.client.post(f"/api/profiles/tags/{tag_id}/join/")
 
-        # hide profile2
-        self.profile2.is_visible = False
-        self.profile2.save(update_fields=["is_visible"])
-
         self.client.credentials()
         response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["count"], 2)
         ids = [r["id"] for r in data["results"]]
         self.assertIn(str(self.profile.id), ids)
-        self.assertNotIn(str(self.profile2.id), ids)
+        self.assertIn(str(self.profile2.id), ids)
 
     def test_members_list_honors_show_initials_only(self) -> None:
         """When a member has show_initials_only, the response shows initials."""
@@ -4245,7 +4167,7 @@ class CommunityTagNotificationTests(TestCase):
             app_usage_mode=AppUsageMode.MENTOR,
         )
         self.creator_profile = Profile.objects.create(
-            user=self.creator_user, display_name="Creator", is_visible=True
+            user=self.creator_user, display_name="Creator"
         )
         self.creator_token = str(RefreshToken.for_user(self.creator_user).access_token)
 
@@ -4255,7 +4177,7 @@ class CommunityTagNotificationTests(TestCase):
             app_usage_mode=AppUsageMode.MENTOR,
         )
         self.member_profile = Profile.objects.create(
-            user=self.member_user, display_name="Member", is_visible=True
+            user=self.member_user, display_name="Member"
         )
         self.member_token = str(RefreshToken.for_user(self.member_user).access_token)
 
@@ -4266,7 +4188,7 @@ class CommunityTagNotificationTests(TestCase):
             app_usage_mode=AppUsageMode.MENTOR,
         )
         self.admin_profile = Profile.objects.create(
-            user=self.admin_user, display_name="Admin", is_visible=True
+            user=self.admin_user, display_name="Admin"
         )
         self.admin_token = str(RefreshToken.for_user(self.admin_user).access_token)
 
@@ -4690,7 +4612,6 @@ class ProfileFeedDeletionScenarioTests(TestCase):
             user=self.mentor_user,
             username="feed_mentor",
             display_name="Feed Mentor",
-            is_visible=True,
         )
 
         self.mentee_user = User.objects.create_user(
@@ -4702,7 +4623,6 @@ class ProfileFeedDeletionScenarioTests(TestCase):
             user=self.mentee_user,
             username="feed_mentee",
             display_name="Feed Mentee",
-            is_visible=True,
         )
 
         self.viewer_user = User.objects.create_user(
@@ -4714,7 +4634,6 @@ class ProfileFeedDeletionScenarioTests(TestCase):
             user=self.viewer_user,
             username="feed_viewer",
             display_name="Feed Viewer",
-            is_visible=True,
         )
         self.viewer_token = str(RefreshToken.for_user(self.viewer_user).access_token)
 
@@ -4769,9 +4688,6 @@ class ProfileFeedDeletionScenarioTests(TestCase):
             content="Achievement",
             show_on_profile=True,
         )
-
-        self.mentee_profile.is_visible = False
-        self.mentee_profile.save(update_fields=["is_visible"])
 
         self._auth_viewer()
         response = self.api_client.get(self.feed_url + "?category=MCTE")
