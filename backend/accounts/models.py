@@ -80,6 +80,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         max_length=16,
         choices=AppUsageMode.choices,
         blank=True,
+        null=True,
     )
     is_banned = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)

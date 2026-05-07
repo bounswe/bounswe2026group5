@@ -108,10 +108,20 @@ export function DashboardHome() {
   const { mutate: markAllRead } = useMarkAllNotificationsRead()
   const queryClient = useQueryClient()
 
-  // Accumulate non-message notifications as they arrive via polling.
-  // Each poll only adds genuinely new ones; already-seen IDs are skipped.
-  // Marking as read happens immediately on arrival, separate from visibility.
-  const [visibleNotifications, setVisibleNotifications] = useState<Notification[]>([])
+  // Show unread notifications + the 4 most recent notifications overall
+  const displayNotifications = useMemo(() => {
+    const unread = notifications.filter(n => !n.is_read)
+    const recentlyRead = notifications.filter(n => n.is_read).slice(0, 4)
+    const combined = [...unread]
+    
+    // Add recently read that aren't already in unread (shouldn't happen but for safety)
+    recentlyRead.forEach(rn => {
+        if (!combined.some(c => c.id === rn.id)) combined.push(rn)
+    })
+    
+    return combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }, [notifications])
+
   const seenIds = useRef<Set<string>>(new Set())
   const isFirstRun = useRef(true)
 
@@ -122,9 +132,8 @@ export function DashboardHome() {
     if (incoming.length === 0) return
 
     incoming.forEach(n => seenIds.current.add(n.id))
-    const toShow = incoming.filter(n => !n.is_read)
-    if (toShow.length > 0) setVisibleNotifications(prev => [...prev, ...toShow])
-
+    
+    // Mark genuinely new unread notifications as read
     const unreadIds = incoming.filter(n => n.type !== 'new_message' && !n.is_read).map(n => n.id)
     if (unreadIds.length > 0) markAllRead(unreadIds)
 
@@ -134,9 +143,11 @@ export function DashboardHome() {
     }
 
     const keysToInvalidate = new Set<string>()
-    for (const n of toShow) {
-      for (const key of NOTIFICATION_INVALIDATION_MAP[n.type]) {
-        keysToInvalidate.add(JSON.stringify(key))
+    for (const n of incoming) {
+      if (NOTIFICATION_INVALIDATION_MAP[n.type]) {
+        for (const key of NOTIFICATION_INVALIDATION_MAP[n.type]) {
+          keysToInvalidate.add(JSON.stringify(key))
+        }
       }
     }
     keysToInvalidate.forEach(k => queryClient.invalidateQueries({ queryKey: JSON.parse(k) }))
@@ -165,14 +176,14 @@ export function DashboardHome() {
         )}
       </div>
 
-      {visibleNotifications.length > 0 && (
+      {displayNotifications.length > 0 && (
         <section className="flex flex-col gap-3">
           <Heading as="h3" className="text-xl flex items-center gap-2">
             <Bell className="w-5 h-5 text-accent" />
             Notifications
           </Heading>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {visibleNotifications.map(n => (
+            {displayNotifications.map(n => (
               <NotificationItem key={n.id} notification={n} />
             ))}
           </div>

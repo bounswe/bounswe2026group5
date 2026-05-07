@@ -26,7 +26,6 @@ function AuthorizedLayout() {
       <main className="flex-1">
         <Outlet />
       </main>
-        <Toaster position="bottom-right" toastOptions={{ classNames: { toast: 'cn-toast' } }} style={{ zIndex: 9999 }} />
     </div>
   )
 }

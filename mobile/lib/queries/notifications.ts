@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Href } from "expo-router";
 
-import { apiGet, apiPut } from "@/lib/api/client";
+import { apiGet, apiPost, apiPut } from "@/lib/api/client";
 
 export interface BackendNotificationActor {
   username?: string;
@@ -222,7 +222,7 @@ export function useNotificationsQuery(username?: string) {
     enabled: Boolean(username),
     staleTime: 10_000,
     refetchOnMount: "always",
-    refetchInterval: 15_000,
+    refetchInterval: false,
     refetchIntervalInBackground: false,
   });
 }
@@ -240,5 +240,21 @@ export function useMarkNotificationReadMutation(username?: string) {
         queryKey: notificationsQueryKey(username),
       });
     },
+  });
+}
+
+export function useRegisterFCMTokenMutation() {
+  return useMutation({
+    mutationFn: ({
+      token,
+      device_type,
+    }: {
+      token: string;
+      device_type: "android" | "ios";
+    }) =>
+      apiPost<{ detail: string }>("/api/notifications/fcm-token/", {
+        token,
+        device_type,
+      }),
   });
 }

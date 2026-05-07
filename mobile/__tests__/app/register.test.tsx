@@ -114,8 +114,8 @@ import RegisterScreen from "@/app/register";
 function renderRegister() {
   const qc = new QueryClient({
     defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false, gcTime: 0 },
     },
   });
   return render(

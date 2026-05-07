@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
@@ -34,30 +34,6 @@ export default function LoginScreen() {
   const theme = Colors[colorScheme];
 
   /**
-   * Navigate to dashboard when login succeeds.
-   */
-  useEffect(() => {
-    if (loginMutation.data) {
-      router.replace("/(tabs)");
-    }
-  }, [loginMutation.data]);
-
-  /**
-   * Navigate to dashboard or onboarding when Google login succeeds.
-   */
-  useEffect(() => {
-    if (googleLoginMutation.data) {
-      const user = googleLoginMutation.data.user;
-      if (!user.app_usage_mode) {
-        // New user needs to select role and skills
-        router.replace("/register");
-      } else {
-        router.replace("/(tabs)");
-      }
-    }
-  }, [googleLoginMutation.data]);
-
-  /**
    * Handle login button press.
    * Validates input and calls login mutation.
    */
@@ -76,6 +52,7 @@ export default function LoginScreen() {
 
     try {
       await loginMutation.mutateAsync({ email: email.trim(), password });
+      router.replace("/(tabs)");
     } catch (error) {
       // Error is already handled by mutation's onError, but we can add local handling if needed
       console.error("Login error:", error);
@@ -88,7 +65,13 @@ export default function LoginScreen() {
   const handleGoogleLogin = async () => {
     setLocalError(null);
     try {
-      await googleLoginMutation.mutateAsync();
+      const data = await googleLoginMutation.mutateAsync();
+      if (!data.user.app_usage_mode) {
+        // New user needs to select role and skills
+        router.replace("/register");
+      } else {
+        router.replace("/(tabs)");
+      }
     } catch (error) {
       console.error("Google login error:", error);
     }
@@ -307,4 +290,3 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
-

@@ -104,7 +104,3 @@ class MessageCreateSerializer(serializers.Serializer):
         return attachment
 
 
-class MessageReportSerializer(serializers.Serializer):
-    """Serializer for reporting problematic messages."""
-
-    reason = serializers.CharField(max_length=512)

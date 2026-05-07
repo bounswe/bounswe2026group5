@@ -48,6 +48,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          headerShown: false,
           title: "Home",
           tabBarIcon: renderHomeIcon,
         }}
@@ -56,6 +57,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="connections"
         options={{
+          headerShown: false,
           title: "Connections",
           tabBarIcon: renderConnectionsIcon,
         }}
@@ -80,6 +82,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="community"
         options={{
+          headerShown: false,
           title: "Community",
           tabBarIcon: renderCommunityIcon,
         }}
@@ -112,6 +115,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="discover"
         options={{
+          headerShown: false,
           title: "Discover",
           tabBarIcon: renderDiscoverIcon,
         }}

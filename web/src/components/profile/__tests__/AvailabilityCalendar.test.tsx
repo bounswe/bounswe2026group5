@@ -124,7 +124,7 @@ describe('AvailabilityCalendar — Pending Slot Display', () => {
     const slot = makeSlot()
     mockUseAvailabilitySlots.mockReturnValue({ data: [slot] })
     mockUseMyRequests.mockReturnValue({
-      data: [{ slot_id: 'slot-1', status: 'PENDING' }],
+      data: [{ slot_id: 'slot-1', status: 'PENDING', mentor: { username: 'test-mentor' } }],
     })
 
     renderCalendar({ isOwner: false, isAuthenticated: true })
@@ -137,7 +137,7 @@ describe('AvailabilityCalendar — Pending Slot Display', () => {
     const slot = makeSlot()
     mockUseAvailabilitySlots.mockReturnValue({ data: [slot] })
     mockUseMyRequests.mockReturnValue({
-      data: [{ slot_id: 'slot-1', status: 'PENDING' }],
+      data: [{ slot_id: 'slot-1', status: 'PENDING', mentor: { username: 'test-mentor' } }],
     })
 
     renderCalendar({ isOwner: true, isAuthenticated: true })
@@ -149,7 +149,7 @@ describe('AvailabilityCalendar — Pending Slot Display', () => {
     const slot = makeSlot()
     mockUseAvailabilitySlots.mockReturnValue({ data: [slot] })
     mockUseMyRequests.mockReturnValue({
-      data: [{ slot_id: 'slot-1', status: 'PENDING' }],
+      data: [{ slot_id: 'slot-1', status: 'PENDING', mentor: { username: 'test-mentor' } }],
     })
 
     renderCalendar({ isOwner: false, isAuthenticated: true })
