@@ -8,7 +8,6 @@ export interface PublicMentorProfile {
     username: string
     full_name: string
     bio: string
-    hidden: boolean
     picture_url: string | null
     title: string
     location: string | null
