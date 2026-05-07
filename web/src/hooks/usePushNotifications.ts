@@ -52,5 +52,5 @@ export const usePushNotifications = (isAuthenticated: boolean, currentUsername?:
         return () => {
             if (unsubscribe) unsubscribe()
         }
-    }, [isAuthenticated, registerToken, queryClient])
+    }, [isAuthenticated, registerToken, queryClient, currentUsername])
 }

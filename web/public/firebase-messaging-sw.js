@@ -1,3 +1,13 @@
+/**
+ * Firebase Service Worker for Push Notifications
+ * 
+ * NOTE: The configuration below is hardcoded because this file is served as a static asset 
+ * in the public directory and does not have access to build-time environment variables 
+ * (import.meta.env). 
+ * 
+ * When updating Firebase project settings, ensure these values match those in 
+ * web/src/lib/firebase.ts.
+ */
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 

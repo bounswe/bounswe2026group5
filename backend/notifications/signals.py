@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -22,10 +23,12 @@ def trigger_push_notification(sender, instance, created, **kwargs):
         if instance.action_url:
             data["action_url"] = instance.action_url
 
-        # Send the notification
-        send_push_notification(
-            user_id=instance.user.id,
-            title=instance.title or "New Notification",
-            body=instance.message,
-            data=data,
+        # Send the notification after the transaction is committed
+        transaction.on_commit(
+            lambda: send_push_notification(
+                user_id=instance.user.id,
+                title=instance.title or "New Notification",
+                body=instance.message,
+                data=data,
+            )
         )
