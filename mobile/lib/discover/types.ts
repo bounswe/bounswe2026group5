@@ -17,6 +17,7 @@ export interface DiscoverMentorProfile {
   skills: string[];
   average_rating: string;
   total_mentee_count: number;
+  distance_km?: number | null;
 }
 
 export interface DiscoverProfilesResponse {

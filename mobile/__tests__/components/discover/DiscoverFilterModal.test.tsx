@@ -29,8 +29,10 @@ describe("DiscoverFilterModal", () => {
         communityTags={communityTags}
         selectedSkills={new Set(["GraphQL"])}
         selectedCommunityTags={new Set()}
+        selectedDistanceKm={null}
         onToggleSkill={onToggleSkill}
         onToggleCommunityTag={jest.fn()}
+        onSelectDistanceKm={jest.fn()}
         onClear={onClear}
         onApply={jest.fn()}
         onClose={onClose}
@@ -61,8 +63,10 @@ describe("DiscoverFilterModal", () => {
         communityTags={communityTags}
         selectedSkills={new Set()}
         selectedCommunityTags={new Set(["backend-guild"])}
+        selectedDistanceKm={null}
         onToggleSkill={jest.fn()}
         onToggleCommunityTag={onToggleCommunityTag}
+        onSelectDistanceKm={jest.fn()}
         onClear={jest.fn()}
         onApply={jest.fn()}
         onClose={jest.fn()}
@@ -83,8 +87,10 @@ describe("DiscoverFilterModal", () => {
         communityTags={[]}
         selectedSkills={new Set()}
         selectedCommunityTags={new Set()}
+        selectedDistanceKm={null}
         onToggleSkill={jest.fn()}
         onToggleCommunityTag={jest.fn()}
+        onSelectDistanceKm={jest.fn()}
         onClear={onClear}
         onApply={jest.fn()}
         onClose={jest.fn()}
@@ -105,8 +111,10 @@ describe("DiscoverFilterModal", () => {
         communityTags={[]}
         selectedSkills={new Set()}
         selectedCommunityTags={new Set()}
+        selectedDistanceKm={null}
         onToggleSkill={jest.fn()}
         onToggleCommunityTag={jest.fn()}
+        onSelectDistanceKm={jest.fn()}
         onClear={jest.fn()}
         onApply={onApply}
         onClose={jest.fn()}
@@ -115,6 +123,55 @@ describe("DiscoverFilterModal", () => {
 
     fireEvent.press(getByTestId("apply-button"));
     expect(onApply).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onSelectDistanceKm when a distance chip is pressed", () => {
+    const onSelectDistanceKm = jest.fn();
+
+    const { getByTestId } = render(
+      <DiscoverFilterModal
+        visible
+        allSkills={["Docker"]}
+        communityTags={[]}
+        selectedSkills={new Set()}
+        selectedCommunityTags={new Set()}
+        selectedDistanceKm={null}
+        onToggleSkill={jest.fn()}
+        onToggleCommunityTag={jest.fn()}
+        onSelectDistanceKm={onSelectDistanceKm}
+        onClear={jest.fn()}
+        onApply={jest.fn()}
+        onClose={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(getByTestId("distance-filter-15"));
+    expect(onSelectDistanceKm).toHaveBeenCalledWith(15);
+  });
+
+  it("shows selected distance in the selected filters area", () => {
+    const onSelectDistanceKm = jest.fn();
+
+    const { getByTestId, getAllByText } = render(
+      <DiscoverFilterModal
+        visible
+        allSkills={["Docker"]}
+        communityTags={[]}
+        selectedSkills={new Set()}
+        selectedCommunityTags={new Set()}
+        selectedDistanceKm={25}
+        onToggleSkill={jest.fn()}
+        onToggleCommunityTag={jest.fn()}
+        onSelectDistanceKm={onSelectDistanceKm}
+        onClear={jest.fn()}
+        onApply={jest.fn()}
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(getAllByText("25 km").length).toBeGreaterThan(0);
+    fireEvent.press(getByTestId("selected-distance-filter"));
+    expect(onSelectDistanceKm).toHaveBeenCalledWith(null);
   });
 
   it("shows selected skills and communities in one selected filters area", () => {
@@ -128,8 +185,10 @@ describe("DiscoverFilterModal", () => {
         communityTags={communityTags}
         selectedSkills={new Set(["Docker"])}
         selectedCommunityTags={new Set(["backend-guild"])}
+        selectedDistanceKm={null}
         onToggleSkill={onToggleSkill}
         onToggleCommunityTag={onToggleCommunityTag}
+        onSelectDistanceKm={jest.fn()}
         onClear={jest.fn()}
         onApply={jest.fn()}
         onClose={jest.fn()}
@@ -152,8 +211,10 @@ describe("DiscoverFilterModal", () => {
         communityTags={[]}
         selectedSkills={new Set()}
         selectedCommunityTags={new Set()}
+        selectedDistanceKm={null}
         onToggleSkill={jest.fn()}
         onToggleCommunityTag={jest.fn()}
+        onSelectDistanceKm={jest.fn()}
         onClear={jest.fn()}
         onApply={jest.fn()}
         onClose={jest.fn()}
@@ -172,8 +233,10 @@ describe("DiscoverFilterModal", () => {
         communityTags={[]}
         selectedSkills={new Set()}
         selectedCommunityTags={new Set()}
+        selectedDistanceKm={null}
         onToggleSkill={jest.fn()}
         onToggleCommunityTag={jest.fn()}
+        onSelectDistanceKm={jest.fn()}
         onClear={jest.fn()}
         onApply={jest.fn()}
         onClose={jest.fn()}
