@@ -35,6 +35,20 @@ interface EditProfileModalProps {
   onSave: (data: SaveProfileData) => Promise<boolean | void> | boolean | void;
 }
 
+function validateDisplayName(value: string): string | null {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "Name cannot be empty!";
+  }
+
+  if (/\d/.test(trimmedValue)) {
+    return "Display name cannot contain numbers.";
+  }
+
+  return null;
+}
+
 export function EditProfileModal({
   visible,
   onClose,
@@ -78,8 +92,9 @@ export function EditProfileModal({
   };
 
   const handleSave = async () => {
-    if (!name.trim()) {
-      alert("Name cannot be empty!");
+    const displayNameError = validateDisplayName(name);
+    if (displayNameError) {
+      alert(displayNameError);
       return;
     }
 
