@@ -10,6 +10,7 @@ interface ProfilePostsPreviewProps {
   onViewAll: () => void;
   onCompose?: () => void;
   communityLabelsById?: Record<string, string>;
+  onOpenCommunity?: (communityId: string) => void;
 }
 
 /**
@@ -26,6 +27,7 @@ export function ProfilePostsPreview({
   onViewAll,
   onCompose,
   communityLabelsById,
+  onOpenCommunity,
 }: Readonly<ProfilePostsPreviewProps>) {
   const postsQuery = useProfilePostsQuery(username, { limit: 3 });
 
@@ -52,7 +54,10 @@ export function ProfilePostsPreview({
   }
 
   return (
-    <View testID="profile-posts-preview" className="mb-6">
+    <View
+      testID="profile-posts-preview"
+      className="mb-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4"
+    >
       <View className="mb-3 flex-row items-center justify-between gap-3">
         <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
           Posts
@@ -82,6 +87,7 @@ export function ProfilePostsPreview({
                 ? communityLabelsById?.[post.community_id]
                 : undefined
             }
+            onCommunityPress={onOpenCommunity}
           />
         ))}
       </View>

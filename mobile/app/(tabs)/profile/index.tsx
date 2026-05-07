@@ -106,7 +106,7 @@ function renderSkillsSection({
   }
 
   return (
-    <View className="mb-6">
+    <View className="mb-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 pt-4">
       <SkillsCloud
         title={skillsTitle}
         skills={skillsData}
@@ -148,7 +148,7 @@ function renderCommunitiesSection({
   }
 
   return (
-    <View className="mb-6">
+    <View className="mb-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4">
       <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
         Communities
       </Text>
@@ -179,11 +179,13 @@ function renderPostsSection({
   onViewAll,
   onCompose,
   communityLabelsById,
+  onOpenCommunity,
 }: {
   currentUsername?: string;
   onViewAll: () => void;
   onCompose: () => void;
   communityLabelsById: Record<string, string>;
+  onOpenCommunity: (communityId: string) => void;
 }) {
   if (!currentUsername) {
     return null;
@@ -195,6 +197,7 @@ function renderPostsSection({
       onViewAll={onViewAll}
       onCompose={onCompose}
       communityLabelsById={communityLabelsById}
+      onOpenCommunity={onOpenCommunity}
     />
   );
 }
@@ -214,7 +217,11 @@ function renderAvailabilitySection({
     return null;
   }
 
-  return <AvailabilityPreview schedule={availabilityData} onEdit={onEdit} />;
+  return (
+    <View className="mb-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 pt-4">
+      <AvailabilityPreview schedule={availabilityData} onEdit={onEdit} />
+    </View>
+  );
 }
 
 function renderReviewsSection({
@@ -239,7 +246,7 @@ function renderReviewsSection({
   }
 
   return (
-    <View className="mt-6">
+    <View className="mt-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4">
       <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
         Reviews
       </Text>
@@ -667,6 +674,10 @@ export default function ProfileScreen() {
             onViewAll: () => router.push("/(tabs)/profile/posts" as any),
             onCompose: () => setPostComposerOpen(true),
             communityLabelsById,
+            onOpenCommunity: (communityId) =>
+              router.push(
+                `/(tabs)/community/${encodeURIComponent(communityId)}?from=profile`,
+              ),
           })}
 
           {renderAvailabilitySection({

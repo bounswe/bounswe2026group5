@@ -308,6 +308,17 @@ describe("ProfileScreen Layout", () => {
     });
   });
 
+  it("opens the avatar image centered when the profile photo is pressed", async () => {
+    const { findByTestId, getByTestId } = render(<ProfileScreen />);
+
+    await findByTestId("profile-avatar-image");
+    fireEvent.press(getByTestId("profile-avatar-button"));
+
+    expect(getByTestId("profile-avatar-preview-image").props.source).toEqual({
+      uri: "https://cdn.example.com/current.jpg",
+    });
+  });
+
   it("removes the current avatar from the edit modal", async () => {
     const { findByTestId, getByTestId, queryByTestId } = render(
       <ProfileScreen />,

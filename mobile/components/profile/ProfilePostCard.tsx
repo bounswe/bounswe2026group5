@@ -81,6 +81,7 @@ interface ProfilePostCardProps {
   /** When true, content is not truncated. Default: false (preview mode). */
   expanded?: boolean;
   communityLabel?: string | null;
+  onCommunityPress?: (communityId: string) => void;
 }
 
 /**
@@ -92,9 +93,13 @@ export function ProfilePostCard({
   post,
   expanded = false,
   communityLabel,
+  onCommunityPress,
 }: Readonly<ProfilePostCardProps>) {
   const label = EVENT_TYPE_LABELS[post.event_type] ?? post.event_type;
-  const categoryLabel = CATEGORY_LABELS[post.category] ?? post.category;
+  const categoryLabel =
+    post.category === "CoP" && communityLabel
+      ? communityLabel
+      : CATEGORY_LABELS[post.category] ?? post.category;
   const dateLabel = formatPostTimestamp(post.timestamp);
   const authorName =
     post.author?.display_name || post.author?.username || "Unknown user";
@@ -142,25 +147,27 @@ export function ProfilePostCard({
             </Text>
           </View>
         </View>
-        <View className="rounded-full bg-surface-active dark:bg-gray-800 px-2 py-0.5">
+        <TouchableOpacity
+          testID={`post-card-category-${post.id}`}
+          activeOpacity={post.category === "CoP" && post.community_id ? 0.75 : 1}
+          disabled={post.category !== "CoP" || !post.community_id}
+          onPress={() => {
+            if (post.community_id) {
+              onCommunityPress?.(post.community_id);
+            }
+          }}
+          className="rounded-full bg-surface-active dark:bg-gray-800 px-2 py-0.5"
+        >
           <Text className="text-[10px] font-black uppercase text-on-surface-muted dark:text-on-surface-muted-dark">
             {categoryLabel}
           </Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       <View className="mb-2 flex-row items-center gap-1.5">
         <Ionicons name={iconName} size={14} color="#6b7280" />
         <Text className={`text-xs font-bold ${accentColor}`}>{label}</Text>
       </View>
-
-      {post.category === "CoP" && post.community_id ? (
-        <View className="mb-2 self-start rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1">
-          <Text className="text-[10px] font-bold uppercase tracking-wide text-primary dark:text-primary-dim">
-            {communityLabel ? `#${communityLabel}` : "Community post"}
-          </Text>
-        </View>
-      ) : null}
 
       {/* Content */}
       {post.content ? (

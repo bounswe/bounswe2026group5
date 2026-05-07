@@ -418,6 +418,13 @@ export default function CommunityDetailScreen() {
             post={item}
             expanded
             communityLabel={tag?.name ?? null}
+            onCommunityPress={() => {
+              if (tag) {
+                router.push(
+                  `/(tabs)/community/${encodeURIComponent(tag.id)}?from=community`,
+                );
+              }
+            }}
           />
         )}
         ListHeaderComponent={headerContent}

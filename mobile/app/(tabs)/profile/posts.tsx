@@ -129,6 +129,11 @@ export default function OwnPostsScreen() {
                   ? communityLabelsById[item.community_id]
                   : undefined
               }
+              onCommunityPress={(communityId) =>
+                router.push(
+                  `/(tabs)/community/${encodeURIComponent(communityId)}?from=profile`,
+                )
+              }
             />
           )}
           onEndReached={handleLoadMore}

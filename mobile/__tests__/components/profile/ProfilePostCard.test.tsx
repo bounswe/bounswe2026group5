@@ -90,4 +90,21 @@ describe("ProfilePostCard", () => {
       "https://cdn.example.com/files/resume.pdf",
     );
   });
+
+  it("moves the community name into the category badge and opens the community", () => {
+    const onCommunityPress = jest.fn();
+    const { getByTestId, getByText, queryByText } = render(
+      <ProfilePostCard
+        post={buildPost()}
+        communityLabel="Backend Guild"
+        onCommunityPress={onCommunityPress}
+      />,
+    );
+
+    fireEvent.press(getByTestId("post-card-category-post-1"));
+
+    expect(getByText("Backend Guild")).toBeTruthy();
+    expect(queryByText("#Backend Guild")).toBeNull();
+    expect(onCommunityPress).toHaveBeenCalledWith("tag-1");
+  });
 });
