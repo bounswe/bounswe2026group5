@@ -91,7 +91,7 @@ describe("ProfilePostCard", () => {
     );
   });
 
-  it("moves the community name into the category badge and opens the community", () => {
+  it("shows a quiet community name in the author metadata and opens the community", () => {
     const onCommunityPress = jest.fn();
     const { getByTestId, getByText, queryByText } = render(
       <ProfilePostCard
@@ -101,10 +101,33 @@ describe("ProfilePostCard", () => {
       />,
     );
 
-    fireEvent.press(getByTestId("post-card-category-post-1"));
+    const communityLabel = getByTestId("post-card-community-post-1");
 
-    expect(getByText("Backend Guild")).toBeTruthy();
+    fireEvent.press(communityLabel);
+
+    expect(getByTestId("post-card-event-icon-post-1").props.name).toBe(
+      "people-outline",
+    );
+    expect(getByTestId("post-card-community-icon-post-1").props.name).toBe(
+      "pricetag-outline",
+    );
+    expect(getByText("Backend Guild").props.className).toContain("text-[11px]");
+    expect(getByText("Backend Guild").props.className).not.toContain("bg-");
     expect(queryByText("#Backend Guild")).toBeNull();
     expect(onCommunityPress).toHaveBeenCalledWith("tag-1");
+  });
+
+  it("does not render a milestone category tag", () => {
+    const { queryByText } = render(
+      <ProfilePostCard
+        post={buildPost({
+          category: "MCTE",
+          community_id: null,
+          event_type: "achievement",
+        })}
+      />,
+    );
+
+    expect(queryByText("Milestone")).toBeNull();
   });
 });

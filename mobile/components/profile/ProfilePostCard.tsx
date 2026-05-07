@@ -10,12 +10,6 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   progress: "Progress update",
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  PrP: "Post",
-  MCTE: "Milestone",
-  CoP: "Community",
-};
-
 function getAccentColor(eventType: string): string {
   if (eventType === "achievement") {
     return "text-amber-600 dark:text-amber-400";
@@ -30,14 +24,14 @@ function getIconName(
   category: string,
   eventType: string,
 ): React.ComponentProps<typeof Ionicons>["name"] {
-  if (category === "CoP") {
-    return "chatbubbles-outline";
-  }
   if (eventType === "achievement") {
     return "trophy-outline";
   }
   if (eventType === "social") {
     return "people-outline";
+  }
+  if (category === "CoP") {
+    return "chatbubbles-outline";
   }
   return "trending-up-outline";
 }
@@ -96,10 +90,6 @@ export function ProfilePostCard({
   onCommunityPress,
 }: Readonly<ProfilePostCardProps>) {
   const label = EVENT_TYPE_LABELS[post.event_type] ?? post.event_type;
-  const categoryLabel =
-    post.category === "CoP" && communityLabel
-      ? communityLabel
-      : CATEGORY_LABELS[post.category] ?? post.category;
   const dateLabel = formatPostTimestamp(post.timestamp);
   const authorName =
     post.author?.display_name || post.author?.username || "Unknown user";
@@ -113,7 +103,7 @@ export function ProfilePostCard({
       testID={`post-card-${post.id}`}
       className="rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4"
     >
-      <View className="mb-3 flex-row items-start justify-between gap-3">
+      <View className="mb-3 flex-row items-center gap-3">
         <View className="min-w-0 flex-1 flex-row items-center gap-3">
           {post.author?.picture_url ? (
             <Image
@@ -145,28 +135,43 @@ export function ProfilePostCard({
             >
               {authorSubtitle ? `${authorSubtitle} - ${dateLabel}` : dateLabel}
             </Text>
+            {post.category === "CoP" && communityLabel ? (
+              <TouchableOpacity
+                testID={`post-card-community-${post.id}`}
+                activeOpacity={post.community_id ? 0.75 : 1}
+                disabled={!post.community_id}
+                onPress={() => {
+                  if (post.community_id) {
+                    onCommunityPress?.(post.community_id);
+                  }
+                }}
+                className="mt-0.5 flex-row items-center gap-1 self-start"
+              >
+                <Ionicons
+                  testID={`post-card-community-icon-${post.id}`}
+                  name="pricetag-outline"
+                  size={11}
+                  color="#6b7280"
+                />
+                <Text className="text-[11px] text-on-surface-muted dark:text-on-surface-muted-dark">
+                  {communityLabel}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
-        <TouchableOpacity
-          testID={`post-card-category-${post.id}`}
-          activeOpacity={post.category === "CoP" && post.community_id ? 0.75 : 1}
-          disabled={post.category !== "CoP" || !post.community_id}
-          onPress={() => {
-            if (post.community_id) {
-              onCommunityPress?.(post.community_id);
-            }
-          }}
-          className="rounded-full bg-surface-active dark:bg-gray-800 px-2 py-0.5"
-        >
-          <Text className="text-[10px] font-black uppercase text-on-surface-muted dark:text-on-surface-muted-dark">
-            {categoryLabel}
-          </Text>
-        </TouchableOpacity>
       </View>
 
-      <View className="mb-2 flex-row items-center gap-1.5">
-        <Ionicons name={iconName} size={14} color="#6b7280" />
-        <Text className={`text-xs font-bold ${accentColor}`}>{label}</Text>
+      <View className="mb-2">
+        <View className="flex-row items-center gap-1.5">
+          <Ionicons
+            testID={`post-card-event-icon-${post.id}`}
+            name={iconName}
+            size={14}
+            color="#6b7280"
+          />
+          <Text className={`text-xs font-bold ${accentColor}`}>{label}</Text>
+        </View>
       </View>
 
       {/* Content */}

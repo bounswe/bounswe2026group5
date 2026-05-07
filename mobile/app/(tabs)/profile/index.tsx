@@ -246,7 +246,7 @@ function renderReviewsSection({
   }
 
   return (
-    <View className="mt-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4">
+    <View className="mt-2 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4">
       <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
         Reviews
       </Text>
