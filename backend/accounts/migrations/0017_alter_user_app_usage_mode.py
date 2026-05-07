@@ -17,6 +17,7 @@ class Migration(migrations.Migration):
                 blank=True,
                 choices=[("MENTEE", "Mentee"), ("MENTOR", "Mentor"), ("ADMIN", "Admin")],
                 max_length=16,
+                null=True,
             ),
         ),
     ]

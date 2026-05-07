@@ -704,7 +704,7 @@ class MyAvailabilitySlotDetailAPIView(ProfileLookupMixin, APIView):
             with transaction.atomic():
                 locked_slot = AvailabilitySlot.objects.select_for_update().get(id=slot.id)
 
-                if locked_slot.is_booked:
+                if locked_slot.status == AvailabilitySlot.Status.BOOKED:
                     return Response(
                         {"detail": "Cannot delete a booked slot. Cancel the booking first."},
                         status=status.HTTP_400_BAD_REQUEST,

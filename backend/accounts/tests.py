@@ -1399,6 +1399,7 @@ class IsEmailVerifiedPermissionTests(TestCase):
         request.user = AnonymousUser()  # type: ignore[attr-defined]
         self.assertFalse(self.permission.has_permission(request, Mock()))
 
+    @override_settings(REQUIRE_EMAIL_VERIFICATION=True)
     def test_denies_unverified_authenticated_user(self) -> None:
         user = User.objects.create_user(email="u@example.com", password="P!aaabbbb")
         user.is_email_verified = False

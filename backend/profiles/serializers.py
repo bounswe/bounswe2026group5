@@ -194,7 +194,6 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
             "startTime",
             "endTime",
             "status",
-            "is_booked",
             "bookedBy",
             "bookedAt",
             "sessionId",
@@ -233,7 +232,7 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
     @extend_schema_field(OpenApiTypes.STR)
     def get_sessionId(self, obj: AvailabilitySlot) -> str | None:
         """Return the ID of an active MeetingSession associated with this slot."""
-        if not obj.is_booked:
+        if obj.status != AvailabilitySlot.Status.BOOKED:
             return None
 
         session = MeetingSession.objects.filter(

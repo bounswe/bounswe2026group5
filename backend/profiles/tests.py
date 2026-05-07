@@ -128,13 +128,13 @@ class ProfileModelsTests(TestCase):
             end_at=end_at,
         )
 
-        slot.mark_booked()
+        slot.mark_booked(self.mentee_user)
         slot.refresh_from_db()
-        self.assertTrue(slot.is_booked)
+        self.assertEqual(slot.status, AvailabilitySlot.Status.BOOKED)
 
         slot.mark_available()
         slot.refresh_from_db()
-        self.assertFalse(slot.is_booked)
+        self.assertEqual(slot.status, AvailabilitySlot.Status.AVAILABLE)
 
     def test_availability_slot_overlapping_range_rejected(self) -> None:
         """Overlapping availability slots are rejected for same profile."""
@@ -1678,7 +1678,6 @@ class AvailabilitySlotAPIViewTests(TestCase):
             profile=self.mentor_profile,
             start_at=slot_start,
             end_at=slot_start + timedelta(hours=1),
-            is_booked=False,
         )
         request_obj = MentorshipRequest.objects.create(
             mentor=self.mentor_profile,
@@ -2044,7 +2043,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
             profile=self.mentor_profile,
             start_at=slot_start,
             end_at=slot_start + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.mentee_user,
             booked_at=timezone.now(),
         )
@@ -2081,7 +2080,6 @@ class AvailabilitySlotAPIViewTests(TestCase):
             profile=self.mentor_profile,
             start_at=slot_start,
             end_at=slot_end,
-            is_booked=False,
         )
         request_obj = MentorshipRequest.objects.create(
             mentor=self.mentor_profile,
@@ -2182,7 +2180,7 @@ class AvailabilitySlotBookingAPIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         slot.refresh_from_db()
-        self.assertTrue(slot.is_booked)
+        self.assertEqual(slot.status, AvailabilitySlot.Status.BOOKED)
         self.assertEqual(slot.booked_by, self.mentee_user)
         self.assertIsNotNone(slot.booked_at)
         self.assertEqual(response.json()["bookedBy"], self.mentee_profile.username)
@@ -2194,7 +2192,7 @@ class AvailabilitySlotBookingAPIViewTests(TestCase):
             profile=self.mentor_profile,
             start_at=slot_start,
             end_at=slot_start + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.other_user,
             booked_at=timezone.now(),
         )
@@ -3133,7 +3131,7 @@ class ProfileSerializersUnitTests(TestCase):
             profile=self.profile,
             start_at=start_at,
             end_at=start_at + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=user_without_profile,
             booked_at=timezone.now(),
         )
@@ -3193,7 +3191,7 @@ class AvailabilityBookingServicesTests(TestCase):
             actor=self.mentee_user,
         )
 
-        self.assertTrue(booked_slot.is_booked)
+        self.assertEqual(booked_slot.status, AvailabilitySlot.Status.BOOKED)
         self.assertEqual(booked_slot.booked_by, self.mentee_user)
         self.assertIsNotNone(booked_slot.booked_at)
 
@@ -3220,7 +3218,7 @@ class AvailabilityBookingServicesTests(TestCase):
             profile=self.mentor_profile,
             start_at=start_at,
             end_at=start_at + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.other_user,
             booked_at=timezone.now(),
         )
@@ -3271,7 +3269,7 @@ class AvailabilityBookingServicesTests(TestCase):
             profile=self.mentor_profile,
             start_at=start_at,
             end_at=start_at + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.mentee_user,
             booked_at=timezone.now(),
         )
@@ -3290,7 +3288,7 @@ class AvailabilityBookingServicesTests(TestCase):
             profile=self.mentor_profile,
             start_at=start_at,
             end_at=start_at + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.mentee_user,
             booked_at=timezone.now(),
         )
@@ -3301,7 +3299,7 @@ class AvailabilityBookingServicesTests(TestCase):
             actor=self.mentor_user,
         )
 
-        self.assertFalse(canceled_slot.is_booked)
+        self.assertEqual(canceled_slot.status, AvailabilitySlot.Status.AVAILABLE)
         self.assertIsNone(canceled_slot.booked_by)
         self.assertIsNone(canceled_slot.booked_at)
 
@@ -3312,7 +3310,7 @@ class AvailabilityBookingServicesTests(TestCase):
             profile=self.mentor_profile,
             start_at=start_at,
             end_at=start_at + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.mentee_user,
             booked_at=timezone.now(),
         )
@@ -3323,7 +3321,7 @@ class AvailabilityBookingServicesTests(TestCase):
             actor=self.mentee_user,
         )
 
-        self.assertFalse(canceled_slot.is_booked)
+        self.assertEqual(canceled_slot.status, AvailabilitySlot.Status.AVAILABLE)
         self.assertIsNone(canceled_slot.booked_by)
 
     def test_cancel_availability_booking_unlinks_accepted_requests(self) -> None:
@@ -3334,7 +3332,7 @@ class AvailabilityBookingServicesTests(TestCase):
             profile=self.mentor_profile,
             start_at=start_at,
             end_at=end_at,
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.mentee_user,
             booked_at=timezone.now(),
         )
@@ -3357,7 +3355,7 @@ class AvailabilityBookingServicesTests(TestCase):
         self.assertIsNone(request_obj.slot)
         self.assertEqual(request_obj.initial_session_start_at, start_at)
         self.assertEqual(request_obj.initial_session_end_at, end_at)
-        self.assertFalse(slot.is_booked)
+        self.assertEqual(slot.status, AvailabilitySlot.Status.AVAILABLE)
 
 
 class CommunityTagsAPITests(TestCase):

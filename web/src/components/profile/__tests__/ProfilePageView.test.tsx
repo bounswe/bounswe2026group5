@@ -51,9 +51,9 @@ describe('ProfilePageView', () => {
     vi.clearAllMocks()
     mockUseAvailabilitySlots.mockReturnValue({
       data: [
-        { id: 'slot-1', is_booked: false },
-        { id: 'slot-2', is_booked: false },
-        { id: 'slot-3', is_booked: true },
+        { id: 'slot-1', status: 'AVAILABLE' },
+        { id: 'slot-2', status: 'AVAILABLE' },
+        { id: 'slot-3', status: 'BOOKED' },
       ],
     })
   })

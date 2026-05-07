@@ -10,7 +10,6 @@ export interface AvailabilitySlot {
     date: string
     startTime: string
     endTime: string
-    is_booked: boolean
     bookedBy: string | null
     bookedAt: string | null
     sessionId: string | null

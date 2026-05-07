@@ -106,7 +106,7 @@ describe("ScheduleScreen", () => {
           date: today,
           startTime: "11:00:00",
           endTime: "12:00:00",
-          is_booked: false,
+          status: "AVAILABLE",
         },
       ],
       isLoading: false,

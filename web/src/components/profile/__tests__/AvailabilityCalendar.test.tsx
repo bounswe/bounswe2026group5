@@ -78,7 +78,6 @@ function makeSlot(overrides = {}) {
     date: futureDate,
     startTime: '10:00:00',
     endTime: '11:00:00',
-    is_booked: false,
     status: 'AVAILABLE',
     bookedBy: null,
     bookedAt: null,

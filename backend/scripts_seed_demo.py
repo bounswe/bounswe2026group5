@@ -219,7 +219,6 @@ def seed_availability(profile, offset_days: int) -> None:
             profile=profile,
             start_at=start_at,
             end_at=end_at,
-            is_booked=False,
         )
 
 

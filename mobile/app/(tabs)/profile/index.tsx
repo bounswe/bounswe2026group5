@@ -63,9 +63,9 @@ const REVIEWS_PAGE_SIZE = 6;
 function isFutureOpenSlot(slot: {
   date: string;
   startTime: string;
-  is_booked: boolean;
+  status: "AVAILABLE" | "PENDING" | "BOOKED";
 }): boolean {
-  if (slot.is_booked) {
+  if (slot.status !== "AVAILABLE") {
     return false;
   }
 
