@@ -355,6 +355,35 @@ describe("RegisterScreen", () => {
     });
   });
 
+  it("lets users opt out of registration location before the permission prompt", async () => {
+    (registerFn as jest.Mock).mockResolvedValueOnce({
+      access_token: "acc",
+      refresh_token: "ref",
+      user: { username: "server_user", app_usage_mode: "" },
+    });
+
+    const { getByLabelText, findByLabelText } = renderRegister();
+
+    fireEvent.changeText(getByLabelText("Email"), "user@example.com");
+    fireEvent.changeText(getByLabelText("Password"), "Password1");
+    fireEvent.changeText(getByLabelText("Confirm password"), "Password1");
+    fireEvent.press(getByLabelText("Use my location to find nearby mentors"));
+    fireEvent.press(
+      getByLabelText("I agree to the Terms of Service and Privacy Policy"),
+    );
+    fireEvent.press(getByLabelText("Complete registration"));
+    fireEvent.press(await findByLabelText("submit-profile-setup"));
+
+    await waitFor(() => {
+      expect(mockRequestForegroundPermissionsAsync).not.toHaveBeenCalled();
+      expect(registerFn).toHaveBeenCalledWith({
+        email: "user@example.com",
+        password: "Password1",
+        confirm_password: "Password1",
+      });
+    });
+  });
+
   it("surfaces username validation errors from profile setup", async () => {
     (registerFn as jest.Mock).mockResolvedValueOnce({
       access_token: "acc",

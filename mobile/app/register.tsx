@@ -129,6 +129,8 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [shareRegistrationLocation, setShareRegistrationLocation] =
+    useState(true);
   const [terms, setTerms] = useState(false);
   const [termsError, setTermsError] = useState("");
   const [submitError, setSubmitError] = useState("");
@@ -178,7 +180,9 @@ export default function RegisterScreen() {
         user = googleLoginMutation.data.user;
       } else {
         // Normal email/password registration
-        const location = await getRegistrationLocation();
+        const location = shareRegistrationLocation
+          ? await getRegistrationLocation()
+          : undefined;
         const registration = await registerFn({
           email: email.trim(),
           password,
@@ -525,6 +529,43 @@ export default function RegisterScreen() {
                   {confirmPasswordError}
                 </Text>
               ) : null}
+            </View>
+
+            {/* Location Sharing */}
+            <View className="gap-1.5">
+              <Pressable
+                onPress={() => setShareRegistrationLocation((value) => !value)}
+                className="flex-row items-start gap-3 rounded-xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4"
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: shareRegistrationLocation }}
+                accessibilityLabel="Use my location to find nearby mentors"
+              >
+                <View
+                  className="w-5 h-5 rounded mt-0.5 items-center justify-center border"
+                  style={{
+                    backgroundColor: shareRegistrationLocation
+                      ? theme.primary
+                      : "transparent",
+                    borderColor: shareRegistrationLocation
+                      ? theme.primary
+                      : theme.textMuted,
+                  }}
+                >
+                  {shareRegistrationLocation && (
+                    <Ionicons name="checkmark" size={13} color="white" />
+                  )}
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-bold text-on-surface dark:text-on-surface-dark">
+                    Use my location to find nearby mentors
+                  </Text>
+                  <Text className="mt-1 text-xs leading-5 text-on-surface-soft dark:text-on-surface-soft-dark">
+                    We will ask your device for permission during signup. You
+                    can skip this now and change precise sharing later in
+                    Settings.
+                  </Text>
+                </View>
+              </Pressable>
             </View>
 
             {/* Terms & Conditions */}
