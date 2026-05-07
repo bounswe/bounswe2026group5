@@ -21,7 +21,8 @@ const AVATAR_COLORS = [
 function ProfileAvatar({
                          displayName,
                          pictureUrl,
-                       }: Readonly<{ displayName: string; pictureUrl: string | null }>) {
+                         showInitialsOnly,
+                       }: Readonly<{ displayName: string; pictureUrl: string | null; showInitialsOnly: boolean }>) {
   const initials = (displayName || '?')
       .split(' ')
       .map((n) => n[0])
@@ -31,7 +32,7 @@ function ProfileAvatar({
 
   const colorClass = AVATAR_COLORS[displayName.length % AVATAR_COLORS.length]
 
-  if (pictureUrl) {
+  if (pictureUrl && !showInitialsOnly) {
     return (
         <img
             src={pictureUrl}
@@ -71,6 +72,7 @@ export function ProfileCard({
           <ProfileAvatar
               displayName={profile.full_name}
               pictureUrl={profile.picture_url}
+              showInitialsOnly={profile.show_initials_only}
           />
           <div className="min-w-0">
             <h3 className="font-display text-2xl font-bold text-ink leading-tight truncate">

@@ -163,7 +163,6 @@ def _notify_matching_interests(tag: CommunityTag) -> None:
 
     candidates = (
         Profile.objects
-        .filter(is_visible=True)
         .exclude(id=creator_profile_id)
         .values_list("user_id", "skills")
     )

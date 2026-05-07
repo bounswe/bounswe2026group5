@@ -1386,6 +1386,7 @@ class ResendVerificationAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 403)
 
 
+@override_settings(REQUIRE_EMAIL_VERIFICATION=True)
 class IsEmailVerifiedPermissionTests(TestCase):
     """Direct unit tests for the IsEmailVerified permission class."""
 

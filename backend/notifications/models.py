@@ -54,3 +54,25 @@ class Notification(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user.username}: {self.type} - {self.message[:50]}"
+
+
+class FCMToken(models.Model):
+    """FCM Token for push notifications."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="fcm_tokens")
+    token = models.TextField(unique=True)
+    device_type = models.CharField(
+        max_length=20,
+        choices=[("web", "Web"), ("android", "Android"), ("ios", "iOS")],
+        default="web",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "fcm_tokens"
+        verbose_name = "FCM Token"
+        verbose_name_plural = "FCM Tokens"
+
+    def __str__(self) -> str:
+        return f"{self.user.username} - {self.device_type}"

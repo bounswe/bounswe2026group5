@@ -58,16 +58,16 @@ describe('ProfilePageView', () => {
     })
   })
 
-  it('hides private mentor fields from non-owners', () => {
+  it('shows initials and hides picture when show_initials_only is true', () => {
     renderWithProviders(
       <ProfilePageView
         profile={{
           isMentor: true,
-          username: 'mentor-hidden',
-          full_name: 'Hidden Mentor',
+          username: 'mentor-anon',
+          full_name: 'MA', // initials from backend
           bio: 'Private bio',
-          hidden: true,
-          picture_url: '',
+          show_initials_only: true,
+          picture_url: 'https://example.com/pic.jpg',
           title: 'Senior Mentor',
           skills: ['React'],
           average_rating: 4.8,
@@ -79,12 +79,10 @@ describe('ProfilePageView', () => {
       />,
     )
 
-    expect(screen.getByText(/Bio is hidden by the user/i)).toBeInTheDocument()
-    expect(screen.getByText(/Title is hidden by the user/i)).toBeInTheDocument()
-    expect(screen.getByText(/Rating is hidden by the user/i)).toBeInTheDocument()
-    expect(screen.getByText(/Mentee count is hidden by the user/i)).toBeInTheDocument()
-    expect(screen.queryByTestId('availability-calendar')).not.toBeInTheDocument()
-    expect(mockUseAvailabilitySlots).toHaveBeenCalledWith('mentor-hidden', true)
+    expect(screen.getByText('MA')).toBeInTheDocument()
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+    expect(screen.getByText('Senior Mentor')).toBeInTheDocument()
+    expect(screen.getByTestId('availability-calendar')).toBeInTheDocument()
   })
 
   it('shows mentor snapshot/calendar and opens edit modal for owner', async () => {
@@ -97,7 +95,7 @@ describe('ProfilePageView', () => {
           username: 'mentor-public',
           full_name: 'Public Mentor',
           bio: 'I help with systems design.',
-          hidden: false,
+          show_initials_only: false,
           picture_url: '',
           title: 'Principal Engineer',
           skills: ['Systems Design', 'TypeScript'],
@@ -126,7 +124,7 @@ describe('ProfilePageView', () => {
           username: 'admin-user',
           full_name: 'System Admin',
           bio: 'I manage the platform.',
-          hidden: false,
+          show_initials_only: false,
           picture_url: '',
           skills: [],
           app_usage_mode: 'ADMIN',
@@ -149,7 +147,7 @@ describe('ProfilePageView', () => {
           username: 'other-user',
           full_name: 'Other User',
           bio: 'Hello world',
-          hidden: false,
+          show_initials_only: false,
           picture_url: '',
           skills: [],
           app_usage_mode: 'MENTEE',
@@ -170,7 +168,7 @@ describe('ProfilePageView', () => {
           username: 'my-user',
           full_name: 'My User',
           bio: 'My bio',
-          hidden: false,
+          show_initials_only: false,
           picture_url: '',
           skills: [],
           app_usage_mode: 'MENTEE',

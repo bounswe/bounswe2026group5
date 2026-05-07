@@ -55,6 +55,16 @@ export class ProfilePage {
     await expect(this.page.getByText('Requested')).toBeVisible();
   }
 
+  async expectAverageRating(rating: string | RegExp) {
+    await expect(this.page.getByText('Average Rating')).toBeVisible();
+    await expect(this.page.getByText(rating).first()).toBeVisible();
+  }
+
+  async expectPublicReview(reviewText: string) {
+    await expect(this.page.getByText('Reviews')).toBeVisible();
+    await expect(this.page.getByText(reviewText)).toBeVisible();
+  }
+
   private async clickAvailabilityCell(dayIndexFromMonday: number, hour: number) {
     const hourIndex = hour - 8;
     const cellIndex = 8 + hourIndex * 8 + 1 + dayIndexFromMonday;

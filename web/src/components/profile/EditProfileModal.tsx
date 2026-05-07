@@ -24,7 +24,7 @@ interface EditProfileModalProps {
     mode: 'MENTOR' | 'MENTEE'
     initialValues: EditProfileValues & {
         title?: string
-        hidden?: boolean
+        show_initials_only?: boolean
     }
     onClose: () => void
 }
@@ -40,11 +40,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
     const [bio, setBio] = useState(initialValues.bio)
     const [skills, setSkills] = useState<string[]>(initialValues.skills)
     const [title, setTitle] = useState(initialValues.title ?? '')
-    const [hidden, setHidden] = useState(
-        profileData && 'hidden' in profileData
-            ? profileData.hidden
-            : initialValues.hidden ?? false
-    )
+    const [showInitialsOnly, setShowInitialsOnly] = useState(initialValues.show_initials_only ?? false)
 
     const isMentor = mode === 'MENTOR'
 
@@ -62,12 +58,12 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
             {
                 bio,
                 title: isMentor ? title : undefined,
-                is_visible: !hidden,
+                show_initials_only: showInitialsOnly,
                 skills: skills,
             },
             {
                 onSuccess: () => {
-                    queryClient.invalidateQueries({ queryKey: ['profiles', me?.username] })
+                    queryClient.invalidateQueries({ queryKey: ['profiles'] })
                     onClose()
                 },
             }
@@ -151,15 +147,15 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                         />
                     </div>
 
-                    {/* Hidden toggle */}
+                    {/* Show initials only toggle */}
                     <div className="flex items-center gap-4 rounded-xl border border-line p-4 bg-black/[0.02]">
                         <Switch
-                            checked={hidden}
-                            onCheckedChange={setHidden}
+                            checked={showInitialsOnly}
+                            onCheckedChange={setShowInitialsOnly}
                         />
                         <div>
-                            <p className="text-sm font-medium text-ink">Hide my profile</p>
-                            <Muted className="text-xs">Only your name will be visible to others.</Muted>
+                            <p className="text-sm font-medium text-ink">Show initials only</p>
+                            <Muted className="text-xs">Your full name and picture will be hidden from others.</Muted>
                         </div>
                     </div>
 

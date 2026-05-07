@@ -54,37 +54,4 @@ class Message(models.Model):
         ordering = ["created_at"]
 
     def __str__(self) -> str:
-        return f"Message {self.id} from {getattr(self, 'sender_id')}"
-
-
-class MessageReport(models.Model):
-    """A report created by a participant for a problematic message."""
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    message = models.ForeignKey(
-        Message,
-        on_delete=models.CASCADE,
-        related_name="reports",
-    )
-    reported_by = models.ForeignKey(
-        Profile,
-        on_delete=models.CASCADE,
-        related_name="submitted_message_reports",
-    )
-    reason = models.CharField(max_length=512)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "message_reports"
-        ordering = ["-created_at"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["message", "reported_by"],
-                name="uniq_message_report_per_reporter",
-            )
-        ]
-
-    def __str__(self) -> str:
-        return (
-            f"Report for message {getattr(self, 'message_id')} by {getattr(self, 'reported_by_id')}"
-        )
+        return f"Message {self.id} from {self.sender_id}"

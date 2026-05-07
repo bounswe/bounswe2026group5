@@ -338,17 +338,20 @@ export default function ProfileScreen() {
   );
 
   useEffect(() => {
+    const controller = new AbortController();
     let mounted = true;
 
     if (!currentUsername) {
       return () => {
         mounted = false;
+        controller.abort();
       };
     }
 
     fetch(
       `${API_BASE_URL}/api/profiles/${encodeURIComponent(currentUsername)}/`,
       {
+        signal: controller.signal,
         headers: {
           Accept: "application/json",
         },
@@ -375,8 +378,8 @@ export default function ProfileScreen() {
         setIsProfileHidden(Boolean(payload.hidden));
         setSkillsData(payload.skills ?? []);
       })
-      .catch(() => {
-        if (!mounted) {
+      .catch((error) => {
+        if (!mounted || error.name === "AbortError") {
           return;
         }
         setIsProfileHidden(null);
@@ -385,6 +388,7 @@ export default function ProfileScreen() {
 
     return () => {
       mounted = false;
+      controller.abort();
     };
   }, [currentUsername]);
 
@@ -393,31 +397,34 @@ export default function ProfileScreen() {
       return;
     }
 
+    const { results: nextResults } = reviewsQuery.data;
+
     setReviews((prev) => {
       const nextReviews =
-        reviewsPage === 1
-          ? reviewsQuery.data.results
-          : [...prev, ...reviewsQuery.data.results];
+        reviewsPage === 1 ? nextResults : [...prev, ...nextResults];
 
-      const isSameCollection =
-        prev.length === nextReviews.length &&
-        prev.every((review, index) => {
-          const nextReview = nextReviews[index];
+      if (prev.length === nextReviews.length) {
+        const isSame = prev.every((r, i) => {
+          const nr = nextReviews[i];
           return (
-            review?.rating === nextReview?.rating &&
-            review?.text === nextReview?.text &&
-            review?.created_at === nextReview?.created_at
+            r.rating === nr.rating &&
+            r.text === nr.text &&
+            r.created_at === nr.created_at
           );
         });
+        if (isSame) return prev;
+      }
 
-      return isSameCollection ? prev : nextReviews;
+      return nextReviews;
     });
   }, [reviewsPage, reviewsQuery.data]);
 
   useEffect(() => {
+    const controller = new AbortController();
     let mounted = true;
 
     fetch(`${API_BASE_URL}/api/profiles/skills/`, {
+      signal: controller.signal,
       headers: {
         Accept: "application/json",
       },
@@ -439,14 +446,16 @@ export default function ProfileScreen() {
 
         setAvailableSkills(normalized);
       })
-      .catch(() => {
-        if (mounted) {
-          setAvailableSkills([]);
+      .catch((error) => {
+        if (!mounted || error.name === "AbortError") {
+          return;
         }
+        setAvailableSkills([]);
       });
 
     return () => {
       mounted = false;
+      controller.abort();
     };
   }, []);
 

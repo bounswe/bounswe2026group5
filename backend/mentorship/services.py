@@ -717,7 +717,9 @@ def delete_match_feedback(*, feedback: Feedback) -> None:
 
     # Determine whether this feedback was already in a visible threshold batch.
     mentee_feedback_ids = list(
-        Feedback.objects.filter(match__mentor=mentor).exclude(submitted_by=mentor).order_by("id")
+        Feedback.objects.filter(match__mentor=mentor)
+        .exclude(submitted_by=mentor)
+        .order_by("created_at", "id")
     )
     visible_limit = (mentor.review_count // threshold) * threshold
     feedback_index = next(

@@ -245,10 +245,10 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
 class MenteeProfileResponseSerializer(serializers.ModelSerializer):
     """Read serializer for mentee profile data."""
 
-    full_name = serializers.CharField(source="display_name", read_only=True)
-    hidden = serializers.BooleanField(source="is_visible", read_only=True)
+    full_name = serializers.SerializerMethodField()
     picture_url = serializers.SerializerMethodField()
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
+    show_initials_only = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Profile
@@ -257,35 +257,40 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
             "username",
             "full_name",
             "bio",
-            "hidden",
+            "show_initials_only",
             "picture_url",
             "skills",
         )
         read_only_fields = fields
 
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_full_name(self, obj: Profile) -> str:
+        """Return display name or initials based on 'show_initials_only' setting."""
+        if obj.show_initials_only:
+            return _get_display_initials(obj.display_name or "")
+        return obj.display_name
+
     @extend_schema_field(OpenApiTypes.URI)
     def get_picture_url(self, obj: Profile) -> str:
-        """Return uploaded picture URL or external URL fallback."""
+        """Return uploaded picture URL or external URL fallback, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_picture_url(obj)
+            return ""
         return resolve_picture_url(obj)
-
-    def to_representation(self, instance: Profile) -> dict[str, Any]:
-        """Add 'hidden' field to the output representation."""
-        ret = super().to_representation(instance)
-        # Invert is_visible to get "hidden" semantics
-        ret["hidden"] = not instance.is_visible
-        return ret
 
 
 class MentorProfileResponseSerializer(serializers.ModelSerializer):
     """Read serializer for mentor profile data."""
 
-    full_name = serializers.CharField(source="display_name", read_only=True)
+    full_name = serializers.SerializerMethodField()
     title = serializers.CharField(read_only=True)
-    hidden = serializers.BooleanField(source="is_visible", read_only=True)
     picture_url = serializers.SerializerMethodField()
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     average_rating = serializers.DecimalField(max_digits=3, decimal_places=2, read_only=True)
     total_mentee_count = serializers.IntegerField(read_only=True)
+    show_initials_only = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Profile
@@ -295,7 +300,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
             "full_name",
             "title",
             "bio",
-            "hidden",
+            "show_initials_only",
             "picture_url",
             "skills",
             "average_rating",
@@ -303,16 +308,22 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_full_name(self, obj: Profile) -> str:
+        """Return display name or initials based on 'show_initials_only' setting."""
+        if obj.show_initials_only:
+            return _get_display_initials(obj.display_name or "")
+        return obj.display_name
+
     @extend_schema_field(OpenApiTypes.URI)
     def get_picture_url(self, obj: Profile) -> str:
-        """Return uploaded picture URL or external URL fallback."""
+        """Return uploaded picture URL or external URL fallback, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_picture_url(obj)
+            return ""
         return resolve_picture_url(obj)
-
-    def to_representation(self, instance):
-        ret = super().to_representation(instance)
-        # Invert is_visible to get "hidden" semantics
-        ret["hidden"] = not instance.is_visible
-        return ret
 
 
 class ProfileResponseSerializer(serializers.ModelSerializer):
@@ -332,7 +343,6 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
             "picture_url",
             "title",
             "location",
-            "is_visible",
             "show_initials_only",
             "skills",
             "created_at",
@@ -342,7 +352,12 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_picture_url(self, obj: Profile) -> str:
-        """Return uploaded picture URL or external URL fallback."""
+        """Return uploaded picture URL or external URL fallback, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_picture_url(obj)
+            return ""
         return resolve_picture_url(obj)
 
 
@@ -398,7 +413,6 @@ class ProfileUpdateSerializer(UsernameUpdateMixin, serializers.ModelSerializer):
             "title",
             "location",
             "share_precise_location",
-            "is_visible",
             "show_initials_only",
             "skills",
         )
@@ -533,13 +547,10 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
 
     Notes:
     - Enforces `show_initials_only` by replacing `full_name` with initials.
-    - Includes `hidden` (inverse of `is_visible`) for compatibility with the
-      existing profile detail endpoints.
     """
 
     full_name = serializers.SerializerMethodField()
     username = serializers.CharField(read_only=True)
-    hidden = serializers.BooleanField(source="is_visible", read_only=True)
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     location = serializers.SerializerMethodField()
     picture_url = serializers.SerializerMethodField()
@@ -553,7 +564,6 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
             "username",
             "full_name",
             "bio",
-            "hidden",
             "picture_url",
             "title",
             "location",
@@ -573,15 +583,13 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_picture_url(self, obj: Profile) -> str:
-        """Return uploaded picture URL or external URL fallback."""
+        """Return uploaded picture URL or external URL fallback, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_picture_url(obj)
+            return ""
         return resolve_picture_url(obj)
-
-    def to_representation(self, instance: Profile) -> dict[str, Any]:
-        """Add 'hidden' field to the output representation."""
-        ret = super().to_representation(instance)
-        # Invert is_visible to get "hidden" semantics.
-        ret["hidden"] = not instance.is_visible
-        return ret
 
     @extend_schema_field(LocationField)
     def get_location(self, obj: Profile) -> dict[str, float] | None:
@@ -623,16 +631,29 @@ _PROFILE_POST_CATEGORY_CHOICES = ["PrP", "MCTE", "CoP"]
 class ProfilePostAuthorSerializer(serializers.ModelSerializer):
     """Compact profile representation for profile post responses."""
 
+    display_name = serializers.SerializerMethodField()
     picture_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
-        fields = ("id", "username", "display_name", "picture_url", "title")
+        fields = ("id", "username", "display_name", "picture_url", "title", "show_initials_only")
         read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_display_name(self, obj: Profile) -> str:
+        """Return display name or initials based on 'show_initials_only' setting."""
+        if obj.show_initials_only:
+            return _get_display_initials(obj.display_name or "")
+        return obj.display_name
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_picture_url(self, obj: Profile) -> str:
-        """Return uploaded picture URL or external URL fallback."""
+        """Return uploaded picture URL or external URL fallback, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_picture_url(obj)
+            return ""
         return resolve_picture_url(obj)
 
 

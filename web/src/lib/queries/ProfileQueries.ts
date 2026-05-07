@@ -13,7 +13,7 @@ export interface MenteeProfile {
     id: string
     full_name: string
     bio: string
-    hidden: boolean
+    show_initials_only: boolean
     picture_url: string
     skills: string[] | null
     app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
@@ -23,7 +23,7 @@ export interface MentorProfile {
     id: string
     full_name: string
     bio: string
-    hidden: boolean
+    show_initials_only: boolean
     picture_url: string
     title: string
     skills: string[] | null
@@ -44,7 +44,6 @@ export interface UpdateProfileBody {
     picture_url?: string
     title?: string
     location?: string
-    is_visible?: boolean
     show_initials_only?: boolean
     skills?: string[]
 }
