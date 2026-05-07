@@ -42,6 +42,12 @@
           }
         }
       ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Neighborship uses your location to help find mentors near you."
+        }
+      ],
       "expo-secure-store",
       "@react-native-google-signin/google-signin"
     ],
