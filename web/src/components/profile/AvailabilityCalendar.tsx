@@ -279,7 +279,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
     )
     const hasPendingRequestForThisMentor = myRequests.some(
         r => r.status === 'PENDING' && 
-             r.mentor.username.toLowerCase() === username.toLowerCase()
+             r.mentor?.username?.toLowerCase() === username.toLowerCase()
     )
 
     const monday = getMonday(addDays(new Date(), weekOffset * 7))
