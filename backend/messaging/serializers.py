@@ -34,6 +34,8 @@ class MessageSerializer(serializers.ModelSerializer):
     conversation_id = serializers.UUIDField(source="conversation.id", read_only=True)
     sender = ProfileSummarySerializer(read_only=True)
     attachment_url = serializers.SerializerMethodField()
+    read_receipts = serializers.SerializerMethodField()
+    status_for_me = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -43,6 +45,8 @@ class MessageSerializer(serializers.ModelSerializer):
             "sender",
             "body",
             "attachment_url",
+            "read_receipts",
+            "status_for_me",
             "created_at",
         )
         read_only_fields = (
@@ -50,6 +54,8 @@ class MessageSerializer(serializers.ModelSerializer):
             "conversation_id",
             "sender",
             "attachment_url",
+            "read_receipts",
+            "status_for_me",
             "created_at",
         )
 
@@ -59,6 +65,20 @@ class MessageSerializer(serializers.ModelSerializer):
             return None
         request = self.context.get("request")
         return request.build_absolute_uri(obj.attachment.url) if request else obj.attachment.url
+
+    def get_read_receipts(self, obj: Message) -> dict:
+        """Return read receipt statuses for all users."""
+        receipts = {}
+        for receipt in obj.read_receipts.all():
+            receipts[str(receipt.user_id)] = receipt.status
+        return receipts
+
+    def get_status_for_me(self, obj: Message) -> str:
+        """Return the status of this message for the current user."""
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return "sent"
+        return obj.get_status_for_user(str(request.user.id))
 
 
 class MessageCreateSerializer(serializers.Serializer):
@@ -102,5 +122,3 @@ class MessageCreateSerializer(serializers.Serializer):
             )
 
         return attachment
-
-

@@ -15,6 +15,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
+from firebase_admin import auth
 
 from .models import AuthProvider, EmailVerificationToken, PasswordResetToken, Report, User
 from .oauth import OAuthVerificationError, verify_google_id_token
@@ -49,9 +50,20 @@ def build_auth_response(user: User, refresh: RefreshToken | None = None) -> dict
     if refresh is None:
         refresh = RefreshToken.for_user(user)
 
+    # Generate a Firebase custom token for real-time messaging
+    firebase_token = None
+    try:
+        from messaging.firebase import get_firebase_app
+        app = get_firebase_app()
+        if app:
+            firebase_token = auth.create_custom_token(str(user.id), app=app).decode("utf-8")
+    except Exception:
+        logger.exception("Failed to generate Firebase custom token for user %s", user.id)
+
     return {
         "access_token": str(refresh.access_token),
         "refresh_token": str(refresh),
+        "firebase_token": firebase_token,
         "user": UserResponseSerializer(user).data,
     }
 

@@ -5,6 +5,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
+COPY .env.local .
 COPY . .
 
 EXPOSE 5173

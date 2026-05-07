@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { requestForToken, onMessageListener } from '#/lib/firebase'
+import { requestForToken, onMessageListener } from '#/lib/firebase-client'
 import { useRegisterFCMToken } from '#/lib/queries/NotificationQueries'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'

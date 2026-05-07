@@ -249,6 +249,12 @@ FIREBASE_SERVICE_ACCOUNT_PATH = os.getenv(
     "FIREBASE_SERVICE_ACCOUNT_PATH", "credentials/firebase-service-account.json"
 )
 
+# Firebase real-time messaging
+USE_FIREBASE_REALTIME = bool(
+    os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH") and os.getenv("VITE_FIREBASE_PROJECT_ID")
+)
+FIRESTORE_DATABASE_ID = env("FIRESTORE_DATABASE_ID", default=None)
+
 # Password reset
 PASSWORD_RESET_TOKEN_LIFETIME_MINUTES = int(
     os.getenv("PASSWORD_RESET_TOKEN_LIFETIME_MINUTES", "30")

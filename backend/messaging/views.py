@@ -14,7 +14,7 @@ from accounts.serializers import ReportCreateSerializer
 from notifications.models import Notification, NotificationType
 from profiles.models import Profile
 
-from .models import Conversation, Message
+from .models import Conversation, Message, ReadReceipt
 from .serializers import (
     ConversationSerializer,
     MessageCreateSerializer,
@@ -254,3 +254,50 @@ class MessageReportAPIView(APIView):
         )
 
         return Response({"detail": "Report created."}, status=status.HTTP_201_CREATED)
+
+
+class MessageMarkReadAPIView(APIView):
+    """Mark a message as read by the current user."""
+
+    permission_classes = [IsRegularUser]
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: MessageSerializer,
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Access denied."),
+            404: OpenApiResponse(description="Message not found."),
+        },
+        description="Mark a message as read by the authenticated user.",
+        tags=["Messages"],
+        operation_id="messages_mark_read",
+    )
+    def post(self, request: Request, message_id: str) -> Response:
+        """Mark the message as read for the current user."""
+        try:
+            profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response({"detail": PROFILE_NOT_FOUND_MSG}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            message = Message.objects.select_related(
+                "conversation__match__mentor", "conversation__match__mentee"
+            ).get(id=message_id)
+        except Message.DoesNotExist:
+            return Response({"detail": "Message not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check if user is a participant in the conversation
+        conversation = message.conversation
+        if conversation.match.mentor != profile and conversation.match.mentee != profile:
+            return Response({"detail": ACCESS_DENIED_MSG}, status=status.HTTP_403_FORBIDDEN)
+
+        # Update or create read receipt with 'read' status
+        read_receipt, created = ReadReceipt.objects.update_or_create(
+            message=message,
+            user=profile,
+            defaults={"status": "read"},
+        )
+
+        response_serializer = MessageSerializer(message, context={"request": request})
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
