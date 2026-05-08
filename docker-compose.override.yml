@@ -1,10 +1,12 @@
 services:
   backend:
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
     volumes:
       - ./backend:/app
       - ./backend/credentials:/app/credentials:ro
 
   frontend:
+    command: npm run dev -- --host 0.0.0.0 --port 3000
     volumes:
       - ./web:/app
       - /app/node_modules
