@@ -12,23 +12,50 @@ export const usePushNotifications = (isAuthenticated: boolean, currentUsername?:
     useEffect(() => {
         if (!isAuthenticated) return
 
+        // We store the registered token per user to support multi-account login on the same browser
+        const userId = localStorage.getItem('id')
+        const tokenKey = `last_fcm_token_${userId}`
+
         const setupNotifications = async () => {
-            const token = await requestForToken()
+            // Attempt to get the token. 
+            // In Dashboard, this will be 'silent' (forcePrompt=false) to avoid intrusive popups on load.
+            const token = await requestForToken(false)
+            
             if (token) {
-                const lastToken = localStorage.getItem('last_fcm_token')
-                if (token !== lastToken) {
+                const registeredToken = localStorage.getItem(tokenKey)
+                if (token !== registeredToken) {
                     registerToken(
                         { token, device_type: 'web' },
                         {
-                            onSuccess: () => localStorage.setItem('last_fcm_token', token),
-                            onError: (err: any) => console.log('FCM registration skipped or failed:', err.message)
+                            onSuccess: () => {
+                                localStorage.setItem(tokenKey, token)
+                                console.log('FCM token registered for user:', userId)
+                            },
+                            onError: (err: any) => console.log('FCM registration failed:', err.message)
                         }
                     )
                 }
             }
         }
 
+        // Run immediately
         setupNotifications()
+
+        // AGGRESSIVE POLLING:
+        // When the user logs in, they are prompted for permission. 
+        // We poll every 500ms to detect the exact moment they click 'Allow'.
+        const interval = setInterval(() => {
+            if (Notification.permission === 'granted') {
+                setupNotifications()
+                // If we successfully got a token for this user, we can stop polling
+                if (localStorage.getItem(tokenKey)) {
+                    clearInterval(interval)
+                }
+            }
+        }, 500)
+
+        // Stop polling after 15 seconds to avoid unnecessary background work
+        const timeout = setTimeout(() => clearInterval(interval), 15000)
 
         const unsubscribe = onMessageListener((payload: any) => {
             const title = payload.notification?.title || 'New Notification'
@@ -36,7 +63,6 @@ export const usePushNotifications = (isAuthenticated: boolean, currentUsername?:
             const type = payload.data?.type as NotificationType
             const actorUsername = payload.data?.actor_username
             
-            // Filter self-notifications
             if (actorUsername && currentUsername && actorUsername === currentUsername) return
 
             toast.info(title, { description: body })
@@ -50,7 +76,9 @@ export const usePushNotifications = (isAuthenticated: boolean, currentUsername?:
         })
 
         return () => {
+            clearInterval(interval)
+            clearTimeout(timeout)
             if (unsubscribe) unsubscribe()
         }
-    }, [isAuthenticated, registerToken, queryClient, currentUsername])
+    }, [isAuthenticated, currentUsername, registerToken, queryClient])
 }

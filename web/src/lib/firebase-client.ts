@@ -53,10 +53,25 @@ export const signInWithFirebase = async (t: string) => {
   if (a) await signInWithCustomToken(getAuth(a), t).catch(console.warn)
 }
 
-export const requestForToken = async () => {
+/**
+ * Request FCM Token.
+ * @param forcePrompt If true, will trigger the browser permission prompt if not already granted/denied.
+ *                   If false, will return null if permission is 'default' to avoid auto-blocking on load.
+ */
+export const requestForToken = async (forcePrompt = false) => {
   if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission === 'denied') return null
+  
+  if (Notification.permission === 'default' && !forcePrompt) {
+    return null 
+  }
+
   const m = getMessagingInstance()
-  return m ? getToken(m, { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY }).catch(() => null) : null
+  try {
+    return m ? await getToken(m, { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY }) : null
+  } catch (err) {
+    console.error('FCM Token error:', err)
+    return null
+  }
 }
 
 export const onMessageListener = (cb: (p: any) => void) => {

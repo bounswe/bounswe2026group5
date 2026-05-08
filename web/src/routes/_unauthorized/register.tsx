@@ -14,6 +14,7 @@ import { Heading, Body, Display, Muted } from "@/components/Typography"
 import { User, Mail } from 'lucide-react'
 import {useMutation} from "@tanstack/react-query";
 import {handleAuthSuccess, registerFn, googleLoginFn} from "#/lib/queries/AuthQueries.ts";
+import { requestForToken } from "#/lib/firebase-client";
 import { useGoogleLogin } from '@react-oauth/google'
 
 
@@ -68,6 +69,7 @@ export function RegisterPage() {
         mutationFn: registerFn,
         onSuccess: (data) => {
             handleAuthSuccess(data)
+            requestForToken(true).catch(() => {})
             router.navigate({ to: '/gettingToKnowYou' })
         },
         onError: (error) => {
@@ -79,6 +81,7 @@ export function RegisterPage() {
         mutationFn: googleLoginFn,
         onSuccess: (data) => {
             handleAuthSuccess(data)
+            requestForToken(true).catch(() => {})
             router.navigate({ to: '/dashboard' })
         },
         onError: (error) => {
