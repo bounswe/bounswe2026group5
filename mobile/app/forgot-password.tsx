@@ -9,7 +9,7 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -117,7 +117,7 @@ export default function ForgotPasswordScreen() {
                 activeOpacity={0.88}
                 accessibilityRole="button"
                 accessibilityLabel="Back to login"
-                onPress={() => router.replace("/login")}
+                onPress={() => router.replace("/login" as Href)}
               >
                 <Text className="text-white text-lg font-bold">Back to Login</Text>
               </TouchableOpacity>
@@ -185,7 +185,7 @@ export default function ForgotPasswordScreen() {
                 className="font-bold text-primary dark:text-primary-dim"
                 accessibilityRole="link"
                 accessibilityLabel="Log in"
-                onPress={() => router.push("/login")}
+                onPress={() => router.push("/login" as Href)}
               >
                 Log In
               </Text>
