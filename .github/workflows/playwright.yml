@@ -45,10 +45,10 @@ jobs:
         fi
         
         if [ -n "$GCP_SERVICE_ACCOUNT" ]; then
-          printf "%s" "$GCP_SERVICE_ACCOUNT" | base64 --decode > backend/credentials/service-account.json
+          printf "%s" "$GCP_SERVICE_ACCOUNT" | tr -cd 'A-Za-z0-9+/=' | base64 --decode > backend/credentials/service-account.json
         fi
         if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
-          printf "%s" "$FIREBASE_SERVICE_ACCOUNT" | base64 --decode > backend/credentials/firebase-service-account.json
+          printf "%s" "$FIREBASE_SERVICE_ACCOUNT" | tr -cd 'A-Za-z0-9+/=' | base64 --decode > backend/credentials/firebase-service-account.json
         fi
         
         # Mobile configuration
@@ -56,7 +56,7 @@ jobs:
           echo "$MOBILE_ENV" > mobile/.env
         fi
         if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-          printf "%s" "$GOOGLE_SERVICES_JSON" | base64 --decode > mobile/google-services.json
+          printf "%s" "$GOOGLE_SERVICES_JSON" | tr -cd 'A-Za-z0-9+/=' | base64 --decode > mobile/google-services.json
         fi
       working-directory: .
       
