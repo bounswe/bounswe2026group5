@@ -5,8 +5,8 @@
 
 import { getFirebaseApp, getFirestoreInstance, isFirebaseAvailable } from '#/lib/firebase-client'
 import { getAuth, onAuthStateChanged } from 'firebase/auth'
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
-import { useEffect, useRef, useState } from 'react'
+import { collection, limit, onSnapshot, orderBy, query } from 'firebase/firestore'
+import { useEffect, useRef, useState, useCallback } from 'react'
 
 export interface FirebaseMessage {
   id: string
@@ -25,6 +25,7 @@ export function useFirestoreMessages(conversationId: string | null) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isFirebaseAvail, setIsFirebaseAvail] = useState(false)
+  const [currentLimit, setCurrentLimit] = useState(50)
 
   // Use refs to keep track of current state for the timeout callback
   const isLoadingRef = useRef(isLoading)
@@ -34,6 +35,10 @@ export function useFirestoreMessages(conversationId: string | null) {
     isLoadingRef.current = isLoading
     messagesRef.current = messages
   }, [isLoading, messages])
+
+  const loadMore = useCallback(() => {
+    setCurrentLimit(prev => prev + 50)
+  }, [])
 
   useEffect(() => {
     if (!conversationId) {
@@ -45,7 +50,6 @@ export function useFirestoreMessages(conversationId: string | null) {
     // Check if Firebase is available
     const app = getFirebaseApp()
     if (!app || !isFirebaseAvailable()) {
-      console.debug('[Firestore] Firebase not available, skipping listener')
       setIsFirebaseAvail(false)
       return
     }
@@ -53,26 +57,18 @@ export function useFirestoreMessages(conversationId: string | null) {
     let unsubscribeFirestore: (() => void) | null = null
     let timeoutId: NodeJS.Timeout | null = null
 
-    // 1. Start safety timeout immediately to ensure UI never hangs
     timeoutId = setTimeout(() => {
       if (isLoadingRef.current && messagesRef.current.length === 0) {
-        console.debug('[Firestore] Safety timeout reached for conversation', conversationId, '- falling back to HTTP')
         setIsLoading(false)
-        setIsFirebaseAvail(false) // Trigger fallback to HTTP
+        setIsFirebaseAvail(false) 
       }
     }, 5000)
 
-    // 2. Log Auth state for debugging, but DO NOT block the listener
     const auth = getAuth(app)
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        console.debug('[Firestore] Firebase Auth user:', user.uid)
-      } else {
-        console.debug('[Firestore] Firebase Auth not signed in (Custom Token might be missing or configuration-not-found)')
-      }
+      if (!user) console.debug('[Firestore] Firebase Auth not signed in')
     })
 
-    // 3. Start Firestore listener immediately (bypass auth check since we use 'allow read: if true')
     function startListener() {
       setIsFirebaseAvail(true)
       setIsLoading(true)
@@ -89,7 +85,8 @@ export function useFirestoreMessages(conversationId: string | null) {
 
         const q = query(
           collection(firestore, 'conversations', conversationId, 'messages'),
-          orderBy('created_at', 'asc'),
+          orderBy('created_at', 'desc'),
+          limit(currentLimit)
         )
 
         unsubscribeFirestore = onSnapshot(
@@ -117,7 +114,6 @@ export function useFirestoreMessages(conversationId: string | null) {
                 clearTimeout(timeoutId)
                 timeoutId = null
               }
-              console.debug('[Firestore] Snapshot received:', newMessages.length, 'messages')
             } catch (err) {
               console.warn('[Firestore] Snapshot processing error:', err)
               setIsLoading(false)
@@ -126,7 +122,7 @@ export function useFirestoreMessages(conversationId: string | null) {
           (err: Error) => {
             console.warn('[Firestore] Listener error:', err.message)
             setIsLoading(false)
-            setIsFirebaseAvail(false) // Trigger fallback to HTTP
+            setIsFirebaseAvail(false) 
             if (timeoutId) {
               clearTimeout(timeoutId)
               timeoutId = null
@@ -136,24 +132,25 @@ export function useFirestoreMessages(conversationId: string | null) {
       } catch (err) {
         console.warn('[Firestore] Failed to setup listener:', err)
         setIsLoading(false)
-        setIsFirebaseAvail(false) // Trigger fallback to HTTP
+        setIsFirebaseAvail(false)
       }
     }
 
     startListener()
 
     return () => {
-      console.debug('[Firestore] Cleaning up for conversation', conversationId)
       unsubscribeAuth()
       if (unsubscribeFirestore) unsubscribeFirestore()
       if (timeoutId) clearTimeout(timeoutId)
     }
-  }, [conversationId])
+  }, [conversationId, currentLimit]) // Re-run listener when limit increases
 
   return {
     messages,
     isLoading,
     error,
     isFirebaseAvailable: isFirebaseAvail,
+    loadMore,
+    hasMore: messages.length >= currentLimit
   }
 }

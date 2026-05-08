@@ -65,7 +65,11 @@ export const usePushNotifications = (isAuthenticated: boolean, currentUsername?:
             
             if (actorUsername && currentUsername && actorUsername === currentUsername) return
 
-            toast.info(title, { description: body })
+            // Suppress toasts if the user is currently in the messaging interface
+            const isMessagingInterface = window.location.pathname.startsWith('/messages')
+            if (!isMessagingInterface) {
+                toast.info(title, { description: body })
+            }
 
             if (type && NOTIFICATION_INVALIDATION_MAP[type]) {
                 NOTIFICATION_INVALIDATION_MAP[type].forEach((queryKey) => {

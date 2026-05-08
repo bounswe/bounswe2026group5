@@ -53,7 +53,7 @@ class ConversationListAPIView(APIView):
         )
 
         return Response(
-            ConversationSerializer(conversations, many=True).data,
+            ConversationSerializer(conversations, many=True, context={"request": request}).data,
             status=status.HTTP_200_OK,
         )
 
@@ -96,7 +96,7 @@ class ConversationDetailAPIView(APIView):
         if conversation.match.mentor != profile and conversation.match.mentee != profile:
             return Response({"detail": ACCESS_DENIED_MSG}, status=status.HTTP_403_FORBIDDEN)
 
-        messages_qs = Message.objects.filter(conversation=conversation).select_related("sender")
+        messages_qs = Message.objects.filter(conversation=conversation).select_related("sender").order_by("-created_at")
 
         # Manual pagination
         page = max(int(request.query_params.get("page", 1)), 1)
@@ -257,47 +257,63 @@ class MessageReportAPIView(APIView):
 
 
 class MessageMarkReadAPIView(APIView):
-    """Mark a message as read by the current user."""
+    """Mark all messages in a conversation as read by the current user."""
 
     permission_classes = [IsRegularUser]
 
     @extend_schema(
         request=None,
         responses={
-            200: MessageSerializer,
+            200: OpenApiResponse(description="All messages marked as read."),
             401: OpenApiResponse(description="Authentication required."),
             403: OpenApiResponse(description="Access denied."),
-            404: OpenApiResponse(description="Message not found."),
+            404: OpenApiResponse(description="Conversation not found."),
         },
-        description="Mark a message as read by the authenticated user.",
+        description="Mark all messages in a private conversation as read by the authenticated user.",
         tags=["Messages"],
         operation_id="messages_mark_read",
     )
-    def post(self, request: Request, message_id: str) -> Response:
-        """Mark the message as read for the current user."""
+    def post(self, request: Request, conversation_id: str) -> Response:
+        """Mark all messages in the conversation as read for the current user."""
         try:
             profile = Profile.objects.get(user=request.user)
         except Profile.DoesNotExist:
             return Response({"detail": PROFILE_NOT_FOUND_MSG}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            message = Message.objects.select_related(
-                "conversation__match__mentor", "conversation__match__mentee"
-            ).get(id=message_id)
-        except Message.DoesNotExist:
-            return Response({"detail": "Message not found."}, status=status.HTTP_404_NOT_FOUND)
+            conversation = Conversation.objects.select_related(
+                "match__mentor", "match__mentee"
+            ).get(id=conversation_id)
+        except Conversation.DoesNotExist:
+            return Response({"detail": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Check if user is a participant in the conversation
-        conversation = message.conversation
+        # Check if user is a participant
         if conversation.match.mentor != profile and conversation.match.mentee != profile:
             return Response({"detail": ACCESS_DENIED_MSG}, status=status.HTTP_403_FORBIDDEN)
 
-        # Update or create read receipt with 'read' status
-        read_receipt, created = ReadReceipt.objects.update_or_create(
-            message=message,
-            user=profile,
-            defaults={"status": "read"},
-        )
+        # Update all messages from other sender to 'read'
+        unread_messages = Message.objects.filter(
+            conversation=conversation
+        ).exclude(sender=profile)
 
-        response_serializer = MessageSerializer(message, context={"request": request})
-        return Response(response_serializer.data, status=status.HTTP_200_OK)
+        # 1. Update existing receipts for this user to 'read'
+        ReadReceipt.objects.filter(
+            message__conversation=conversation, 
+            user=profile
+        ).update(status="read")
+
+        # 2. Find messages that don't have receipts yet and bulk create them
+        existing_receipt_msg_ids = ReadReceipt.objects.filter(
+            message__conversation=conversation,
+            user=profile
+        ).values_list("message_id", flat=True)
+
+        new_receipts = [
+            ReadReceipt(message=message, user=profile, status="read")
+            for message in unread_messages.exclude(id__in=existing_receipt_msg_ids)
+        ]
+        
+        if new_receipts:
+            ReadReceipt.objects.bulk_create(new_receipts)
+
+        return Response({"detail": "All messages marked as read."}, status=status.HTTP_200_OK)

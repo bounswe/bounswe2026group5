@@ -14,6 +14,7 @@ class ConversationSerializer(serializers.ModelSerializer):
     match_id = serializers.UUIDField(source="match.id", read_only=True)
     mentor = ProfileSummarySerializer(source="match.mentor", read_only=True)
     mentee = ProfileSummarySerializer(source="match.mentee", read_only=True)
+    unread_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
@@ -22,10 +23,28 @@ class ConversationSerializer(serializers.ModelSerializer):
             "match_id",
             "mentor",
             "mentee",
+            "unread_count",
             "created_at",
             "updated_at",
         )
         read_only_fields = fields
+
+    def get_unread_count(self, obj: Conversation) -> int:
+        """Return the number of unread messages for the current user in this conversation."""
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return 0
+        
+        # We MUST use the Profile ID, not the User ID, because messages and receipts 
+        # are linked to Profiles.
+        profile = getattr(request.user, 'profile', None)
+        if not profile:
+            return 0
+            
+        return obj.messages.exclude(sender_id=profile.id).exclude(
+            read_receipts__user_id=profile.id, 
+            read_receipts__status="read"
+        ).count()
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -78,7 +97,13 @@ class MessageSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return "sent"
-        return obj.get_status_for_user(str(request.user.id))
+        
+        # Use Profile ID because ReadReceipts are linked to Profiles
+        profile = getattr(request.user, 'profile', None)
+        if not profile:
+            return "sent"
+            
+        return obj.get_status_for_user(str(profile.id))
 
 
 class MessageCreateSerializer(serializers.Serializer):

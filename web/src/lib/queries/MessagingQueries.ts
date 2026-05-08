@@ -3,9 +3,9 @@ import { useMessageQueue } from '#/hooks/useMessageQueue'
 import { throwApiError } from '#/lib/apiError.ts'
 import { isFirebaseAvailable } from '#/lib/firebase-client'
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
-import { queryOptions, useMutation, useQuery } from '@tanstack/react-query'
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -24,6 +24,7 @@ export interface Conversation {
     match_id: string
     mentor: ProfileSummary
     mentee: ProfileSummary
+    unread_count: number
     created_at: string
     updated_at: string
 }
@@ -75,15 +76,6 @@ async function sendMessage(conversationId: string, body: string): Promise<Messag
     return res.json()
 }
 
-async function markMessageRead(messageId: string): Promise<Message> {
-    const res = await fetch(`${API_BASE_URL}/messages/${messageId}/mark-read/`, {
-        method: 'POST',
-        headers: authHeaders(),
-    })
-    if (!res.ok) await throwApiError(res)
-    return res.json()
-}
-
 // ---- Query Options ----
 
 export const conversationsQueryOptions = queryOptions({
@@ -92,10 +84,10 @@ export const conversationsQueryOptions = queryOptions({
     staleTime: 30 * 1000,
 })
 
-export const messagesQueryOptions = (conversationId: string, forceEnable = false) =>
+export const messagesQueryOptions = (conversationId: string, pageSize = 50, forceEnable = false) =>
     queryOptions({
-        queryKey: ['messaging', 'messages', conversationId],
-        queryFn: () => fetchMessages(conversationId),
+        queryKey: ['messaging', 'messages', conversationId, pageSize],
+        queryFn: () => fetchMessages(conversationId, 1, pageSize),
         staleTime: 2000,
         refetchInterval: 2000, // Poll every 2s
         enabled: !!conversationId && (!isFirebaseAvailable() || forceEnable),
@@ -107,41 +99,29 @@ export function useConversations() {
     return useQuery(conversationsQueryOptions)
 }
 
-/**
- * Hook for fetching messages with Firestore real-time updates and HTTP fallback.
- * 
- * Priority:
- * 1. If Firebase is available: uses real-time Firestore listener (primary)
- * 2. If Firebase is unavailable: falls back to HTTP polling (5s interval)
- * 
- * Merges offline-queued messages with remote messages to provide seamless offline support.
- */
 export function useMessages(conversationId: string) {
-    const { messages: firebaseMessages, isLoading: fbLoading, isFirebaseAvailable: fbAvailable } = useFirestoreMessages(conversationId)
+    const [pageSize, setPageSize] = useState(50)
+    
+    const { 
+        messages: firebaseMessages, 
+        isLoading: fbLoading, 
+        isFirebaseAvailable: fbAvailable,
+        loadMore: fbLoadMore,
+        hasMore: fbHasMore
+    } = useFirestoreMessages(conversationId)
+
     const { data: httpMessages = [], isLoading: httpLoading } = useQuery(
-        messagesQueryOptions(conversationId, !fbAvailable),
+        messagesQueryOptions(conversationId, pageSize, !fbAvailable),
     )
+    
     const { queue: queuedMessages } = useMessageQueue(conversationId)
 
-    // Debug logging for transport layer
-    if (fbAvailable && firebaseMessages.length > 0) {
-        console.debug(`[Messaging] Using Firestore (${firebaseMessages.length} messages)`)
-    } else if (!fbAvailable && httpMessages.length > 0) {
-        console.debug(`[Messaging] Using HTTP polling fallback (${httpMessages.length} messages)`)
-    }
-
-    // Determine primary source and merge messages
     const mergedMessages = useMemo(() => {
-        // Use Firebase messages if available, otherwise use HTTP
         const remoteMessages = fbAvailable ? firebaseMessages : httpMessages
-
-        // Create a map of remote message IDs for deduplication
         const remoteMsgIds = new Set(remoteMessages.map(m => m.id))
 
-        // Convert Firebase messages to our Message interface if needed
         const allMessages = remoteMessages.map(msg => {
             if ('sender_username' in msg) {
-                // It's a Firebase message, convert to Message interface
                 const status = (msg.read_receipts?.[msg.sender_id] || 'sent') as 'sent' | 'delivered' | 'read'
                 return {
                     id: msg.id,
@@ -163,19 +143,12 @@ export function useMessages(conversationId: string) {
             return msg
         }) as Message[]
 
-        // Add queued messages that aren't already sent
         const queuedOnlyMessages = queuedMessages
             .filter(q => !remoteMsgIds.has(q.tempId))
             .map(q => ({
                 id: q.tempId,
                 conversation_id: conversationId,
-                sender: {
-                    id: 'me',
-                    username: 'me',
-                    display_name: 'You',
-                    picture_url: null,
-                    title: null,
-                },
+                sender: { id: 'me', username: 'me', display_name: 'You', picture_url: null, title: null },
                 body: q.body,
                 attachment_url: q.attachmentUrl,
                 created_at: new Date(q.timestamp).toISOString(),
@@ -188,9 +161,19 @@ export function useMessages(conversationId: string) {
         )
     }, [fbAvailable, firebaseMessages, httpMessages, queuedMessages, conversationId])
 
+    const loadMore = useCallback(() => {
+        if (fbAvailable) {
+            fbLoadMore()
+        } else {
+            setPageSize(prev => prev + 50)
+        }
+    }, [fbAvailable, fbLoadMore])
+
     return {
         data: mergedMessages,
         isLoading: fbAvailable ? fbLoading : httpLoading,
+        loadMore,
+        hasMore: fbAvailable ? fbHasMore : httpMessages.length >= pageSize
     }
 }
 
@@ -200,9 +183,41 @@ export function useSendMessage(conversationId: string) {
     })
 }
 
-export function useMarkMessageRead(messageId: string) {
+/**
+ * useMarkRead: Minimalist batch marking of a conversation as read with optimistic updates.
+ */
+export function useMarkRead(conversationId: string) {
+    const queryClient = useQueryClient()
     return useMutation({
-        mutationFn: () => markMessageRead(messageId),
+        mutationFn: async () => {
+            const res = await fetch(`${API_BASE_URL}/messages/conversations/${conversationId}/mark-read/`, {
+                method: 'POST',
+                headers: authHeaders(),
+            })
+            if (!res.ok) await throwApiError(res)
+            return res.json()
+        },
+        onMutate: async () => {
+            // Optimistic update: cancel refetches and clear count locally
+            await queryClient.cancelQueries({ queryKey: ['messaging', 'conversations'] })
+            const previousConversations = queryClient.getQueryData<Conversation[]>(['messaging', 'conversations'])
+            
+            queryClient.setQueryData<Conversation[]>(['messaging', 'conversations'], (old) => {
+                return old?.map(c => c.id === conversationId ? { ...c, unread_count: 0 } : c)
+            })
+
+            return { previousConversations }
+        },
+        onError: (_err, _newVal, context) => {
+            // Rollback on error
+            if (context?.previousConversations) {
+                queryClient.setQueryData(['messaging', 'conversations'], context.previousConversations)
+            }
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['messaging', 'conversations'] })
+            queryClient.invalidateQueries({ queryKey: ['messaging', 'messages', conversationId] })
+        }
     })
 }
 

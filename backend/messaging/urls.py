@@ -22,8 +22,8 @@ urlpatterns = [
         name="message-report",
     ),
     path(
-        "<uuid:message_id>/mark-read/",
+        "conversations/<uuid:conversation_id>/mark-read/",
         MessageMarkReadAPIView.as_view(),
-        name="message-mark-read",
+        name="message-conversation-mark-read",
     ),
 ]

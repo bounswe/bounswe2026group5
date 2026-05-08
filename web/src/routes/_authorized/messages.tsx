@@ -2,7 +2,7 @@ import { useMessageQueue } from '#/hooks/useMessageQueue'
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 import {
     useConversations,
-    useMarkMessageRead,
+    useMarkRead,
     useMessages,
     useSendMessage,
     type Conversation,
@@ -133,6 +133,11 @@ function ConversationItem({
                 <p className="text-sm font-medium text-ink truncate">{other.display_name}</p>
                 <p className="text-xs text-ink-soft truncate">@{other.username}</p>
             </div>
+            {conversation.unread_count > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white shadow-sm">
+                    {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
+                </span>
+            )}
         </button>
     )
 }
@@ -156,16 +161,51 @@ function MessageThread({ conversationId }: { readonly conversationId: string | n
 
 function Thread({ conversationId }: { readonly conversationId: string }) {
     const { data: me } = useQuery(meQueryOptions)
-    const { data: messages = [], isLoading } = useMessages(conversationId)
+    const { data: messages = [], isLoading, loadMore, hasMore } = useMessages(conversationId)
+    const { mutate: markRead } = useMarkRead(conversationId)
     const sendMessage = useSendMessage(conversationId)
     const queryClient = useQueryClient()
     const { enqueueMessage, updateMessageStatus, dequeueMessage } = useMessageQueue(conversationId)
     const [text, setText] = useState('')
-    const bottomRef = useRef<HTMLDivElement>(null)
 
+    // Mark conversation as read when opening
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, [messages])
+        if (conversationId) {
+            markRead()
+        }
+    }, [conversationId, markRead])
+    
+    const scrollContainerRef = useRef<HTMLDivElement>(null)
+    const bottomRef = useRef<HTMLDivElement>(null)
+    const [isAtBottom, setIsAtBottom] = useState(true)
+
+    // Handle auto-scroll to bottom
+    useEffect(() => {
+        if (isAtBottom) {
+            bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }
+    }, [messages, isAtBottom])
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const target = e.currentTarget
+        const atTop = target.scrollTop === 0
+        const atBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 100
+        
+        setIsAtBottom(atBottom)
+
+        if (atTop && hasMore && !isLoading) {
+            // Store height to maintain scroll position after loading
+            const oldHeight = target.scrollHeight
+            loadMore()
+            
+            // Adjust scroll position after render
+            requestAnimationFrame(() => {
+                if (target) {
+                    target.scrollTop = target.scrollHeight - oldHeight
+                }
+            })
+        }
+    }
 
     const handleSubmit = useCallback(
         async (e: SyntheticEvent) => {
@@ -173,19 +213,16 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
             const body = text.trim()
             if (!body || sendMessage.isPending) return
 
-            // Optimistic update: add to queue immediately
+            setIsAtBottom(true) // Force scroll to bottom for new message
             const queuedMsg = enqueueMessage(body)
             setText('')
 
             try {
                 updateMessageStatus(queuedMsg.tempId, 'sending')
                 await sendMessage.mutateAsync(body)
-
-                // Remove from queue and update cache
                 dequeueMessage(queuedMsg.tempId)
                 queryClient.invalidateQueries({ queryKey: ['messaging', 'messages', conversationId] })
             } catch (error) {
-                // On error, mark as failed but keep in queue for retry
                 updateMessageStatus(queuedMsg.tempId, 'failed', error instanceof Error ? error.message : 'Failed to send')
                 console.error('[Messages] Error sending message:', error)
             }
@@ -196,7 +233,21 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
     return (
         <div className="flex-1 flex flex-col min-w-0">
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3">
+            <div 
+                ref={scrollContainerRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3"
+            >
+                {hasMore && (
+                    <div className="flex justify-center py-2">
+                        {isLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-ink-soft" />
+                        ) : (
+                            <p className="text-[10px] text-ink-soft italic">Scroll up to load more</p>
+                        )}
+                    </div>
+                )}
+                
                 {isLoading && messages.length === 0 ? (
                     <div className="flex justify-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
@@ -213,8 +264,6 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
                                 key={msg.id}
                                 message={msg}
                                 isMe={isMe}
-                                conversationId={conversationId}
-                                isTempId={msg.id.startsWith('temp_')}
                             />
                         )
                     })
@@ -265,36 +314,10 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
 function MessageBubble({
     message,
     isMe,
-    conversationId,
-    isTempId,
 }: {
     readonly message: Message
     readonly isMe: boolean
-    readonly conversationId: string
-    readonly isTempId: boolean
 }) {
-    const { mutate: markRead } = useMarkMessageRead(message.id)
-    const msgRef = useRef<HTMLDivElement>(null)
-
-    // Auto-mark message as read when it enters viewport (Intersection Observer)
-    useEffect(() => {
-        if (isMe || isTempId || !msgRef.current) return
-
-        const observer = new IntersectionObserver(
-            entries => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting && message.status_for_me !== 'read') {
-                        markRead()
-                    }
-                })
-            },
-            { threshold: 0.5 },
-        )
-
-        observer.observe(msgRef.current)
-        return () => observer.disconnect()
-    }, [isMe, isTempId, message.id, message.status_for_me, markRead])
-
     const getStatusIcon = () => {
         const status = message.status_for_me
         if (status === 'read') {
@@ -309,13 +332,10 @@ function MessageBubble({
         return null
     }
 
-    const isSending = isTempId && message.status_for_me === 'sending'
+    const isSending = message.status_for_me === 'sending'
 
     return (
-        <div
-            ref={msgRef}
-            className={cn('flex items-end gap-2', isMe && 'flex-row-reverse')}
-        >
+        <div className={cn('flex items-end gap-2', isMe && 'flex-row-reverse')}>
             {!isMe && (
                 <Avatar
                     name={message.sender.display_name}
@@ -344,7 +364,7 @@ function MessageBubble({
                     </a>
                 )}
                 <div className={cn('flex items-center gap-1 text-[10px] mt-1', isMe ? 'justify-end' : 'justify-start')}>
-                    <time className="opacity-60">
+                    <time className="opacity-80">
                         {new Date(message.created_at).toLocaleTimeString([], {
                             hour: '2-digit',
                             minute: '2-digit',
