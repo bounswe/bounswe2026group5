@@ -221,12 +221,18 @@ export default function DiscoverScreen() {
   const [selectedCommunityTags, setSelectedCommunityTags] = useState<Set<string>>(
     new Set(),
   );
+  const [selectedDistanceKm, setSelectedDistanceKm] = useState<number | null>(
+    null,
+  );
   const [draftSelectedSkills, setDraftSelectedSkills] = useState<Set<string>>(
     new Set(),
   );
   const [draftSelectedCommunityTags, setDraftSelectedCommunityTags] = useState<
     Set<string>
   >(new Set());
+  const [draftSelectedDistanceKm, setDraftSelectedDistanceKm] = useState<
+    number | null
+  >(null);
 
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [loadingSkills, setLoadingSkills] = useState(false);
@@ -248,8 +254,10 @@ export default function DiscoverScreen() {
   const resetDiscoverFilters = useCallback(() => {
     setSelectedSkills(new Set());
     setSelectedCommunityTags(new Set());
+    setSelectedDistanceKm(null);
     setDraftSelectedSkills(new Set());
     setDraftSelectedCommunityTags(new Set());
+    setDraftSelectedDistanceKm(null);
     setPage(1);
     setProfiles([]);
     setCommunityTags([]);
@@ -320,7 +328,8 @@ export default function DiscoverScreen() {
   const hasMentorSearchFilters =
     debouncedQuery.length > 0 ||
     selectedSkillList.length > 0 ||
-    selectedCommunityTagList.length > 0;
+    selectedCommunityTagList.length > 0 ||
+    selectedDistanceKm !== null;
   const hasCommunitySearchFilters = debouncedQuery.length > 0;
 
   useEffect(() => {
@@ -340,6 +349,9 @@ export default function DiscoverScreen() {
         query: debouncedQuery,
         skills: selectedSkillList,
         tags: selectedCommunityTagList,
+        ...(selectedDistanceKm !== null
+          ? { distanceKm: selectedDistanceKm }
+          : {}),
       }).then((payload) => ({
         count: payload.count,
         results: payload.results,
@@ -399,6 +411,7 @@ export default function DiscoverScreen() {
     debouncedQuery,
     selectedSkillList,
     selectedCommunityTagList,
+    selectedDistanceKm,
     hasMentorSearchFilters,
     feedMode,
     activeTab,
@@ -503,7 +516,8 @@ export default function DiscoverScreen() {
     page === 1 &&
     debouncedQuery.length === 0 &&
     selectedSkillList.length === 0 &&
-    selectedCommunityTagList.length === 0;
+    selectedCommunityTagList.length === 0 &&
+    selectedDistanceKm === null;
 
   const visibleProfiles = showDemoContent ? DEMO_DISCOVER_PROFILES : profiles;
   const visibleSkills = skills.length > 0 ? skills : DEMO_DISCOVER_SKILLS;
@@ -541,18 +555,21 @@ export default function DiscoverScreen() {
   const clearDraftFilters = () => {
     setDraftSelectedSkills(new Set());
     setDraftSelectedCommunityTags(new Set());
+    setDraftSelectedDistanceKm(null);
   };
 
   const applyFilters = () => {
     setPage(1);
     setSelectedSkills(new Set(draftSelectedSkills));
     setSelectedCommunityTags(new Set(draftSelectedCommunityTags));
+    setSelectedDistanceKm(draftSelectedDistanceKm);
     setFilterModalOpen(false);
   };
 
   const openFilterModal = () => {
     setDraftSelectedSkills(new Set(selectedSkills));
     setDraftSelectedCommunityTags(new Set(selectedCommunityTags));
+    setDraftSelectedDistanceKm(selectedDistanceKm);
     setFilterModalOpen(true);
     if (communityFilterTags.length > 0) {
       return;
@@ -754,10 +771,15 @@ export default function DiscoverScreen() {
                 size={17}
                 color={activeTab === "mentors" ? "#ffffff" : theme.textMuted}
               />
-              {selectedSkills.size + selectedCommunityTags.size > 0 && (
+              {selectedSkills.size +
+                selectedCommunityTags.size +
+                (selectedDistanceKm !== null ? 1 : 0) >
+                0 && (
                 <View className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-surface-card dark:bg-surface-card-dark items-center justify-center border border-primary">
                   <Text className="text-[10px] font-bold text-primary dark:text-primary-dim">
-                    {selectedSkills.size + selectedCommunityTags.size}
+                    {selectedSkills.size +
+                      selectedCommunityTags.size +
+                      (selectedDistanceKm !== null ? 1 : 0)}
                   </Text>
                 </View>
               )}
@@ -808,8 +830,10 @@ export default function DiscoverScreen() {
         communityTags={communityFilterTags}
         selectedSkills={draftSelectedSkills}
         selectedCommunityTags={draftSelectedCommunityTags}
+        selectedDistanceKm={draftSelectedDistanceKm}
         onToggleSkill={toggleDraftSkill}
         onToggleCommunityTag={toggleDraftCommunityTag}
+        onSelectDistanceKm={setDraftSelectedDistanceKm}
         onClear={clearDraftFilters}
         onApply={applyFilters}
         onClose={() => setFilterModalOpen(false)}

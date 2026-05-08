@@ -47,18 +47,21 @@ jobs:
         run: npm ci
 
       - name: Write mobile env file
+        env:
+          MOBILE_ENV: ${{ secrets.MOBILE_ENV }}
         run: |
-          echo "EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL" > .env
-          echo "Using EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL"
+          if [ -n "$MOBILE_ENV" ]; then
+            echo "$MOBILE_ENV" > .env
+          else
+            echo "EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL" > .env
+          fi
 
       - name: Decode Google Services JSON
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
-          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
-            echo "GOOGLE_SERVICES_JSON_BASE64 secret is not set. Skipping..."
-          else
-            echo "$GOOGLE_SERVICES_JSON" | base64 --decode > google-services.json
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf "%s" "$GOOGLE_SERVICES_JSON" | tr -cd 'A-Za-z0-9+/=' | base64 --decode > google-services.json
           fi
 
       - name: Generate native Android project

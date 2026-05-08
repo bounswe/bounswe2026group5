@@ -64,4 +64,8 @@ export interface RegisterCredentials {
   email: string;
   password: string;
   confirm_password: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
 }

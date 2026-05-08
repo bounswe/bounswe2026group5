@@ -30,6 +30,7 @@ jest.mock("@/lib/auth/store", () => ({
 
 jest.mock("@/lib/queries/notifications", () => ({
   useNotificationsQuery: () => mockNotificationsQuery(),
+  useMarkAllNotificationsReadMutation: () => ({ mutate: jest.fn() }),
 }));
 
 describe("NotificationBell", () => {

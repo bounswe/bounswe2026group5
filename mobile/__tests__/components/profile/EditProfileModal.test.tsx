@@ -84,6 +84,27 @@ describe("EditProfileModal", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  it("blocks save and alerts when name contains numbers", () => {
+    const onSave = jest.fn();
+
+    const { getByTestId } = render(
+      <EditProfileModal
+        visible
+        onClose={jest.fn()}
+        initialData={{ name: "Ali", bio: "Initial bio" }}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.changeText(getByTestId("name-input"), "Ali 123");
+    fireEvent.press(getByTestId("save-button"));
+
+    expect(globalThis.alert).toHaveBeenCalledWith(
+      "Display name cannot contain numbers.",
+    );
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("calls onClose when close button is pressed", () => {
     const onClose = jest.fn();
 

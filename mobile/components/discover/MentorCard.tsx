@@ -9,7 +9,17 @@ interface MentorCardProps {
   onPress?: (profile: DiscoverMentorProfile) => void;
 }
 
+function formatDistance(distanceKm?: number | null): string | null {
+  if (typeof distanceKm !== "number" || !Number.isFinite(distanceKm)) {
+    return null;
+  }
+
+  return `${distanceKm.toFixed(distanceKm < 10 ? 1 : 0)} km away`;
+}
+
 export function MentorCard({ profile, onPress }: Readonly<MentorCardProps>) {
+  const distanceLabel = formatDistance(profile.distance_km);
+
   return (
     <TouchableOpacity
       activeOpacity={0.8}
@@ -47,6 +57,15 @@ export function MentorCard({ profile, onPress }: Readonly<MentorCardProps>) {
       >
         {profile.bio || "No bio provided yet."}
       </Text>
+
+      {distanceLabel ? (
+        <Text
+          testID={`mentor-distance-${profile.username}`}
+          className="text-xs font-semibold text-on-surface-muted dark:text-on-surface-muted-dark mb-3"
+        >
+          {distanceLabel}
+        </Text>
+      ) : null}
 
       <View className="flex-row flex-wrap gap-2">
         {(profile.skills || []).slice(0, 4).map((skill) => (

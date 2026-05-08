@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import * as Location from "expo-location";
 import { router, Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -32,6 +33,11 @@ import { useGoogleLoginMutation } from "@/lib/queries/googleAuth";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+type RegistrationLocationPayload = {
+  latitude: number;
+  longitude: number;
+};
+
 function validateEmail(value: string): string {
   if (!value.trim()) return "Email is required.";
   if (!EMAIL_REGEX.test(value.trim()))
@@ -52,6 +58,29 @@ function buildUsernamePreview(email: string): string {
   const localPart = email.trim().toLowerCase().split("@")[0] ?? "";
   const sanitized = localPart.replaceAll(/[^a-z0-9_]/g, "_");
   return sanitized || "user";
+}
+
+async function getRegistrationLocation(): Promise<
+  RegistrationLocationPayload | undefined
+> {
+  try {
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (permission.status !== Location.PermissionStatus.GRANTED) {
+      return undefined;
+    }
+
+    const currentLocation = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+
+    return {
+      latitude: currentLocation.coords.latitude,
+      longitude: currentLocation.coords.longitude,
+    };
+  } catch (error) {
+    console.warn("Could not attach registration location:", error);
+    return undefined;
+  }
 }
 
 function getRegistrationValidationErrors(params: {
@@ -100,6 +129,8 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [shareRegistrationLocation, setShareRegistrationLocation] =
+    useState(true);
   const [terms, setTerms] = useState(false);
   const [termsError, setTermsError] = useState("");
   const [submitError, setSubmitError] = useState("");
@@ -149,10 +180,14 @@ export default function RegisterScreen() {
         user = googleLoginMutation.data.user;
       } else {
         // Normal email/password registration
+        const location = shareRegistrationLocation
+          ? await getRegistrationLocation()
+          : undefined;
         const registration = await registerFn({
           email: email.trim(),
           password,
           confirm_password: confirmPassword,
+          ...(location ? { location } : {}),
         });
         accessToken = registration.access_token;
         refreshToken = registration.refresh_token;
@@ -494,6 +529,36 @@ export default function RegisterScreen() {
                   {confirmPasswordError}
                 </Text>
               ) : null}
+            </View>
+
+            {/* Location Sharing */}
+            <View className="gap-1.5">
+              <Pressable
+                onPress={() => setShareRegistrationLocation((value) => !value)}
+                className="flex-row items-start gap-3"
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: shareRegistrationLocation }}
+                accessibilityLabel="Use my location to find nearby mentors"
+              >
+                <View
+                  className="w-5 h-5 rounded mt-0.5 items-center justify-center border"
+                  style={{
+                    backgroundColor: shareRegistrationLocation
+                      ? theme.primary
+                      : "transparent",
+                    borderColor: shareRegistrationLocation
+                      ? theme.primary
+                      : theme.textMuted,
+                  }}
+                >
+                  {shareRegistrationLocation && (
+                    <Ionicons name="checkmark" size={13} color="white" />
+                  )}
+                </View>
+                <Text className="flex-1 text-sm font-medium text-on-surface dark:text-on-surface-dark leading-snug">
+                  Use my location to find nearby mentors.
+                </Text>
+              </Pressable>
             </View>
 
             {/* Terms & Conditions */}
