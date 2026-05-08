@@ -108,6 +108,6 @@ describe('MessagesPage', () => {
     const sendButton = screen.getByRole('button', { name: /send message/i })
     fireEvent.click(sendButton)
     
-    expect(mockMutate).toHaveBeenCalledWith('New message')
+    expect(mockMutate).toHaveBeenCalledWith({ body: 'New message', attachment: undefined })
   })
 })

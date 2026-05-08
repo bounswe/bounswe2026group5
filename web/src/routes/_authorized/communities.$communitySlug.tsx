@@ -15,9 +15,9 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { MediaUploadField } from '@/components/MediaUploadField'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
     communityDetailQueryOptions,
@@ -345,8 +345,8 @@ function CreatePostDialog({
                         <TaggableUsersList communityId={communityId} selected={form.tagged_users ?? []} onChange={(usernames) => setForm((f) => ({ ...f, tagged_users: usernames }))} />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="cop_create_media">Media URL (optional)</Label>
-                        <Input id="cop_create_media" value={(form.media_url as string) ?? ''} onChange={(e) => setForm((f) => ({ ...f, media_url: e.target.value }))} placeholder="https://…" type="url" />
+                        <Label>Media (optional)</Label>
+                        <MediaUploadField onUrl={url => setForm(f => ({ ...f, media_url: url ?? undefined }))} />
                     </div>
                     <label className="flex items-center gap-2.5 cursor-pointer text-sm">
                         <Checkbox checked={form.show_on_profile} onCheckedChange={(v) => setForm((f) => ({ ...f, show_on_profile: Boolean(v) }))} />
@@ -429,8 +429,8 @@ function EditPostDialog({
                         <TaggableUsersList communityId={communityId} selected={form.tagged_users ?? []} onChange={(usernames) => setForm((f) => ({ ...f, tagged_users: usernames }))} />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="cop_edit_media">Media URL (optional)</Label>
-                        <Input id="cop_edit_media" value={(form.media_url as string) ?? ''} onChange={(e) => setForm((f) => ({ ...f, media_url: e.target.value }))} placeholder="https://…" type="url" />
+                        <Label>Media (optional)</Label>
+                        <MediaUploadField currentUrl={post.media_url} onUrl={url => setForm(f => ({ ...f, media_url: url ?? undefined }))} />
                     </div>
                     <label className="flex items-center gap-2.5 cursor-pointer text-sm">
                         <Checkbox checked={form.show_on_profile} onCheckedChange={(v) => setForm((f) => ({ ...f, show_on_profile: Boolean(v) }))} />

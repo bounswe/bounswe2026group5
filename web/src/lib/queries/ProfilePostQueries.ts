@@ -142,3 +142,22 @@ export function useDeleteProfilePost(username: string) {
         },
     })
 }
+
+async function uploadPostMedia(file: File): Promise<{ url: string }> {
+    const token = localStorage.getItem('access_token')
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch(`${API_BASE_URL}/profiles/me/uploads/`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+    })
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
+export function useUploadPostMedia() {
+    return useMutation({
+        mutationFn: (file: File) => uploadPostMedia(file),
+    })
+}

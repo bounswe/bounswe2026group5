@@ -22,9 +22,9 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { MediaUploadField } from '@/components/MediaUploadField'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
@@ -404,13 +404,9 @@ function CreateMCTEDialog({ matchId, open, onOpenChange }: CreateMCTEDialogProps
                         <p className="text-xs text-ink-soft text-right">{form.content.length}/2000</p>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="media_url">Media URL (optional)</Label>
-                        <Input
-                            id="media_url"
-                            value={form.media_url ?? ''}
-                            onChange={e => setForm(f => ({ ...f, media_url: e.target.value }))}
-                            placeholder="https://..."
-                            type="url"
+                        <Label>Media (optional)</Label>
+                        <MediaUploadField
+                            onUrl={url => setForm(f => ({ ...f, media_url: url ?? undefined }))}
                         />
                     </div>
                     <div className="flex items-center gap-2">
@@ -506,13 +502,10 @@ function EditMCTEDialog({ matchId, event, open, onOpenChange }: EditMCTEDialogPr
                         <p className="text-xs text-ink-soft text-right">{(form.content ?? '').length}/2000</p>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="edit_media_url">Media URL (optional)</Label>
-                        <Input
-                            id="edit_media_url"
-                            value={form.media_url ?? ''}
-                            onChange={e => setForm(f => ({ ...f, media_url: e.target.value }))}
-                            placeholder="https://..."
-                            type="url"
+                        <Label>Media (optional)</Label>
+                        <MediaUploadField
+                            currentUrl={event.media_url}
+                            onUrl={url => setForm(f => ({ ...f, media_url: url ?? undefined }))}
                         />
                     </div>
                     <div className="flex items-center gap-2">
