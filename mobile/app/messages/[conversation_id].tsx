@@ -21,7 +21,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ReportSheet } from "@/components/report/ReportSheet";
 import { BasicFormattedText } from "@/components/ui/BasicFormattedText";
-import { FocusedImageModal } from "@/components/ui/FocusedImageModal";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   useConversations,
@@ -182,13 +181,11 @@ function MessageBubble({
   isMe,
   onImagePress,
   onLongPress,
-  onImagePress,
 }: {
   message: Message;
   isMe: boolean;
   onImagePress?: (imageUrl: string) => void;
   onLongPress?: () => void;
-  onImagePress?: (url: string) => void;
 }) {
   const attachmentUrl = getAbsoluteUrl(message.attachment_url);
   
