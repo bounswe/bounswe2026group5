@@ -111,3 +111,27 @@ class MarkNotificationReadAPIView(APIView):
             {"detail": "Notification marked as read."},
             status=status.HTTP_200_OK,
         )
+
+
+class MarkAllNotificationsReadAPIView(APIView):
+    """Mark all unread notifications for the current user as read."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: OpenApiResponse(description="All notifications marked as read."),
+            401: OpenApiResponse(description="Authentication required."),
+        },
+        description="Mark all unread notifications for the authenticated user as read.",
+        tags=["Notifications"],
+    )
+    def post(self, request: Request) -> Response:
+        """Mark all unread notifications for the current user as read."""
+        Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+
+        return Response(
+            {"detail": "All notifications marked as read."},
+            status=status.HTTP_200_OK,
+        )

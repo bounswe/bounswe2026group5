@@ -15,6 +15,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -24,6 +25,7 @@ import {
   useConversations,
   useMessages,
   useSendMessage,
+  useMarkRead,
   type Message,
 } from "@/lib/queries/MessagingQueries";
 import { useSubmitReportMutation } from "@/lib/queries/reporting";
@@ -31,11 +33,20 @@ import type { LocalUploadFile } from "@/lib/queries/uploads";
 import {
   pickMessageImageFile,
   pickMessagePdfFile,
+  pickMessageAudioFile,
 } from "@/lib/uploads/picker";
+
+import { API_BASE_URL } from "@/lib/api/config";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function getAbsoluteUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http")) return url;
+  return `${API_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+}
 
 function getInitials(name: string): string {
   return name
@@ -76,10 +87,16 @@ function isImageAttachment(url: string): boolean {
   return /\.(jpe?g|png|gif|webp)$/.test(path);
 }
 
-function getAttachmentLabel(url: string): string {
+function getAttachmentLabel(url: string, originalName?: string | null): string {
+  if (originalName) return originalName;
   const path = url.split("?")[0] ?? "";
   const fileName = decodeURIComponent(path.split("/").pop() || "");
   return fileName || "Attachment";
+}
+
+function isAudioAttachment(url: string): boolean {
+  const path = url.split("?")[0]?.toLowerCase() ?? "";
+  return /\.(mp3|wav|ogg|m4a|aac)$/.test(path);
 }
 
 // ---------------------------------------------------------------------------
@@ -122,10 +139,11 @@ function Avatar({
   pictureUrl: string | null;
   size: number;
 }) {
-  if (pictureUrl) {
+  const absoluteUrl = getAbsoluteUrl(pictureUrl);
+  if (absoluteUrl) {
     return (
       <Image
-        source={{ uri: pictureUrl }}
+        source={{ uri: absoluteUrl }}
         style={{ width: size, height: size, borderRadius: size / 2 }}
       />
     );
@@ -161,12 +179,29 @@ function MessageBubble({
   message,
   isMe,
   onLongPress,
+  onImagePress,
 }: {
   message: Message;
   isMe: boolean;
   onLongPress?: () => void;
+  onImagePress?: (url: string) => void;
 }) {
-  const attachmentUrl = message.attachment_url;
+  const attachmentUrl = getAbsoluteUrl(message.attachment_url);
+  
+  const getStatusIcon = () => {
+    const status = message.status_for_me;
+    if (status === "read") {
+      return <Ionicons name="checkmark-done" size={14} color="#ffffffcc" style={{ marginLeft: 4 }} />;
+    }
+    if (status === "delivered") {
+      return <Ionicons name="checkmark-done" size={14} color="#ffffffcc" style={{ marginLeft: 4 }} />;
+    }
+    if (status === "sent") {
+      return <Ionicons name="checkmark" size={14} color="#ffffff99" style={{ marginLeft: 4 }} />;
+    }
+    return null;
+  };
+
   return (
     <View className={`w-full mb-1 ${isMe ? "items-end" : "items-start"}`}>
       <TouchableOpacity
@@ -203,11 +238,15 @@ function MessageBubble({
               testID={`message-attachment-${message.id}`}
               activeOpacity={0.85}
               onPress={() => {
-                void Linking.openURL(attachmentUrl);
+                if (attachmentUrl && isImageAttachment(attachmentUrl)) {
+                  onImagePress?.(attachmentUrl);
+                } else if (attachmentUrl) {
+                  void Linking.openURL(attachmentUrl);
+                }
               }}
               className={message.body ? "mt-2" : ""}
             >
-              {isImageAttachment(attachmentUrl) ? (
+              {attachmentUrl && isImageAttachment(attachmentUrl) ? (
                 <Image
                   source={{ uri: attachmentUrl }}
                   className="rounded-xl mb-2"
@@ -224,6 +263,8 @@ function MessageBubble({
                   name={
                     isImageAttachment(attachmentUrl)
                       ? "image"
+                      : isAudioAttachment(attachmentUrl)
+                      ? "musical-notes"
                       : "document-text"
                   }
                   size={16}
@@ -235,24 +276,50 @@ function MessageBubble({
                   }`}
                   numberOfLines={1}
                 >
-                  {getAttachmentLabel(attachmentUrl)}
+                  {getAttachmentLabel(attachmentUrl, message.original_filename)}
                 </Text>
               </View>
             </TouchableOpacity>
           ) : null}
         </View>
-        <Text
-          className={`text-[10px] text-on-surface-muted px-1 mt-0.5 ${
-            isMe ? "text-right" : "text-left"
-          }`}
-        >
-          {formatTime(message.created_at)}
-        </Text>
+        <View className={`flex-row items-center px-1 mt-0.5 ${isMe ? "justify-end" : "justify-start"}`}>
+          <Text className="text-[10px] text-on-surface-muted">
+            {formatTime(message.created_at)}
+          </Text>
+          {isMe && getStatusIcon()}
+        </View>
       </TouchableOpacity>
     </View>
   );
 }
 
+
+function ImageViewer({
+  url,
+  onClose,
+}: {
+  url: string | null;
+  onClose: () => void;
+}) {
+  if (!url) return null;
+  return (
+    <Modal visible={!!url} transparent animationType="fade" onRequestClose={onClose}>
+      <View className="flex-1 bg-black items-center justify-center">
+        <TouchableOpacity 
+          onPress={onClose} 
+          className="absolute top-12 right-6 z-10 w-10 h-10 items-center justify-center rounded-full bg-white/20"
+        >
+          <Ionicons name="close" size={24} color="white" />
+        </TouchableOpacity>
+        <Image
+          source={{ uri: url }}
+          className="w-full h-full"
+          resizeMode="contain"
+        />
+      </View>
+    </Modal>
+  );
+}
 function EmptyMessages() {
   return (
     <View className="flex-1 items-center justify-center py-20">
@@ -265,7 +332,7 @@ function EmptyMessages() {
       <Text className="text-[15px] font-semibold text-on-surface text-center mb-1">
         No messages yet
       </Text>
-      <Text className="text-[13px] text-on-surface-muted text-center">
+      <Text className="text-[13px] text-on-surface-muted text-center px-8">
         Say hello to start the conversation!
       </Text>
     </View>
@@ -292,8 +359,11 @@ export default function ConversationScreen() {
     data: messages = [],
     isLoading: messagesLoading,
     isError: messagesError,
+    loadMore,
+    hasMore,
   } = useMessages(conversation_id ?? "");
 
+  const markRead = useMarkRead(conversation_id ?? "");
   const sendMessage = useSendMessage(conversation_id ?? "");
   const submitReportMutation = useSubmitReportMutation();
   const [text, setText] = useState("");
@@ -302,10 +372,34 @@ export default function ConversationScreen() {
   const [attachment, setAttachment] = useState<LocalUploadFile | null>(null);
   const [showAttachOptions, setShowAttachOptions] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const flatListRef = useRef<FlatList<ListItem>>(null);
   const isNearBottomRef = useRef(true);
   const hasInitialScrollDoneRef = useRef(false);
   const prevLastMessageIdRef = useRef<string | null>(null);
+
+  // Mark conversation as read on mount and when new messages arrive if near bottom
+  useEffect(() => {
+    if (conversation_id) {
+      markRead.mutate();
+    }
+  }, [conversation_id]);
+
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && isNearBottomRef.current) {
+        markRead.mutate();
+    }
+  }, [messages.length]);
+
+  const handleHeaderScroll = useCallback(async () => {
+    if (hasMore && !messagesLoading && !isRefreshing) {
+      setIsRefreshing(true);
+      await loadMore();
+      setIsRefreshing(false);
+    }
+  }, [hasMore, messagesLoading, isRefreshing, loadMore]);
 
   const other = conversation
     ? conversation.mentor.username === currentUsername
@@ -354,8 +448,13 @@ export default function ConversationScreen() {
       const distanceFromBottom =
         contentSize.height - (contentOffset.y + layoutMeasurement.height);
       isNearBottomRef.current = distanceFromBottom <= 80;
+
+      // Detect top of list to load more (older) messages
+      if (contentOffset.y <= 10 && !messagesLoading && hasMore) {
+        void handleHeaderScroll();
+      }
     },
-    [],
+    [messagesLoading, hasMore, handleHeaderScroll],
   );
 
   const handleSend = useCallback(async () => {
@@ -407,6 +506,19 @@ export default function ConversationScreen() {
     }
   }, []);
 
+  const handlePickAudio = useCallback(async () => {
+    setAttachmentError(null);
+    try {
+      const file = await pickMessageAudioFile();
+      if (file) {
+        setAttachment(file);
+        setShowAttachOptions(false);
+      }
+    } catch {
+      setAttachmentError("Could not attach that audio file.");
+    }
+  }, []);
+
   const handleSubmitReport = useCallback(
     async ({
       reason,
@@ -448,6 +560,7 @@ export default function ConversationScreen() {
         <MessageBubble
           message={item.message}
           isMe={item.message.sender.username === currentUsername}
+          onImagePress={(url) => setFullScreenImage(url)}
           onLongPress={
             item.message.sender.username === currentUsername
               ? undefined
@@ -546,6 +659,7 @@ export default function ConversationScreen() {
             data={listItems}
             keyExtractor={(item) => item.key}
             renderItem={renderItem}
+            ListHeaderComponent={isRefreshing ? <ActivityIndicator size="small" color="#4a7c6f" style={{ marginVertical: 10 }} /> : null}
             contentContainerStyle={{
               paddingHorizontal: 16,
               paddingTop: 12,
@@ -592,6 +706,21 @@ export default function ConversationScreen() {
                   PDF
                 </Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                testID="attach-audio-button"
+                activeOpacity={0.85}
+                onPress={handlePickAudio}
+                className="flex-row items-center bg-surface-input rounded-xl px-3 py-2"
+              >
+                <Ionicons
+                  name="musical-notes-outline"
+                  size={18}
+                  color="#4a7c6f"
+                />
+                <Text className="text-[13px] font-semibold text-on-surface ml-2">
+                  Audio
+                </Text>
+              </TouchableOpacity>
             </View>
           ) : null}
 
@@ -604,6 +733,8 @@ export default function ConversationScreen() {
                 name={
                   attachment.type.startsWith("image/")
                     ? "image"
+                    : attachment.type.startsWith("audio/")
+                    ? "musical-notes"
                     : "document-text"
                 }
                 size={18}
@@ -707,6 +838,11 @@ export default function ConversationScreen() {
         onSubmit={(payload) => {
           void handleSubmitReport(payload);
         }}
+      />
+
+      <ImageViewer 
+        url={fullScreenImage} 
+        onClose={() => setFullScreenImage(null)} 
       />
     </View>
   );

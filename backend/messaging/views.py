@@ -158,11 +158,13 @@ class ConversationDetailAPIView(APIView):
         # Help type-checker
         validated_data = getattr(serializer, "validated_data", {})
 
+        attachment = validated_data.get("attachment")
         message = Message.objects.create(
             conversation=conversation,
             sender=profile,
             body=validated_data.get("body", ""),
-            attachment=validated_data.get("attachment"),
+            attachment=attachment,
+            original_filename=attachment.name if attachment else None,
         )
 
         other_profile = (

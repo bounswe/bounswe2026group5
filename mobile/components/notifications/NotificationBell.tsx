@@ -6,7 +6,10 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
 import { useNotificationBadgeStore } from "@/lib/notifications/badgePreferences";
-import { useNotificationsQuery } from "@/lib/queries/notifications";
+import { 
+  useNotificationsQuery, 
+  useMarkAllNotificationsReadMutation 
+} from "@/lib/queries/notifications";
 
 function formatUnreadCount(count: number): string {
   if (count > 99) {
@@ -28,6 +31,8 @@ export function NotificationBell() {
     (state) => state.dismissUnreadBadge,
   );
   const notificationsQuery = useNotificationsQuery(currentUsername);
+  const { mutate: markAllRead } = useMarkAllNotificationsReadMutation(currentUsername);
+
   const unreadNotifications =
     notificationsQuery.data?.filter((notification) => !notification.isRead) ??
     [];
@@ -44,8 +49,11 @@ export function NotificationBell() {
     unreadCount > 0 && latestUnreadTimestamp > dismissedThrough;
 
   const handlePress = () => {
-    if (currentUsername && latestUnreadTimestamp > 0) {
-      dismissUnreadBadge(currentUsername, latestUnreadTimestamp);
+    if (currentUsername) {
+      if (latestUnreadTimestamp > 0) {
+        dismissUnreadBadge(currentUsername, latestUnreadTimestamp);
+      }
+      markAllRead();
     }
 
     router.push("/notifications" as Href);

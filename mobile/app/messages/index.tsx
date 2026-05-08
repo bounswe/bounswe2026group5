@@ -128,9 +128,18 @@ function ConversationItem({
           >
             {other.display_name}
           </Text>
-          <Text className="text-[11px] text-on-surface-muted ml-2 shrink-0">
-            {formatRelativeTime(conversation.updated_at)}
-          </Text>
+          <View className="flex-row items-center">
+            <Text className="text-[11px] text-on-surface-muted ml-2 shrink-0">
+              {formatRelativeTime(conversation.updated_at)}
+            </Text>
+            {conversation.unread_count > 0 && (
+              <View className="bg-primary rounded-full min-w-[20px] h-5 items-center justify-center px-1.5 ml-2">
+                <Text className="text-white text-[11px] font-bold">
+                  {conversation.unread_count}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
         <Text className="text-[13px] text-on-surface-soft" numberOfLines={1}>
           @{other.username}
