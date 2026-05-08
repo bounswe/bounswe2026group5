@@ -27,6 +27,7 @@ jobs:
     
     - name: Set up environment variables
       env:
+        ROOT_ENV: ${{ secrets.ROOT_ENV }}
         BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
         MOBILE_ENV: ${{ secrets.MOBILE_ENV }}
         GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT_BASE64 }}
@@ -34,7 +35,11 @@ jobs:
         GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
       run: |
         # Root .env for Docker Compose
-        cp .env.example .env
+        if [ -n "$ROOT_ENV" ]; then
+          echo "$ROOT_ENV" > .env
+        else
+          cp .env.example .env
+        fi
         
         # Backend .env and credentials
         mkdir -p backend/credentials
