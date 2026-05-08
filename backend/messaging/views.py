@@ -239,10 +239,10 @@ class MessageReportAPIView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check for existing report for this message by this user
-        if Report.objects.filter(related_message=message, submitted_by=request.user).exists():
+        # Check for existing report for this user by this reporter
+        if Report.objects.filter(reported_user=message.sender.user, submitted_by=request.user).exists():
             return Response(
-                {"detail": "You have already reported this message."},
+                {"detail": "You have already reported this user."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

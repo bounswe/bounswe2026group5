@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from mentorship.serializers import ProfileSummarySerializer
 
+from accounts.models import Report
 from .models import Conversation, Message
 
 

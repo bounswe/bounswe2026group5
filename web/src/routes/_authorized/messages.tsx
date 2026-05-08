@@ -29,7 +29,13 @@ export const Route = createFileRoute('/_authorized/messages')({
 
 export function MessagesPage() {
     const { conversationId } = Route.useSearch()
+    const navigate = Route.useNavigate()
     const [selectedId, setSelectedId] = useState<string | null>(conversationId || null)
+
+    const handleSelect = (id: string) => {
+        setSelectedId(id)
+        navigate({ search: { conversationId: id } })
+    }
 
     const { data: notifications = [] } = useNotifications()
     const { mutate: markAllRead } = useMarkAllNotificationsRead()
@@ -52,7 +58,7 @@ export function MessagesPage() {
     return (
         <div className="p-4 md:p-6 h-[calc(100vh-3.5rem)]">
             <div className="flex h-full rounded-xl border border-line overflow-hidden shadow-sm bg-background max-w-5xl mx-auto">
-                <ConversationList selectedId={selectedId} onSelect={setSelectedId} />
+                <ConversationList selectedId={selectedId} onSelect={handleSelect} />
                 <MessageThread conversationId={selectedId} />
             </div>
         </div>
@@ -311,6 +317,8 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
 // Message Bubble with status indicators
 // ---------------------------------------------------------------------------
 
+import { ReportMessageDialog } from '@/components/ReportMessageDialog'
+
 function MessageBubble({
     message,
     isMe,
@@ -335,7 +343,7 @@ function MessageBubble({
     const isSending = message.status_for_me === 'sending'
 
     return (
-        <div className={cn('flex items-end gap-2', isMe && 'flex-row-reverse')}>
+        <div className={cn('flex items-end gap-2 group', isMe && 'flex-row-reverse')}>
             {!isMe && (
                 <Avatar
                     name={message.sender.display_name}
@@ -345,7 +353,7 @@ function MessageBubble({
             )}
             <div
                 className={cn(
-                    'max-w-[70%] rounded-2xl px-4 py-2 text-sm',
+                    'max-w-[70%] rounded-2xl px-4 py-2 text-sm relative',
                     isMe
                         ? 'bg-accent text-white rounded-br-sm'
                         : 'bg-accent-muted text-ink rounded-bl-sm',
@@ -373,6 +381,15 @@ function MessageBubble({
                     {isMe && getStatusIcon()}
                 </div>
             </div>
+
+            {!isMe && (
+                <div className="opacity-40 group-hover:opacity-100 transition-opacity">
+                    <ReportMessageDialog
+                        messageId={message.id}
+                        reportedUsername={message.sender.username}
+                    />
+                </div>
+            )}
         </div>
     )
 }

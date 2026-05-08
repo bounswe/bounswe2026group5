@@ -779,12 +779,24 @@ class ReportCreateAPIView(APIView):
         )
         serializer.is_valid(raise_exception=True)
 
+        reported_user_id = serializer.validated_data["reported_user_id"]
+        related_message_id = serializer.validated_data.get("related_message_id")
+
+        # Check if this user has already reported this target user
+        if Report.objects.filter(
+            submitted_by=request.user, reported_user_id=reported_user_id
+        ).exists():
+            return Response(
+                {"detail": "You have already reported this user."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         report = Report.objects.create(
             submitted_by=cast(User, request.user),
-            reported_user_id=serializer.validated_data["reported_user_id"],
+            reported_user_id=reported_user_id,
             reason=serializer.validated_data["reason"],
             description=serializer.validated_data.get("description", ""),
-            related_message_id=serializer.validated_data.get("related_message_id"),
+            related_message_id=related_message_id,
         )
 
         return Response(
