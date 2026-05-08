@@ -1,4 +1,4 @@
-import { infiniteQueryOptions, queryOptions, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { infiniteQueryOptions, queryOptions, useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { throwApiError } from '#/lib/apiError.ts'
 import type { PublicMentorProfile } from '#/lib/queries/DiscoverQueries.ts'
 
@@ -222,11 +222,11 @@ async function fetchTaggableUsers(communityId: string): Promise<{ count: number;
     return res.json()
 }
 
-async function fetchCommunityPosts(communityId: string): Promise<CommunityPostFeed> {
-    const res = await fetch(
-        `${API_BASE_URL}/profiles/tags/${communityId}/posts/`,
-        { headers: authHeaders() },
-    )
+async function fetchCommunityPosts(communityId: string, offset = 0, limit = 20): Promise<CommunityPostFeed> {
+    const url = new URL(`${API_BASE_URL}/profiles/tags/${communityId}/posts/`, window.location.origin)
+    url.searchParams.set('offset', String(offset))
+    url.searchParams.set('limit', String(limit))
+    const res = await fetch(url.toString(), { headers: authHeaders() })
     if (!res.ok) await throwApiError(res)
     return res.json()
 }
@@ -351,6 +351,21 @@ export const communityPostsQueryOptions = (communityId: string) =>
         staleTime: 30_000,
     })
 
+const COMMUNITY_POSTS_PAGE_SIZE = 20
+
+export const communityPostsInfiniteQueryOptions = (communityId: string) =>
+    infiniteQueryOptions({
+        queryKey: [...communityQueryKeys.posts(communityId), 'infinite'],
+        queryFn: ({ pageParam }) => fetchCommunityPosts(communityId, pageParam as number, COMMUNITY_POSTS_PAGE_SIZE),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage) => {
+            const fetched = lastPage.offset + lastPage.results.length
+            return fetched < lastPage.count ? fetched : undefined
+        },
+        enabled: Boolean(communityId),
+        staleTime: 30_000,
+    })
+
 // ---------------------------------------------------------------------------
 // Mutation hooks
 // ---------------------------------------------------------------------------
@@ -405,13 +420,19 @@ export function useCommunityPosts(communityId: string) {
     return useQuery(communityPostsQueryOptions(communityId))
 }
 
+export function useInfiniteCommunityPosts(communityId: string) {
+    return useInfiniteQuery(communityPostsInfiniteQueryOptions(communityId))
+}
+
+function invalidatePosts(queryClient: ReturnType<typeof useQueryClient>, communityId: string) {
+    return queryClient.invalidateQueries({ queryKey: communityQueryKeys.posts(communityId) })
+}
+
 export function useCreateCommunityPost(communityId: string) {
     const queryClient = useQueryClient()
     return useMutation({
         mutationFn: (payload: CommunityPostCreatePayload) => createCommunityPost(communityId, payload),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: communityQueryKeys.posts(communityId) })
-        },
+        onSuccess: () => invalidatePosts(queryClient, communityId),
     })
 }
 
@@ -420,9 +441,7 @@ export function useEditCommunityPost(communityId: string) {
     return useMutation({
         mutationFn: ({ postId, payload }: { postId: string; payload: CommunityPostUpdatePayload }) =>
             editCommunityPost(communityId, postId, payload),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: communityQueryKeys.posts(communityId) })
-        },
+        onSuccess: () => invalidatePosts(queryClient, communityId),
     })
 }
 
@@ -430,8 +449,6 @@ export function useDeleteCommunityPost(communityId: string) {
     const queryClient = useQueryClient()
     return useMutation({
         mutationFn: (postId: string) => deleteCommunityPost(communityId, postId),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: communityQueryKeys.posts(communityId) })
-        },
+        onSuccess: () => invalidatePosts(queryClient, communityId),
     })
 }

@@ -2,15 +2,12 @@ import { useState } from 'react'
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-    Users, ChevronLeft, ChevronRight, Lock, Pencil,
-    Plus, Trophy, TrendingUp, Trash2, Loader2,
+    Users, ChevronLeft, Pencil, Plus, Trophy, TrendingUp,
+    Trash2, Loader2, Lock, User, MessageSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Display, Muted } from '@/components/Typography'
-import { ProfileCard } from '@/components/features/discover/ProfileCard'
 import {
     Dialog,
     DialogContent,
@@ -28,7 +25,7 @@ import {
     useJoinCommunityMutation,
     useLeaveCommunityMutation,
     useUpdateCommunityDescriptionMutation,
-    useCommunityPosts,
+    useInfiniteCommunityPosts,
     useCreateCommunityPost,
     useEditCommunityPost,
     useDeleteCommunityPost,
@@ -41,10 +38,19 @@ import { meQueryOptions } from '@/lib/queries/AuthQueries.ts'
 import { useMessaging } from '@/lib/queries/MessagingQueries.ts'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import type { PublicMentorProfile } from '@/lib/queries/DiscoverQueries.ts'
 
 // ---------------------------------------------------------------------------
-// Shared metadata
+// Constants
 // ---------------------------------------------------------------------------
+
+export const AVATAR_COLORS = [
+    'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+    'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+    'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+]
 
 const EVENT_TYPE_META = {
     achievement: { label: 'Achievement', Icon: Trophy, className: 'bg-amber-100 text-amber-700 border-amber-200' },
@@ -57,70 +63,88 @@ function formatTimestamp(ts: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Edit Description Modal
+// Shared avatar (used for both members and posts)
 // ---------------------------------------------------------------------------
 
-interface EditDescriptionModalProps {
-    open: boolean
-    currentDescription: string
-    communitySlug: string
-    onClose: () => void
-    updateMutation: ReturnType<typeof useUpdateCommunityDescriptionMutation>
-}
+function UserAvatar({
+    displayName,
+    pictureUrl,
+    size = 'md',
+}: {
+    displayName: string
+    pictureUrl: string | null
+    size?: 'sm' | 'md'
+}) {
+    const initials = (displayName || '?')
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase()
+    const colorClass = AVATAR_COLORS[displayName.length % AVATAR_COLORS.length]
+    const dim = size === 'sm' ? 'h-8 w-8 text-xs' : 'h-10 w-10 text-sm'
 
-function EditDescriptionModal({
-    open,
-    currentDescription,
-    communitySlug,
-    onClose,
-    updateMutation,
-}: EditDescriptionModalProps) {
-    const [description, setDescription] = useState(currentDescription)
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        try {
-            await updateMutation.mutateAsync({ communitySlug, description })
-            toast.success('Description updated.')
-            onClose()
-        } catch {
-            toast.error('Failed to update description.')
-        }
+    if (pictureUrl) {
+        return (
+            <img
+                src={pictureUrl}
+                alt={displayName}
+                className={cn('rounded-full object-cover shrink-0 border border-line', dim)}
+            />
+        )
     }
-
     return (
-        <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle className="font-display text-xl">Edit Description</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
-                    <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="edit-desc">Description</Label>
-                        <Textarea
-                            id="edit-desc"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="What is this community about?"
-                            rows={4}
-                        />
-                    </div>
-                    <DialogFooter className="mt-2">
-                        <Button type="button" variant="ghost" onClick={onClose} disabled={updateMutation.isPending}>
-                            Cancel
-                        </Button>
-                        <Button type="submit" className="bg-accent hover:bg-accent-light text-white" disabled={updateMutation.isPending}>
-                            {updateMutation.isPending ? 'Saving…' : 'Save'}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+        <div className={cn('rounded-full flex items-center justify-center font-bold shrink-0 border border-white/50', colorClass, dim)}>
+            {initials}
+        </div>
     )
 }
 
 // ---------------------------------------------------------------------------
-// Community Post Card
+// Member card (compact sidebar strip)
+// ---------------------------------------------------------------------------
+
+function MemberCard({
+    profile,
+    onViewProfile,
+    onSendMessage,
+}: {
+    profile: PublicMentorProfile
+    onViewProfile: (username: string) => void
+    onSendMessage?: (username: string) => void
+}) {
+    return (
+        <div className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-surface-alt transition-colors">
+            <UserAvatar displayName={profile.full_name} pictureUrl={profile.picture_url} size="sm" />
+            <span className="text-sm font-medium text-ink truncate flex-1">{profile.full_name}</span>
+            <div className="flex items-center gap-0.5 shrink-0">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-ink-soft hover:text-accent"
+                    onClick={() => onViewProfile(profile.username)}
+                    aria-label="View profile"
+                >
+                    <User className="h-3.5 w-3.5" />
+                </Button>
+                {onSendMessage && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-ink-soft hover:text-accent"
+                        onClick={() => onSendMessage(profile.username)}
+                        aria-label="Send message"
+                    >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                    </Button>
+                )}
+            </div>
+        </div>
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Community post card (real-post style)
 // ---------------------------------------------------------------------------
 
 function CommunityPostCard({
@@ -134,92 +158,77 @@ function CommunityPostCard({
     onEdit: (p: CommunityPost) => void
     onDelete: (p: CommunityPost) => void
 }) {
-    const meta = EVENT_TYPE_META[post.event_type]
-    const { Icon, label, className } = meta
+    const { Icon, label, className } = EVENT_TYPE_META[post.event_type]
 
     return (
-        <Card className="border-line shadow-sm bg-white hover:shadow-md transition-shadow">
-            <CardContent className="pt-4 pb-4 flex flex-col gap-2">
-                <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${className}`}>
-                            <Icon className="w-3 h-3" />
-                            {label}
-                        </span>
+        <div className="rounded-lg border border-line bg-white dark:bg-white/5 px-5 py-4 flex flex-col gap-3 hover:border-accent/40 transition-colors">
+
+            {/* Header: avatar + author info + actions */}
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                    <UserAvatar displayName={post.author.display_name} pictureUrl={post.author.picture_url} />
+                    <div className="flex flex-col min-w-0">
+                        <Link
+                            to="/profiles/$username"
+                            params={{ username: post.author.username }}
+                            className="text-sm font-semibold text-ink hover:underline leading-snug"
+                        >
+                            {post.author.display_name}
+                        </Link>
+                        <Muted className="text-xs">
+                            @{post.author.username}{post.author.title ? ` · ${post.author.title}` : ''}
+                        </Muted>
+                        <Muted className="text-xs">{formatTimestamp(post.timestamp)}</Muted>
                     </div>
-                    {isOwn && (
-                        <div className="flex items-center gap-1">
-                            <Button
-                                variant="ghost" size="sm"
-                                className="h-7 w-7 p-0 text-ink-soft hover:text-ink"
-                                onClick={() => onEdit(post)}
-                                aria-label="Edit post"
-                            >
-                                <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                                variant="ghost" size="sm"
-                                className="h-7 w-7 p-0 text-ink-soft hover:text-red-500"
-                                onClick={() => onDelete(post)}
-                                aria-label="Delete post"
-                            >
-                                <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                        </div>
-                    )}
                 </div>
 
-                <Muted className="text-xs font-medium">
-                    <Link
-                        to="/profiles/$username"
-                        params={{ username: post.author.username }}
-                        className="text-accent hover:underline"
-                    >
-                        {post.author.display_name}
-                    </Link>
+                {isOwn && (
+                    <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-ink-soft hover:text-ink" onClick={() => onEdit(post)} aria-label="Edit post">
+                            <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-ink-soft hover:text-red-500" onClick={() => onDelete(post)} aria-label="Delete post">
+                            <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                    </div>
+                )}
+            </div>
+
+            {/* Event type badge */}
+            <span className={`self-start inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${className}`}>
+                <Icon className="w-3 h-3" />
+                {label}
+            </span>
+
+            {post.content && (
+                <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{post.content}</p>
+            )}
+
+            {post.tagged_users.length > 0 && (
+                <Muted className="text-xs">
+                    with{' '}
+                    {post.tagged_users.map((u, i) => (
+                        <span key={u.user_id}>
+                            <Link to="/profiles/$username" params={{ username: u.username }} className="text-accent hover:underline">
+                                @{u.username}
+                            </Link>
+                            {i < post.tagged_users.length - 1 && ', '}
+                        </span>
+                    ))}
                 </Muted>
+            )}
 
-                {post.content && (
-                    <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{post.content}</p>
-                )}
-
-                {post.media_url && (
-                    <a
-                        href={post.media_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-accent underline truncate"
-                    >
-                        {post.media_url}
-                    </a>
-                )}
-
-                {post.tagged_users.length > 0 && (
-                    <Muted className="text-xs">
-                        with{' '}
-                        {post.tagged_users.map((u, i) => (
-                            <span key={u.user_id}>
-                                <Link
-                                    to="/profiles/$username"
-                                    params={{ username: u.username }}
-                                    className="text-accent hover:underline"
-                                >
-                                    @{u.username}
-                                </Link>
-                                {i < post.tagged_users.length - 1 && ', '}
-                            </span>
-                        ))}
-                    </Muted>
-                )}
-
-                <Muted className="text-xs">{formatTimestamp(post.timestamp)}</Muted>
-            </CardContent>
-        </Card>
+            {post.media_url && (
+                <a href={post.media_url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent underline truncate">
+                    {post.media_url}
+                </a>
+            )}
+        </div>
     )
 }
 
 // ---------------------------------------------------------------------------
-// Tagged users checklist (shared between create and edit dialogs)
+// Taggable users checklist
 // ---------------------------------------------------------------------------
 
 function TaggableUsersList({
@@ -313,16 +322,11 @@ function CreatePostDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>New Post</DialogTitle>
-                </DialogHeader>
+                <DialogHeader><DialogTitle>New Post</DialogTitle></DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
                     <div className="flex flex-col gap-1.5">
                         <Label htmlFor="cop_create_type">Type</Label>
-                        <Select
-                            value={form.event_type}
-                            onValueChange={(v) => setForm((f) => ({ ...f, event_type: v as CommunityPostCreatePayload['event_type'] }))}
-                        >
+                        <Select value={form.event_type} onValueChange={(v) => setForm((f) => ({ ...f, event_type: v as CommunityPostCreatePayload['event_type'] }))}>
                             <SelectTrigger id="cop_create_type"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="achievement">Achievement</SelectItem>
@@ -331,56 +335,26 @@ function CreatePostDialog({
                             </SelectContent>
                         </Select>
                     </div>
-
                     <div className="flex flex-col gap-1.5">
                         <Label htmlFor="cop_create_content">Content <span className="text-red-500">*</span></Label>
-                        <Textarea
-                            id="cop_create_content"
-                            value={form.content}
-                            onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                            placeholder="Share something with this community…"
-                            maxLength={2000}
-                            rows={4}
-                            required
-                        />
+                        <Textarea id="cop_create_content" value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} placeholder="Share something with this community…" maxLength={2000} rows={4} required />
                         <p className="text-xs text-ink-soft text-right">{form.content.length}/2000</p>
                     </div>
-
                     <div className="flex flex-col gap-1.5">
                         <Label>Tag people <span className="text-ink-soft text-xs">(max 5)</span></Label>
-                        <TaggableUsersList
-                            communityId={communityId}
-                            selected={form.tagged_users ?? []}
-                            onChange={(usernames) => setForm((f) => ({ ...f, tagged_users: usernames }))}
-                        />
+                        <TaggableUsersList communityId={communityId} selected={form.tagged_users ?? []} onChange={(usernames) => setForm((f) => ({ ...f, tagged_users: usernames }))} />
                     </div>
-
                     <div className="flex flex-col gap-1.5">
                         <Label htmlFor="cop_create_media">Media URL (optional)</Label>
-                        <Input
-                            id="cop_create_media"
-                            value={(form.media_url as string) ?? ''}
-                            onChange={(e) => setForm((f) => ({ ...f, media_url: e.target.value }))}
-                            placeholder="https://…"
-                            type="url"
-                        />
+                        <Input id="cop_create_media" value={(form.media_url as string) ?? ''} onChange={(e) => setForm((f) => ({ ...f, media_url: e.target.value }))} placeholder="https://…" type="url" />
                     </div>
-
                     <label className="flex items-center gap-2.5 cursor-pointer text-sm">
-                        <Checkbox
-                            checked={form.show_on_profile}
-                            onCheckedChange={(v) => setForm((f) => ({ ...f, show_on_profile: Boolean(v) }))}
-                        />
+                        <Checkbox checked={form.show_on_profile} onCheckedChange={(v) => setForm((f) => ({ ...f, show_on_profile: Boolean(v) }))} />
                         Share to my profile
                     </label>
-
                     <DialogFooter className="mt-2">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                        <Button
-                            type="submit"
-                            disabled={!form.content.trim() || createMutation.isPending}
-                            className="bg-accent hover:bg-accent/90 text-white"
-                        >
+                        <Button type="submit" disabled={!form.content.trim() || createMutation.isPending} className="bg-accent hover:bg-accent/90 text-white">
                             {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Publish'}
                         </Button>
                     </DialogFooter>
@@ -423,28 +397,20 @@ function EditPostDialog({
             show_on_profile: form.show_on_profile,
             tagged_users: form.tagged_users,
         }
-        editMutation.mutate(
-            { postId: post.id, payload },
-            {
-                onSuccess: () => { toast.success('Post updated'); onOpenChange(false) },
-                onError: () => toast.error('Failed to update post. Please try again.'),
-            },
-        )
+        editMutation.mutate({ postId: post.id, payload }, {
+            onSuccess: () => { toast.success('Post updated'); onOpenChange(false) },
+            onError: () => toast.error('Failed to update post. Please try again.'),
+        })
     }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Edit Post</DialogTitle>
-                </DialogHeader>
+                <DialogHeader><DialogTitle>Edit Post</DialogTitle></DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
                     <div className="flex flex-col gap-1.5">
                         <Label htmlFor="cop_edit_type">Type</Label>
-                        <Select
-                            value={form.event_type}
-                            onValueChange={(v) => setForm((f) => ({ ...f, event_type: v as CommunityPostUpdatePayload['event_type'] }))}
-                        >
+                        <Select value={form.event_type} onValueChange={(v) => setForm((f) => ({ ...f, event_type: v as CommunityPostUpdatePayload['event_type'] }))}>
                             <SelectTrigger id="cop_edit_type"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="achievement">Achievement</SelectItem>
@@ -453,56 +419,26 @@ function EditPostDialog({
                             </SelectContent>
                         </Select>
                     </div>
-
                     <div className="flex flex-col gap-1.5">
                         <Label htmlFor="cop_edit_content">Content <span className="text-red-500">*</span></Label>
-                        <Textarea
-                            id="cop_edit_content"
-                            value={form.content ?? ''}
-                            onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                            placeholder="Share something with this community…"
-                            maxLength={2000}
-                            rows={4}
-                            required
-                        />
+                        <Textarea id="cop_edit_content" value={form.content ?? ''} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} placeholder="Share something with this community…" maxLength={2000} rows={4} required />
                         <p className="text-xs text-ink-soft text-right">{(form.content ?? '').length}/2000</p>
                     </div>
-
                     <div className="flex flex-col gap-1.5">
                         <Label>Tag people <span className="text-ink-soft text-xs">(max 5)</span></Label>
-                        <TaggableUsersList
-                            communityId={communityId}
-                            selected={form.tagged_users ?? []}
-                            onChange={(usernames) => setForm((f) => ({ ...f, tagged_users: usernames }))}
-                        />
+                        <TaggableUsersList communityId={communityId} selected={form.tagged_users ?? []} onChange={(usernames) => setForm((f) => ({ ...f, tagged_users: usernames }))} />
                     </div>
-
                     <div className="flex flex-col gap-1.5">
                         <Label htmlFor="cop_edit_media">Media URL (optional)</Label>
-                        <Input
-                            id="cop_edit_media"
-                            value={(form.media_url as string) ?? ''}
-                            onChange={(e) => setForm((f) => ({ ...f, media_url: e.target.value }))}
-                            placeholder="https://…"
-                            type="url"
-                        />
+                        <Input id="cop_edit_media" value={(form.media_url as string) ?? ''} onChange={(e) => setForm((f) => ({ ...f, media_url: e.target.value }))} placeholder="https://…" type="url" />
                     </div>
-
                     <label className="flex items-center gap-2.5 cursor-pointer text-sm">
-                        <Checkbox
-                            checked={form.show_on_profile}
-                            onCheckedChange={(v) => setForm((f) => ({ ...f, show_on_profile: Boolean(v) }))}
-                        />
+                        <Checkbox checked={form.show_on_profile} onCheckedChange={(v) => setForm((f) => ({ ...f, show_on_profile: Boolean(v) }))} />
                         Share to my profile
                     </label>
-
                     <DialogFooter className="mt-2">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                        <Button
-                            type="submit"
-                            disabled={!form.content?.trim() || editMutation.isPending}
-                            className="bg-accent hover:bg-accent/90 text-white"
-                        >
+                        <Button type="submit" disabled={!form.content?.trim() || editMutation.isPending} className="bg-accent hover:bg-accent/90 text-white">
                             {editMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
                         </Button>
                     </DialogFooter>
@@ -539,9 +475,7 @@ function DeletePostDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-sm">
-                <DialogHeader>
-                    <DialogTitle>Delete Post</DialogTitle>
-                </DialogHeader>
+                <DialogHeader><DialogTitle>Delete Post</DialogTitle></DialogHeader>
                 <p className="text-sm text-ink-soft mt-1">
                     Are you sure you want to delete this post? This action cannot be undone.
                 </p>
@@ -557,18 +491,61 @@ function DeletePostDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Constants
+// Edit Description Modal
 // ---------------------------------------------------------------------------
 
-const AVATAR_COLORS = [
-    'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-    'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
-    'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
-    'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-]
+function EditDescriptionModal({
+    open,
+    currentDescription,
+    communitySlug,
+    onClose,
+    updateMutation,
+}: {
+    open: boolean
+    currentDescription: string
+    communitySlug: string
+    onClose: () => void
+    updateMutation: ReturnType<typeof useUpdateCommunityDescriptionMutation>
+}) {
+    const [description, setDescription] = useState(currentDescription)
 
-const MEMBERS_PAGE_SIZE = 9
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        try {
+            await updateMutation.mutateAsync({ communityId: communitySlug, description })
+            toast.success('Description updated.')
+            onClose()
+        } catch {
+            toast.error('Failed to update description.')
+        }
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle className="font-display text-xl">Edit Description</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
+                    <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="edit-desc">Description</Label>
+                        <Textarea id="edit-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is this community about?" rows={4} />
+                    </div>
+                    <DialogFooter className="mt-2">
+                        <Button type="button" variant="ghost" onClick={onClose} disabled={updateMutation.isPending}>Cancel</Button>
+                        <Button type="submit" className="bg-accent hover:bg-accent-light text-white" disabled={updateMutation.isPending}>
+                            {updateMutation.isPending ? 'Saving…' : 'Save'}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Route
+// ---------------------------------------------------------------------------
 
 export const Route = createFileRoute('/_authorized/communities/$communitySlug')({
     component: CommunityDetailPage,
@@ -581,7 +558,7 @@ export const Route = createFileRoute('/_authorized/communities/$communitySlug')(
 export function CommunityDetailPage() {
     const { communitySlug } = Route.useParams()
     const navigate = useNavigate()
-    const [membersPage, setMembersPage] = useState(1)
+
     const [isJoining, setIsJoining] = useState(false)
     const [isLeaving, setIsLeaving] = useState(false)
     const [showEditModal, setShowEditModal] = useState(false)
@@ -591,24 +568,27 @@ export function CommunityDetailPage() {
 
     const { data: me } = useQuery(meQueryOptions)
     const { data: community, isLoading } = useQuery(communityDetailQueryOptions(communitySlug))
-    const { data: membersData } = useQuery(
-        communityMembersQueryOptions(communitySlug, membersPage, MEMBERS_PAGE_SIZE),
-    )
-    const { data: postsData, isLoading: postsLoading } = useCommunityPosts(
-        community?.is_member ? community.id : '',
-    )
+    const { data: membersData } = useQuery(communityMembersQueryOptions(communitySlug, 1, 50))
+    const { matchedUsernames, sendMessageTo } = useMessaging()
+
+    const {
+        data: postsData,
+        isLoading: postsLoading,
+        hasNextPage,
+        isFetchingNextPage,
+        fetchNextPage,
+    } = useInfiniteCommunityPosts(community?.is_member ? community.id : '')
 
     const joinMutation = useJoinCommunityMutation()
     const leaveMutation = useLeaveCommunityMutation()
     const updateMutation = useUpdateCommunityDescriptionMutation()
-    const { matchedUsernames, sendMessageTo } = useMessaging()
 
     const isMember = community?.is_member ?? false
     const isCreator = Boolean(me && community?.created_by_username === me.username)
     const members = membersData?.results ?? []
     const totalMembers = membersData?.count ?? 0
-    const totalPages = Math.ceil(totalMembers / MEMBERS_PAGE_SIZE)
-    const posts = postsData?.results ?? []
+    const posts = postsData?.pages.flatMap((p) => p.results) ?? []
+    const totalPosts = postsData?.pages[0]?.count ?? 0
 
     const handleJoin = async () => {
         setIsJoining(true)
@@ -635,245 +615,187 @@ export function CommunityDetailPage() {
     }
 
     if (isLoading) {
-        return (
-            <div className="page-wrap py-24 text-center text-ink-soft text-lg">
-                Loading community…
-            </div>
-        )
+        return <div className="page-wrap py-24 text-center text-ink-soft text-lg">Loading community…</div>
     }
 
     if (!community) {
         return (
             <div className="page-wrap py-24 text-center">
                 <p className="text-ink-soft text-lg">Community not found.</p>
-                <Link to="/communities" className="text-accent hover:underline text-sm mt-2 block">
-                    ← Back to Communities
-                </Link>
+                <Link to="/communities" className="text-accent hover:underline text-sm mt-2 block">← Back to Communities</Link>
             </div>
         )
     }
 
     const colorClass = AVATAR_COLORS[community.name.length % AVATAR_COLORS.length]
-    const initials = community.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .substring(0, 2)
-        .toUpperCase()
+    const initials = community.name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase()
 
     return (
-        <div className="py-10 sm:py-16 rise-in flex flex-col gap-12">
+        <div className="py-4 sm:py-6 rise-in flex flex-col gap-5">
 
             {/* ── Back link ───────────────────────────────────────────────── */}
-            <div className="page-wrap">
-                <Link
-                    to="/communities"
-                    className="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink transition-colors"
-                >
+            <div className="px-4 sm:px-6">
+                <Link to="/communities" className="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink transition-colors">
                     <ChevronLeft className="h-4 w-4" />
                     Communities
                 </Link>
             </div>
 
-            {/* ── Community Header ────────────────────────────────────────── */}
-            <div className="page-wrap">
-                <div className="island-shell rounded-2xl shadow-md flex flex-col">
+            {/* ── Two-column layout: LEFT = members sidebar, RIGHT = header + feed ── */}
+            <div className="flex items-start gap-6 px-4 sm:px-6 w-full">
 
-                    {/* Top: avatar + meta */}
-                    <div className="p-8 sm:p-10 flex flex-col sm:flex-row items-start gap-7">
-                        <div
-                            className={cn(
-                                'h-20 w-20 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 border border-white/50 shadow-sm',
-                                colorClass,
-                            )}
-                        >
-                            {initials}
+                {/* ── LEFT: Members sidebar ───────────────────────────────── */}
+                <aside className="hidden lg:flex flex-col w-64 shrink-0 sticky top-20 self-start">
+                    <div className="island-shell rounded-xl flex flex-col max-h-[calc(100vh-6rem)] overflow-hidden">
+                        <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+                            <span className="text-sm font-semibold text-ink">Members</span>
+                            <span className="text-xs text-ink-soft">{totalMembers.toLocaleString()}</span>
                         </div>
+                        <div className="overflow-y-auto divide-y divide-line">
+                            {members.length === 0 ? (
+                                <p className="text-xs text-ink-soft px-4 py-6 text-center">No members yet.</p>
+                            ) : (
+                                <>
+                                    {members.map((profile) => (
+                                        <MemberCard
+                                            key={profile.id}
+                                            profile={profile}
+                                            onViewProfile={(username) => navigate({ to: '/profiles/$username', params: { username } })}
+                                            onSendMessage={matchedUsernames.has(profile.username) ? sendMessageTo : undefined}
+                                        />
+                                    ))}
+                                    {totalMembers > 50 && (
+                                        <p className="text-xs text-ink-soft px-4 py-3 text-center">
+                                            and {(totalMembers - 50).toLocaleString()} more
+                                        </p>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </aside>
 
-                        <div className="flex-1 min-w-0 flex flex-col gap-2.5">
-                            <Display as="h1" className="text-3xl sm:text-4xl text-ink leading-tight">
-                                {community.name}
-                            </Display>
+                {/* ── RIGHT: Community header + feed ──────────────────────── */}
+                <div className="flex-1 min-w-0 flex flex-col gap-5">
 
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                                {community.created_by_username && (
-                                    <Muted className="text-sm">
-                                        Created by{' '}
-                                        <Link
-                                            to="/profiles/$username"
-                                            params={{ username: community.created_by_username }}
-                                            className="text-accent hover:underline"
-                                        >
-                                            @{community.created_by_username}
-                                        </Link>
-                                    </Muted>
-                                )}
-                                <p className="flex items-center gap-1.5 text-ink-soft text-sm">
-                                    <Users className="h-3.5 w-3.5" />
-                                    {community.member_count.toLocaleString()} member{community.member_count !== 1 ? 's' : ''}
+                    {/* Community header island */}
+                    <div className="island-shell rounded-2xl shadow-md flex flex-col">
+                        <div className="p-6 sm:p-8 flex flex-col sm:flex-row items-start gap-5">
+                            <div className={cn('h-16 w-16 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0 border border-white/50 shadow-sm', colorClass)}>
+                                {initials}
+                            </div>
+                            <div className="flex-1 min-w-0 flex flex-col gap-2">
+                                <Display as="h1" className="text-2xl sm:text-3xl text-ink leading-tight">{community.name}</Display>
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                                    {community.created_by_username && (
+                                        <Muted className="text-sm">
+                                            Created by{' '}
+                                            <Link to="/profiles/$username" params={{ username: community.created_by_username }} className="text-accent hover:underline">
+                                                @{community.created_by_username}
+                                            </Link>
+                                        </Muted>
+                                    )}
+                                    <p className="flex items-center gap-1.5 text-ink-soft text-sm">
+                                        <Users className="h-3.5 w-3.5" />
+                                        {community.member_count.toLocaleString()} member{community.member_count !== 1 ? 's' : ''}
+                                    </p>
+                                </div>
+                                <p className="text-ink-soft leading-relaxed">
+                                    {community.description || <span className="italic">No description yet.</span>}
                                 </p>
                             </div>
-
-                            <p className="text-ink-soft leading-relaxed max-w-2xl mt-1">
-                                {community.description || <span className="italic">No description yet.</span>}
-                            </p>
                         </div>
-                    </div>
 
-                    {/* Footer: actions row */}
-                    {me && (
-                        <>
-                            <div className="border-t border-line" />
-                            <div className="px-8 sm:px-10 py-4 flex items-center justify-between gap-4">
-                                <div>
-                                    {isCreator && (
-                                        <button
-                                            onClick={() => setShowEditModal(true)}
-                                            className="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink hover:bg-accent-muted/60 transition-colors px-2 py-1.5 rounded-md"
-                                        >
-                                            <Pencil className="h-3.5 w-3.5" />
-                                            Edit Description
+                        {me && (
+                            <>
+                                <div className="border-t border-line" />
+                                <div className="px-6 sm:px-8 py-3 flex items-center justify-between gap-4">
+                                    <div>
+                                        {isCreator && (
+                                            <button onClick={() => setShowEditModal(true)} className="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink hover:bg-accent-muted/60 transition-colors px-2 py-1.5 rounded-md">
+                                                <Pencil className="h-3.5 w-3.5" />
+                                                Edit Description
+                                            </button>
+                                        )}
+                                    </div>
+                                    {isMember ? (
+                                        <button onClick={handleLeave} disabled={isLeaving} className="inline-flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors px-2 py-1.5 rounded-md disabled:opacity-50">
+                                            {isLeaving ? 'Leaving…' : 'Leave Community'}
                                         </button>
+                                    ) : (
+                                        <Button className="bg-accent hover:bg-accent-light text-white shadow-sm" size="sm" disabled={isJoining} onClick={handleJoin}>
+                                            {isJoining ? 'Joining…' : 'Join Community'}
+                                        </Button>
                                     )}
                                 </div>
-
-                                {isMember ? (
-                                    <button
-                                        onClick={handleLeave}
-                                        disabled={isLeaving}
-                                        className="inline-flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors px-2 py-1.5 rounded-md disabled:opacity-50"
-                                    >
-                                        {isLeaving ? 'Leaving…' : 'Leave Community'}
-                                    </button>
-                                ) : (
-                                    <Button
-                                        className="bg-accent hover:bg-accent-light text-white shadow-sm"
-                                        size="sm"
-                                        disabled={isJoining}
-                                        onClick={handleJoin}
-                                    >
-                                        {isJoining ? 'Joining…' : 'Join Community'}
-                                    </Button>
-                                )}
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {/* ── Members ─────────────────────────────────────────────────── */}
-            <div className="page-wrap flex flex-col gap-6">
-                <div className="flex items-center gap-4">
-                    <div className="flex-1 border-t border-line" />
-                    <span className="text-xs text-ink-soft uppercase tracking-widest font-semibold flex items-center gap-2">
-                        <Users className="h-3.5 w-3.5" />
-                        Members
-                    </span>
-                    <div className="flex-1 border-t border-line" />
-                </div>
-
-                {members.length === 0 ? (
-                    <p className="text-ink-soft text-center py-12">No members yet. Be the first to join!</p>
-                ) : (
-                    <>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                            {members.map((profile) => (
-                                <ProfileCard
-                                    key={profile.id}
-                                    profile={profile}
-                                    onViewProfile={(username) =>
-                                        navigate({ to: '/profiles/$username', params: { username } })
-                                    }
-                                    onSendMessage={matchedUsernames.has(profile.username) ? sendMessageTo : undefined}
-                                />
-                            ))}
-                        </div>
-
-                        {totalPages > 1 && (
-                            <div className="flex items-center justify-center gap-4 mt-4">
-                                <Button
-                                    variant="outline" size="icon"
-                                    disabled={membersPage === 1}
-                                    onClick={() => setMembersPage((p) => p - 1)}
-                                    aria-label="Previous page"
-                                >
-                                    <ChevronLeft className="h-4 w-4" />
-                                </Button>
-                                <span className="text-sm text-ink-soft">
-                                    Page {membersPage} of {totalPages}
-                                </span>
-                                <Button
-                                    variant="outline" size="icon"
-                                    disabled={membersPage >= totalPages}
-                                    onClick={() => setMembersPage((p) => p + 1)}
-                                    aria-label="Next page"
-                                >
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
-                            </div>
+                            </>
                         )}
-                    </>
-                )}
-            </div>
+                    </div>
 
-            {/* ── Community Feed ──────────────────────────────────────────── */}
-            <div className="page-wrap flex flex-col gap-6">
-                <div className="flex items-center gap-4">
-                    <div className="flex-1 border-t border-line" />
-                    <span className="text-xs text-ink-soft uppercase tracking-widest font-semibold">
-                        Community Feed
-                    </span>
-                    <div className="flex-1 border-t border-line" />
-                </div>
-
-                {isMember ? (
-                    <>
-                        <div className="flex justify-end">
-                            <Button
-                                onClick={() => setCreateOpen(true)}
-                                className="rounded-full bg-accent hover:bg-accent/90 text-white gap-2"
-                                size="sm"
-                            >
-                                <Plus className="w-4 h-4" />
-                                New Post
-                            </Button>
-                        </div>
-
-                        {postsLoading ? (
-                            <div className="flex justify-center py-12">
-                                <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
-                            </div>
-                        ) : posts.length === 0 ? (
-                            <div className="island-shell rounded-xl p-12 text-center flex flex-col items-center gap-3 shadow-sm">
-                                <p className="text-ink font-semibold">No posts yet.</p>
-                                <Muted className="text-sm max-w-sm">
-                                    Be the first to share something with this community.
-                                </Muted>
+                    {/* Feed */}
+                    <div className="flex flex-col gap-4">
+                        {!isMember ? (
+                            <div className="island-shell rounded-xl p-12 text-center flex flex-col items-center gap-3 shadow-sm opacity-60">
+                                <Lock className="h-8 w-8 text-ink-soft" />
+                                <p className="text-ink font-semibold">Members only</p>
+                                <Muted className="text-sm">Join this community to access the feed.</Muted>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {posts.map((post) => (
-                                    <CommunityPostCard
-                                        key={post.id}
-                                        post={post}
-                                        isOwn={me?.username === post.author.username}
-                                        onEdit={setEditPost}
-                                        onDelete={setDeletePost}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </>
-                ) : (
-                    <div className="island-shell rounded-xl p-12 text-center flex flex-col items-center gap-3 shadow-sm opacity-60">
-                        <Lock className="h-8 w-8 text-ink-soft" />
-                        <p className="text-ink font-semibold">Members only</p>
-                        <Muted className="text-sm">Join this community to access the feed.</Muted>
-                    </div>
-                )}
-            </div>
+                            <>
+                                <div className="flex justify-end">
+                                    <Button onClick={() => setCreateOpen(true)} className="rounded-full bg-accent hover:bg-accent/90 text-white gap-2" size="sm">
+                                        <Plus className="w-4 h-4" />
+                                        New Post
+                                    </Button>
+                                </div>
 
-            {/* ── Dialogs ─────────────────────────────────────────────────── */}
+                                {postsLoading ? (
+                                    <div className="flex justify-center py-12">
+                                        <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
+                                    </div>
+                                ) : posts.length === 0 ? (
+                                    <div className="island-shell rounded-xl p-12 text-center flex flex-col items-center gap-3 shadow-sm">
+                                        <p className="text-ink font-semibold">No posts yet.</p>
+                                        <Muted className="text-sm max-w-sm">Be the first to share something with this community.</Muted>
+                                    </div>
+                                ) : (
+                                    <div className="island-shell rounded-xl overflow-hidden">
+                                        <div className="px-6 py-4 border-b border-line flex items-center justify-between">
+                                            <span className="text-sm font-semibold text-ink">Posts</span>
+                                            <span className="text-xs text-ink-soft">{totalPosts} total</span>
+                                        </div>
+                                        <div className="flex flex-col gap-3 p-4">
+                                            {posts.map((post) => (
+                                                <CommunityPostCard
+                                                    key={post.id}
+                                                    post={post}
+                                                    isOwn={me?.username === post.author.username}
+                                                    onEdit={setEditPost}
+                                                    onDelete={setDeletePost}
+                                                />
+                                            ))}
+                                        </div>
+                                        <div className="px-4 pb-4 flex flex-col items-center gap-2">
+                                            <Muted className="text-xs">{posts.length} of {totalPosts} posts</Muted>
+                                            {hasNextPage && (
+                                                <Button variant="outline" size="sm" disabled={isFetchingNextPage} onClick={() => fetchNextPage()}>
+                                                    {isFetchingNextPage
+                                                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> Loading…</>
+                                                        : 'Load more'}
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+
+                </div>{/* end RIGHT column */}
+
+            </div>{/* end two-column */}
+
+            {/* ── Modals ──────────────────────────────────────────────────── */}
             <EditDescriptionModal
                 open={showEditModal}
                 currentDescription={community.description}
@@ -881,26 +803,16 @@ export function CommunityDetailPage() {
                 onClose={() => setShowEditModal(false)}
                 updateMutation={updateMutation}
             />
-            <CreatePostDialog
-                communityId={community.id}
-                open={createOpen}
-                onOpenChange={setCreateOpen}
-            />
-            {editPost && (
-                <EditPostDialog
-                    communityId={community.id}
-                    post={editPost}
-                    open={!!editPost}
-                    onOpenChange={(open) => { if (!open) setEditPost(null) }}
-                />
-            )}
-            {deletePost && (
-                <DeletePostDialog
-                    communityId={community.id}
-                    post={deletePost}
-                    open={!!deletePost}
-                    onOpenChange={(open) => { if (!open) setDeletePost(null) }}
-                />
+            {community && (
+                <>
+                    <CreatePostDialog communityId={community.id} open={createOpen} onOpenChange={setCreateOpen} />
+                    {editPost && (
+                        <EditPostDialog communityId={community.id} post={editPost} open={!!editPost} onOpenChange={(open) => { if (!open) setEditPost(null) }} />
+                    )}
+                    {deletePost && (
+                        <DeletePostDialog communityId={community.id} post={deletePost} open={!!deletePost} onOpenChange={(open) => { if (!open) setDeletePost(null) }} />
+                    )}
+                </>
             )}
         </div>
     )
