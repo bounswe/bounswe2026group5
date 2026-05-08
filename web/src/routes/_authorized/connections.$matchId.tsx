@@ -50,6 +50,11 @@ export const Route = createFileRoute('/_authorized/connections/$matchId')({
     component: JourneyPage,
 })
 
+function mediaFileName(url: string): string {
+    const raw = url.split('/').pop()?.split('?')[0] ?? 'media'
+    return /^[a-f0-9]{32}_/.test(raw) ? raw.slice(33) : raw
+}
+
 // ---------------------------------------------------------------------------
 // AGTE event metadata
 // ---------------------------------------------------------------------------
@@ -317,7 +322,7 @@ function MCTEItem({
                             rel="noopener noreferrer"
                             className="text-xs text-accent underline truncate"
                         >
-                            {event.media_url}
+                            {mediaFileName(event.media_url)}
                         </a>
                     )}
                     <Muted className="text-xs">{formatTimestamp(event.timestamp)}</Muted>

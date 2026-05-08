@@ -27,6 +27,14 @@ import {
     type ProfilePostUpdatePayload,
 } from '#/lib/queries/ProfilePostQueries.ts'
 
+// ---- Helpers ----
+
+function mediaFileName(url: string): string {
+    const raw = url.split('/').pop()?.split('?')[0] ?? 'media'
+    // Backend prepends a 32-char hex UUID + underscore; strip it if present
+    return /^[a-f0-9]{32}_/.test(raw) ? raw.slice(33) : raw
+}
+
 // ---- Types ----
 
 interface ProfilePostsSectionProps {
@@ -188,7 +196,7 @@ function ProfilePostCard({
                         rel="noopener noreferrer"
                         className="text-xs text-accent underline truncate"
                     >
-                        {post.media_url}
+                        {mediaFileName(post.media_url)}
                     </a>
                 )}
                 {post.category === 'MCTE' && post.mentorship_partner && (

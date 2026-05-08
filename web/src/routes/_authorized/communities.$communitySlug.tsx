@@ -40,6 +40,11 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { PublicMentorProfile } from '@/lib/queries/DiscoverQueries.ts'
 
+function mediaFileName(url: string): string {
+    const raw = url.split('/').pop()?.split('?')[0] ?? 'media'
+    return /^[a-f0-9]{32}_/.test(raw) ? raw.slice(33) : raw
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -220,7 +225,7 @@ function CommunityPostCard({
 
             {post.media_url && (
                 <a href={post.media_url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent underline truncate">
-                    {post.media_url}
+                    {mediaFileName(post.media_url)}
                 </a>
             )}
         </div>
