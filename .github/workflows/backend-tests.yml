@@ -64,10 +64,10 @@ jobs:
         run: |
           mkdir -p credentials
           if [ -n "$GCP_SERVICE_ACCOUNT" ]; then
-            echo "$GCP_SERVICE_ACCOUNT" | base64 --decode > credentials/service-account.json
+            printf "%s" "$GCP_SERVICE_ACCOUNT" | base64 --decode > credentials/service-account.json
           fi
           if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "$FIREBASE_SERVICE_ACCOUNT" | base64 --decode > credentials/firebase-service-account.json
+            printf "%s" "$FIREBASE_SERVICE_ACCOUNT" | base64 --decode > credentials/firebase-service-account.json
           fi
         working-directory: backend
 

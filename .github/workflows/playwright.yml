@@ -26,7 +26,38 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Set up environment variables
-      run: cp .env.example .env
+      env:
+        BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
+        MOBILE_ENV: ${{ secrets.MOBILE_ENV }}
+        GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT_BASE64 }}
+        FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+        GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+      run: |
+        # Root .env for Docker Compose
+        cp .env.example .env
+        
+        # Backend .env and credentials
+        mkdir -p backend/credentials
+        if [ -n "$BACKEND_ENV" ]; then
+          echo "$BACKEND_ENV" > backend/.env
+        else
+          cp backend/.env.example backend/.env
+        fi
+        
+        if [ -n "$GCP_SERVICE_ACCOUNT" ]; then
+          printf "%s" "$GCP_SERVICE_ACCOUNT" | base64 --decode > backend/credentials/service-account.json
+        fi
+        if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+          printf "%s" "$FIREBASE_SERVICE_ACCOUNT" | base64 --decode > backend/credentials/firebase-service-account.json
+        fi
+        
+        # Mobile configuration
+        if [ -n "$MOBILE_ENV" ]; then
+          echo "$MOBILE_ENV" > mobile/.env
+        fi
+        if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+          printf "%s" "$GOOGLE_SERVICES_JSON" | base64 --decode > mobile/google-services.json
+        fi
       working-directory: .
       
     - uses: actions/setup-node@v4
