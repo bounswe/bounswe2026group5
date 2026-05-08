@@ -49,11 +49,21 @@ async function markNotificationRead(id: string): Promise<void> {
     if (!res.ok) await throwApiError(res)
 }
 
+async function registerFCMToken(token: string, device_type: 'web' | 'android' | 'ios' = 'web'): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/notifications/fcm-token/`, {
+        method: 'POST',
+        headers: {
+            ...authHeaders(),
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token, device_type }),
+    })
+    if (!res.ok) await throwApiError(res)
+}
+
 export const notificationsQueryOptions = queryOptions({
     queryKey: ['notifications'],
     queryFn: fetchNotifications,
-    staleTime: 10 * 1000,
-    refetchInterval: 10 * 1000,
 })
 
 export function useNotifications() {
@@ -67,6 +77,13 @@ export function useMarkAllNotificationsRead() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['notifications'] })
         },
+    })
+}
+
+export function useRegisterFCMToken() {
+    return useMutation({
+        mutationFn: ({ token, device_type }: { token: string; device_type?: 'web' | 'android' | 'ios' }) =>
+            registerFCMToken(token, device_type),
     })
 }
 

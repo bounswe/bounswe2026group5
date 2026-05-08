@@ -18,6 +18,10 @@ jest.mock("@/hooks/use-color-scheme", () => ({
   useColorScheme: () => mockColorScheme,
 }));
 
+jest.mock("@/hooks/usePushNotifications", () => ({
+  usePushNotifications: jest.fn(),
+}));
+
 jest.mock("expo-router", () => {
   const React = require("react");
   const StackScreen = ({ name }: { name: string }) =>

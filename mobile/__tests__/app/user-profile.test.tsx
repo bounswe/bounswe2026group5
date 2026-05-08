@@ -26,7 +26,7 @@ let mockAvailabilitySlots: any[] = [
     date: "2099-04-29",
     startTime: "09:00:00",
     endTime: "10:00:00",
-    is_booked: false,
+    status: "AVAILABLE",
   },
 ];
 let mockReviewsData: any = {
@@ -268,7 +268,7 @@ describe("MentorProfileScreen email verification gate", () => {
         date: "2099-04-29",
         startTime: "09:00:00",
         endTime: "10:00:00",
-        is_booked: false,
+        status: "AVAILABLE",
       },
     ];
     mockReviewsData = {

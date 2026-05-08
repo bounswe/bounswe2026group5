@@ -37,3 +37,58 @@ jest.mock("@react-native-google-signin/google-signin", () => ({
     SIGN_IN_REQUIRED: "SIGN_IN_REQUIRED",
   },
 }));
+
+// Global fetch mock
+global.fetch = jest.fn(() =>
+  Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({}),
+  }),
+);
+
+// Mock expo-notifications
+jest.mock("expo-notifications", () => ({
+  setNotificationHandler: jest.fn(),
+  addNotificationReceivedListener: jest.fn(() => ({
+    remove: jest.fn(),
+  })),
+  addNotificationResponseReceivedListener: jest.fn(() => ({
+    remove: jest.fn(),
+  })),
+  getDevicePushTokenAsync: jest.fn(() => Promise.resolve({ data: "mock-token" })),
+  getPermissionsAsync: jest.fn(() => Promise.resolve({ status: "granted" })),
+  requestPermissionsAsync: jest.fn(() => Promise.resolve({ status: "granted" })),
+  setNotificationChannelAsync: jest.fn(() => Promise.resolve()),
+  AndroidImportance: { DEFAULT: 3 },
+}));
+
+// Mock expo-device
+jest.mock("expo-device", () => ({
+  isDevice: true,
+}));
+
+// Mock expo-constants
+jest.mock("expo-constants", () => ({
+  expoConfig: {
+    extra: {
+      eas: {
+        projectId: "mock-project-id",
+      },
+    },
+  },
+}));
+
+// Mock expo-font
+jest.mock("expo-font", () => ({
+  loadAsync: jest.fn(() => Promise.resolve()),
+  isLoaded: jest.fn(() => true),
+  isLoading: jest.fn(() => false),
+}));
+
+// Mock expo-asset
+jest.mock("expo-asset", () => ({
+  Asset: {
+    loadAsync: jest.fn(() => Promise.resolve()),
+  },
+}));

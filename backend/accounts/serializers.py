@@ -334,8 +334,10 @@ class ReportCreateSerializer(serializers.Serializer):
                         {"related_message_id": "User profile not found."}
                     )
                 
+                # Admins can report any message; regular users are restricted to their own conversations.
+                is_admin = getattr(request.user, "role", None) == "ADMIN"
                 match = message.conversation.match
-                if profile.id not in [match.mentor_id, match.mentee_id]:
+                if not is_admin and profile.id not in [match.mentor_id, match.mentee_id]:
                     raise serializers.ValidationError(
                         {"related_message_id": "You can only report messages from your own conversations."}
                     )

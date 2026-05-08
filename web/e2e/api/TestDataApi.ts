@@ -339,7 +339,6 @@ export class TestDataApi {
       display_name: profile.displayName,
       bio: profile.bio,
       title: profile.title,
-      is_visible: true,
       show_initials_only: false,
       skills: profile.skills,
     });

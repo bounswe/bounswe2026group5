@@ -52,7 +52,6 @@ class Profile(models.Model):
     title = models.CharField(max_length=120, blank=True, default="")
     location = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     share_precise_location = models.BooleanField(default=True)
-    is_visible = models.BooleanField(default=True)
     show_initials_only = models.BooleanField(default=False)
     skills = ArrayField(
         models.CharField(max_length=120),
@@ -73,7 +72,7 @@ class Profile(models.Model):
         db_table = "profiles"
         ordering = ["display_name", "-created_at"]
         indexes = [
-            models.Index(fields=["is_visible", "show_initials_only"]),
+            models.Index(fields=["show_initials_only"]),
         ]
 
     def __str__(self) -> str:
@@ -125,7 +124,6 @@ class AvailabilitySlot(models.Model):
         choices=Status.choices,
         default=Status.AVAILABLE,
     )
-    is_booked = models.BooleanField(default=False)
     booked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -164,21 +162,19 @@ class AvailabilitySlot(models.Model):
         indexes = [
             models.Index(fields=["profile", "start_at"]),
             models.Index(fields=["status", "start_at"]),
-            models.Index(fields=["is_booked", "start_at"]),
             models.Index(fields=["booked_by", "start_at"]),
         ]
 
     def __str__(self) -> str:
         return f"{self.profile.display_name}: {self.start_at.isoformat()}"
 
-    def mark_booked(self, user=None) -> None:
-        """Mark slot as booked and optionally track who booked it."""
+    def mark_booked(self, user) -> None:
+        """Mark slot as booked by a specific user."""
 
         self.status = self.Status.BOOKED
-        self.is_booked = True
         self.booked_by = user
         self.booked_at = timezone.now()
-        self.save(update_fields=["status", "is_booked", "booked_by", "booked_at", "updated_at"])
+        self.save(update_fields=["status", "booked_by", "booked_at", "updated_at"])
 
     def mark_pending(self) -> None:
         """Mark slot as pending (requested)."""
@@ -187,13 +183,12 @@ class AvailabilitySlot(models.Model):
         self.save(update_fields=["status", "updated_at"])
 
     def mark_available(self) -> None:
-        """Mark slot as available again."""
+        """Reset slot to available state."""
 
         self.status = self.Status.AVAILABLE
-        self.is_booked = False
         self.booked_by = None
         self.booked_at = None
-        self.save(update_fields=["status", "is_booked", "booked_by", "booked_at", "updated_at"])
+        self.save(update_fields=["status", "booked_by", "booked_at", "updated_at"])
 
 
 class CommunityTag(models.Model):

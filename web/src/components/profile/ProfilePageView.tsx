@@ -15,7 +15,7 @@ interface BaseMappedProfile {
   username: string
   full_name: string
   bio: string
-  hidden: boolean
+  show_initials_only: boolean
   picture_url: string
   skills: string[]
   app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
@@ -114,25 +114,16 @@ function MentorReviewsList({ username }: { username: string }) {
     )
 }
 
-function HiddenField({ label }: { label: string }) {
-  return (
-      <div className="flex items-center gap-2 text-ink-soft text-sm italic">
-        <EyeOff className="h-4 w-4" />
-        {label} is hidden by the user.
-      </div>
-  )
-}
 
 import { ReportUserDialog } from '#/components/ReportUserDialog.tsx'
 
 export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: ProfilePageViewProps) {
   const [editOpen, setEditOpen] = useState(false)
-  const isHidden = profile.hidden && !isOwner
   const { data: slots = [] } = useAvailabilitySlots(profile.username, profile.isMentor)
 
   const avatarBlock = (
       <div className="flex flex-wrap items-center gap-5">
-        {profile.picture_url && !isHidden ? (
+        {profile.picture_url && !profile.show_initials_only ? (
             <img
                 src={profile.picture_url}
                 alt={`${profile.full_name} profile picture`}
@@ -152,7 +143,6 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
             <Badge className="bg-accent-muted text-ink border border-line">
               {profile.app_usage_mode === 'ADMIN' ? 'Admin' : profile.app_usage_mode === 'MENTOR' ? 'Mentor' : 'Mentee'}
             </Badge>
-            {isHidden && <Badge variant="secondary">Private</Badge>}
             {isOwner && (
                 <button
                     onClick={() => setEditOpen(true)}
@@ -169,11 +159,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
             )}
           </div>
 
-          {profile.isMentor && (
-              isHidden
-                  ? <HiddenField label="Title" />
-                  : profile.title && <Body className="text-ink-soft">{profile.title}</Body>
-          )}
+          {profile.isMentor && profile.title && <Body className="text-ink-soft">{profile.title}</Body>}
         </div>
       </div>
   )
@@ -184,10 +170,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
           <CardTitle className="text-lg">Bio</CardTitle>
         </CardHeader>
         <CardContent>
-          {isHidden
-              ? <HiddenField label="Bio" />
-              : <Body className="text-ink-soft leading-7">{profile.bio || 'No bio yet.'}</Body>
-          }
+          <Body className="text-ink-soft leading-7">{profile.bio || 'No bio yet.'}</Body>
         </CardContent>
       </Card>
   )
@@ -198,7 +181,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
           initialValues={{
             bio: profile.bio ?? '',
             title: profile.isMentor ? profile.title : undefined,
-            hidden: profile.hidden,
+            show_initials_only: profile.show_initials_only,
             skills: profile.skills,
           }}
           onClose={() => setEditOpen(false)}
@@ -221,9 +204,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {isHidden ? (
-                        <HiddenField label="Learning interests" />
-                    ) : profile.skills.length === 0 ? (
+                    {profile.skills.length === 0 ? (
                         <p className="text-gray-500 italic">No skills listed</p>
                     ) : (
                         <div className="flex flex-wrap gap-2">
@@ -249,7 +230,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
         </main>
     )
   }
-  const openSlots = slots.filter(s => !s.is_booked)
+  const openSlots = slots.filter(s => s.status !== 'BOOKED')
 
     // MENTOR layout — restructure to put calendar full width below
     return (
@@ -266,9 +247,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                                 <CardTitle className="text-lg">Expertise</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                {isHidden ? (
-                                    <HiddenField label="Expertise" />
-                                ) : profile.skills.length === 0 ? (
+                                {profile.skills.length === 0 ? (
                                     <p className="text-gray-500 italic">No skills listed</p>
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
@@ -285,19 +264,17 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                             </CardContent>
                         </Card>
 
-                        {!isHidden && (
-                            <Card className="border-line bg-white/70 shadow-sm">
-                                <CardHeader>
-                                    <CardTitle className="text-lg flex items-center gap-2">
-                                        <Star className="h-4 w-4 text-amber-500" />
-                                        Reviews
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <MentorReviewsList username={profile.username} />
-                                </CardContent>
-                            </Card>
-                        )}
+                        <Card className="border-line bg-white/70 shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                    <Star className="h-4 w-4 text-amber-500" />
+                                    Reviews
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <MentorReviewsList username={profile.username} />
+                            </CardContent>
+                        </Card>
                     </div>
 
                     <aside className="space-y-4">
@@ -308,22 +285,14 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                             <CardContent className="grid gap-3">
                                 <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
                                     <Muted className="text-xs uppercase tracking-wider">Average Rating</Muted>
-                                    {isHidden ? (
-                                        <HiddenField label="Rating" />
-                                    ) : (
-                                        <p className="text-2xl font-semibold text-ink mt-1 flex items-center gap-1">
-                                            <Star className="h-4 w-4 fill-current text-amber-500" />
-                                            {profile.average_rating.toFixed(1)}
-                                        </p>
-                                    )}
+                                    <p className="text-2xl font-semibold text-ink mt-1 flex items-center gap-1">
+                                        <Star className="h-4 w-4 fill-current text-amber-500" />
+                                        {profile.average_rating.toFixed(1)}
+                                    </p>
                                 </div>
                                 <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
                                     <Muted className="text-xs uppercase tracking-wider">Total Mentees</Muted>
-                                    {isHidden ? (
-                                        <HiddenField label="Mentee count" />
-                                    ) : (
-                                        <p className="text-2xl font-semibold text-ink mt-1">{profile.total_mentee_count}</p>
-                                    )}
+                                    <p className="text-2xl font-semibold text-ink mt-1">{profile.total_mentee_count}</p>
                                 </div>
                                 <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
                                     <Muted className="text-xs uppercase tracking-wider">Open Slots</Muted>
@@ -335,13 +304,11 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                 </div>
 
                 {/* Full width calendar below */}
-                {!isHidden && (
-                    <AvailabilityCalendar
-                        username={profile.username}
-                        isOwner={isOwner}
-                        isAuthenticated={isAuthenticatedViewer}
-                    />
-                )}
+                <AvailabilityCalendar
+                    username={profile.username}
+                    isOwner={isOwner}
+                    isAuthenticated={isAuthenticatedViewer}
+                />
 
             </section>
             {isAuthenticatedViewer && (

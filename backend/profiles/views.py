@@ -169,10 +169,6 @@ class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
-        is_owner = request.user.is_authenticated and request.user == profile.user
-        if not is_owner and not profile.is_visible:
-            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-
         return Response(self._serialize_profile_by_mode(profile), status=status.HTTP_200_OK)
 
 
@@ -295,10 +291,6 @@ class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
         """Return paginated profile feed events for a profile page."""
         profile = self._get_profile_or_404(username)
         if profile is None:
-            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
-
-        is_owner = request.user == profile.user
-        if not is_owner and not profile.is_visible:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         params_serializer = ProfilePostListQueryParamsSerializer(data=request.query_params)
@@ -712,7 +704,7 @@ class MyAvailabilitySlotDetailAPIView(ProfileLookupMixin, APIView):
             with transaction.atomic():
                 locked_slot = AvailabilitySlot.objects.select_for_update().get(id=slot.id)
 
-                if locked_slot.is_booked:
+                if locked_slot.status == AvailabilitySlot.Status.BOOKED:
                     return Response(
                         {"detail": "Cannot delete a booked slot. Cancel the booking first."},
                         status=status.HTTP_400_BAD_REQUEST,
@@ -835,7 +827,6 @@ class RecentlyAddedMentorsListAPIView(APIView):
         qs = (
             Profile.objects.select_related("user")
             .filter(
-                is_visible=True,
                 user__app_usage_mode=AppUsageMode.MENTOR,
                 user__is_active=True,
             )
@@ -877,7 +868,6 @@ class PopularMentorsListAPIView(APIView):
         qs = (
             Profile.objects.select_related("user")
             .filter(
-                is_visible=True,
                 user__app_usage_mode=AppUsageMode.MENTOR,
                 user__is_active=True,
             )
@@ -1051,7 +1041,7 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         page_size = min(page_size, 50)
 
         qs = Profile.objects.select_related("user").filter(
-            is_visible=True, user__app_usage_mode=AppUsageMode.MENTOR
+            user__app_usage_mode=AppUsageMode.MENTOR
         )
 
         if q:
@@ -1145,7 +1135,7 @@ class MentorPublicAverageRatingAPIView(ProfileLookupMixin, APIView):
     def get(self, request: Request, username: str) -> Response:
         """Return average_rating and review_count for the named profile."""
         profile = self._get_profile_or_404(username)
-        if profile is None or not profile.is_visible:
+        if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         return Response(
@@ -1196,7 +1186,7 @@ class ProfileReviewsByUsernameAPIView(ProfileLookupMixin, APIView):
     )
     def get(self, request: Request, username: str) -> Response:
         profile = self._get_profile_or_404(username)
-        if profile is None or not profile.is_visible or not self._is_mentor_profile(profile):
+        if profile is None or not self._is_mentor_profile(profile):
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
         try:
@@ -2004,7 +1994,7 @@ class CommunityTagMembersListAPIView(APIView):
         page_size = max(1, min(page_size, 50))
 
         memberships = (
-            CommunityTagMembership.objects.filter(tag=tag, profile__is_visible=True)
+            CommunityTagMembership.objects.filter(tag=tag)
             .select_related("profile__user")
             .order_by("-joined_at")
         )
