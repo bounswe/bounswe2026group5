@@ -3,8 +3,7 @@ import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router'
 import { AuthorizedHeader } from '@/components/layout/AuthorizedHeader'
 import { getStoredUser, meQueryOptions, resendVerificationEmailFn } from "#/lib/queries/AuthQueries.ts"
 import { Toaster } from "#/components/ui/sonner.tsx"
-import { useQuery } from '@tanstack/react-query'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { AlertTriangle, CheckCircle, X } from 'lucide-react'
 
@@ -29,7 +28,7 @@ function EmailVerificationBanner() {
 
     const resend = useMutation({ mutationFn: resendVerificationEmailFn })
 
-    if (dismissed || !me || me.is_email_verified !== false) return null
+    if (dismissed || me?.is_email_verified !== false) return null
 
     return (
         <div className="w-full bg-amber-50 border-b border-amber-200 px-4 py-2.5">
@@ -73,7 +72,7 @@ function EmailVerificationBanner() {
 
 function AuthorizedLayout() {
     return (
-        <div className="flex min-h-screen flex-col bg-black/[0.02] dark:bg-background">
+        <div className="flex min-h-screen flex-col bg-black/2 dark:bg-background">
             <AuthorizedHeader />
             <EmailVerificationBanner />
             <main className="flex-1">
