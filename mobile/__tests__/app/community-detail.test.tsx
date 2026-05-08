@@ -9,10 +9,13 @@ let mockTagId: string | undefined = "tag-1";
 let mockFrom: string | undefined = undefined;
 const mockDetailRefetch = jest.fn();
 const mockDetailQuery = jest.fn();
+const mockTaggableUsersQuery = jest.fn();
 const mockJoinMutation = jest.fn();
 const mockLeaveMutation = jest.fn();
 const mockCommunityPostsQuery = jest.fn();
 const mockCreateCommunityPostMutation = jest.fn();
+const mockUpdateCommunityPostMutation = jest.fn();
+const mockDeleteCommunityPostMutation = jest.fn();
 let focusCleanup: (() => void) | undefined;
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
@@ -43,6 +46,8 @@ jest.mock("@/lib/auth/store", () => ({
 
 jest.mock("@/lib/queries/communityTags", () => ({
   useCommunityTagDetailQuery: (tagId?: string) => mockDetailQuery(tagId),
+  useCommunityTaggableUsersQuery: (...args: unknown[]) =>
+    mockTaggableUsersQuery(...args),
   useJoinCommunityTagMutation: (username?: string) =>
     mockJoinMutation(username),
   useLeaveCommunityTagMutation: (username?: string) =>
@@ -54,6 +59,10 @@ jest.mock("@/lib/queries/communityPosts", () => ({
     mockCommunityPostsQuery(...args),
   useCreateCommunityPostMutation: (username?: string) =>
     mockCreateCommunityPostMutation(username),
+  useUpdateCommunityPostMutation: (username?: string) =>
+    mockUpdateCommunityPostMutation(username),
+  useDeleteCommunityPostMutation: (username?: string) =>
+    mockDeleteCommunityPostMutation(username),
 }));
 
 describe("CommunityDetailScreen", () => {
@@ -104,7 +113,19 @@ describe("CommunityDetailScreen", () => {
       data: undefined,
       isFetching: false,
     });
+    mockTaggableUsersQuery.mockReturnValue({
+      data: { count: 0, results: [] },
+      isLoading: false,
+    });
     mockCreateCommunityPostMutation.mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
+    mockUpdateCommunityPostMutation.mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+    });
+    mockDeleteCommunityPostMutation.mockReturnValue({
       mutateAsync: jest.fn(),
       isPending: false,
     });

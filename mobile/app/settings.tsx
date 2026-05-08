@@ -6,6 +6,10 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
 import { useProfileVisibilityStore } from "@/lib/profile/preferences";
 import { useLogoutMutation } from "@/lib/queries/auth";
+import {
+  useOwnProfileSettingsQuery,
+  useUpdateOwnProfileMutation,
+} from "@/lib/queries/profile";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -16,6 +20,8 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const logoutMutation = useLogoutMutation();
+  const ownProfileSettingsQuery = useOwnProfileSettingsQuery();
+  const updateProfileMutation = useUpdateOwnProfileMutation();
   const authUser = useAuthStore((state) => state.user);
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
@@ -61,6 +67,31 @@ export default function SettingsScreen() {
 
   const handleLogout = () => {
     setShowLogoutConfirmation(true);
+  };
+
+  const sharePreciseLocation =
+    ownProfileSettingsQuery.data?.share_precise_location ?? true;
+
+  const handleTogglePreciseLocation = async (nextValue: boolean) => {
+    try {
+      setActionError(null);
+      setInfoMessage(null);
+      await updateProfileMutation.mutateAsync({
+        share_precise_location: nextValue,
+      });
+      await ownProfileSettingsQuery.refetch();
+      setInfoMessage(
+        nextValue
+          ? "Precise location sharing is enabled."
+          : "Precise location sharing is disabled.",
+      );
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update location privacy.",
+      );
+    }
   };
 
   return (
@@ -151,6 +182,31 @@ export default function SettingsScreen() {
               onToggle={setShowAvailability}
             />
           )}
+        </View>
+
+        {/* Section: Location Privacy */}
+        <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-8 mb-2">
+          Location Privacy
+        </Text>
+        <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
+          <SettingItem
+            type="toggle"
+            icon="location-outline"
+            label={
+              updateProfileMutation.isPending
+                ? "Updating Location..."
+                : "Share Precise Location"
+            }
+            isToggled={sharePreciseLocation}
+            onToggle={
+              ownProfileSettingsQuery.isLoading ||
+              updateProfileMutation.isPending
+                ? undefined
+                : (value) => {
+                    void handleTogglePreciseLocation(value);
+                  }
+            }
+          />
         </View>
 
         {/* Section: Account */}

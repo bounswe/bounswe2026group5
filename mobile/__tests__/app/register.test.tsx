@@ -12,6 +12,8 @@ import {
 
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
+const mockRequestForegroundPermissionsAsync = jest.fn();
+const mockGetCurrentPositionAsync = jest.fn();
 
 jest.mock("expo-router", () => ({
   router: {
@@ -24,6 +26,14 @@ jest.mock("expo-router", () => ({
 }));
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+jest.mock("expo-location", () => ({
+  Accuracy: { Balanced: 3 },
+  PermissionStatus: { GRANTED: "granted", DENIED: "denied" },
+  requestForegroundPermissionsAsync: (...args: unknown[]) =>
+    mockRequestForegroundPermissionsAsync(...args),
+  getCurrentPositionAsync: (...args: unknown[]) =>
+    mockGetCurrentPositionAsync(...args),
+}));
 
 const mockSetAuthenticated = jest.fn();
 
@@ -132,6 +142,15 @@ describe("RegisterScreen", () => {
     (updateProfileFn as jest.Mock).mockResolvedValue({});
     (updateUsernameFn as jest.Mock).mockResolvedValue({
       username: "custom_user",
+    });
+    mockRequestForegroundPermissionsAsync.mockResolvedValue({
+      status: "granted",
+    });
+    mockGetCurrentPositionAsync.mockResolvedValue({
+      coords: {
+        latitude: 41.0082,
+        longitude: 28.9784,
+      },
     });
   });
 
@@ -271,6 +290,10 @@ describe("RegisterScreen", () => {
         email: "user@example.com",
         password: "Password1",
         confirm_password: "Password1",
+        location: {
+          latitude: 41.0082,
+          longitude: 28.9784,
+        },
       });
       expect(updateUsageModeFn).toHaveBeenCalledWith({
         app_usage_mode: "MENTEE",
@@ -297,6 +320,67 @@ describe("RegisterScreen", () => {
         },
       );
       expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    });
+  });
+
+  it("continues registration without location when permission is denied", async () => {
+    mockRequestForegroundPermissionsAsync.mockResolvedValueOnce({
+      status: "denied",
+    });
+    (registerFn as jest.Mock).mockResolvedValueOnce({
+      access_token: "acc",
+      refresh_token: "ref",
+      user: { username: "server_user", app_usage_mode: "" },
+    });
+
+    const { getByLabelText, findByLabelText } = renderRegister();
+
+    fireEvent.changeText(getByLabelText("Email"), "user@example.com");
+    fireEvent.changeText(getByLabelText("Password"), "Password1");
+    fireEvent.changeText(getByLabelText("Confirm password"), "Password1");
+    fireEvent.press(
+      getByLabelText("I agree to the Terms of Service and Privacy Policy"),
+    );
+    fireEvent.press(getByLabelText("Complete registration"));
+    fireEvent.press(await findByLabelText("submit-profile-setup"));
+
+    await waitFor(() => {
+      expect(registerFn).toHaveBeenCalledWith({
+        email: "user@example.com",
+        password: "Password1",
+        confirm_password: "Password1",
+      });
+      expect(mockGetCurrentPositionAsync).not.toHaveBeenCalled();
+      expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    });
+  });
+
+  it("lets users opt out of registration location before the permission prompt", async () => {
+    (registerFn as jest.Mock).mockResolvedValueOnce({
+      access_token: "acc",
+      refresh_token: "ref",
+      user: { username: "server_user", app_usage_mode: "" },
+    });
+
+    const { getByLabelText, findByLabelText } = renderRegister();
+
+    fireEvent.changeText(getByLabelText("Email"), "user@example.com");
+    fireEvent.changeText(getByLabelText("Password"), "Password1");
+    fireEvent.changeText(getByLabelText("Confirm password"), "Password1");
+    fireEvent.press(getByLabelText("Use my location to find nearby mentors"));
+    fireEvent.press(
+      getByLabelText("I agree to the Terms of Service and Privacy Policy"),
+    );
+    fireEvent.press(getByLabelText("Complete registration"));
+    fireEvent.press(await findByLabelText("submit-profile-setup"));
+
+    await waitFor(() => {
+      expect(mockRequestForegroundPermissionsAsync).not.toHaveBeenCalled();
+      expect(registerFn).toHaveBeenCalledWith({
+        email: "user@example.com",
+        password: "Password1",
+        confirm_password: "Password1",
+      });
     });
   });
 

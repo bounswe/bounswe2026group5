@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Switch,
@@ -13,6 +13,7 @@ import { PostMediaPicker } from "@/components/posts/PostMediaPicker";
 import { uploadPostMedia } from "@/lib/queries/uploads";
 import type { LocalUploadFile } from "@/lib/queries/uploads";
 import type { CreateCommunityPostPayload } from "@/lib/queries/communityPosts";
+import type { CommunityTaggableUser } from "@/lib/queries/communityTags";
 
 const EVENT_TYPES: {
   value: CreateCommunityPostPayload["event_type"];
@@ -26,14 +27,18 @@ const EVENT_TYPES: {
 
 export function CommunityPostComposer({
   isSubmitting,
+  isLoadingTaggableUsers,
   onSubmit,
+  taggableUsers = [],
 }: Readonly<{
   isSubmitting?: boolean;
+  isLoadingTaggableUsers?: boolean;
   onSubmit: (
     payload: Omit<CreateCommunityPostPayload, "tagId">,
   ) => Promise<boolean | void> | boolean | void;
+  taggableUsers?: CommunityTaggableUser[];
 }>) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [eventType, setEventType] =
     useState<CreateCommunityPostPayload["event_type"]>("social");
   const [content, setContent] = useState("");
@@ -44,6 +49,51 @@ export function CommunityPostComposer({
 
   const isBusy = Boolean(isSubmitting) || isUploadingMedia;
   const canSubmit = content.trim().length > 0 && !isBusy;
+  const taggableUsersByUsername = useMemo(
+    () =>
+      new Map(
+        taggableUsers.map((user) => [
+          user.username.trim().toLowerCase(),
+          user,
+        ]),
+      ),
+    [taggableUsers],
+  );
+  const activeMentionMatch = content.match(/(^|\s)@([a-zA-Z0-9_]{0,30})$/);
+  const activeMentionQuery = activeMentionMatch?.[2]?.toLowerCase() ?? null;
+  const mentionedUsernames = useMemo(() => {
+    const usernames = new Set<string>();
+    for (const match of content.matchAll(/(^|\s)@([a-zA-Z0-9_]+)/g)) {
+      const username = match[2]?.toLowerCase();
+      const taggableUser = username
+        ? taggableUsersByUsername.get(username)
+        : undefined;
+      if (taggableUser) {
+        usernames.add(taggableUser.username);
+      }
+    }
+    return Array.from(usernames).slice(0, 5);
+  }, [content, taggableUsersByUsername]);
+  const mentionedUsernameLookup = useMemo(
+    () => new Set(mentionedUsernames.map((username) => username.toLowerCase())),
+    [mentionedUsernames],
+  );
+  const mentionSuggestions = useMemo(() => {
+    if (activeMentionQuery === null) {
+      return [];
+    }
+    return taggableUsers
+      .filter((user) => {
+        const username = user.username.trim().toLowerCase();
+        const displayName = user.display_name.trim().toLowerCase();
+        return (
+          !mentionedUsernameLookup.has(username) &&
+          (username.includes(activeMentionQuery) ||
+            displayName.includes(activeMentionQuery))
+        );
+      })
+      .slice(0, 5);
+  }, [activeMentionQuery, mentionedUsernameLookup, taggableUsers]);
 
   const resetForm = () => {
     setContent("");
@@ -51,6 +101,11 @@ export function CommunityPostComposer({
     setEventType("social");
     setMedia(null);
     setMediaError(null);
+  };
+
+  const insertMention = (username: string) => {
+    const prefix = content.replace(/(^|\s)@([a-zA-Z0-9_]{0,30})$/, "$1");
+    setContent(`${prefix}@${username} `);
   };
 
   const handleSubmit = async () => {
@@ -83,6 +138,9 @@ export function CommunityPostComposer({
       content: content.trim(),
       ...(mediaUrl ? { media_url: mediaUrl } : {}),
       show_on_profile: showOnProfile,
+      ...(mentionedUsernames.length > 0
+        ? { tagged_users: mentionedUsernames }
+        : {}),
     });
 
     if (didSubmit === false) {
@@ -165,6 +223,57 @@ export function CommunityPostComposer({
             textAlignVertical="top"
             className="mt-4 min-h-[120px] rounded-xl border border-divider bg-surface px-3 py-3 text-on-surface dark:border-divider-dark dark:bg-surface-dark dark:text-on-surface-dark"
           />
+
+          {isLoadingTaggableUsers && activeMentionQuery !== null ? (
+            <Text className="mt-2 text-xs text-on-surface-muted dark:text-on-surface-muted-dark">
+              Loading taggable users...
+            </Text>
+          ) : null}
+
+          {mentionSuggestions.length > 0 ? (
+            <View
+              testID="community-composer-mention-suggestions"
+              className="mt-2 overflow-hidden rounded-xl border border-divider bg-surface dark:border-divider-dark dark:bg-surface-dark"
+            >
+              {mentionSuggestions.map((user, index) => (
+                <TouchableOpacity
+                  key={user.username}
+                  testID={`community-composer-mention-suggestion-${user.username}`}
+                  activeOpacity={0.75}
+                  onPress={() => insertMention(user.username)}
+                  className={`flex-row items-center gap-3 px-3 py-2.5 ${
+                    index < mentionSuggestions.length - 1
+                      ? "border-b border-divider dark:border-divider-dark"
+                      : ""
+                  }`}
+                >
+                  <View className="h-8 w-8 items-center justify-center rounded-full bg-primary/10 dark:bg-primary-dim/15">
+                    <Ionicons
+                      name="person-add-outline"
+                      size={15}
+                      color="#2f7d68"
+                    />
+                  </View>
+                  <View className="min-w-0 flex-1">
+                    <Text
+                      numberOfLines={1}
+                      className="text-sm font-bold text-on-surface dark:text-on-surface-dark"
+                    >
+                      @{user.username}
+                    </Text>
+                    {user.display_name.trim() ? (
+                      <Text
+                        numberOfLines={1}
+                        className="text-xs text-on-surface-muted dark:text-on-surface-muted-dark"
+                      >
+                        {user.display_name}
+                      </Text>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
 
           <PostMediaPicker
             disabled={isBusy}

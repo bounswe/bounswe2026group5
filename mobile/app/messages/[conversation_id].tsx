@@ -20,6 +20,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ReportSheet } from "@/components/report/ReportSheet";
+import { BasicFormattedText } from "@/components/ui/BasicFormattedText";
+import { FocusedImageModal } from "@/components/ui/FocusedImageModal";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   useConversations,
@@ -178,11 +180,13 @@ function DateSeparator({ dateStr }: { dateStr: string }) {
 function MessageBubble({
   message,
   isMe,
+  onImagePress,
   onLongPress,
   onImagePress,
 }: {
   message: Message;
   isMe: boolean;
+  onImagePress?: (imageUrl: string) => void;
   onLongPress?: () => void;
   onImagePress?: (url: string) => void;
 }) {
@@ -225,13 +229,14 @@ function MessageBubble({
           }}
         >
           {message.body ? (
-            <Text
+            <BasicFormattedText
               className={`text-[14px] leading-5 ${
                 isMe ? "text-white" : "text-on-surface"
               }`}
+              linkColor={isMe ? "#ffffff" : "#2563eb"}
             >
               {message.body}
-            </Text>
+            </BasicFormattedText>
           ) : null}
           {attachmentUrl ? (
             <TouchableOpacity
@@ -374,6 +379,7 @@ export default function ConversationScreen() {
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [focusedImageUrl, setFocusedImageUrl] = useState<string | null>(null);
   const flatListRef = useRef<FlatList<ListItem>>(null);
   const isNearBottomRef = useRef(true);
   const hasInitialScrollDoneRef = useRef(false);

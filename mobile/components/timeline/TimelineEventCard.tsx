@@ -138,7 +138,7 @@ const EVENT_STYLES: Record<string, TimelineEventStyle> = {
     titleClassName: "text-amber-600 dark:text-amber-300",
   },
   social: {
-    icon: "chatbubbles-outline",
+    icon: "people-outline",
     badge: "Social",
     iconColor: "#0891b2",
     titleColor: "#0891b2",
@@ -311,6 +311,7 @@ export function TimelineEventCard({
             className={`h-10 w-10 items-center justify-center rounded-full border-2 ${eventStyle.iconClassName}`}
           >
             <Ionicons
+              testID={`journey-event-icon-${event.id}`}
               name={eventStyle.icon}
               size={18}
               color={eventStyle.iconColor}
@@ -396,6 +397,7 @@ export function TimelineEventCard({
           className={`h-12 w-12 items-center justify-center rounded-full border-[3px] shadow-sm ${eventStyle.iconClassName}`}
         >
           <Ionicons
+            testID={`journey-event-icon-${event.id}`}
             name={eventStyle.icon}
             size={21}
             color={eventStyle.iconColor}
