@@ -27,6 +27,11 @@ export interface Skill {
   name: string;
 }
 
+interface LocationPayload {
+  latitude: number;
+  longitude: number;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function extractErrorMessage(
@@ -90,6 +95,7 @@ export async function registerFn(credentials: {
   email: string;
   password: string;
   confirm_password: string;
+  location?: LocationPayload;
 }): Promise<AuthResponse> {
   const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/register/`, {
     method: "POST",

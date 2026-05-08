@@ -19,6 +19,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ReportSheet } from "@/components/report/ReportSheet";
+import { BasicFormattedText } from "@/components/ui/BasicFormattedText";
+import { FocusedImageModal } from "@/components/ui/FocusedImageModal";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   useConversations,
@@ -160,13 +162,16 @@ function DateSeparator({ dateStr }: { dateStr: string }) {
 function MessageBubble({
   message,
   isMe,
+  onImagePress,
   onLongPress,
 }: {
   message: Message;
   isMe: boolean;
+  onImagePress?: (imageUrl: string) => void;
   onLongPress?: () => void;
 }) {
   const attachmentUrl = message.attachment_url;
+  const hasImageAttachment = attachmentUrl ? isImageAttachment(attachmentUrl) : false;
   return (
     <View className={`w-full mb-1 ${isMe ? "items-end" : "items-start"}`}>
       <TouchableOpacity
@@ -190,24 +195,29 @@ function MessageBubble({
           }}
         >
           {message.body ? (
-            <Text
+            <BasicFormattedText
               className={`text-[14px] leading-5 ${
                 isMe ? "text-white" : "text-on-surface"
               }`}
+              linkColor={isMe ? "#ffffff" : "#2563eb"}
             >
               {message.body}
-            </Text>
+            </BasicFormattedText>
           ) : null}
           {attachmentUrl ? (
             <TouchableOpacity
               testID={`message-attachment-${message.id}`}
               activeOpacity={0.85}
               onPress={() => {
+                if (hasImageAttachment) {
+                  onImagePress?.(attachmentUrl);
+                  return;
+                }
                 void Linking.openURL(attachmentUrl);
               }}
               className={message.body ? "mt-2" : ""}
             >
-              {isImageAttachment(attachmentUrl) ? (
+              {hasImageAttachment ? (
                 <Image
                   source={{ uri: attachmentUrl }}
                   className="rounded-xl mb-2"
@@ -221,11 +231,7 @@ function MessageBubble({
                 }`}
               >
                 <Ionicons
-                  name={
-                    isImageAttachment(attachmentUrl)
-                      ? "image"
-                      : "document-text"
-                  }
+                  name={hasImageAttachment ? "image" : "document-text"}
                   size={16}
                   color={isMe ? "#ffffff" : "#4a7c6f"}
                 />
@@ -302,6 +308,7 @@ export default function ConversationScreen() {
   const [attachment, setAttachment] = useState<LocalUploadFile | null>(null);
   const [showAttachOptions, setShowAttachOptions] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [focusedImageUrl, setFocusedImageUrl] = useState<string | null>(null);
   const flatListRef = useRef<FlatList<ListItem>>(null);
   const isNearBottomRef = useRef(true);
   const hasInitialScrollDoneRef = useRef(false);
@@ -448,6 +455,7 @@ export default function ConversationScreen() {
         <MessageBubble
           message={item.message}
           isMe={item.message.sender.username === currentUsername}
+          onImagePress={setFocusedImageUrl}
           onLongPress={
             item.message.sender.username === currentUsername
               ? undefined
@@ -707,6 +715,11 @@ export default function ConversationScreen() {
         onSubmit={(payload) => {
           void handleSubmitReport(payload);
         }}
+      />
+      <FocusedImageModal
+        visible={Boolean(focusedImageUrl)}
+        imageUrl={focusedImageUrl}
+        onClose={() => setFocusedImageUrl(null)}
       />
     </View>
   );

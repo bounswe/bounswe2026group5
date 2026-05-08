@@ -33,6 +33,16 @@ export interface CommunityTagMembersResponse {
   results: DiscoverMentorProfile[];
 }
 
+export interface CommunityTaggableUser {
+  username: string;
+  display_name: string;
+}
+
+export interface CommunityTaggableUsersResponse {
+  count: number;
+  results: CommunityTaggableUser[];
+}
+
 export interface CommunityTagMembershipResponse {
   tag_id: string;
   tag_name: string;
@@ -96,6 +106,8 @@ export const communityTagsQueryKeys = {
       params.page ?? 1,
       params.pageSize ?? 20,
     ] as const,
+  taggableUsers: (tagId?: string) =>
+    [...communityTagsQueryKeys.all, "taggable-users", tagId ?? "unknown"] as const,
 };
 
 function buildQueryString(params: Record<string, string | number | undefined>) {
@@ -156,6 +168,14 @@ export function fetchCommunityTagMembers({
 
   return apiGet<CommunityTagMembersResponse>(
     `/api/profiles/tags/${encodeURIComponent(tagId)}/members/?${queryString}`,
+  );
+}
+
+export function fetchCommunityTaggableUsers(
+  tagId: string,
+): Promise<CommunityTaggableUsersResponse> {
+  return apiGet<CommunityTaggableUsersResponse>(
+    `/api/profiles/tags/${encodeURIComponent(tagId)}/taggable-users/`,
   );
 }
 
@@ -245,6 +265,18 @@ export function useCommunityTagMembersQuery(
     queryKey: communityTagsQueryKeys.members(params),
     queryFn: () => fetchCommunityTagMembers(params),
     enabled: Boolean(params.tagId) && enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useCommunityTaggableUsersQuery(
+  tagId?: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: communityTagsQueryKeys.taggableUsers(tagId),
+    queryFn: () => fetchCommunityTaggableUsers(tagId ?? ""),
+    enabled: Boolean(tagId) && enabled,
     staleTime: 30_000,
   });
 }
