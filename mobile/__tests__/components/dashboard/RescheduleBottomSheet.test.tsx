@@ -14,7 +14,7 @@ describe("RescheduleBottomSheet", () => {
       date: "2026-05-10",
       startTime: "10:00:00",
       endTime: "11:00:00",
-      is_booked: false,
+      status: "AVAILABLE",
     },
   ];
 

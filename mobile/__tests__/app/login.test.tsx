@@ -112,15 +112,13 @@ describe("LoginScreen", () => {
     expect(queryByText("Log In")).toBeNull();
   });
 
-  it("navigates to the dashboard when login succeeds", async () => {
-    (useLoginMutation as jest.Mock).mockReturnValue({
-      mutateAsync: mockMutateAsync,
-      isPending: false,
-      data: { access_token: "tok" },
-      error: null,
-    });
+  it("navigates to the dashboard after a successful login submit", async () => {
+    mockMutateAsync.mockResolvedValueOnce({});
+    const { getByLabelText } = render(<LoginScreen />);
 
-    render(<LoginScreen />);
+    fireEvent.changeText(getByLabelText("Email or username"), "user@example.com");
+    fireEvent.changeText(getByLabelText("Password"), "secret123");
+    fireEvent.press(getByLabelText("Log in"));
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
@@ -179,12 +177,31 @@ describe("LoginScreen", () => {
     );
   });
 
-  it("triggers Google login mutation when Log in with Google is pressed", () => {
+  it("navigates to the dashboard after Google login for an onboarded user", async () => {
+    mockGoogleMutateAsync.mockResolvedValueOnce({
+      user: { app_usage_mode: "mentor" },
+    });
     const { getByLabelText } = render(<LoginScreen />);
 
     fireEvent.press(getByLabelText("Log in with Google"));
 
-    expect(mockGoogleMutateAsync).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockGoogleMutateAsync).toHaveBeenCalled();
+      expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    });
+  });
+
+  it("navigates to register after Google login for a new user", async () => {
+    mockGoogleMutateAsync.mockResolvedValueOnce({
+      user: { app_usage_mode: null },
+    });
+    const { getByLabelText } = render(<LoginScreen />);
+
+    fireEvent.press(getByLabelText("Log in with Google"));
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/register");
+    });
   });
 
   it("navigates to the register screen when Sign Up is pressed", () => {

@@ -212,7 +212,7 @@ interface BackendAvailabilitySlot {
   date: string;
   startTime: string;
   endTime: string;
-  is_booked: boolean;
+  status: "AVAILABLE" | "PENDING" | "BOOKED";
   bookedBy?: string | null;
   bookedAt?: string | null;
   sessionId?: string | null;
@@ -748,7 +748,7 @@ interface BookAvailabilitySlotResponse {
   date: string;
   startTime: string;
   endTime: string;
-  is_booked: boolean;
+  status: "AVAILABLE" | "PENDING" | "BOOKED";
   bookedBy?: string | null;
   bookedAt?: string | null;
 }
@@ -1013,7 +1013,7 @@ export function mapMentorBookedSlotsToSessions(
   const now = new Date();
 
   return slots
-    .filter((slot) => slot.is_booked && Boolean(slot.bookedBy))
+    .filter((slot) => slot.status === "BOOKED" && Boolean(slot.bookedBy))
     .map((slot) => {
       const sessionStart = parseLocalDateTime(
         slot.date,
@@ -1192,7 +1192,7 @@ export function mapAvailabilityToSchedule(
     daySlots.push({
       id: slot.id,
       label: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
-      isBooked: slot.is_booked,
+      isBooked: slot.status === "BOOKED",
       date: slot.date,
     });
 

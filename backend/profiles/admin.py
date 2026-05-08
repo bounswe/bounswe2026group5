@@ -9,11 +9,10 @@ class ProfileAdmin(admin.ModelAdmin):
         "username",
         "display_name",
         "user",
-        "is_visible",
         "show_initials_only",
         "created_at",
     )
-    list_filter = ("is_visible", "show_initials_only")
+    list_filter = ("show_initials_only",)
     search_fields = ("username", "display_name", "user__email", "title")
     ordering = ("display_name",)
 
@@ -29,7 +28,7 @@ class SkillAdmin(admin.ModelAdmin):
 
 @admin.register(AvailabilitySlot)
 class AvailabilitySlotAdmin(admin.ModelAdmin):
-    list_display = ("profile", "start_at", "end_at", "is_booked", "created_at")
-    list_filter = ("is_booked",)
+    list_display = ("profile", "start_at", "end_at", "status", "created_at")
+    list_filter = ("status",)
     search_fields = ("profile__display_name", "profile__user__email")
     ordering = ("start_at",)

@@ -33,12 +33,17 @@ jest.mock("@/lib/api/fetchWithTimeout", () => ({
 }));
 
 // Setup React Query wrapper
-const queryClient = new QueryClient({
-  defaultOptions: { mutations: { retry: false } },
-});
-const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-);
+const createWrapper = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false, gcTime: 0 },
+    },
+  });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+};
 
 describe("useGoogleLoginMutation", () => {
   beforeEach(() => {
@@ -67,7 +72,9 @@ describe("useGoogleLoginMutation", () => {
       json: () => Promise.resolve(mockAuthResponse),
     });
 
-    const { result } = renderHook(() => useGoogleLoginMutation(), { wrapper });
+    const { result } = renderHook(() => useGoogleLoginMutation(), {
+      wrapper: createWrapper(),
+    });
 
     await result.current.mutateAsync();
 
@@ -87,7 +94,9 @@ describe("useGoogleLoginMutation", () => {
   it("handles Google sign-in failure", async () => {
     (GoogleSignin.signIn as any).mockRejectedValueOnce(new Error("Google Login Failed"));
 
-    const { result } = renderHook(() => useGoogleLoginMutation(), { wrapper });
+    const { result } = renderHook(() => useGoogleLoginMutation(), {
+      wrapper: createWrapper(),
+    });
 
     try {
       await result.current.mutateAsync();

@@ -1,9 +1,14 @@
 from django.urls import path
 
-from .views import MarkNotificationReadAPIView, NotificationListAPIView
+from .views import (
+    FCMTokenRegisterAPIView,
+    MarkNotificationReadAPIView,
+    NotificationListAPIView,
+)
 
 urlpatterns = [
     path("", NotificationListAPIView.as_view(), name="notification-list"),
+    path("fcm-token/", FCMTokenRegisterAPIView.as_view(), name="fcm-token-register"),
     path(
         "<uuid:notification_id>/read/",
         MarkNotificationReadAPIView.as_view(),

@@ -15,7 +15,7 @@ interface AvailableSlot {
   date: string;
   startTime: string;
   endTime: string;
-  is_booked: boolean;
+  status: "AVAILABLE" | "PENDING" | "BOOKED";
 }
 
 interface RescheduleBottomSheetProps {
@@ -53,7 +53,7 @@ export function RescheduleBottomSheet({
   currentSlotId,
 }: Readonly<RescheduleBottomSheetProps>): React.ReactNode {
   const availableSlots = slots.filter(
-    (slot) => !slot.is_booked && slot.id !== currentSlotId,
+    (slot) => slot.status === "AVAILABLE" && slot.id !== currentSlotId,
   );
   const slotCountLabel = availableSlots.length === 1 ? "slot" : "slots";
 

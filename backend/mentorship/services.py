@@ -487,7 +487,7 @@ def cancel_match_session(
         # If slot booking is still active, cancel it first.
         # If booking was already released but session remained scheduled/rescheduled,
         # proceed to cancel the session to repair consistency.
-        if slot is not None and slot.is_booked:
+        if slot is not None and slot.status == AvailabilitySlot.Status.BOOKED:
             cancel_availability_booking(
                 profile=match.mentor,
                 slot_id=slot.id,
@@ -571,7 +571,7 @@ def reschedule_match_session(
         raise SameSlotSelectionError("New slot is the same as the current slot.")
 
     with transaction.atomic():
-        if old_slot is not None and old_slot.is_booked:
+        if old_slot is not None and old_slot.status == AvailabilitySlot.Status.BOOKED:
             cancel_availability_booking(
                 profile=match.mentor,
                 slot_id=old_slot.id,

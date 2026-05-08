@@ -83,10 +83,9 @@ function normalizeUsernameIdentifier(value?: string): string {
 function isFutureOpenSlot(slot: {
   date: string;
   startTime: string;
-  is_booked: boolean;
-  is_pending?: boolean;
+  status: "AVAILABLE" | "PENDING" | "BOOKED";
 }): boolean {
-  if (slot.is_booked || slot.is_pending) {
+  if (slot.status !== "AVAILABLE") {
     return false;
   }
 
@@ -99,8 +98,7 @@ function groupSlotsByWeekday(
     date: string;
     startTime: string;
     endTime: string;
-    is_booked: boolean;
-    is_pending?: boolean;
+    status: "AVAILABLE" | "PENDING" | "BOOKED";
   }[],
 ): AvailabilitySlot[] {
   const grouped = new Map<
@@ -120,8 +118,8 @@ function groupSlotsByWeekday(
     dayTimes.push({
       id: slot.id,
       label: `${slot.startTime.slice(0, 5)} - ${slot.endTime.slice(0, 5)}`,
-      isBooked: slot.is_booked,
-      isPending: slot.is_pending,
+      isBooked: slot.status === "BOOKED",
+      isPending: slot.status === "PENDING",
       date: slot.date,
     });
     grouped.set(day, dayTimes);
@@ -581,8 +579,7 @@ export default function MentorProfileScreen() {
           date,
           startTime,
           endTime,
-          is_booked: slot.is_booked,
-          is_pending: pendingRequestedSlotIds.has(slot.id),
+          status: slot.status,
         };
       })
       .filter(
@@ -593,8 +590,7 @@ export default function MentorProfileScreen() {
           date: string;
           startTime: string;
           endTime: string;
-          is_booked: boolean;
-          is_pending: boolean;
+          status: "AVAILABLE" | "PENDING" | "BOOKED";
         } => Boolean(slot),
       );
 
@@ -618,8 +614,7 @@ export default function MentorProfileScreen() {
           return isFutureOpenSlot({
             date: entry.date,
             startTime,
-            is_booked: Boolean(entry.isBooked),
-            is_pending: Boolean(entry.isPending),
+            status: entry.isBooked ? "BOOKED" : (entry.isPending ? "PENDING" : "AVAILABLE"),
           });
         }).length,
     [availability],

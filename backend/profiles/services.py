@@ -352,7 +352,7 @@ def book_availability_slot(*, profile: Profile, slot_id, actor) -> AvailabilityS
         if slot.start_at <= timezone.now():
             raise SlotInPastError("Cannot book a slot in the past.")
 
-        if slot.is_booked or slot.status == AvailabilitySlot.Status.BOOKED:
+        if slot.status == AvailabilitySlot.Status.BOOKED:
             raise SlotAlreadyBookedError("Slot is already booked.")
 
         if slot.profile.user.id == actor.id:
@@ -371,7 +371,7 @@ def cancel_availability_booking(*, profile: Profile, slot_id, actor) -> Availabi
             .get(id=slot_id, profile=profile)
         )
 
-        if not slot.is_booked:
+        if slot.status != AvailabilitySlot.Status.BOOKED:
             raise SlotNotBookedError("Slot is not booked.")
 
         is_slot_owner = slot.profile.user.id == actor.id
