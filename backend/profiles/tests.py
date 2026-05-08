@@ -752,6 +752,26 @@ class ProfilePostsAPITests(TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_create_prp_with_relative_media_url_success(self) -> None:
+        self._auth_owner()
+        relative_path = "/media/post_media/2026/05/test.jpg"
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "achievement",
+                "content": "Test relative path",
+                "media_url": relative_path,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["media_url"], relative_path)
+        # Verify DB
+        event = TimelineEvent.objects.get(id=response.data["id"])
+        self.assertEqual(event.media_url, relative_path)
+
     def test_list_profile_posts_requires_authentication(self) -> None:
         response = self.api_client.get(self.owner_feed_url)
         self.assertEqual(response.status_code, 401)

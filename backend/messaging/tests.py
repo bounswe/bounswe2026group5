@@ -342,13 +342,19 @@ class MessageCreateAPIViewTests(MessagingAPIBaseTestCase):
     def test_attachment_upload_works(self) -> None:
         # Create a fake PDF file
         pdf_content = b"%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n"
-        file = ContentFile(pdf_content, name="test.pdf")
+        file_name = "test.pdf"
+        file = ContentFile(pdf_content, name=file_name)
 
         url = self._conversation_detail_url(self.conversation.id)
         response = self.mentee_client.post(url, {"attachment": file}, format="multipart")
         self.assertEqual(response.status_code, 201)
         self.assertIn("attachment_url", response.data)
         self.assertIsNotNone(response.data["attachment_url"])
+        self.assertEqual(response.data["original_filename"], file_name)
+
+        # Verify DB
+        msg = Message.objects.get(id=response.data["id"])
+        self.assertEqual(msg.original_filename, file_name)
 
     def test_invalid_attachment_type_rejected(self) -> None:
         # Create a fake executable file
