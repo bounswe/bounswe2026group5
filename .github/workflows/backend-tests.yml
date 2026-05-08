@@ -57,6 +57,34 @@ jobs:
         run: pip install -r requirements-dev.txt
         working-directory: backend
 
+      - name: Decode service accounts
+        env:
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT_BASE64 }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+        run: |
+          mkdir -p credentials
+          if [ -n "$GCP_SERVICE_ACCOUNT" ]; then
+            echo "$GCP_SERVICE_ACCOUNT" | base64 --decode > credentials/service-account.json
+          fi
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "$FIREBASE_SERVICE_ACCOUNT" | base64 --decode > credentials/firebase-service-account.json
+          fi
+        working-directory: backend
+
+      - name: Write backend env file
+        env:
+          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
+        run: |
+          if [ -n "$BACKEND_ENV" ]; then
+            echo "$BACKEND_ENV" > .env
+          else
+            # Fallback for PRs without secrets
+            echo "SECRET_KEY=${{ env.SECRET_KEY }}" > .env
+            echo "DATABASE_URL=${{ env.DATABASE_URL }}" >> .env
+            echo "DEBUG=True" >> .env
+          fi
+        working-directory: backend
+
       - name: Run migrations
         run: python manage.py migrate
         working-directory: backend
