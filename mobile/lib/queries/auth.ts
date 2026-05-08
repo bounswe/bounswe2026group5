@@ -220,3 +220,45 @@ export function isEmailVerificationRequiredError(error: unknown): boolean {
     error.message.trim() === EMAIL_VERIFICATION_REQUIRED_MESSAGE
   );
 }
+
+export async function forgotPassword(email: string): Promise<void> {
+  const url = `${API_BASE_URL}${AUTH_BASE_PATH}/forgot-password/`;
+  const response = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "omit",
+    body: JSON.stringify({ email }),
+  });
+  if (!response.ok && response.status !== 400) {
+    throw new Error("Something went wrong. Please check your connection and try again.");
+  }
+}
+
+export function useForgotPasswordMutation() {
+  return useMutation({ mutationFn: forgotPassword });
+}
+
+export async function resetPassword(data: {
+  token: string;
+  new_password: string;
+  confirm_password: string;
+}): Promise<void> {
+  const url = `${API_BASE_URL}${AUTH_BASE_PATH}/reset-password/`;
+  const response = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "omit",
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}) as Record<string, unknown>);
+    const msg =
+      (errorData as { detail?: string }).detail ||
+      "Password reset failed. The link may have expired.";
+    throw new Error(msg);
+  }
+}
+
+export function useResetPasswordMutation() {
+  return useMutation({ mutationFn: resetPassword });
+}
