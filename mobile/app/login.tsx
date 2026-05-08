@@ -163,9 +163,7 @@ export default function LoginScreen() {
                 <TouchableOpacity
                   accessibilityRole="link"
                   accessibilityLabel="Forgot password"
-                  onPress={() =>
-                    console.log("TODO: Navigate to forgot-password screen")
-                  }
+                  onPress={() => router.push("/forgot-password" as Href)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
