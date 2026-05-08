@@ -32,6 +32,7 @@ def sync_message_to_firestore(m):
         d = {"id": str(m.id), "sender_id": str(m.sender_id), "sender_username": m.sender.username,
              "sender_display_name": m.sender.display_name, "sender_picture_url": m.sender.picture_url,
              "body": m.body, "attachment_url": m.attachment.url if m.attachment else None,
+             "original_filename": m.original_filename,
              "created_at": m.created_at.isoformat(), "read_receipts": {}}
         c.collection("conversations").document(str(m.conversation_id)).collection("messages").document(str(m.id)).set(d, merge=True)
         return True

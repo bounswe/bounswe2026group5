@@ -1,5 +1,7 @@
+import React, { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Image, Modal, Text, TouchableOpacity, View } from "react-native";
+import { getAbsoluteUrl } from "@/lib/api/config";
 
 import type { TimelineEvent } from "@/lib/queries/mentorship";
 
@@ -287,6 +289,7 @@ export function TimelineEventCard({
   onToggle: () => void;
   onEdit?: () => void;
 }>) {
+  const [showFullscreen, setShowFullscreen] = useState(false);
   const isSystemEvent = event.category === "AGTE";
   const eventStyle = getTimelineEventStyle(event);
   const actorLabel = getTimelineActorLabel(event);
@@ -490,12 +493,17 @@ export function TimelineEventCard({
         {expanded && hasDetails ? (
           <View className="mt-2 rounded-xl border border-divider/70 bg-surface-card/80 px-4 py-3 dark:border-divider-dark dark:bg-surface-card-dark">
             {event.media_url ? (
-              <Image
-                testID={`journey-event-media-${event.id}`}
-                source={{ uri: event.media_url }}
-                className="h-40 w-full rounded-xl bg-surface-active dark:bg-surface-active-dark"
-                resizeMode="cover"
-              />
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setShowFullscreen(true)}
+              >
+                <Image
+                  testID={`journey-event-media-${event.id}`}
+                  source={{ uri: getAbsoluteUrl(event.media_url) }}
+                  className="h-40 w-full rounded-xl bg-surface-active dark:bg-surface-active-dark"
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
             ) : null}
 
             {payloadEntries.length > 0 ? (
@@ -526,6 +534,28 @@ export function TimelineEventCard({
           </View>
         ) : null}
       </View>
+
+      <Modal
+        visible={showFullscreen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowFullscreen(false)}
+      >
+        <View className="flex-1 bg-black/95 items-center justify-center">
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => setShowFullscreen(false)}
+            className="absolute top-10 right-6 z-10 h-10 w-10 items-center justify-center rounded-full bg-white/20"
+          >
+            <Ionicons name="close" size={24} color="white" />
+          </TouchableOpacity>
+          <Image
+            source={{ uri: getAbsoluteUrl(event.media_url) }}
+            className="h-full w-full"
+            resizeMode="contain"
+          />
+        </View>
+      </Modal>
     </View>
   );
 }

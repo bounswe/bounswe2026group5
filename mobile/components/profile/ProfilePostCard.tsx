@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Image, Linking, Text, TouchableOpacity, View } from "react-native";
+import { Image, Linking, Modal, Text, TouchableOpacity, View } from "react-native";
+import { getAbsoluteUrl } from "@/lib/api/config";
 
 import type { ProfilePost } from "@/lib/queries/profile";
 
@@ -103,6 +104,8 @@ export function ProfilePostCard({
   const iconName = getIconName(post.category, post.event_type);
   const hasImageMedia = post.media_url ? isImageMediaUrl(post.media_url) : false;
 
+  const [showFullscreen, setShowFullscreen] = React.useState(false);
+
   return (
     <View
       testID={`post-card-${post.id}`}
@@ -113,7 +116,7 @@ export function ProfilePostCard({
           {post.author?.picture_url ? (
             <Image
               testID={`post-card-avatar-${post.id}`}
-              source={{ uri: post.author.picture_url }}
+              source={{ uri: getAbsoluteUrl(post.author.picture_url) }}
               className="h-10 w-10 rounded-full bg-surface-active dark:bg-surface-active-dark"
               resizeMode="cover"
             />
@@ -174,14 +177,20 @@ export function ProfilePostCard({
       ) : null}
 
       {post.media_url && hasImageMedia ? (
-        <Image
-          testID={`post-card-media-${post.id}`}
-          source={{ uri: post.media_url }}
-          className={`mt-3 w-full rounded-xl bg-surface-active dark:bg-surface-active-dark ${
-            expanded ? "h-72" : "h-52"
-          }`}
-          resizeMode="cover"
-        />
+        <TouchableOpacity
+          testID={`post-card-media-button-${post.id}`}
+          activeOpacity={0.9}
+          onPress={() => setShowFullscreen(true)}
+        >
+          <Image
+            testID={`post-card-media-${post.id}`}
+            source={{ uri: getAbsoluteUrl(post.media_url) }}
+            className={`mt-3 w-full rounded-xl bg-surface-active dark:bg-surface-active-dark ${
+              expanded ? "h-72" : "h-52"
+            }`}
+            resizeMode="cover"
+          />
+        </TouchableOpacity>
       ) : null}
 
       {post.media_url && !hasImageMedia ? (
@@ -189,7 +198,7 @@ export function ProfilePostCard({
           testID={`post-card-attachment-${post.id}`}
           activeOpacity={0.82}
           onPress={() => {
-            void Linking.openURL(post.media_url ?? "");
+            void Linking.openURL(getAbsoluteUrl(post.media_url ?? ""));
           }}
           className="mt-3 flex-row items-center gap-3 rounded-xl border border-divider bg-surface-active px-3 py-3 dark:border-divider-dark dark:bg-surface-active-dark"
         >
@@ -209,6 +218,28 @@ export function ProfilePostCard({
           </View>
         </TouchableOpacity>
       ) : null}
+
+      <Modal
+        visible={showFullscreen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowFullscreen(false)}
+      >
+        <View className="flex-1 bg-black/95 items-center justify-center">
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => setShowFullscreen(false)}
+            className="absolute top-10 right-6 z-10 h-10 w-10 items-center justify-center rounded-full bg-white/20"
+          >
+            <Ionicons name="close" size={24} color="white" />
+          </TouchableOpacity>
+          <Image
+            source={{ uri: getAbsoluteUrl(post.media_url) }}
+            className="h-full w-full"
+            resizeMode="contain"
+          />
+        </View>
+      </Modal>
     </View>
   );
 }

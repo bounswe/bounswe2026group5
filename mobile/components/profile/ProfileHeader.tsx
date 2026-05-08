@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { getAbsoluteUrl } from "@/lib/api/config";
 
 const BIO_PREVIEW_LENGTH = 240;
 
@@ -54,7 +55,7 @@ export function ProfileHeader({
       {/* 1. Cover Photo Area */}
       <View className="h-32 bg-surface-active dark:bg-surface-active-dark w-full">
         {coverUrl ? (
-          <Image source={{ uri: coverUrl }} className="w-full h-full" />
+          <Image source={{ uri: getAbsoluteUrl(coverUrl) }} className="w-full h-full" />
         ) : (
           <View className="flex-1 bg-surface-active dark:bg-surface-active-dark border-b border-divider dark:border-divider-dark" />
         )}
@@ -68,7 +69,7 @@ export function ProfileHeader({
             {imageUrl ? (
               <Image
                 testID="profile-avatar-image"
-                source={{ uri: imageUrl }}
+                source={{ uri: getAbsoluteUrl(imageUrl) }}
                 className="w-full h-full"
               />
             ) : (

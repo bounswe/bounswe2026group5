@@ -16,6 +16,7 @@ export interface FirebaseMessage {
   sender_picture_url: string | null;
   body: string;
   attachment_url: string | null;
+  original_filename?: string | null;
   created_at: string;
   read_receipts: Record<string, string>;
 }
@@ -105,6 +106,7 @@ export function useFirestoreMessages(conversationId: string | null) {
                   sender_picture_url: data.sender_picture_url,
                   body: data.body,
                   attachment_url: data.attachment_url,
+                  original_filename: data.original_filename,
                   created_at: data.created_at,
                   read_receipts: data.read_receipts || {},
                 });

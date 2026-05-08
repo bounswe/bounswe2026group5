@@ -662,7 +662,7 @@ class PrPCreateSerializer(serializers.Serializer):
 
     event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES)
     content = serializers.CharField(required=True, max_length=2000)
-    media_url = serializers.URLField(required=False, allow_null=True, default=None)
+    media_url = serializers.CharField(required=False, allow_null=True, default=None)
     timestamp = serializers.DateTimeField(required=False, allow_null=True, default=None)
 
     def to_internal_value(self, data: Any) -> dict:
@@ -686,7 +686,7 @@ class PrPUpdateSerializer(serializers.Serializer):
 
     content = serializers.CharField(required=False, allow_blank=True, max_length=2000)
     event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES, required=False)
-    media_url = serializers.URLField(required=False, allow_null=True)
+    media_url = serializers.CharField(required=False, allow_null=True)
 
     def validate(self, attrs: dict) -> dict:
         """Require at least one editable field to be provided."""
@@ -736,7 +736,7 @@ class ProfilePostSerializer(serializers.Serializer):
     category = serializers.CharField(read_only=True)
     event_type = serializers.CharField(read_only=True)
     content = serializers.CharField(read_only=True)
-    media_url = serializers.URLField(read_only=True, allow_null=True)
+    media_url = serializers.CharField(read_only=True, allow_null=True)
     timestamp = serializers.DateTimeField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     last_edited = serializers.DateTimeField(read_only=True, allow_null=True)
@@ -988,7 +988,7 @@ class CoPCreateSerializer(serializers.Serializer):
 
     event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES)
     content = serializers.CharField(required=True, max_length=2000)
-    media_url = serializers.URLField(required=False, allow_null=True, default=None)
+    media_url = serializers.CharField(required=False, allow_null=True, default=None)
     show_on_profile = serializers.BooleanField(required=False, default=False)
     timestamp = serializers.DateTimeField(required=False, allow_null=True, default=None)
     tagged_users = serializers.ListField(
@@ -1025,7 +1025,7 @@ class CoPUpdateSerializer(serializers.Serializer):
 
     content = serializers.CharField(required=False, allow_blank=True, max_length=2000)
     event_type = serializers.ChoiceField(choices=_PROFILE_POST_EVENT_TYPE_CHOICES, required=False)
-    media_url = serializers.URLField(required=False, allow_null=True)
+    media_url = serializers.CharField(required=False, allow_null=True)
     show_on_profile = serializers.BooleanField(required=False)
     tagged_users = serializers.ListField(
         child=serializers.CharField(),
@@ -1070,7 +1070,7 @@ class CommunityPostSerializer(serializers.Serializer):
     category = serializers.CharField(read_only=True)
     event_type = serializers.CharField(read_only=True)
     content = serializers.CharField(read_only=True)
-    media_url = serializers.URLField(read_only=True, allow_null=True)
+    media_url = serializers.CharField(read_only=True, allow_null=True)
     timestamp = serializers.DateTimeField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     last_edited = serializers.DateTimeField(read_only=True, allow_null=True)

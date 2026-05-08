@@ -34,19 +34,15 @@ import {
   pickMessageImageFile,
   pickMessagePdfFile,
   pickMessageAudioFile,
+  pickMessageDeviceFile,
 } from "@/lib/uploads/picker";
+import { getAbsoluteUrl } from "@/lib/api/config";
 
 import { API_BASE_URL } from "@/lib/api/config";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function getAbsoluteUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  if (url.startsWith("http")) return url;
-  return `${API_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
-}
 
 function getInitials(name: string): string {
   return name
@@ -519,6 +515,19 @@ export default function ConversationScreen() {
     }
   }, []);
 
+  const handlePickDevice = useCallback(async () => {
+    setAttachmentError(null);
+    try {
+      const file = await pickMessageDeviceFile();
+      if (file) {
+        setAttachment(file);
+        setShowAttachOptions(false);
+      }
+    } catch {
+      setAttachmentError("Could not attach that file.");
+    }
+  }, []);
+
   const handleSubmitReport = useCallback(
     async ({
       reason,
@@ -719,6 +728,21 @@ export default function ConversationScreen() {
                 />
                 <Text className="text-[13px] font-semibold text-on-surface ml-2">
                   Audio
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="attach-file-button"
+                activeOpacity={0.85}
+                onPress={handlePickDevice}
+                className="flex-row items-center bg-surface-input rounded-xl px-3 py-2"
+              >
+                <Ionicons
+                  name="folder-outline"
+                  size={18}
+                  color="#4a7c6f"
+                />
+                <Text className="text-[13px] font-semibold text-on-surface ml-2">
+                  Device
                 </Text>
               </TouchableOpacity>
             </View>
