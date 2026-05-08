@@ -12,7 +12,7 @@ export const Route = createFileRoute('/verify-email')({
     component: VerifyEmailPage,
 })
 
-function VerifyEmailPage() {
+export function VerifyEmailPage() {
     // Use URLSearchParams directly to avoid TanStack Router splitting on `=` in base64 tokens
     const token = new URLSearchParams(globalThis.location.search).get('token') ?? ''
     const router = useRouter()

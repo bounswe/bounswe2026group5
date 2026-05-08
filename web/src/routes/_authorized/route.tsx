@@ -22,7 +22,7 @@ export const Route = createFileRoute('/_authorized')({
     component: AuthorizedLayout,
 })
 
-function EmailVerificationBanner() {
+export function EmailVerificationBanner() {
     const { data: me } = useQuery(meQueryOptions)
     const [dismissed, setDismissed] = useState(false)
 
