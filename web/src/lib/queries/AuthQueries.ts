@@ -184,11 +184,12 @@ export async function verifyEmailFn(token: string) {
 
 export async function resendVerificationEmailFn() {
     const token = localStorage.getItem('access_token')
-    const res = await fetch(`${API_BASE_URL}/auth/resend-verification-email/`, {
+    const res = await fetch(`${API_BASE_URL}/auth/resend-verification/`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) await throwApiError(res)
+    return res.json()
 }
 
 export function clearAuthState() {
