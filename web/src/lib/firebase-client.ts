@@ -34,7 +34,7 @@ export const getFirestoreInstance = () => {
   if (db) return db
   const a = getFirebaseApp()
   if (!a) return null
-  db = getFirestore(a, import.meta.env.VITE_FIRESTORE_DATABASE_ID || undefined)
+  db = getFirestore(a, import.meta.env.VITE_FIRESTORE_DATABASE_ID || 'neighborship-messaging')
   if (import.meta.env.VITE_FIRESTORE_EMULATOR_HOST) {
     const [h, p] = import.meta.env.VITE_FIRESTORE_EMULATOR_HOST.split(':')
     connectFirestoreEmulator(db, h, +p)

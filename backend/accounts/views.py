@@ -299,10 +299,10 @@ class UserAppUsageModeMeAPIView(APIView):
 
 
 def _send_email_verification_email(user: User, raw_token: str) -> None:
-    verify_path = getattr(settings, "EMAIL_VERIFICATION_URL_PATH", "/verify-email")
+    verify_path = "/verify-email"
     base_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
     verify_link = f"{base_url}{verify_path}?token={raw_token}"
-    lifetime_hours = getattr(settings, "EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS", 24)
+    lifetime_hours = 24
 
     subject = "Verify your Neighborship email address"
     body = (
@@ -323,10 +323,10 @@ def _send_email_verification_email(user: User, raw_token: str) -> None:
 
 
 def _send_password_reset_email(user: User, raw_token: str) -> None:
-    reset_path = getattr(settings, "PASSWORD_RESET_URL_PATH", "/reset-password")
+    reset_path = "/reset-password"
     base_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
     reset_link = f"{base_url}{reset_path}?token={raw_token}"
-    lifetime = getattr(settings, "PASSWORD_RESET_TOKEN_LIFETIME_MINUTES", 30)
+    lifetime = 30
 
     subject = "Reset your Neighborship password"
     body = (

@@ -16,19 +16,18 @@ from pathlib import Path
 
 import environ
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# ==============================================================================
+# 1. BASE SETUP
+# ==============================================================================
 BASE_DIR = Path(__file__).resolve().parent.parent
 ROOT_DIR = BASE_DIR.parent
 
 env = environ.Env(DEBUG=(bool, False))
-
 environ.Env.read_env(os.path.join(ROOT_DIR, ".env"))
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
-# SECURITY WARNING: keep the secret key used in production secret!
-
+# ==============================================================================
+# 2. CORE DJANGO SETTINGS
+# ==============================================================================
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env("DEBUG")
 
@@ -57,7 +56,9 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 
-# Application definition
+ROOT_URLCONF = "core.urls"
+WSGI_APPLICATION = "core.wsgi.application"
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -83,55 +84,6 @@ INSTALLED_APPS = [
     "messaging",
 ]
 
-REST_FRAMEWORK = {
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_AUTHENTICATION_CLASSES": ("accounts.authentication.CookieOrHeaderJWTAuthentication",),
-    "DEFAULT_PARSER_CLASSES": (
-        "rest_framework.parsers.JSONParser",
-        "rest_framework.parsers.MultiPartParser",
-        "rest_framework.parsers.FormParser",
-    ),
-}
-
-# Messaging settings
-MAX_MESSAGE_ATTACHMENT_SIZE_MB = 20
-MAX_MESSAGE_ATTACHMENT_SIZE_BYTES = MAX_MESSAGE_ATTACHMENT_SIZE_MB * 1024 * 1024
-
-# Profile picture upload settings
-MAX_PROFILE_PICTURE_SIZE_MB = 5
-MAX_PROFILE_PICTURE_SIZE_BYTES = MAX_PROFILE_PICTURE_SIZE_MB * 1024 * 1024
-PROFILE_PICTURE_MAX_DIMENSION = 512  # px — longest side after resize
-
-# Post / timeline media upload settings
-MAX_POST_MEDIA_SIZE_MB = 10
-MAX_POST_MEDIA_SIZE_BYTES = MAX_POST_MEDIA_SIZE_MB * 1024 * 1024
-POST_MEDIA_MAX_DIMENSION = 1920  # px — longest side after resize
-
-# Community Post (CoP) tagging settings
-COP_MAX_TAGS = 5  # Maximum number of users that can be tagged in a CoP
-
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1440),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
-}
-
-AUTH_ACCESS_COOKIE_NAME = os.getenv("AUTH_ACCESS_COOKIE_NAME", "access_token")
-AUTH_REFRESH_COOKIE_NAME = os.getenv("AUTH_REFRESH_COOKIE_NAME", "refresh_token")
-AUTH_COOKIE_SECURE = env.bool("AUTH_COOKIE_SECURE", default=not DEBUG)
-AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax")
-
-SPECTACULAR_SETTINGS = {
-    "TITLE": "Neighborship App API",
-    "DESCRIPTION": "Neighborship App API Documentation",
-    "VERSION": "1.0.0",
-    "SERVE_INCLUDE_SCHEMA": False,
-    "ENUM_NAME_OVERRIDES": {
-        "AppUsageModeEnum": "accounts.models.AppUsageMode",
-    },
-}
-
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
@@ -143,8 +95,6 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.TimezoneMiddleware",
 ]
-
-ROOT_URLCONF = "core.urls"
 
 TEMPLATES = [
     {
@@ -161,118 +111,121 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "core.wsgi.application"
-
-
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
+# ==============================================================================
+# 3. DATABASE & AUTHENTICATION
+# ==============================================================================
 DATABASES = {"default": env.db("DATABASE_URL")}
 DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
 
 AUTH_USER_MODEL = "accounts.User"
 
-
-# Password validation
-# https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
-    },
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# ==============================================================================
+# 4. REST FRAMEWORK & API
+# ==============================================================================
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_AUTHENTICATION_CLASSES": ("accounts.authentication.CookieOrHeaderJWTAuthentication",),
+    "DEFAULT_PARSER_CLASSES": (
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.MultiPartParser",
+        "rest_framework.parsers.FormParser",
+    ),
+}
 
-# Internationalization
-# https://docs.djangoproject.com/en/6.0/topics/i18n/
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1440),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+}
 
+AUTH_ACCESS_COOKIE_NAME = "access_token"
+AUTH_REFRESH_COOKIE_NAME = "refresh_token"
+AUTH_COOKIE_SECURE = env.bool("AUTH_COOKIE_SECURE", default=not DEBUG)
+AUTH_COOKIE_SAMESITE = "Lax"
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Neighborship App API",
+    "DESCRIPTION": "Neighborship App API Documentation",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {
+        "AppUsageModeEnum": "accounts.models.AppUsageMode",
+    },
+}
+
+# ==============================================================================
+# 5. INTERNATIONALIZATION
+# ==============================================================================
 LANGUAGE_CODE = "en-us"
-
 TIME_ZONE = "Europe/Istanbul"
-
 USE_I18N = True
-
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.0/howto/static-files/
-
+# ==============================================================================
+# 6. STATIC & MEDIA STORAGE
+# ==============================================================================
 STATIC_URL = "static/"
 
-# ---------------------------------------------------------------------------
-# Media / file upload storage
-# ---------------------------------------------------------------------------
-# When GS_BUCKET_NAME is set, use Google Cloud Storage for all uploaded media.
-# Otherwise fall back to local filesystem (useful for running tests locally).
+GS_BUCKET_NAME = "neighborship-bucket"
 
-GS_BUCKET_NAME = os.getenv("GS_BUCKET_NAME", "")
-
-if GS_BUCKET_NAME:
+if GS_BUCKET_NAME and not DEBUG:
     STORAGES = {
         "default": {
             "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
-            "OPTIONS": {
-                "bucket_name": GS_BUCKET_NAME,
-            },
+            "OPTIONS": {"bucket_name": GS_BUCKET_NAME},
         },
         "staticfiles": {
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
     }
-    GS_DEFAULT_ACL = os.getenv("GS_DEFAULT_ACL", None)
-    GS_QUERYSTRING_AUTH = env.bool("GS_QUERYSTRING_AUTH", default=False)
-    GS_FILE_OVERWRITE = env.bool("GS_FILE_OVERWRITE", default=False)
+    GS_DEFAULT_ACL = None
+    GS_QUERYSTRING_AUTH = False
+    GS_FILE_OVERWRITE = False
     MEDIA_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/"
 else:
     # Local filesystem fallback (tests, CI, offline dev)
     MEDIA_ROOT = BASE_DIR / "media"
     MEDIA_URL = "/media/"
 
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+# ==============================================================================
+# 7. THIRD-PARTY SERVICES (Firebase / Google)
+# ==============================================================================
+FIREBASE_SERVICE_ACCOUNT_PATH = "credentials/firebase-service-account.json"
+USE_FIREBASE_REALTIME = bool(os.getenv("VITE_FIREBASE_PROJECT_ID"))
+FIRESTORE_DATABASE_ID = "neighborship-messaging"
 
-# Feedback & rating
-RATING_UPDATE_THRESHOLD = int(os.getenv("RATING_UPDATE_THRESHOLD", "5"))
-
-# Notifications
-NOTIFICATIONS_HISTORY_LIMIT = int(os.getenv("NOTIFICATIONS_HISTORY_LIMIT", "100"))
-FIREBASE_SERVICE_ACCOUNT_PATH = os.getenv(
-    "FIREBASE_SERVICE_ACCOUNT_PATH", "credentials/firebase-service-account.json"
-)
-
-# Firebase real-time messaging
-USE_FIREBASE_REALTIME = bool(
-    os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH") and os.getenv("VITE_FIREBASE_PROJECT_ID")
-)
-FIRESTORE_DATABASE_ID = env("FIRESTORE_DATABASE_ID", default=None)
-
-# Password reset
-PASSWORD_RESET_TOKEN_LIFETIME_MINUTES = int(
-    os.getenv("PASSWORD_RESET_TOKEN_LIFETIME_MINUTES", "30")
-)
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-PASSWORD_RESET_URL_PATH = os.getenv("PASSWORD_RESET_URL_PATH", "/reset-password")
-
-# Email verification
-REQUIRE_EMAIL_VERIFICATION = env.bool("REQUIRE_EMAIL_VERIFICATION", default=True)
-EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS = int(
-    os.getenv("EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS", "24")
-)
-EMAIL_VERIFICATION_URL_PATH = os.getenv("EMAIL_VERIFICATION_URL_PATH", "/verify-email")
-
-# OAuth2 providers
 GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 
-# Email
+# ==============================================================================
+# 8. APPLICATION DOMAIN SETTINGS
+# ==============================================================================
+
+# Business Logic Limits
+RATING_UPDATE_THRESHOLD = 5
+NOTIFICATIONS_HISTORY_LIMIT = 100
+MAX_MESSAGE_ATTACHMENT_SIZE_MB = 20
+MAX_MESSAGE_ATTACHMENT_SIZE_BYTES = MAX_MESSAGE_ATTACHMENT_SIZE_MB * 1024 * 1024
+MAX_PROFILE_PICTURE_SIZE_MB = 5
+MAX_PROFILE_PICTURE_SIZE_BYTES = MAX_PROFILE_PICTURE_SIZE_MB * 1024 * 1024
+PROFILE_PICTURE_MAX_DIMENSION = 512
+MAX_POST_MEDIA_SIZE_MB = 10
+MAX_POST_MEDIA_SIZE_BYTES = MAX_POST_MEDIA_SIZE_MB * 1024 * 1024
+POST_MEDIA_MAX_DIMENSION = 1920
+COP_MAX_TAGS = 5
+
+# Auth & Verification
+REQUIRE_EMAIL_VERIFICATION = env.bool("REQUIRE_EMAIL_VERIFICATION", default=True)
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+
+# Email Configuration
 EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND",
     "django.core.mail.backends.console.EmailBackend",
@@ -282,8 +235,8 @@ EMAIL_PORT = int(os.getenv("EMAIL_PORT", "25"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@neighborship.app")
+DEFAULT_FROM_EMAIL = "no-reply@neighborship.app"
 
-# Initial Admin Seeding
+# Initial Seeding
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@test.com")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "AdminPass123!")
