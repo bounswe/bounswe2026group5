@@ -16,12 +16,20 @@ from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode, UserRole
-from mentorship.models import Feedback, Match, MeetingSession, MentorshipRequest
+from mentorship.models import (
+    Feedback,
+    Match,
+    MeetingSession,
+    MentorshipRequest,
+    Workshop,
+    WorkshopParticipant,
+)
 from mentorship.serializers import (
     MeetingSessionSerializer,
     MentorshipRequestCreateSerializer,
     UpcomingMenteeSessionSerializer,
     UpcomingMentorSessionSerializer,
+    WorkshopCreateSerializer,
 )
 from mentorship.services import (
     MissingSelectedSlotError,
@@ -41,6 +49,111 @@ from profiles.services import OwnSlotBookingError
 from timeline.models import TimelineEvent
 
 User: Any = get_user_model()
+
+
+class WorkshopModelsAndSerializerTests(TestCase):
+    """Unit tests for workshop models and create serializer validations."""
+
+    def setUp(self) -> None:
+        self.mentor_user = User.objects.create_user(
+            email="mentor.workshop.model@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+            is_email_verified=True,
+        )
+        self.member_user = User.objects.create_user(
+            email="member.workshop.model@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+            is_email_verified=True,
+        )
+
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            display_name="Workshop Mentor",
+        )
+        self.member_profile = Profile.objects.create(
+            user=self.member_user,
+            display_name="Workshop Member",
+        )
+
+        from profiles.models import CommunityTag, CommunityTagMembership
+
+        self.tag = CommunityTag.objects.create(
+            name="Workshop Serializer Tag",
+            created_by=self.mentor_profile,
+        )
+        CommunityTagMembership.objects.create(profile=self.mentor_profile, tag=self.tag)
+        CommunityTagMembership.objects.create(profile=self.member_profile, tag=self.tag)
+
+        self.request_factory = APIRequestFactory()
+
+    def test_workshop_is_full_and_unique_participant_constraint(self) -> None:
+        workshop = Workshop.objects.create(
+            community=self.tag,
+            author=self.mentor_profile,
+            title="Capacity test",
+            description="",
+            scheduled_at=timezone.now() + timedelta(days=2),
+            end_at=timezone.now() + timedelta(days=2, hours=1),
+            max_participants=1,
+        )
+        WorkshopParticipant.objects.create(workshop=workshop, participant=self.member_profile)
+
+        self.assertTrue(workshop.is_full())
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                WorkshopParticipant.objects.create(
+                    workshop=workshop,
+                    participant=self.member_profile,
+                )
+
+    def test_workshop_create_serializer_rejects_booked_slot_conflict(self) -> None:
+        request = self.request_factory.post("/api/profiles/tags/any/workshops/")
+        request.user = self.mentor_user
+
+        start_at = timezone.now() + timedelta(days=1, hours=2)
+        end_at = start_at + timedelta(hours=2)
+        AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=start_at,
+            end_at=end_at,
+            status=AvailabilitySlot.Status.BOOKED,
+            booked_by=self.member_user,
+        )
+
+        serializer = WorkshopCreateSerializer(
+            data={
+                "title": "Conflict",
+                "description": "",
+                "scheduled_at": start_at,
+                "end_at": end_at,
+                "max_participants": 5,
+            },
+            context={"request": request, "community": self.tag},
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("conflicts", str(serializer.errors).lower())
+
+    def test_workshop_create_serializer_requires_mentor(self) -> None:
+        request = self.request_factory.post("/api/profiles/tags/any/workshops/")
+        request.user = self.member_user
+
+        serializer = WorkshopCreateSerializer(
+            data={
+                "title": "Not allowed",
+                "description": "",
+                "scheduled_at": timezone.now() + timedelta(days=1, hours=2),
+                "end_at": timezone.now() + timedelta(days=1, hours=3),
+                "max_participants": 5,
+            },
+            context={"request": request, "community": self.tag},
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("mentors", str(serializer.errors).lower())
 
 
 def _create_accepted_request(**kwargs: Any) -> MentorshipRequest:

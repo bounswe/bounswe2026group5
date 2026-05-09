@@ -11,7 +11,8 @@ from django.db import IntegrityError, models, transaction
 from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import serializers, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny
@@ -20,8 +21,18 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import AppUsageMode, UserRole
-from accounts.permissions import IsUser
-from mentorship.models import Feedback, MentorshipRequest
+from accounts.permissions import IsEmailVerified, IsUser
+from mentorship.models import Feedback, MentorshipRequest, Workshop, WorkshopParticipant
+from mentorship.serializers import (
+    WorkshopCreateSerializer,
+    WorkshopDetailSerializer,
+    WorkshopFeedSerializer,
+    WorkshopListSerializer,
+    WorkshopParticipantCreateSerializer,
+    WorkshopParticipantFeedSerializer,
+    WorkshopParticipantSerializer,
+    WorkshopUpdateSerializer,
+)
 from mentorship.services import book_match_session
 
 from .models import AvailabilitySlot, CommunityTag, CommunityTagMembership, Profile, Skill
@@ -1040,9 +1051,7 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         page_size = max(page_size, 1)
         page_size = min(page_size, 50)
 
-        qs = Profile.objects.select_related("user").filter(
-            user__app_usage_mode=AppUsageMode.MENTOR
-        )
+        qs = Profile.objects.select_related("user").filter(user__app_usage_mode=AppUsageMode.MENTOR)
 
         if q:
             base_qs = qs
@@ -2141,3 +2150,520 @@ class PostMediaUploadAPIView(ProfileLookupMixin, APIView):
         url = serializer.save_file()
 
         return Response({"url": url}, status=status.HTTP_201_CREATED)
+
+
+# ============================================================================
+# WORKSHOP COMMUNITY ENDPOINTS
+# ============================================================================
+
+
+class CommunityTagWorkshopsListCreateAPIView(ProfileLookupMixin, APIView):
+    """List and create workshops for a community tag."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        operation_id="community_tag_workshops_list",
+        parameters=[
+            OpenApiParameter(
+                name="status",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.STR,
+                enum=["SCHEDULED", "COMPLETED", "CANCELLED"],
+                description="Filter by workshop status.",
+            ),
+            OpenApiParameter(
+                name="offset",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Zero-based index of the first item to include. Default: 0.",
+            ),
+            OpenApiParameter(
+                name="limit",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Maximum number of items to return. Default: 50. Maximum: 200.",
+            ),
+        ],
+        responses={
+            200: WorkshopFeedSerializer,
+            400: OpenApiResponse(description="Invalid query parameters."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Community tag not found."),
+        },
+        description=(
+            "List workshops for a community tag, ordered by scheduled_at (newest first). "
+            "Supports filtering by status. Pagination via `offset` and `limit`."
+        ),
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request, tag_id: str) -> Response:
+        """Return paginated workshops for a community tag."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        # Parse and validate query params
+        status_filter = request.query_params.get("status")
+        offset = int(request.query_params.get("offset", 0))
+        limit = min(int(request.query_params.get("limit", 50)), 200)
+
+        # Build query
+        queryset = Workshop.objects.filter(community=tag)
+        if status_filter:
+            if status_filter not in [s[0] for s in Workshop.Status.choices]:
+                return Response(
+                    {"detail": "Invalid status filter."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            queryset = queryset.filter(status=status_filter)
+
+        queryset = queryset.order_by("-scheduled_at", "-created_at")
+        total_count = queryset.count()
+        workshops = list(queryset[offset : offset + limit])
+
+        serializer = WorkshopListSerializer(workshops, many=True, context={"request": request})
+        return Response(
+            {
+                "count": total_count,
+                "offset": offset,
+                "limit": limit,
+                "results": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        operation_id="community_tag_workshops_create",
+        request=WorkshopCreateSerializer,
+        responses={
+            201: WorkshopDetailSerializer,
+            400: OpenApiResponse(
+                description=(
+                    "Validation error. Possible causes: "
+                    "(1) not a community member; "
+                    "(2) not a mentor; "
+                    "(3) invalid scheduled time (must be ≥1 hour in future); "
+                    "(4) workshop conflicts with booked availability slots; "
+                    "(5) max_participants < 1"
+                )
+            ),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Community tag not found."),
+        },
+        description=(
+            "Create a new workshop for a community. "
+            "Only mentors who are community members can create workshops. "
+            "Workshop must not conflict with author's booked availability slots."
+        ),
+        tags=["Community Tags"],
+    )
+    def post(self, request: Request, tag_id: str) -> Response:
+        """Create a new workshop for a community tag."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = WorkshopCreateSerializer(
+            data=request.data,
+            context={"request": request, "community": tag},
+        )
+        serializer.is_valid(raise_exception=True)
+        workshop = serializer.save()
+
+        return Response(
+            WorkshopDetailSerializer(workshop, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CommunityTagWorkshopDetailAPIView(ProfileLookupMixin, APIView):
+    """Retrieve, update, or delete a specific workshop."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        operation_id="community_tag_workshop_detail_retrieve",
+        responses={
+            200: WorkshopDetailSerializer,
+            404: OpenApiResponse(description="Workshop or community tag not found."),
+        },
+        description="Retrieve details of a specific workshop.",
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request, tag_id: str, workshop_id: str) -> Response:
+        """Retrieve workshop detail."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        workshop = Workshop.objects.filter(id=workshop_id, community=tag).first()
+        if workshop is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(
+            WorkshopDetailSerializer(workshop, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        operation_id="community_tag_workshop_detail_update",
+        request=WorkshopUpdateSerializer,
+        responses={
+            200: WorkshopDetailSerializer,
+            400: OpenApiResponse(description="Validation error or scheduling conflict."),
+            403: OpenApiResponse(description="Only workshop author can update."),
+            404: OpenApiResponse(description="Workshop or community tag not found."),
+        },
+        description="Update workshop details (author only).",
+        tags=["Community Tags"],
+    )
+    def patch(self, request: Request, tag_id: str, workshop_id: str) -> Response:
+        """Update workshop details (author only)."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        workshop = Workshop.objects.filter(id=workshop_id, community=tag).first()
+        if workshop is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        author_profile = self._get_request_profile_or_404(request)
+        if author_profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+        if workshop.author_id != author_profile.id:
+            return Response(
+                {"detail": "Only the workshop author can update it."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = WorkshopUpdateSerializer(
+            data=request.data,
+            context={"request": request, "workshop": workshop},
+        )
+        serializer.is_valid(raise_exception=True)
+        workshop = serializer.update(workshop, serializer.validated_data)
+
+        return Response(
+            WorkshopDetailSerializer(workshop, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        operation_id="community_tag_workshop_detail_delete",
+        responses={
+            204: OpenApiResponse(description="Workshop cancelled successfully."),
+            403: OpenApiResponse(description="Only workshop author can cancel."),
+            404: OpenApiResponse(description="Workshop or community tag not found."),
+        },
+        description="Cancel a workshop (soft-delete, status → CANCELLED). Author only.",
+        tags=["Community Tags"],
+    )
+    def delete(self, request: Request, tag_id: str, workshop_id: str) -> Response:
+        """Cancel a workshop (soft-delete via status=CANCELLED)."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        workshop = Workshop.objects.filter(id=workshop_id, community=tag).first()
+        if workshop is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            author_profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        if workshop.author != author_profile:
+            return Response(
+                {"detail": "Only the workshop author can cancel it."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        workshop.status = Workshop.Status.CANCELLED
+        workshop.save()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CommunityTagWorkshopParticipantsListAPIView(ProfileLookupMixin, APIView):
+    """List workshop participants."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        operation_id="community_tag_workshop_participants_list",
+        parameters=[
+            OpenApiParameter(
+                name="offset",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Zero-based index of first item. Default: 0.",
+            ),
+            OpenApiParameter(
+                name="limit",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Maximum items to return. Default: 50. Maximum: 200.",
+            ),
+        ],
+        responses={
+            200: WorkshopParticipantFeedSerializer,
+            404: OpenApiResponse(description="Workshop or community tag not found."),
+        },
+        description="List all participants in a workshop, ordered by join time.",
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request, tag_id: str, workshop_id: str) -> Response:
+        """Return paginated list of workshop participants."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        workshop = Workshop.objects.filter(id=workshop_id, community=tag).first()
+        if workshop is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        offset = int(request.query_params.get("offset", 0))
+        limit = min(int(request.query_params.get("limit", 50)), 200)
+
+        queryset = workshop.participants.all().order_by("joined_at")
+        total_count = queryset.count()
+        participants = list(queryset[offset : offset + limit])
+
+        serializer = WorkshopParticipantSerializer(participants, many=True)
+        return Response(
+            {
+                "count": total_count,
+                "offset": offset,
+                "limit": limit,
+                "results": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class CommunityTagWorkshopJoinAPIView(ProfileLookupMixin, APIView):
+    """Join a workshop as a participant."""
+
+    permission_classes = [IsUser, IsEmailVerified]
+
+    @extend_schema(
+        operation_id="community_tag_workshop_join",
+        request=WorkshopParticipantCreateSerializer,
+        responses={
+            201: WorkshopParticipantSerializer,
+            400: OpenApiResponse(
+                description=(
+                    "Validation error. Possible causes: "
+                    "(1) not a community member; "
+                    "(2) already enrolled; "
+                    "(3) workshop is full; "
+                    "(4) workshop is in the past"
+                )
+            ),
+            409: OpenApiResponse(description="Workshop has reached maximum capacity."),
+            404: OpenApiResponse(description="Workshop or community tag not found."),
+        },
+        description=(
+            "Join a workshop as a participant. User must be a community member. "
+            "Workshop must have available slots and not be in the past."
+        ),
+        tags=["Community Tags"],
+    )
+    def post(self, request: Request, tag_id: str, workshop_id: str) -> Response:
+        """Join a workshop."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        workshop = Workshop.objects.filter(id=workshop_id, community=tag).first()
+        if workshop is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            participant_profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        # Check community membership
+        if not tag.members.filter(id=participant_profile.id).exists():
+            return Response(
+                {"detail": "You must be a community member to join this workshop."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check not already enrolled
+        if workshop.participants.filter(participant=participant_profile).exists():
+            return Response(
+                {"detail": "You are already enrolled in this workshop."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check workshop not full
+        if workshop.is_full():
+            return Response(
+                {"detail": "Workshop is at maximum capacity."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Check workshop not in past
+        if workshop.is_past_end_time():
+            return Response(
+                {"detail": "Workshop has already ended."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payload = WorkshopParticipantCreateSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+
+        participant = WorkshopParticipant.objects.create(
+            workshop=workshop,
+            participant=participant_profile,
+            show_on_profile=payload.validated_data.get("show_on_profile", False),
+        )
+
+        return Response(
+            WorkshopParticipantSerializer(participant).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CommunityTagWorkshopLeaveAPIView(ProfileLookupMixin, APIView):
+    """Leave/withdraw from a workshop."""
+
+    permission_classes = [IsUser, IsEmailVerified]
+
+    @extend_schema(
+        operation_id="community_tag_workshop_leave",
+        request=None,
+        responses={
+            204: OpenApiResponse(description="Successfully left workshop."),
+            400: OpenApiResponse(
+                description=(
+                    "Validation error. Possible causes: "
+                    "(1) not enrolled in workshop; "
+                    "(2) cannot withdraw after workshop end time"
+                )
+            ),
+            404: OpenApiResponse(description="Workshop or community tag not found."),
+        },
+        description=(
+            "Leave/withdraw from a workshop. Only allowed if workshop hasn't ended yet. "
+            "Removes the participant record."
+        ),
+        tags=["Community Tags"],
+    )
+    def post(self, request: Request, tag_id: str, workshop_id: str) -> Response:
+        """Leave/withdraw from a workshop."""
+        tag = CommunityTag.objects.filter(id=tag_id).first()
+        if tag is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        workshop = Workshop.objects.filter(id=workshop_id, community=tag).first()
+        if workshop is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            participant_profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        # Check user is enrolled
+        participation = WorkshopParticipant.objects.filter(
+            workshop=workshop, participant=participant_profile
+        ).first()
+        if participation is None:
+            return Response(
+                {"detail": "You are not enrolled in this workshop."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check workshop hasn't ended (allow withdrawal before end_at)
+        if workshop.is_past_end_time():
+            return Response(
+                {"detail": "Cannot withdraw from workshop after it has ended."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Delete participation record
+        participation.delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CommunityTagWorkshopMyParticipationAPIView(ProfileLookupMixin, APIView):
+    """Retrieve or update current user's workshop participation preferences."""
+
+    permission_classes = [IsUser, IsEmailVerified]
+
+    @extend_schema(
+        operation_id="community_tag_workshop_my_participation_get",
+        responses={
+            200: WorkshopParticipantSerializer,
+            404: OpenApiResponse(description="Participation not found."),
+        },
+        tags=["Community Tags"],
+    )
+    def get(self, request: Request, tag_id: str, workshop_id: str) -> Response:
+        """Return current user's workshop participation record."""
+        participation = self._get_participation_or_404(request, tag_id, workshop_id)
+        if participation is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(
+            WorkshopParticipantSerializer(participation).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        operation_id="community_tag_workshop_my_participation_patch",
+        request=WorkshopParticipantCreateSerializer,
+        responses={
+            200: WorkshopParticipantSerializer,
+            404: OpenApiResponse(description="Participation not found."),
+        },
+        tags=["Community Tags"],
+    )
+    def patch(self, request: Request, tag_id: str, workshop_id: str) -> Response:
+        """Update current user's workshop participation preferences."""
+        participation = self._get_participation_or_404(request, tag_id, workshop_id)
+        if participation is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        payload = WorkshopParticipantCreateSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        participation.show_on_profile = payload.validated_data.get(
+            "show_on_profile", participation.show_on_profile
+        )
+        participation.save(update_fields=["show_on_profile"])
+        return Response(
+            WorkshopParticipantSerializer(participation).data,
+            status=status.HTTP_200_OK,
+        )
+
+    def _get_participation_or_404(
+        self,
+        request: Request,
+        tag_id: str,
+        workshop_id: str,
+    ) -> WorkshopParticipant | None:
+        """Resolve authenticated user's participation for a specific workshop."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return None
+
+        return (
+            WorkshopParticipant.objects.select_related("workshop", "workshop__community")
+            .filter(
+                workshop_id=workshop_id,
+                workshop__community_id=tag_id,
+                participant=profile,
+            )
+            .first()
+        )

@@ -1,6 +1,7 @@
 """Domain services for profile-related business operations."""
 
 import uuid
+from datetime import datetime
 from typing import Any
 
 from django.conf import settings
@@ -45,6 +46,43 @@ class InvalidPrPEventTypeError(Exception):
 
 class InvalidCoPEventTypeError(Exception):
     """Raised when an unsupported event_type is supplied for a community post."""
+
+
+# ============================================================================
+# WORKSHOP SERVICE EXCEPTIONS
+# ============================================================================
+
+
+class WorkshopError(Exception):
+    """Base exception for workshop-related business rule failures."""
+
+
+class NotCommunityMemberError(WorkshopError):
+    """Raised when user is not a community member."""
+
+
+class NotMentorError(WorkshopError):
+    """Raised when user is not a mentor."""
+
+
+class SchedulingConflictError(WorkshopError):
+    """Raised when workshop conflicts with booked availability slots."""
+
+
+class WorkshopFullError(WorkshopError):
+    """Raised when workshop has reached max participants."""
+
+
+class AlreadyEnrolledError(WorkshopError):
+    """Raised when user is already enrolled in workshop."""
+
+
+class NotEnrolledError(WorkshopError):
+    """Raised when user is not enrolled in workshop."""
+
+
+class WithdrawalNotAllowedError(WorkshopError):
+    """Raised when user cannot withdraw from workshop."""
 
 
 # ============================================================================
@@ -741,3 +779,38 @@ def soft_delete_cop_event(*, event: Any) -> None:
     """Soft-delete a community post by setting is_deleted=True."""
     event.is_deleted = True
     event.save(update_fields=["is_deleted"])
+
+
+# ============================================================================
+# WORKSHOP DOMAIN SERVICES
+# ============================================================================
+
+
+def check_availability_conflicts(
+    profile: Profile, start: datetime, end: datetime
+) -> list[AvailabilitySlot]:
+    """
+    Return list of booked availability slots that conflict with the given timeframe.
+
+    Only checks BOOKED slots (not PENDING or AVAILABLE), to allow flexibility for uncertain bookings.
+    """
+    overlapping = AvailabilitySlot.objects.filter(
+        profile=profile,
+        status=AvailabilitySlot.Status.BOOKED,
+        start_at__lt=end,
+        end_at__gt=start,
+    )
+    return list(overlapping)
+
+
+def validate_workshop_scheduling(
+    author: Profile, start: datetime, end: datetime, exclude_workshop_id: uuid.UUID | None = None
+) -> None:
+    """
+    Validate that workshop scheduling doesn't conflict with author's booked availability.
+
+    Raises SchedulingConflictError if conflicts exist.
+    """
+    overlapping = check_availability_conflicts(author, start, end)
+    if overlapping:
+        raise SchedulingConflictError("Workshop conflicts with your booked availability slots.")

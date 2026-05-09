@@ -8,10 +8,17 @@ from rest_framework import serializers
 
 from accounts.models import AppUsageMode
 from core.utils.timezone import to_local_time
-from profiles.models import AvailabilitySlot, Profile
+from profiles.models import AvailabilitySlot, CommunityTag, Profile
 from profiles.serializers import resolve_picture_url
 
-from .models import Feedback, Match, MeetingSession, MentorshipRequest
+from .models import (
+    Feedback,
+    Match,
+    MeetingSession,
+    MentorshipRequest,
+    Workshop,
+    WorkshopParticipant,
+)
 
 
 class ProfileSummarySerializer(serializers.ModelSerializer):
@@ -483,3 +490,297 @@ class MCTEFeedSerializer(serializers.Serializer):
     offset = serializers.IntegerField(read_only=True)
     limit = serializers.IntegerField(read_only=True)
     results = MCTEEventSerializer(many=True, read_only=True)
+
+
+class WorkshopParticipantSerializer(serializers.ModelSerializer):
+    """Read serializer for workshop participants."""
+
+    participant = ProfileSummarySerializer(read_only=True)
+
+    class Meta:
+        model = WorkshopParticipant
+        fields = ("id", "participant", "joined_at", "show_on_profile")
+        read_only_fields = fields
+
+
+class WorkshopParticipantFeedSerializer(serializers.Serializer):
+    """Read serializer for paginated workshop participant list envelope."""
+
+    count = serializers.IntegerField(read_only=True)
+    offset = serializers.IntegerField(read_only=True)
+    limit = serializers.IntegerField(read_only=True)
+    results = WorkshopParticipantSerializer(many=True, read_only=True)
+
+
+class WorkshopListSerializer(serializers.ModelSerializer):
+    """List view serializer for workshops in community feed."""
+
+    author = ProfileSummarySerializer(read_only=True)
+    community_id = serializers.UUIDField(source="community.id", read_only=True)
+    community_name = serializers.CharField(source="community.name", read_only=True)
+    participant_count = serializers.SerializerMethodField()
+    is_full = serializers.SerializerMethodField()
+    current_user_enrolled = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Workshop
+        fields = (
+            "id",
+            "community_id",
+            "community_name",
+            "author",
+            "title",
+            "description",
+            "scheduled_at",
+            "end_at",
+            "max_participants",
+            "participant_count",
+            "is_full",
+            "status",
+            "current_user_enrolled",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def get_participant_count(self, obj: Workshop) -> int:
+        """Return current number of enrolled participants."""
+        return obj.get_participant_count()
+
+    def get_is_full(self, obj: Workshop) -> bool:
+        """Return whether workshop has reached max capacity."""
+        return obj.is_full()
+
+    def get_current_user_enrolled(self, obj: Workshop) -> bool:
+        """Return whether authenticated user is enrolled."""
+        request = self.context.get("request")
+        if request is None or request.user is None or not request.user.is_authenticated:
+            return False
+        try:
+            profile = Profile.objects.get(user=request.user)
+            return obj.participants.filter(participant=profile).exists()
+        except Profile.DoesNotExist:
+            return False
+
+
+class WorkshopDetailSerializer(serializers.ModelSerializer):
+    """Detail view serializer for workshop with full nested objects."""
+
+    author = ProfileSummarySerializer(read_only=True)
+    community_id = serializers.UUIDField(source="community.id", read_only=True)
+    community_name = serializers.CharField(source="community.name", read_only=True)
+    participants = WorkshopParticipantSerializer(many=True, read_only=True)
+    participant_count = serializers.SerializerMethodField()
+    is_full = serializers.SerializerMethodField()
+    current_user_enrolled = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Workshop
+        fields = (
+            "id",
+            "community_id",
+            "community_name",
+            "author",
+            "title",
+            "description",
+            "scheduled_at",
+            "end_at",
+            "max_participants",
+            "participant_count",
+            "is_full",
+            "participants",
+            "status",
+            "current_user_enrolled",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def get_participant_count(self, obj: Workshop) -> int:
+        """Return current number of enrolled participants."""
+        return obj.get_participant_count()
+
+    def get_is_full(self, obj: Workshop) -> bool:
+        """Return whether workshop has reached max capacity."""
+        return obj.is_full()
+
+    def get_current_user_enrolled(self, obj: Workshop) -> bool:
+        """Return whether authenticated user is enrolled."""
+        request = self.context.get("request")
+        if request is None or request.user is None or not request.user.is_authenticated:
+            return False
+        try:
+            profile = Profile.objects.get(user=request.user)
+            return obj.participants.filter(participant=profile).exists()
+        except Profile.DoesNotExist:
+            return False
+
+
+class WorkshopFeedSerializer(serializers.Serializer):
+    """Read serializer for paginated workshop list envelope."""
+
+    count = serializers.IntegerField(read_only=True)
+    offset = serializers.IntegerField(read_only=True)
+    limit = serializers.IntegerField(read_only=True)
+    results = WorkshopListSerializer(many=True, read_only=True)
+
+
+class WorkshopCreateSerializer(serializers.Serializer):
+    """Write serializer for creating a new workshop."""
+
+    title = serializers.CharField(max_length=255)
+    description = serializers.CharField(required=False, default="", allow_blank=True)
+    scheduled_at = serializers.DateTimeField()
+    end_at = serializers.DateTimeField()
+    max_participants = serializers.IntegerField(min_value=1)
+
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Validate workshop creation business rules."""
+        request = self.context.get("request")
+        if request is None or request.user is None:
+            raise serializers.ValidationError("Request context required.")
+
+        community = self.context.get("community")
+        if not isinstance(community, CommunityTag):
+            raise serializers.ValidationError("Community context required.")
+
+        # Get authenticated user's profile
+        try:
+            author_profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            raise serializers.ValidationError("User profile not found.")
+
+        scheduled_at = data["scheduled_at"]
+        end_at = data["end_at"]
+
+        # Check author is community member
+        if not community.members.filter(id=author_profile.id).exists():
+            raise serializers.ValidationError(
+                "You must be a community member to create a workshop."
+            )
+
+        # Check author is mentor
+        if request.user.app_usage_mode != AppUsageMode.MENTOR:
+            raise serializers.ValidationError("Only mentors can create workshops.")
+
+        # Check scheduled_at is in future (at least 1 hour from now)
+        now = timezone.now()
+        min_scheduled_at = now + timedelta(hours=1)
+        if scheduled_at < min_scheduled_at:
+            raise serializers.ValidationError(
+                "Workshop must be scheduled at least 1 hour in the future."
+            )
+
+        # Check end_at is after scheduled_at
+        if end_at <= scheduled_at:
+            raise serializers.ValidationError("Workshop end time must be after start time.")
+
+        # Check for availability conflicts (only BOOKED slots)
+        overlapping_slots = AvailabilitySlot.objects.filter(
+            profile=author_profile,
+            status=AvailabilitySlot.Status.BOOKED,
+            start_at__lt=end_at,
+            end_at__gt=scheduled_at,
+        )
+        if overlapping_slots.exists():
+            raise serializers.ValidationError(
+                "Workshop conflicts with your booked availability slots."
+            )
+
+        data["community"] = community
+
+        return data
+
+    def create(self, validated_data: dict[str, Any]) -> Workshop:
+        """Create workshop instance."""
+        request = self.context.get("request")
+        author_profile = Profile.objects.get(user=request.user)
+
+        return Workshop.objects.create(
+            community=validated_data["community"],
+            author=author_profile,
+            title=validated_data["title"],
+            description=validated_data["description"],
+            scheduled_at=validated_data["scheduled_at"],
+            end_at=validated_data["end_at"],
+            max_participants=validated_data["max_participants"],
+        )
+
+
+class WorkshopUpdateSerializer(serializers.Serializer):
+    """Write serializer for updating a workshop."""
+
+    title = serializers.CharField(max_length=255, required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
+    scheduled_at = serializers.DateTimeField(required=False)
+    end_at = serializers.DateTimeField(required=False)
+    max_participants = serializers.IntegerField(min_value=1, required=False)
+    status = serializers.ChoiceField(
+        choices=[Workshop.Status.SCHEDULED, Workshop.Status.COMPLETED, Workshop.Status.CANCELLED],
+        required=False,
+    )
+
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Validate workshop update business rules."""
+        request = self.context.get("request")
+        workshop = self.context.get("workshop")
+
+        if request is None or workshop is None:
+            raise serializers.ValidationError("Request and workshop context required.")
+
+        try:
+            author_profile = Profile.objects.get(user=request.user)
+        except Profile.DoesNotExist:
+            raise serializers.ValidationError("User profile not found.")
+
+        # Validate rescheduling (if scheduled_at or end_at changed)
+        scheduled_at = data.get("scheduled_at", workshop.scheduled_at)
+        end_at = data.get("end_at", workshop.end_at)
+
+        # Check scheduled_at is in future
+        if "scheduled_at" in data:
+            now = timezone.now()
+            min_scheduled_at = now + timedelta(hours=1)
+            if scheduled_at < min_scheduled_at:
+                raise serializers.ValidationError(
+                    "Workshop must be scheduled at least 1 hour in the future."
+                )
+
+        # Check end_at is after scheduled_at
+        if end_at <= scheduled_at:
+            raise serializers.ValidationError("Workshop end time must be after start time.")
+
+        max_participants = data.get("max_participants", workshop.max_participants)
+        current_participants = workshop.get_participant_count()
+        if max_participants < current_participants:
+            raise serializers.ValidationError(
+                "max_participants cannot be lower than current participant count."
+            )
+
+        # Check for availability conflicts on reschedule
+        if "scheduled_at" in data or "end_at" in data:
+            overlapping_slots = AvailabilitySlot.objects.filter(
+                profile=author_profile,
+                status=AvailabilitySlot.Status.BOOKED,
+                start_at__lt=end_at,
+                end_at__gt=scheduled_at,
+            )
+            if overlapping_slots.exists():
+                raise serializers.ValidationError(
+                    "Workshop conflicts with your booked availability slots."
+                )
+
+        return data
+
+    def update(self, instance: Workshop, validated_data: dict[str, Any]) -> Workshop:
+        """Update workshop instance."""
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save(update_fields=[*validated_data.keys(), "updated_at"])
+        return instance
+
+
+class WorkshopParticipantCreateSerializer(serializers.Serializer):
+    """Write serializer for updating participant visibility preferences."""
+
+    show_on_profile = serializers.BooleanField(default=False, required=False)

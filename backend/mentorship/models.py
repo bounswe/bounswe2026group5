@@ -257,3 +257,107 @@ class Feedback(models.Model):
 
     def __str__(self) -> str:
         return f"{self.submitted_by.display_name} on {self.match} ({self.rating}/5)"
+
+
+class Workshop(models.Model):
+    """Collective learning session hosted within a community."""
+
+    class Status(models.TextChoices):
+        """Lifecycle statuses for a workshop."""
+
+        SCHEDULED = "SCHEDULED", "Scheduled"
+        COMPLETED = "COMPLETED", "Completed"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    community = models.ForeignKey(
+        "profiles.CommunityTag",
+        on_delete=models.CASCADE,
+        related_name="community_workshops",
+    )
+    author = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name="author_workshops",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    scheduled_at = models.DateTimeField()
+    end_at = models.DateTimeField()
+    max_participants = models.PositiveIntegerField()
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.SCHEDULED,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "workshops"
+        ordering = ["-scheduled_at", "-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(end_at__gt=models.F("scheduled_at")),
+                name="workshop_end_after_start",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["community", "status"]),
+            models.Index(fields=["author", "status"]),
+            models.Index(fields=["scheduled_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.title} @ {self.community.name} ({self.status})"
+
+    def get_participant_count(self) -> int:
+        """Return current number of enrolled participants."""
+        return self.participants.count()
+
+    def is_full(self) -> bool:
+        """Check if workshop has reached max capacity."""
+        return self.get_participant_count() >= self.max_participants
+
+    def is_author(self, profile: Profile) -> bool:
+        """Check if profile is the workshop author."""
+        return self.author == profile
+
+    def is_past_end_time(self) -> bool:
+        """Check if current time is past workshop end time."""
+        return timezone.now() > self.end_at
+
+
+class WorkshopParticipant(models.Model):
+    """Through-table linking Profile to Workshop participation with metadata."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workshop = models.ForeignKey(
+        Workshop,
+        on_delete=models.CASCADE,
+        related_name="participants",
+    )
+    participant = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name="workshop_participations",
+    )
+    joined_at = models.DateTimeField(auto_now_add=True)
+    show_on_profile = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "workshop_participants"
+        ordering = ["joined_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workshop", "participant"],
+                name="uniq_workshop_participant",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["workshop"]),
+            models.Index(fields=["participant"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.participant.display_name} @ {self.workshop.title}"
