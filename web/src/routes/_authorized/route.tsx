@@ -71,9 +71,8 @@ export function EmailVerificationBanner() {
 }
 
 function AuthorizedLayout() {
-<<<<<<< feat/web-email-verification
     return (
-        <div className="flex min-h-screen flex-col bg-black/2 dark:bg-background">
+        <div className="flex min-h-screen flex-col bg-black/[0.02] dark:bg-background">
             <AuthorizedHeader />
             <EmailVerificationBanner />
             <main className="flex-1">
@@ -82,14 +81,4 @@ function AuthorizedLayout() {
             <Toaster position="bottom-right" toastOptions={{ classNames: { toast: 'cn-toast' } }} style={{ zIndex: 9999 }} />
         </div>
     )
-=======
-  return (
-    <div className="flex min-h-screen flex-col bg-black/[0.02] dark:bg-background">
-      <AuthorizedHeader />
-      <main className="flex-1">
-        <Outlet />
-      </main>
-    </div>
-  )
->>>>>>> dev
 }
