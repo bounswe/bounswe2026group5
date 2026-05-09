@@ -7,7 +7,7 @@ import { logout, meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/Aut
 import { useOwnProfile, useUpdateProfile, useUpdateUsername } from "#/lib/queries/ProfileQueries.ts"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export const Route = createFileRoute('/_onBoarding/gettingToKnowYou')({
     loader: ({ context }) => context.queryClient.ensureQueryData(meQueryOptions),
@@ -61,7 +61,7 @@ const BASE_QUESTIONS: Question[] = [
     },
     {
         key: 'primaryUsage',
-        question: "How will you use Campus Tutor ?",
+        question: "How will you use Neighborship ?",
         clarification: "This helps us personalize your experience.",
         type: 'choice',
         validate: ({ primaryUsage }) =>

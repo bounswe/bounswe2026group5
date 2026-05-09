@@ -126,7 +126,7 @@ describe('RegisterPage Component', () => {
     it('renders the left sidebar with branding content', () => {
       render(<RegisterPage />)
 
-      expect(screen.getByText(/Campus Tutor/i)).toBeInTheDocument()
+      expect(screen.getByText(/Neighborship/i)).toBeInTheDocument()
       expect(screen.getByText(/Academic Editorial Excellence/i)).toBeInTheDocument()
       expect(screen.getByText(/Join our community of academic excellence/i)).toBeInTheDocument()
       expect(screen.getByText(/Join 2,000\+ scholars/i)).toBeInTheDocument()

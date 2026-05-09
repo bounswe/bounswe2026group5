@@ -15,7 +15,7 @@ export function UnauthorizedHeader() {
                 {/* Left: Logo and Navigation */}
                 <div className="flex items-center gap-8">
                     <Link to="/discover" className="font-bold font-display tracking-tight text-lg text-ink">
-                        Mentorship
+                        Neighborship
                     </Link>
 
                     <nav aria-label="Main navigation" className="hidden sm:flex items-center gap-1">

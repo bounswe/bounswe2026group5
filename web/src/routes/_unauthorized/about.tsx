@@ -67,7 +67,7 @@ function About() {
                 <section className="flex flex-col items-center gap-6 text-center max-w-4xl mx-auto">
                     <p className="text-xs font-semibold uppercase tracking-widest text-accent">About the platform</p>
                     <Display as="h1" className="text-5xl sm:text-6xl md:text-7xl tracking-tight text-ink">
-                        Mentorship,{' '}
+                        Neighborship,{' '}
                         <span className="italic text-accent">Done Right</span>
                     </Display>
                     <p className="text-lg text-ink-soft leading-relaxed max-w-2xl">
