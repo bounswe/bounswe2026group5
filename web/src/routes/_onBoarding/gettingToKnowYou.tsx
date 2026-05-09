@@ -48,16 +48,22 @@ const BASE_QUESTIONS: Question[] = [
         question: "What's your first name?",
         clarification: "This will appear on your profile.",
         type: 'text',
-        validate: ({ firstName }) =>
-            firstName.trim().length < 2 ? "First name must be at least 2 characters." : null,
+        validate: ({ firstName }) => {
+            if (firstName.trim().length < 2) return "First name must be at least 2 characters."
+            if (!/^[a-zA-ZÀ-ÿ\s'-]+$/.test(firstName.trim())) return "First name can only contain letters."
+            return null
+        },
     },
     {
         key: 'lastName',
         question: "What's your last name?",
         clarification: "This will appear on your profile.",
         type: 'text',
-        validate: ({ lastName }) =>
-            lastName.trim().length < 2 ? "Last name must be at least 2 characters." : null,
+        validate: ({ lastName }) => {
+            if (lastName.trim().length < 2) return "Last name must be at least 2 characters."
+            if (!/^[a-zA-ZÀ-ÿ\s'-]+$/.test(lastName.trim())) return "Last name can only contain letters."
+            return null
+        },
     },
     {
         key: 'primaryUsage',

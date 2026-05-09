@@ -44,6 +44,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
     const [skills, setSkills] = useState<string[]>(initialValues.skills)
     const [title, setTitle] = useState(initialValues.title ?? '')
     const [showInitialsOnly, setShowInitialsOnly] = useState(initialValues.show_initials_only ?? false)
+    const [errors, setErrors] = useState<{ title?: string; bio?: string }>({})
 
     function handlePictureChange(file: File) {
         if (file.size > 5 * 1024 * 1024) {
@@ -70,7 +71,20 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
         ? 'Pick the skills you can teach or guide others through.'
         : 'Pick the topics you want to explore.'
 
+    const validate = () => {
+        const next: { title?: string; bio?: string } = {}
+        if (isMentor && title.trim().length > 100)
+            next.title = "Title must be 100 characters or fewer."
+        else if (isMentor && title.trim().length > 0 && !/^[a-zA-ZÀ-ÿ\s',-]+$/.test(title.trim()))
+            next.title = "Title can only contain letters."
+        if (bio.trim().length < 10)
+            next.bio = "Bio must be at least 10 characters."
+        setErrors(next)
+        return Object.keys(next).length === 0
+    }
+
     const handleSave = () => {
+        if (!validate()) return
         updateProfile.mutate(
             {
                 bio,
@@ -165,10 +179,12 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                             <Input
                                 id="title"
                                 value={title}
-                                onChange={(e) => setTitle(e.target.value)}
+                                onChange={(e) => { setTitle(e.target.value); setErrors(p => ({ ...p, title: undefined })) }}
                                 placeholder="e.g. Senior Software Engineer at Acme"
                                 className="bg-background"
+                                aria-invalid={!!errors.title}
                             />
+                            {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
                         </div>
                     )}
 
@@ -180,12 +196,19 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                         <Textarea
                             id="bio"
                             value={bio}
-                            onChange={(e) => setBio(e.target.value)}
+                            onChange={(e) => { setBio(e.target.value); setErrors(p => ({ ...p, bio: undefined })) }}
                             placeholder="Write a short intro about yourself..."
                             className="bg-background resize-none min-h-[110px]"
                             maxLength={500}
+                            aria-invalid={!!errors.bio}
                         />
-                        <Muted className="text-xs text-right">{bio.length} / 500</Muted>
+                        <div className="flex justify-between items-center">
+                            {errors.bio
+                                ? <p className="text-xs text-destructive">{errors.bio}</p>
+                                : <span />
+                            }
+                            <Muted className="text-xs">{bio.length} / 500</Muted>
+                        </div>
                     </div>
 
                     {/* Skills */}
