@@ -7,12 +7,15 @@ const { queryClientClearMock, queryClientSetDataMock, navigateMock } = vi.hoiste
 }))
 
 vi.mock('#/router.tsx', () => ({
+  router: {
+    navigate: navigateMock,
+  },
+}))
+
+vi.mock('#/queryClient.ts', () => ({
   queryClient: {
     clear: queryClientClearMock,
     setQueryData: queryClientSetDataMock,
-  },
-  router: {
-    navigate: navigateMock,
   },
 }))
 

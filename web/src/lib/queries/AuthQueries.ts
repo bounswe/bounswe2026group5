@@ -1,5 +1,6 @@
 // lib/queries/auth.ts
-import { queryClient, router } from "#/router.tsx"
+import { router } from "#/router.tsx"
+import { queryClient } from "#/queryClient.ts"
 import { throwApiError } from "#/lib/apiError.ts"
 import { queryOptions, useMutation } from "@tanstack/react-query"
 import { signInWithFirebase } from "#/lib/firebase-client"

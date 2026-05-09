@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { queryClient } from '#/router.tsx'
+import { queryClient } from '#/queryClient.ts'
 import { CheckCircle, XCircle, Mail, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Heading, Body, Muted } from '@/components/Typography'
