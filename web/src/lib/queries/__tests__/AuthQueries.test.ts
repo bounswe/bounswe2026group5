@@ -24,6 +24,8 @@ import {
     meQueryOptions,
     registerFn,
     updateAppUsageModeFn,
+    verifyEmailFn,
+    resendVerificationEmailFn,
 } from '../AuthQueries'
 
 function jsonResponse(data: unknown, init?: ResponseInit): Response {
@@ -65,6 +67,7 @@ describe('AuthQueries', () => {
       auth_provider: 'LOCAL',
       app_usage_mode: 'MENTOR',
       is_active: true,
+      is_email_verified: true,
       created_at: '2026-04-10T09:00:00Z',
     }
 
@@ -154,6 +157,7 @@ describe('AuthQueries', () => {
         auth_provider: 'LOCAL',
         app_usage_mode: 'MENTEE' as const,
         is_active: true,
+        is_email_verified: true,
         created_at: '2026-04-10T09:00:00Z',
       },
     }
@@ -196,6 +200,7 @@ describe('AuthQueries', () => {
         auth_provider: 'LOCAL',
         app_usage_mode: 'MENTEE' as const,
         is_active: true,
+        is_email_verified: true,
         created_at: '2026-04-10T09:00:00Z',
       },
     }
@@ -238,6 +243,74 @@ describe('AuthQueries', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(queryClientClearMock).toHaveBeenCalled()
     expect(navigateMock).toHaveBeenCalledWith({ to: '/login' })
+  })
+
+  // ── verifyEmailFn ──────────────────────────────────────────────────────────
+
+  describe('verifyEmailFn', () => {
+    it('sends a GET request with the token as a query parameter', async () => {
+      fetchSpy.mockResolvedValueOnce(jsonResponse({ detail: 'verified' }, { status: 200 }))
+
+      await verifyEmailFn('my-token-123')
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('token=my-token-123'),
+      )
+    })
+
+    it('resolves with the response body on success', async () => {
+      fetchSpy.mockResolvedValueOnce(jsonResponse({ detail: 'verified' }, { status: 200 }))
+
+      await expect(verifyEmailFn('good-token')).resolves.toEqual({ detail: 'verified' })
+    })
+
+    it('throws when the token is invalid or expired (400)', async () => {
+      fetchSpy.mockResolvedValueOnce(new Response(null, { status: 400 }))
+
+      await expect(verifyEmailFn('expired-token')).rejects.toThrow()
+    })
+
+    it('percent-encodes the token so base64 padding characters are safe', async () => {
+      fetchSpy.mockResolvedValueOnce(jsonResponse({}, { status: 200 }))
+
+      await verifyEmailFn('abc==')
+
+      const calledUrl = (fetchSpy.mock.calls[0] as [string])[0]
+      expect(calledUrl).toContain('abc%3D%3D')
+    })
+  })
+
+  // ── resendVerificationEmailFn ──────────────────────────────────────────────
+
+  describe('resendVerificationEmailFn', () => {
+    it('sends a POST to the resend endpoint using the stored access token', async () => {
+      localStorage.setItem('access_token', 'bearer-token')
+      fetchSpy.mockResolvedValueOnce(
+        jsonResponse({ detail: 'If your email is unverified, a new verification link has been sent.' }, { status: 200 }),
+      )
+
+      await resendVerificationEmailFn()
+
+      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+      expect(url).toContain('resend-verification')
+      expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer bearer-token')
+      expect(init.method).toBe('POST')
+    })
+
+    it('resolves with the response body on success', async () => {
+      localStorage.setItem('access_token', 'bearer-token')
+      const body = { detail: 'If your email is unverified, a new verification link has been sent.' }
+      fetchSpy.mockResolvedValueOnce(jsonResponse(body, { status: 200 }))
+
+      await expect(resendVerificationEmailFn()).resolves.toEqual(body)
+    })
+
+    it('throws when the server returns a non-OK status', async () => {
+      localStorage.setItem('access_token', 'bearer-token')
+      fetchSpy.mockResolvedValueOnce(new Response(null, { status: 401 }))
+
+      await expect(resendVerificationEmailFn()).rejects.toThrow()
+    })
   })
 
   it('updates app usage mode and throws when update fails', async () => {

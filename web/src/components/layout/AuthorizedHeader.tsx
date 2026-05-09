@@ -33,7 +33,7 @@ export function AuthorizedHeader() {
               Mentorship
             </Link>
 
-            <nav className="hidden sm:flex items-center gap-1">
+            <nav className="hidden sm:flex items-center gap-1" aria-label="Main navigation">
               <Link
                   to="/dashboard"
                   activeProps={{ className: "bg-accent-muted text-ink font-semibold" }}

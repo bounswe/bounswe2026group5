@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as UnauthorizedRouteRouteImport } from './routes/_unauthorized/route'
 import { Route as OnBoardingRouteRouteImport } from './routes/_onBoarding/route'
 import { Route as AuthorizedRouteRouteImport } from './routes/_authorized/route'
@@ -32,6 +33,11 @@ import { Route as AuthorizedCommunitiesIndexRouteImport } from './routes/_author
 import { Route as AuthorizedConnectionsMatchIdRouteImport } from './routes/_authorized/connections.$matchId'
 import { Route as AuthorizedCommunitiesCommunitySlugRouteImport } from './routes/_authorized/communities.$communitySlug'
 
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
   id: '/_unauthorized',
   getParentRoute: () => rootRouteImport,
@@ -150,6 +156,7 @@ const AuthorizedCommunitiesCommunitySlugRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/admin-moderation': typeof AuthorizedAdminModerationRoute
   '/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/connections': typeof AuthorizedConnectionsRouteWithChildren
@@ -171,6 +178,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/admin-moderation': typeof AuthorizedAdminModerationRoute
   '/dashboard': typeof AuthorizedDashboardRoute
   '/discover': typeof AuthorizedDiscoverRoute
@@ -194,6 +202,7 @@ export interface FileRoutesById {
   '/_authorized': typeof AuthorizedRouteRouteWithChildren
   '/_onBoarding': typeof OnBoardingRouteRouteWithChildren
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
+  '/verify-email': typeof VerifyEmailRoute
   '/_authorized/admin-moderation': typeof AuthorizedAdminModerationRoute
   '/_authorized/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/_authorized/connections': typeof AuthorizedConnectionsRouteWithChildren
@@ -217,6 +226,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/verify-email'
     | '/admin-moderation'
     | '/communities'
     | '/connections'
@@ -238,6 +248,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/verify-email'
     | '/admin-moderation'
     | '/dashboard'
     | '/discover'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/_authorized'
     | '/_onBoarding'
     | '/_unauthorized'
+    | '/verify-email'
     | '/_authorized/admin-moderation'
     | '/_authorized/communities'
     | '/_authorized/connections'
@@ -285,11 +297,19 @@ export interface RootRouteChildren {
   AuthorizedRouteRoute: typeof AuthorizedRouteRouteWithChildren
   OnBoardingRouteRoute: typeof OnBoardingRouteRouteWithChildren
   UnauthorizedRouteRoute: typeof UnauthorizedRouteRouteWithChildren
+  VerifyEmailRoute: typeof VerifyEmailRoute
   ProfilesUsernameRoute: typeof ProfilesUsernameRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_unauthorized': {
       id: '/_unauthorized'
       path: ''
@@ -538,6 +558,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthorizedRouteRoute: AuthorizedRouteRouteWithChildren,
   OnBoardingRouteRoute: OnBoardingRouteRouteWithChildren,
   UnauthorizedRouteRoute: UnauthorizedRouteRouteWithChildren,
+  VerifyEmailRoute: VerifyEmailRoute,
   ProfilesUsernameRoute: ProfilesUsernameRoute,
 }
 export const routeTree = rootRouteImport

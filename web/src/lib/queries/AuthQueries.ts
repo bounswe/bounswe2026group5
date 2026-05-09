@@ -14,6 +14,7 @@ export interface User {
     auth_provider: string
     app_usage_mode: "MENTEE" | "MENTOR" | "ADMIN"
     is_active: boolean
+    is_email_verified: boolean
     created_at: string
 }
 
@@ -186,6 +187,26 @@ export async function resetPasswordFn(data: { token: string; new_password: strin
         body: JSON.stringify(data),
     })
     if (!res.ok) await throwApiError(res)
+}
+
+export async function verifyEmailFn(token: string) {
+    const res = await fetch(`${API_BASE_URL}/auth/verify-email/?token=${encodeURIComponent(token)}`)
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
+export async function resendVerificationEmailFn() {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`${API_BASE_URL}/auth/resend-verification/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({}),
+    })
+    if (!res.ok) await throwApiError(res)
+    return res.json()
 }
 
 export function clearAuthState() {
