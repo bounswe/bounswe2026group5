@@ -13,7 +13,7 @@ import { cn, getInitials } from '#/lib/utils.ts'
 import { Button } from '@/components/ui/button'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { Check, CheckCheck, Loader2, MessageSquare, Send } from 'lucide-react'
+import { Check, CheckCheck, Loader2, MessageSquare, Paperclip, Send, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
 
 export const Route = createFileRoute('/_authorized/messages')({
@@ -173,6 +173,8 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
     const queryClient = useQueryClient()
     const { enqueueMessage, updateMessageStatus, dequeueMessage } = useMessageQueue(conversationId)
     const [text, setText] = useState('')
+    const [attachedFile, setAttachedFile] = useState<File | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     // Mark conversation as read when opening
     useEffect(() => {
@@ -217,15 +219,17 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
         async (e: SyntheticEvent) => {
             e.preventDefault()
             const body = text.trim()
-            if (!body || sendMessage.isPending) return
+            if ((!body && !attachedFile) || sendMessage.isPending) return
 
             setIsAtBottom(true) // Force scroll to bottom for new message
             const queuedMsg = enqueueMessage(body)
             setText('')
+            setAttachedFile(null)
+            if (fileInputRef.current) fileInputRef.current.value = ''
 
             try {
                 updateMessageStatus(queuedMsg.tempId, 'sending')
-                await sendMessage.mutateAsync(body)
+                await sendMessage.mutateAsync({ body, attachment: attachedFile ?? undefined })
                 dequeueMessage(queuedMsg.tempId)
                 queryClient.invalidateQueries({ queryKey: ['messaging', 'messages', conversationId] })
             } catch (error) {
@@ -233,7 +237,7 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
                 console.error('[Messages] Error sending message:', error)
             }
         },
-        [text, sendMessage, enqueueMessage, updateMessageStatus, dequeueMessage, queryClient, conversationId],
+        [text, attachedFile, sendMessage, enqueueMessage, updateMessageStatus, dequeueMessage, queryClient, conversationId],
     )
 
     return (
@@ -280,34 +284,66 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
             {/* Input */}
             <form
                 onSubmit={handleSubmit}
-                className="shrink-0 border-t border-line px-4 py-3 flex items-end gap-2"
+                className="shrink-0 border-t border-line px-4 py-3 flex flex-col gap-2"
             >
-                <textarea
-                    value={text}
-                    onChange={e => setText(e.target.value)}
-                    onKeyDown={e => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault()
-                            handleSubmit(e as unknown as SyntheticEvent)
-                        }
-                    }}
-                    placeholder="Type a message… (Enter to send)"
-                    rows={1}
-                    className="flex-1 resize-none rounded-xl border border-line bg-background px-3 py-2 text-sm text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent/40 max-h-32 overflow-y-auto"
-                />
-                <Button
-                    type="submit"
-                    size="icon"
-                    aria-label="Send message"
-                    disabled={!text.trim() || sendMessage.isPending}
-                    className="rounded-xl bg-accent hover:bg-accent/90 text-white shrink-0"
-                >
-                    {sendMessage.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                        <Send className="h-4 w-4" />
-                    )}
-                </Button>
+                {attachedFile && (
+                    <div className="flex items-center gap-2 rounded-lg border border-line bg-background px-3 py-1.5 text-xs text-ink-soft w-fit max-w-full">
+                        <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{attachedFile.name}</span>
+                        <button
+                            type="button"
+                            onClick={() => { setAttachedFile(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                            className="shrink-0 hover:text-ink"
+                        >
+                            <X className="h-3.5 w-3.5" />
+                        </button>
+                    </div>
+                )}
+                <div className="flex items-end gap-2">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*,application/pdf,audio/*"
+                        className="hidden"
+                        onChange={e => setAttachedFile(e.target.files?.[0] ?? null)}
+                    />
+                    <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label="Attach file"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="rounded-xl shrink-0 text-ink-soft hover:text-ink"
+                    >
+                        <Paperclip className="h-4 w-4" />
+                    </Button>
+                    <textarea
+                        value={text}
+                        onChange={e => setText(e.target.value)}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault()
+                                handleSubmit(e as unknown as SyntheticEvent)
+                            }
+                        }}
+                        placeholder="Type a message… (Enter to send)"
+                        rows={1}
+                        className="flex-1 resize-none rounded-xl border border-line bg-background px-3 py-2 text-sm text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent/40 max-h-32 overflow-y-auto"
+                    />
+                    <Button
+                        type="submit"
+                        size="icon"
+                        aria-label="Send message"
+                        disabled={(!text.trim() && !attachedFile) || sendMessage.isPending}
+                        className="rounded-xl bg-accent hover:bg-accent/90 text-white shrink-0"
+                    >
+                        {sendMessage.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <Send className="h-4 w-4" />
+                        )}
+                    </Button>
+                </div>
             </form>
         </div>
     )
