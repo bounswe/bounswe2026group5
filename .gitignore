@@ -115,3 +115,4 @@ web/playwright/.cache/
 web/playwright/.auth/
 
 mobile/google-services.json
+web/accessibility-reports
