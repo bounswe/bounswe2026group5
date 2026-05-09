@@ -1643,6 +1643,7 @@ class ReportAPITests(TestCase):
             email="admin2@test.com", password="Pass123!", role=UserRole.ADMIN
         )
         self.reporter = User.objects.create_user(email="reporter@test.com", password="Pass123!")
+        self.other_reporter = User.objects.create_user(email="other_reporter@test.com", password="Pass123!")
         self.reported = User.objects.create_user(
             email="reported@test.com", password="Pass123!", username="baduser"
         )
@@ -1655,7 +1656,7 @@ class ReportAPITests(TestCase):
         )
 
     def test_user_can_submit_report_by_id(self):
-        self.api_client.force_authenticate(user=self.reporter)
+        self.api_client.force_authenticate(user=self.other_reporter)
         response = self.api_client.post(
             "/api/auth/reports/",
             {
@@ -1669,7 +1670,7 @@ class ReportAPITests(TestCase):
         self.assertEqual(Report.objects.count(), 2)
 
     def test_user_can_submit_report_by_username(self):
-        self.api_client.force_authenticate(user=self.reporter)
+        self.api_client.force_authenticate(user=self.other_reporter)
         response = self.api_client.post(
             "/api/auth/reports/",
             {
@@ -1679,6 +1680,21 @@ class ReportAPITests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_user_cannot_report_same_user_twice(self):
+        """One user can report another user at most once."""
+        self.api_client.force_authenticate(user=self.reporter)
+        response = self.api_client.post(
+            "/api/auth/reports/",
+            {
+                "reported_user_id": str(self.reported.id),
+                "reason": "HARASSMENT",
+            },
+            format="json",
+        )
+        # self.reporter already reported self.reported in setUp
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("already reported this user", response.data["detail"].lower())
 
     def test_user_cannot_report_self(self):
         self.api_client.force_authenticate(user=self.reporter)
