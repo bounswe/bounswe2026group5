@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/button'
 import {NavLink} from "#/components/NavLink.tsx";
 
 const NAV_LINKS = [
-    { to: '/discover', label: 'Discover' },
-    { to: '/about',    label: 'About'    },
+    { to: '/discover',    label: 'Discover'    },
+    { to: '/communities', label: 'Communities' },
+    { to: '/about',       label: 'About'       },
 ] as const
 
 export function UnauthorizedHeader() {

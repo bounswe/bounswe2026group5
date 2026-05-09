@@ -97,6 +97,7 @@ export const conversationsQueryOptions = queryOptions({
     queryKey: ['messaging', 'conversations'],
     queryFn: fetchConversations,
     staleTime: 30 * 1000,
+    enabled: !!localStorage.getItem('access_token'),
 })
 
 export const messagesQueryOptions = (conversationId: string, pageSize = 50, forceEnable = false) =>

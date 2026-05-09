@@ -81,7 +81,7 @@ export function CommunityCard({
             </p>
 
             {/* Actions */}
-            <div className="grid grid-cols-2 gap-3 mt-auto">
+            <div className={cn('grid gap-3 mt-auto', onJoin !== undefined ? 'grid-cols-2' : 'grid-cols-1')}>
                 <Button
                     className="w-full bg-accent hover:bg-accent-light text-white shadow-sm"
                     size="sm"
@@ -89,26 +89,28 @@ export function CommunityCard({
                 >
                     View
                 </Button>
-                {isMember ? (
-                    <Button
-                        variant="outline"
-                        className="w-full border-line text-ink-soft hover:text-red-600 hover:border-red-300 bg-mist hover:bg-red-50"
-                        size="sm"
-                        disabled={isLeaving}
-                        onClick={() => onLeave?.(community.id)}
-                    >
-                        {isLeaving ? 'Leaving...' : 'Leave'}
-                    </Button>
-                ) : (
-                    <Button
-                        variant="outline"
-                        className="w-full border-line text-ink-soft hover:text-ink hover:border-accent/30 bg-mist hover:bg-accent/20"
-                        size="sm"
-                        disabled={isJoining}
-                        onClick={() => onJoin?.(community.id)}
-                    >
-                        {isJoining ? 'Joining...' : 'Join'}
-                    </Button>
+                {onJoin !== undefined && (
+                    isMember ? (
+                        <Button
+                            variant="outline"
+                            className="w-full border-line text-ink-soft hover:text-red-600 hover:border-red-300 bg-mist hover:bg-red-50"
+                            size="sm"
+                            disabled={isLeaving}
+                            onClick={() => onLeave?.(community.id)}
+                        >
+                            {isLeaving ? 'Leaving...' : 'Leave'}
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            className="w-full border-line text-ink-soft hover:text-ink hover:border-accent/30 bg-mist hover:bg-accent/20"
+                            size="sm"
+                            disabled={isJoining}
+                            onClick={() => onJoin(community.id)}
+                        >
+                            {isJoining ? 'Joining...' : 'Join'}
+                        </Button>
+                    )
                 )}
             </div>
         </div>

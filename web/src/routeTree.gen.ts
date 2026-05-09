@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UnauthorizedRouteRouteImport } from './routes/_unauthorized/route'
+import { Route as PublicRouteRouteImport } from './routes/_public/route'
 import { Route as OnBoardingRouteRouteImport } from './routes/_onBoarding/route'
 import { Route as AuthorizedRouteRouteImport } from './routes/_authorized/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -19,21 +20,25 @@ import { Route as UnauthorizedRegisterRouteImport } from './routes/_unauthorized
 import { Route as UnauthorizedLoginRouteImport } from './routes/_unauthorized/login'
 import { Route as UnauthorizedForgotPasswordRouteImport } from './routes/_unauthorized/forgot-password'
 import { Route as UnauthorizedAboutRouteImport } from './routes/_unauthorized/about'
+import { Route as PublicDiscoverRouteImport } from './routes/_public/discover'
+import { Route as PublicCommunitiesRouteImport } from './routes/_public/communities'
 import { Route as OnBoardingGettingToKnowYouRouteImport } from './routes/_onBoarding/gettingToKnowYou'
 import { Route as AuthorizedScheduleRouteImport } from './routes/_authorized/schedule'
 import { Route as AuthorizedMessagesRouteImport } from './routes/_authorized/messages'
-import { Route as AuthorizedDiscoverRouteImport } from './routes/_authorized/discover'
 import { Route as AuthorizedDashboardRouteImport } from './routes/_authorized/dashboard'
 import { Route as AuthorizedConnectionsRouteImport } from './routes/_authorized/connections'
-import { Route as AuthorizedCommunitiesRouteImport } from './routes/_authorized/communities'
 import { Route as AuthorizedAdminModerationRouteImport } from './routes/_authorized/admin-moderation'
+import { Route as PublicCommunitiesIndexRouteImport } from './routes/_public/communities.index'
 import { Route as AuthorizedConnectionsIndexRouteImport } from './routes/_authorized/connections.index'
-import { Route as AuthorizedCommunitiesIndexRouteImport } from './routes/_authorized/communities.index'
+import { Route as PublicCommunitiesCommunitySlugRouteImport } from './routes/_public/communities.$communitySlug'
 import { Route as AuthorizedConnectionsMatchIdRouteImport } from './routes/_authorized/connections.$matchId'
-import { Route as AuthorizedCommunitiesCommunitySlugRouteImport } from './routes/_authorized/communities.$communitySlug'
 
 const UnauthorizedRouteRoute = UnauthorizedRouteRouteImport.update({
   id: '/_unauthorized',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PublicRouteRoute = PublicRouteRouteImport.update({
+  id: '/_public',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnBoardingRouteRoute = OnBoardingRouteRouteImport.update({
@@ -81,6 +86,16 @@ const UnauthorizedAboutRoute = UnauthorizedAboutRouteImport.update({
   path: '/about',
   getParentRoute: () => UnauthorizedRouteRoute,
 } as any)
+const PublicDiscoverRoute = PublicDiscoverRouteImport.update({
+  id: '/discover',
+  path: '/discover',
+  getParentRoute: () => PublicRouteRoute,
+} as any)
+const PublicCommunitiesRoute = PublicCommunitiesRouteImport.update({
+  id: '/communities',
+  path: '/communities',
+  getParentRoute: () => PublicRouteRoute,
+} as any)
 const OnBoardingGettingToKnowYouRoute =
   OnBoardingGettingToKnowYouRouteImport.update({
     id: '/gettingToKnowYou',
@@ -97,11 +112,6 @@ const AuthorizedMessagesRoute = AuthorizedMessagesRouteImport.update({
   path: '/messages',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
-const AuthorizedDiscoverRoute = AuthorizedDiscoverRouteImport.update({
-  id: '/discover',
-  path: '/discover',
-  getParentRoute: () => AuthorizedRouteRoute,
-} as any)
 const AuthorizedDashboardRoute = AuthorizedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -112,28 +122,28 @@ const AuthorizedConnectionsRoute = AuthorizedConnectionsRouteImport.update({
   path: '/connections',
   getParentRoute: () => AuthorizedRouteRoute,
 } as any)
-const AuthorizedCommunitiesRoute = AuthorizedCommunitiesRouteImport.update({
-  id: '/communities',
-  path: '/communities',
-  getParentRoute: () => AuthorizedRouteRoute,
-} as any)
 const AuthorizedAdminModerationRoute =
   AuthorizedAdminModerationRouteImport.update({
     id: '/admin-moderation',
     path: '/admin-moderation',
     getParentRoute: () => AuthorizedRouteRoute,
   } as any)
+const PublicCommunitiesIndexRoute = PublicCommunitiesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PublicCommunitiesRoute,
+} as any)
 const AuthorizedConnectionsIndexRoute =
   AuthorizedConnectionsIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => AuthorizedConnectionsRoute,
   } as any)
-const AuthorizedCommunitiesIndexRoute =
-  AuthorizedCommunitiesIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthorizedCommunitiesRoute,
+const PublicCommunitiesCommunitySlugRoute =
+  PublicCommunitiesCommunitySlugRouteImport.update({
+    id: '/$communitySlug',
+    path: '/$communitySlug',
+    getParentRoute: () => PublicCommunitiesRoute,
   } as any)
 const AuthorizedConnectionsMatchIdRoute =
   AuthorizedConnectionsMatchIdRouteImport.update({
@@ -141,149 +151,146 @@ const AuthorizedConnectionsMatchIdRoute =
     path: '/$matchId',
     getParentRoute: () => AuthorizedConnectionsRoute,
   } as any)
-const AuthorizedCommunitiesCommunitySlugRoute =
-  AuthorizedCommunitiesCommunitySlugRouteImport.update({
-    id: '/$communitySlug',
-    path: '/$communitySlug',
-    getParentRoute: () => AuthorizedCommunitiesRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin-moderation': typeof AuthorizedAdminModerationRoute
-  '/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/connections': typeof AuthorizedConnectionsRouteWithChildren
   '/dashboard': typeof AuthorizedDashboardRoute
-  '/discover': typeof AuthorizedDiscoverRoute
   '/messages': typeof AuthorizedMessagesRoute
   '/schedule': typeof AuthorizedScheduleRoute
   '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
+  '/communities': typeof PublicCommunitiesRouteWithChildren
+  '/discover': typeof PublicDiscoverRoute
   '/about': typeof UnauthorizedAboutRoute
   '/forgot-password': typeof UnauthorizedForgotPasswordRoute
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
   '/reset-password': typeof UnauthorizedResetPasswordRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
-  '/communities/$communitySlug': typeof AuthorizedCommunitiesCommunitySlugRoute
   '/connections/$matchId': typeof AuthorizedConnectionsMatchIdRoute
-  '/communities/': typeof AuthorizedCommunitiesIndexRoute
+  '/communities/$communitySlug': typeof PublicCommunitiesCommunitySlugRoute
   '/connections/': typeof AuthorizedConnectionsIndexRoute
+  '/communities/': typeof PublicCommunitiesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin-moderation': typeof AuthorizedAdminModerationRoute
   '/dashboard': typeof AuthorizedDashboardRoute
-  '/discover': typeof AuthorizedDiscoverRoute
   '/messages': typeof AuthorizedMessagesRoute
   '/schedule': typeof AuthorizedScheduleRoute
   '/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
+  '/discover': typeof PublicDiscoverRoute
   '/about': typeof UnauthorizedAboutRoute
   '/forgot-password': typeof UnauthorizedForgotPasswordRoute
   '/login': typeof UnauthorizedLoginRoute
   '/register': typeof UnauthorizedRegisterRoute
   '/reset-password': typeof UnauthorizedResetPasswordRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
-  '/communities/$communitySlug': typeof AuthorizedCommunitiesCommunitySlugRoute
   '/connections/$matchId': typeof AuthorizedConnectionsMatchIdRoute
-  '/communities': typeof AuthorizedCommunitiesIndexRoute
+  '/communities/$communitySlug': typeof PublicCommunitiesCommunitySlugRoute
   '/connections': typeof AuthorizedConnectionsIndexRoute
+  '/communities': typeof PublicCommunitiesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authorized': typeof AuthorizedRouteRouteWithChildren
   '/_onBoarding': typeof OnBoardingRouteRouteWithChildren
+  '/_public': typeof PublicRouteRouteWithChildren
   '/_unauthorized': typeof UnauthorizedRouteRouteWithChildren
   '/_authorized/admin-moderation': typeof AuthorizedAdminModerationRoute
-  '/_authorized/communities': typeof AuthorizedCommunitiesRouteWithChildren
   '/_authorized/connections': typeof AuthorizedConnectionsRouteWithChildren
   '/_authorized/dashboard': typeof AuthorizedDashboardRoute
-  '/_authorized/discover': typeof AuthorizedDiscoverRoute
   '/_authorized/messages': typeof AuthorizedMessagesRoute
   '/_authorized/schedule': typeof AuthorizedScheduleRoute
   '/_onBoarding/gettingToKnowYou': typeof OnBoardingGettingToKnowYouRoute
+  '/_public/communities': typeof PublicCommunitiesRouteWithChildren
+  '/_public/discover': typeof PublicDiscoverRoute
   '/_unauthorized/about': typeof UnauthorizedAboutRoute
   '/_unauthorized/forgot-password': typeof UnauthorizedForgotPasswordRoute
   '/_unauthorized/login': typeof UnauthorizedLoginRoute
   '/_unauthorized/register': typeof UnauthorizedRegisterRoute
   '/_unauthorized/reset-password': typeof UnauthorizedResetPasswordRoute
   '/profiles/$username': typeof ProfilesUsernameRoute
-  '/_authorized/communities/$communitySlug': typeof AuthorizedCommunitiesCommunitySlugRoute
   '/_authorized/connections/$matchId': typeof AuthorizedConnectionsMatchIdRoute
-  '/_authorized/communities/': typeof AuthorizedCommunitiesIndexRoute
+  '/_public/communities/$communitySlug': typeof PublicCommunitiesCommunitySlugRoute
   '/_authorized/connections/': typeof AuthorizedConnectionsIndexRoute
+  '/_public/communities/': typeof PublicCommunitiesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/admin-moderation'
-    | '/communities'
     | '/connections'
     | '/dashboard'
-    | '/discover'
     | '/messages'
     | '/schedule'
     | '/gettingToKnowYou'
+    | '/communities'
+    | '/discover'
     | '/about'
     | '/forgot-password'
     | '/login'
     | '/register'
     | '/reset-password'
     | '/profiles/$username'
-    | '/communities/$communitySlug'
     | '/connections/$matchId'
-    | '/communities/'
+    | '/communities/$communitySlug'
     | '/connections/'
+    | '/communities/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/admin-moderation'
     | '/dashboard'
-    | '/discover'
     | '/messages'
     | '/schedule'
     | '/gettingToKnowYou'
+    | '/discover'
     | '/about'
     | '/forgot-password'
     | '/login'
     | '/register'
     | '/reset-password'
     | '/profiles/$username'
-    | '/communities/$communitySlug'
     | '/connections/$matchId'
-    | '/communities'
+    | '/communities/$communitySlug'
     | '/connections'
+    | '/communities'
   id:
     | '__root__'
     | '/'
     | '/_authorized'
     | '/_onBoarding'
+    | '/_public'
     | '/_unauthorized'
     | '/_authorized/admin-moderation'
-    | '/_authorized/communities'
     | '/_authorized/connections'
     | '/_authorized/dashboard'
-    | '/_authorized/discover'
     | '/_authorized/messages'
     | '/_authorized/schedule'
     | '/_onBoarding/gettingToKnowYou'
+    | '/_public/communities'
+    | '/_public/discover'
     | '/_unauthorized/about'
     | '/_unauthorized/forgot-password'
     | '/_unauthorized/login'
     | '/_unauthorized/register'
     | '/_unauthorized/reset-password'
     | '/profiles/$username'
-    | '/_authorized/communities/$communitySlug'
     | '/_authorized/connections/$matchId'
-    | '/_authorized/communities/'
+    | '/_public/communities/$communitySlug'
     | '/_authorized/connections/'
+    | '/_public/communities/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthorizedRouteRoute: typeof AuthorizedRouteRouteWithChildren
   OnBoardingRouteRoute: typeof OnBoardingRouteRouteWithChildren
+  PublicRouteRoute: typeof PublicRouteRouteWithChildren
   UnauthorizedRouteRoute: typeof UnauthorizedRouteRouteWithChildren
   ProfilesUsernameRoute: typeof ProfilesUsernameRoute
 }
@@ -295,6 +302,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof UnauthorizedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_public': {
+      id: '/_public'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof PublicRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_onBoarding': {
@@ -360,6 +374,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnauthorizedAboutRouteImport
       parentRoute: typeof UnauthorizedRouteRoute
     }
+    '/_public/discover': {
+      id: '/_public/discover'
+      path: '/discover'
+      fullPath: '/discover'
+      preLoaderRoute: typeof PublicDiscoverRouteImport
+      parentRoute: typeof PublicRouteRoute
+    }
+    '/_public/communities': {
+      id: '/_public/communities'
+      path: '/communities'
+      fullPath: '/communities'
+      preLoaderRoute: typeof PublicCommunitiesRouteImport
+      parentRoute: typeof PublicRouteRoute
+    }
     '/_onBoarding/gettingToKnowYou': {
       id: '/_onBoarding/gettingToKnowYou'
       path: '/gettingToKnowYou'
@@ -381,13 +409,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedMessagesRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
-    '/_authorized/discover': {
-      id: '/_authorized/discover'
-      path: '/discover'
-      fullPath: '/discover'
-      preLoaderRoute: typeof AuthorizedDiscoverRouteImport
-      parentRoute: typeof AuthorizedRouteRoute
-    }
     '/_authorized/dashboard': {
       id: '/_authorized/dashboard'
       path: '/dashboard'
@@ -402,19 +423,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedConnectionsRouteImport
       parentRoute: typeof AuthorizedRouteRoute
     }
-    '/_authorized/communities': {
-      id: '/_authorized/communities'
-      path: '/communities'
-      fullPath: '/communities'
-      preLoaderRoute: typeof AuthorizedCommunitiesRouteImport
-      parentRoute: typeof AuthorizedRouteRoute
-    }
     '/_authorized/admin-moderation': {
       id: '/_authorized/admin-moderation'
       path: '/admin-moderation'
       fullPath: '/admin-moderation'
       preLoaderRoute: typeof AuthorizedAdminModerationRouteImport
       parentRoute: typeof AuthorizedRouteRoute
+    }
+    '/_public/communities/': {
+      id: '/_public/communities/'
+      path: '/'
+      fullPath: '/communities/'
+      preLoaderRoute: typeof PublicCommunitiesIndexRouteImport
+      parentRoute: typeof PublicCommunitiesRoute
     }
     '/_authorized/connections/': {
       id: '/_authorized/connections/'
@@ -423,12 +444,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedConnectionsIndexRouteImport
       parentRoute: typeof AuthorizedConnectionsRoute
     }
-    '/_authorized/communities/': {
-      id: '/_authorized/communities/'
-      path: '/'
-      fullPath: '/communities/'
-      preLoaderRoute: typeof AuthorizedCommunitiesIndexRouteImport
-      parentRoute: typeof AuthorizedCommunitiesRoute
+    '/_public/communities/$communitySlug': {
+      id: '/_public/communities/$communitySlug'
+      path: '/$communitySlug'
+      fullPath: '/communities/$communitySlug'
+      preLoaderRoute: typeof PublicCommunitiesCommunitySlugRouteImport
+      parentRoute: typeof PublicCommunitiesRoute
     }
     '/_authorized/connections/$matchId': {
       id: '/_authorized/connections/$matchId'
@@ -437,31 +458,8 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedConnectionsMatchIdRouteImport
       parentRoute: typeof AuthorizedConnectionsRoute
     }
-    '/_authorized/communities/$communitySlug': {
-      id: '/_authorized/communities/$communitySlug'
-      path: '/$communitySlug'
-      fullPath: '/communities/$communitySlug'
-      preLoaderRoute: typeof AuthorizedCommunitiesCommunitySlugRouteImport
-      parentRoute: typeof AuthorizedCommunitiesRoute
-    }
   }
 }
-
-interface AuthorizedCommunitiesRouteChildren {
-  AuthorizedCommunitiesCommunitySlugRoute: typeof AuthorizedCommunitiesCommunitySlugRoute
-  AuthorizedCommunitiesIndexRoute: typeof AuthorizedCommunitiesIndexRoute
-}
-
-const AuthorizedCommunitiesRouteChildren: AuthorizedCommunitiesRouteChildren = {
-  AuthorizedCommunitiesCommunitySlugRoute:
-    AuthorizedCommunitiesCommunitySlugRoute,
-  AuthorizedCommunitiesIndexRoute: AuthorizedCommunitiesIndexRoute,
-}
-
-const AuthorizedCommunitiesRouteWithChildren =
-  AuthorizedCommunitiesRoute._addFileChildren(
-    AuthorizedCommunitiesRouteChildren,
-  )
 
 interface AuthorizedConnectionsRouteChildren {
   AuthorizedConnectionsMatchIdRoute: typeof AuthorizedConnectionsMatchIdRoute
@@ -480,20 +478,16 @@ const AuthorizedConnectionsRouteWithChildren =
 
 interface AuthorizedRouteRouteChildren {
   AuthorizedAdminModerationRoute: typeof AuthorizedAdminModerationRoute
-  AuthorizedCommunitiesRoute: typeof AuthorizedCommunitiesRouteWithChildren
   AuthorizedConnectionsRoute: typeof AuthorizedConnectionsRouteWithChildren
   AuthorizedDashboardRoute: typeof AuthorizedDashboardRoute
-  AuthorizedDiscoverRoute: typeof AuthorizedDiscoverRoute
   AuthorizedMessagesRoute: typeof AuthorizedMessagesRoute
   AuthorizedScheduleRoute: typeof AuthorizedScheduleRoute
 }
 
 const AuthorizedRouteRouteChildren: AuthorizedRouteRouteChildren = {
   AuthorizedAdminModerationRoute: AuthorizedAdminModerationRoute,
-  AuthorizedCommunitiesRoute: AuthorizedCommunitiesRouteWithChildren,
   AuthorizedConnectionsRoute: AuthorizedConnectionsRouteWithChildren,
   AuthorizedDashboardRoute: AuthorizedDashboardRoute,
-  AuthorizedDiscoverRoute: AuthorizedDiscoverRoute,
   AuthorizedMessagesRoute: AuthorizedMessagesRoute,
   AuthorizedScheduleRoute: AuthorizedScheduleRoute,
 }
@@ -512,6 +506,33 @@ const OnBoardingRouteRouteChildren: OnBoardingRouteRouteChildren = {
 
 const OnBoardingRouteRouteWithChildren = OnBoardingRouteRoute._addFileChildren(
   OnBoardingRouteRouteChildren,
+)
+
+interface PublicCommunitiesRouteChildren {
+  PublicCommunitiesCommunitySlugRoute: typeof PublicCommunitiesCommunitySlugRoute
+  PublicCommunitiesIndexRoute: typeof PublicCommunitiesIndexRoute
+}
+
+const PublicCommunitiesRouteChildren: PublicCommunitiesRouteChildren = {
+  PublicCommunitiesCommunitySlugRoute: PublicCommunitiesCommunitySlugRoute,
+  PublicCommunitiesIndexRoute: PublicCommunitiesIndexRoute,
+}
+
+const PublicCommunitiesRouteWithChildren =
+  PublicCommunitiesRoute._addFileChildren(PublicCommunitiesRouteChildren)
+
+interface PublicRouteRouteChildren {
+  PublicCommunitiesRoute: typeof PublicCommunitiesRouteWithChildren
+  PublicDiscoverRoute: typeof PublicDiscoverRoute
+}
+
+const PublicRouteRouteChildren: PublicRouteRouteChildren = {
+  PublicCommunitiesRoute: PublicCommunitiesRouteWithChildren,
+  PublicDiscoverRoute: PublicDiscoverRoute,
+}
+
+const PublicRouteRouteWithChildren = PublicRouteRoute._addFileChildren(
+  PublicRouteRouteChildren,
 )
 
 interface UnauthorizedRouteRouteChildren {
@@ -537,6 +558,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthorizedRouteRoute: AuthorizedRouteRouteWithChildren,
   OnBoardingRouteRoute: OnBoardingRouteRouteWithChildren,
+  PublicRouteRoute: PublicRouteRouteWithChildren,
   UnauthorizedRouteRoute: UnauthorizedRouteRouteWithChildren,
   ProfilesUsernameRoute: ProfilesUsernameRoute,
 }

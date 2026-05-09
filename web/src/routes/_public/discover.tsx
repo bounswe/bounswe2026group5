@@ -20,7 +20,7 @@ const PAGE_SIZE = 6
 const DISCOVER_SECTION_CONTAINER_CLASS =
     'w-full max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 lg:px-20 xl:px-28'
 
-export const Route = createFileRoute('/_authorized/discover')({
+export const Route = createFileRoute('/_public/discover')({
     component: DiscoverPage,
 })
 
