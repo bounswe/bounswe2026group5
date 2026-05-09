@@ -90,7 +90,7 @@ export function DiscoverFilterPanel({
                     'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-150',
                     active
                       ? 'bg-accent text-white shadow-sm scale-105'
-                      : 'bg-accent-muted text-accent hover:bg-accent/20',
+                      : 'bg-accent-muted text-primary hover:bg-accent/20 border border-accent/10',
                   )}
                 >
                   {skill}
