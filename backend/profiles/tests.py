@@ -5442,6 +5442,16 @@ class CommunityTagWorkshopsAPITests(TestCase):
         self.assertEqual(response.data["max_participants"], 10)
         self.assertEqual(Workshop.objects.count(), 1)
 
+        workshop = Workshop.objects.get()
+        self.assertTrue(
+            WorkshopParticipant.objects.filter(
+                workshop=workshop,
+                participant=self.mentor_profile,
+            ).exists()
+        )
+        self.assertEqual(response.data["participant_count"], 1)
+        self.assertTrue(response.data["current_user_enrolled"])
+
     def test_create_workshop_as_non_mentor_rejected(self) -> None:
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.member_token}")
         payload = {

@@ -692,11 +692,11 @@ class WorkshopCreateSerializer(serializers.Serializer):
         return data
 
     def create(self, validated_data: dict[str, Any]) -> Workshop:
-        """Create workshop instance."""
+        """Create workshop instance and auto-enroll author as participant."""
         request = self.context.get("request")
         author_profile = Profile.objects.get(user=request.user)
 
-        return Workshop.objects.create(
+        workshop = Workshop.objects.create(
             community=validated_data["community"],
             author=author_profile,
             title=validated_data["title"],
@@ -705,6 +705,14 @@ class WorkshopCreateSerializer(serializers.Serializer):
             end_at=validated_data["end_at"],
             max_participants=validated_data["max_participants"],
         )
+
+        WorkshopParticipant.objects.create(
+            workshop=workshop,
+            participant=author_profile,
+            show_on_profile=False,
+        )
+
+        return workshop
 
 
 class WorkshopUpdateSerializer(serializers.Serializer):
