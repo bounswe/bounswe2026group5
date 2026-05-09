@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Match, MeetingSession, MentorshipRequest
+from .models import Match, MeetingSession, MentorshipRequest, Workshop, WorkshopParticipant
 
 
 @admin.register(MentorshipRequest)
@@ -53,3 +53,42 @@ class MeetingSessionAdmin(admin.ModelAdmin):
         "mentee__user__email",
     )
     ordering = ("-scheduled_start_at_utc",)
+
+
+@admin.register(Workshop)
+class WorkshopAdmin(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "author",
+        "community",
+        "scheduled_at",
+        "max_participants",
+        "status",
+        "created_at",
+    )
+    list_filter = ("status", "community", "created_at")
+    search_fields = (
+        "title",
+        "author__display_name",
+        "author__user__email",
+        "community__name",
+    )
+    ordering = ("-scheduled_at", "-created_at")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(WorkshopParticipant)
+class WorkshopParticipantAdmin(admin.ModelAdmin):
+    list_display = (
+        "participant",
+        "workshop",
+        "joined_at",
+        "show_on_profile",
+    )
+    list_filter = ("show_on_profile", "joined_at")
+    search_fields = (
+        "participant__display_name",
+        "participant__user__email",
+        "workshop__title",
+    )
+    ordering = ("-joined_at",)
