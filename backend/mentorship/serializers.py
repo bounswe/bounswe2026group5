@@ -805,7 +805,9 @@ class WorkshopAttendanceItemSerializer(serializers.ModelSerializer):
     workshop_title = serializers.CharField(source="workshop.title", read_only=True)
     workshop_description = serializers.CharField(source="workshop.description", read_only=True)
     workshop_status = serializers.CharField(source="workshop.status", read_only=True)
-    workshop_scheduled_at = serializers.DateTimeField(source="workshop.scheduled_at", read_only=True)
+    workshop_scheduled_at = serializers.DateTimeField(
+        source="workshop.scheduled_at", read_only=True
+    )
     workshop_end_at = serializers.DateTimeField(source="workshop.end_at", read_only=True)
     community_id = serializers.UUIDField(source="workshop.community.id", read_only=True)
     community_name = serializers.CharField(source="workshop.community.name", read_only=True)
