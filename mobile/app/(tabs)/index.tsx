@@ -1,6 +1,12 @@
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import {
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Import the components for the dashboard
@@ -19,6 +25,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 
 import { useAuthStore } from "@/lib/auth/store";
 import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
+import { useRefreshControl } from "@/hooks/use-refresh-control";
 import {
   MENTOR_MENTEE_CAPACITY_WARNING,
   shouldWarnBeforeAcceptingMentee,
@@ -241,6 +248,16 @@ export default function DashboardScreen() {
     setShowRescheduleSheet(true);
   };
 
+  const refreshDashboard = useCallback(async () => {
+    await Promise.all([
+      requestsQuery.refetch(),
+      meetingSessionsQuery.refetch(),
+      matchesQuery.refetch(),
+    ]);
+  }, [matchesQuery, meetingSessionsQuery, requestsQuery]);
+
+  const { refreshing, onRefresh } = useRefreshControl(refreshDashboard);
+
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
       {/* 1. FIXED TOP HEADER */}
@@ -261,6 +278,9 @@ export default function DashboardScreen() {
         className="flex-1 px-4 pt-4"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 160 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {queryError ? (
           <View className="mb-4">

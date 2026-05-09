@@ -1,7 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -21,6 +27,7 @@ import { ProfileReviews } from "@/components/profile/ProfileReviews";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { useRefreshControl } from "@/hooks/use-refresh-control";
 
 import { API_BASE_URL } from "@/constants/api";
 import { useAuthStore } from "@/lib/auth/store";
@@ -346,6 +353,7 @@ export default function ProfileScreen() {
 
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
   const [isProfileHidden, setIsProfileHidden] = useState<boolean | null>(null);
@@ -425,7 +433,7 @@ export default function ProfileScreen() {
       mounted = false;
       controller.abort();
     };
-  }, [currentUsername]);
+  }, [currentUsername, refreshVersion]);
 
   useEffect(() => {
     if (!reviewsQuery.data) {
@@ -492,7 +500,7 @@ export default function ProfileScreen() {
       mounted = false;
       controller.abort();
     };
-  }, []);
+  }, [refreshVersion]);
 
   const availabilityData = useMemo(
     () => mapAvailabilityToSchedule(availabilityQuery.data ?? []),
@@ -700,6 +708,27 @@ export default function ProfileScreen() {
   );
   const rating = Number.isFinite(normalizedRating) ? normalizedRating : 0;
   const reviewCount = profileRatingQuery.data?.review_count ?? 0;
+  const refreshProfile = useCallback(async () => {
+    setReviewsPage(1);
+    setPageError(null);
+    setRefreshVersion((version) => version + 1);
+    await Promise.all([
+      availabilityQuery.refetch(),
+      mentorshipMatchesQuery.refetch(),
+      mentorshipRequestsQuery.refetch(),
+      profileRatingQuery.refetch(),
+      myCommunitiesQuery.refetch(),
+      reviewsQuery.refetch(),
+    ]);
+  }, [
+    availabilityQuery,
+    mentorshipMatchesQuery,
+    mentorshipRequestsQuery,
+    myCommunitiesQuery,
+    profileRatingQuery,
+    reviewsQuery,
+  ]);
+  const { refreshing, onRefresh } = useRefreshControl(refreshProfile);
 
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
@@ -728,6 +757,9 @@ export default function ProfileScreen() {
         className="flex-1"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 160 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {pageError ? (
           <View className="px-4 pt-4">

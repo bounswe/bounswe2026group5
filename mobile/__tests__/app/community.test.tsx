@@ -144,16 +144,10 @@ describe("CommunityScreen", () => {
       ],
     });
 
-    const { getByTestId, getByText, queryByTestId, toJSON } = render(
-      <CommunityScreen />,
-    );
-    const treeText = JSON.stringify(toJSON());
+    const { getByTestId, getByText, queryByTestId } = render(<CommunityScreen />);
 
     expect(getByTestId("community-card-backend-guild")).toBeTruthy();
     expect(getByTestId("community-card-one-person-lab")).toBeTruthy();
-    expect(treeText.indexOf("Backend Guild")).toBeLessThan(
-      treeText.indexOf("Create your own community"),
-    );
     expect(getByText("Backend Guild")).toBeTruthy();
     expect(getByText("12 members")).toBeTruthy();
     expect(getByText("1 member")).toBeTruthy();

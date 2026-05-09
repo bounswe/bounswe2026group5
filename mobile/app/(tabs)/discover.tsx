@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -24,6 +25,7 @@ import {
 } from "@/constants/discover-demo";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useRefreshControl } from "@/hooks/use-refresh-control";
 import {
   fetchDiscoverPopularProfiles,
   fetchDiscoverProfiles,
@@ -268,6 +270,12 @@ export default function DiscoverScreen() {
     setSortSheetOpen(false);
     setRefreshVersion((version) => version + 1);
   }, []);
+  const refreshDiscover = useCallback(async () => {
+    setPage(1);
+    setErrorText(null);
+    setRefreshVersion((version) => version + 1);
+  }, []);
+  const { refreshing, onRefresh } = useRefreshControl(refreshDiscover);
 
   useEffect(() => {
     const unsubscribe = (navigation as any).addListener("tabPress", () => {
@@ -820,6 +828,9 @@ export default function DiscoverScreen() {
         className="flex-1 px-4 pt-4"
         contentContainerStyle={{ paddingBottom: 130 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {bodyContent}
       </ScrollView>
