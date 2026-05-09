@@ -26,6 +26,7 @@ vi.mock('#/lib/queries/AuthQueries.ts', () => ({
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => () => ({
     useSearch: () => ({ conversationId: '' }),
+    useNavigate: () => vi.fn(),
   }),
 }))
 

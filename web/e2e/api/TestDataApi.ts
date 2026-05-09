@@ -271,6 +271,22 @@ export class TestDataApi {
     return response.json();
   }
 
+  async fetchMessages(auth: AuthResponse, conversationId: string) {
+    const response = await this.request.get(`${API_BASE_URL}/messages/conversations/${conversationId}/`, {
+      headers: this.authHeaders(auth),
+    });
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<any[]>;
+  }
+
+  async reportMessage(auth: AuthResponse, messageId: string, data: { reason: string; description?: string }) {
+    const response = await this.request.post(`${API_BASE_URL}/messages/${messageId}/report/`, {
+      headers: this.authHeaders(auth),
+      data,
+    });
+    return response;
+  }
+
   async fetchMatchFeedback(auth: AuthResponse, matchId: string) {
     const response = await this.request.get(`${API_BASE_URL}/mentorship/matches/${matchId}/feedback/`, {
       headers: this.authHeaders(auth),

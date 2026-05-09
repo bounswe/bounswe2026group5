@@ -293,6 +293,12 @@ class Report(models.Model):
     class Meta:
         db_table = "reports"
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["submitted_by", "reported_user"],
+                name="unique_report_per_user_pair",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"Report({self.reason}, {self.status}, by={self.submitted_by_id})"

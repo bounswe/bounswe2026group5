@@ -124,15 +124,17 @@ export function useResolveReport() {
   })
 }
 
-async function submitReportFn({ reportedUserId, reportedUsername, reason, description }: {
+async function submitReportFn({ reportedUserId, reportedUsername, reason, description, relatedMessageId }: {
   reportedUserId?: string
   reportedUsername?: string
   reason: string
   description?: string
+  relatedMessageId?: string
 }) {
   const body: Record<string, unknown> = { reason, description: description || '' }
   if (reportedUserId) body.reported_user_id = reportedUserId
   if (reportedUsername) body.reported_username = reportedUsername
+  if (relatedMessageId) body.related_message_id = relatedMessageId
 
   const res = await fetch(`${API_BASE_URL}/auth/reports/`, {
     method: 'POST',
@@ -147,7 +149,11 @@ async function submitReportFn({ reportedUserId, reportedUsername, reason, descri
 }
 
 export function useSubmitReport() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: submitReportFn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messaging'] })
+    }
   })
 }
