@@ -4,6 +4,7 @@ import React from "react";
 import { TouchableOpacity } from "react-native";
 
 const mockPush = jest.fn();
+const mockInvalidateQueries = jest.fn();
 const mockRespondMutateAsync = jest.fn();
 const mockDeactivateMutateAsync = jest.fn();
 const mockSubmitFeedbackMutateAsync = jest.fn();
@@ -20,6 +21,12 @@ let mockMatchesError: Error | null = null;
 jest.mock("expo-router", () => ({
   useRouter: () => ({
     push: mockPush,
+  }),
+}));
+
+jest.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({
+    invalidateQueries: mockInvalidateQueries,
   }),
 }));
 

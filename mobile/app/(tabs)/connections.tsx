@@ -1,15 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, type Href } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ConnectionActionsSheet } from "@/components/connections/ConnectionActionsSheet";
@@ -24,6 +26,7 @@ import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet"
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
+import { useRefreshControl } from "@/hooks/use-refresh-control";
 
 import { useAuthStore } from "@/lib/auth/store";
 import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
@@ -838,6 +841,7 @@ function MenteeConnections({
 export default function ConnectionsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuthStore();
 
   const submitFeedbackMutation = useSubmitMatchFeedbackMutation();
@@ -871,6 +875,14 @@ export default function ConnectionsScreen() {
   };
 
   const isMentor = user?.app_usage_mode !== "MENTEE";
+  const refreshConnections = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["mentorship", "requests", "me"] }),
+      queryClient.invalidateQueries({ queryKey: ["mentorship", "matches", "me"] }),
+      queryClient.invalidateQueries({ queryKey: ["messaging", "conversations"] }),
+    ]);
+  }, [queryClient]);
+  const { refreshing, onRefresh } = useRefreshControl(refreshConnections);
 
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
@@ -905,6 +917,9 @@ export default function ConnectionsScreen() {
           paddingBottom: 120,
         }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {actionError ? (
           <View className="mb-4">
