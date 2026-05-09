@@ -48,6 +48,10 @@ export function EmailVerificationBanner() {
                         <span className="flex items-center gap-1 text-xs text-amber-700">
                             <CheckCircle className="w-3.5 h-3.5" /> Email sent
                         </span>
+                    ) : resend.isError ? (
+                        <span className="text-xs text-red-600">
+                            {resend.error?.message ?? 'Failed to send. Try again.'}
+                        </span>
                     ) : (
                         <button
                             onClick={() => resend.mutate()}

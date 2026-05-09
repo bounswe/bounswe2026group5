@@ -1,5 +1,5 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { CheckCircle, XCircle, Mail, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -17,11 +17,12 @@ export function VerifyEmailPage() {
     const token = new URLSearchParams(globalThis.location.search).get('token') ?? ''
     const router = useRouter()
     const isAuthenticated = !!getStoredUser()
+    const redirectTimer = useRef<ReturnType<typeof setTimeout>>(null)
 
     const verifyEmail = useMutation({
         mutationFn: verifyEmailFn,
         onSuccess: () => {
-            setTimeout(() => router.navigate({ to: '/dashboard' }), 3000)
+            redirectTimer.current = setTimeout(() => router.navigate({ to: '/dashboard' }), 3000)
         },
     })
 
@@ -35,6 +36,12 @@ export function VerifyEmailPage() {
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [token])
+
+    useEffect(() => {
+        return () => {
+            if (redirectTimer.current) clearTimeout(redirectTimer.current)
+        }
+    }, [])
 
     return (
         <div className="flex flex-col min-h-screen bg-black/[0.02]">
@@ -51,6 +58,8 @@ export function VerifyEmailPage() {
                             isAuthenticated={isAuthenticated}
                             resendPending={resendVerification.isPending}
                             resendSuccess={resendVerification.isSuccess}
+                            resendIsError={resendVerification.isError}
+                            resendError={resendVerification.error?.message}
                             onResend={() => resendVerification.mutate()}
                             onLogin={() => router.navigate({ to: '/login' })}
                         />
@@ -59,6 +68,8 @@ export function VerifyEmailPage() {
                             isAuthenticated={isAuthenticated}
                             resendPending={resendVerification.isPending}
                             resendSuccess={resendVerification.isSuccess}
+                            resendIsError={resendVerification.isError}
+                            resendError={resendVerification.error?.message}
                             onResend={() => resendVerification.mutate()}
                         />
                     )}
@@ -75,11 +86,15 @@ function PendingState({
     isAuthenticated,
     resendPending,
     resendSuccess,
+    resendIsError,
+    resendError,
     onResend,
 }: {
     isAuthenticated: boolean
     resendPending: boolean
     resendSuccess: boolean
+    resendIsError: boolean
+    resendError?: string
     onResend: () => void
 }) {
     return (
@@ -101,13 +116,18 @@ function PendingState({
                     Verification email sent — check your inbox.
                 </div>
             ) : (
-                <Button
-                    onClick={onResend}
-                    disabled={resendPending || !isAuthenticated}
-                    className="w-full"
-                >
-                    {resendPending ? 'Sending…' : 'Resend verification email'}
-                </Button>
+                <>
+                    <Button
+                        onClick={onResend}
+                        disabled={resendPending || !isAuthenticated}
+                        className="w-full"
+                    >
+                        {resendPending ? 'Sending…' : 'Resend verification email'}
+                    </Button>
+                    {resendIsError && (
+                        <p className="text-xs text-destructive">{resendError ?? 'Failed to send email. Please try again.'}</p>
+                    )}
+                </>
             )}
 
             <Muted className="text-xs text-ink-soft">
@@ -126,6 +146,8 @@ function TokenState({
     isAuthenticated,
     resendPending,
     resendSuccess,
+    resendIsError,
+    resendError,
     onResend,
     onLogin,
 }: {
@@ -136,6 +158,8 @@ function TokenState({
     isAuthenticated: boolean
     resendPending: boolean
     resendSuccess: boolean
+    resendIsError: boolean
+    resendError?: string
     onResend: () => void
     onLogin: () => void
 }) {
@@ -189,12 +213,17 @@ function TokenState({
                             Verification email sent — check your inbox.
                         </div>
                     ) : (
-                        <Button
-                            onClick={onResend}
-                            disabled={resendPending || !isAuthenticated}
-                        >
-                            {resendPending ? 'Sending…' : 'Resend verification email'}
-                        </Button>
+                        <>
+                            <Button
+                                onClick={onResend}
+                                disabled={resendPending || !isAuthenticated}
+                            >
+                                {resendPending ? 'Sending…' : 'Resend verification email'}
+                            </Button>
+                            {resendIsError && (
+                                <p className="text-xs text-destructive">{resendError ?? 'Failed to send email. Please try again.'}</p>
+                            )}
+                        </>
                     )}
                     <Button variant="outline" onClick={onLogin}>
                         Return to login
