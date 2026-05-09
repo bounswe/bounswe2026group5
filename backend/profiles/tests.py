@@ -5442,6 +5442,16 @@ class CommunityTagWorkshopsAPITests(TestCase):
         self.assertEqual(response.data["max_participants"], 10)
         self.assertEqual(Workshop.objects.count(), 1)
 
+        workshop = Workshop.objects.get()
+        self.assertTrue(
+            WorkshopParticipant.objects.filter(
+                workshop=workshop,
+                participant=self.mentor_profile,
+            ).exists()
+        )
+        self.assertEqual(response.data["participant_count"], 1)
+        self.assertTrue(response.data["current_user_enrolled"])
+
     def test_create_workshop_as_non_mentor_rejected(self) -> None:
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.member_token}")
         payload = {
@@ -5552,6 +5562,24 @@ class CommunityTagWorkshopsAPITests(TestCase):
         )
         self.assertTrue(participation.show_on_profile)
 
+    def test_author_cannot_leave_workshop_participation(self) -> None:
+        workshop = self._create_workshop()
+        WorkshopParticipant.objects.create(
+            workshop=workshop,
+            participant=self.mentor_profile,
+            show_on_profile=False,
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_token}")
+        response = self.client.post(self._leave_url(workshop.id), {}, format="json")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(
+            WorkshopParticipant.objects.filter(
+                workshop=workshop,
+                participant=self.mentor_profile,
+            ).exists()
+        )
 
 class ProfileWorkshopAttendanceAPITests(TestCase):
     """Tests for profile-scoped workshop attendance endpoints."""
