@@ -1,12 +1,13 @@
-import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
+import { queryClient } from '#/router.tsx'
 import { CheckCircle, XCircle, Mail, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Heading, Body, Muted } from '@/components/Typography'
 import { UnauthorizedHeader } from '@/components/layout/UnauthorizedHeader'
 import { UnauthorizedFooter } from '@/components/layout/UnauthorizedFooter'
 import { verifyEmailFn, resendVerificationEmailFn, getStoredUser } from '#/lib/queries/AuthQueries.ts'
+import { createFileRoute, useRouter } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/verify-email')({
     component: VerifyEmailPage,
@@ -16,16 +17,27 @@ export function VerifyEmailPage() {
     // Use URLSearchParams directly to avoid TanStack Router splitting on `=` in base64 tokens
     const token = new URLSearchParams(globalThis.location.search).get('token') ?? ''
     const router = useRouter()
-    const queryClient = useQueryClient()
     const isAuthenticated = !!getStoredUser()
     const redirectTimer = useRef<ReturnType<typeof setTimeout>>(null)
 
     const verifyEmail = useMutation({
         mutationFn: verifyEmailFn,
-        onSuccess: () => {
-            // Invalidate 'me' query to update the verification banner immediately
-            queryClient.invalidateQueries({ queryKey: ['me'] })
-            redirectTimer.current = setTimeout(() => router.navigate({ to: '/dashboard' }), 3000)
+        onSuccess: async () => {
+            // Update the local cache immediately so the banner disappears on redirect
+            queryClient.setQueryData(['me'], (old: any) => {
+                if (!old) return old
+                return { ...old, is_email_verified: true }
+            })
+            // Invalidate 'me' query to update the verification banner immediately from server as well
+            await queryClient.invalidateQueries({ queryKey: ['me'] })
+            await queryClient.refetchQueries({ queryKey: ['me'] })
+            
+            // Invalidate the router to force all loaders to re-run
+            await router.invalidate()
+            
+            redirectTimer.current = setTimeout(() => {
+                router.navigate({ to: '/dashboard' })
+            }, 3000)
         },
     })
 
