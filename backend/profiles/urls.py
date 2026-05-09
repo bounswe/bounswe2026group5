@@ -27,6 +27,7 @@ from .views import (
     MyTagsListAPIView,
     MyWorkshopAttendanceDetailAPIView,
     MyWorkshopAttendanceListAPIView,
+    MyWorkshopAttendanceParticipantsListAPIView,
     PopularMentorsListAPIView,
     PopularTagsListAPIView,
     PostMediaUploadAPIView,
@@ -56,6 +57,11 @@ urlpatterns = [
         "me/workshops/attendance/<uuid:workshop_id>/",
         MyWorkshopAttendanceDetailAPIView.as_view(),
         name="profile-me-workshop-attendance-detail",
+    ),
+    path(
+        "me/workshops/attendance/<uuid:workshop_id>/participants/",
+        MyWorkshopAttendanceParticipantsListAPIView.as_view(),
+        name="profile-me-workshop-attendance-participants-list",
     ),
     path("me/posts/", MyProfilePostsCollectionAPIView.as_view(), name="profile-posts-me-create"),
     path(

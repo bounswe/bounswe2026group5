@@ -5581,6 +5581,7 @@ class CommunityTagWorkshopsAPITests(TestCase):
             ).exists()
         )
 
+
 class ProfileWorkshopAttendanceAPITests(TestCase):
     """Tests for profile-scoped workshop attendance endpoints."""
 
@@ -5656,8 +5657,24 @@ class ProfileWorkshopAttendanceAPITests(TestCase):
             show_on_profile=True,
         )
 
+        self.authored_workshop = Workshop.objects.create(
+            community=self.tag,
+            author=self.author_profile,
+            title="Authored Workshop",
+            description="Managed from profile",
+            scheduled_at=now + timedelta(days=2),
+            end_at=now + timedelta(days=2, hours=2),
+            max_participants=20,
+        )
+        WorkshopParticipant.objects.create(
+            workshop=self.authored_workshop,
+            participant=self.author_profile,
+            show_on_profile=False,
+        )
+
         self.owner_token = _token_for_profile_tests(self.owner_user)
         self.viewer_token = _token_for_profile_tests(self.viewer_user)
+        self.author_token = _token_for_profile_tests(self.author_user)
 
     def test_me_attendance_list_returns_all_owner_records(self) -> None:
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
@@ -5723,3 +5740,49 @@ class ProfileWorkshopAttendanceAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+    def test_author_can_patch_workshop_fields_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.author_token}")
+
+        response = self.client.patch(
+            f"/api/profiles/me/workshops/attendance/{self.authored_workshop.id}/",
+            {"title": "Authored Workshop Updated", "max_participants": 25},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.authored_workshop.refresh_from_db()
+        self.assertEqual(self.authored_workshop.title, "Authored Workshop Updated")
+        self.assertEqual(self.authored_workshop.max_participants, 25)
+
+    def test_non_author_cannot_patch_workshop_fields_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.patch(
+            f"/api/profiles/me/workshops/attendance/{self.upcoming_workshop.id}/",
+            {"title": "Should not work"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_author_delete_from_profile_cancels_workshop(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.author_token}")
+
+        response = self.client.delete(
+            f"/api/profiles/me/workshops/attendance/{self.authored_workshop.id}/"
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.authored_workshop.refresh_from_db()
+        self.assertEqual(self.authored_workshop.status, Workshop.Status.CANCELLED)
+
+    def test_attendance_participants_list_available_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.get(
+            f"/api/profiles/me/workshops/attendance/{self.upcoming_workshop.id}/participants/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.data["count"], 1)
