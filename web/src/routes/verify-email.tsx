@@ -1,6 +1,6 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle, XCircle, Mail, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Heading, Body, Muted } from '@/components/Typography'
@@ -16,12 +16,15 @@ export function VerifyEmailPage() {
     // Use URLSearchParams directly to avoid TanStack Router splitting on `=` in base64 tokens
     const token = new URLSearchParams(globalThis.location.search).get('token') ?? ''
     const router = useRouter()
+    const queryClient = useQueryClient()
     const isAuthenticated = !!getStoredUser()
     const redirectTimer = useRef<ReturnType<typeof setTimeout>>(null)
 
     const verifyEmail = useMutation({
         mutationFn: verifyEmailFn,
         onSuccess: () => {
+            // Invalidate 'me' query to update the verification banner immediately
+            queryClient.invalidateQueries({ queryKey: ['me'] })
             redirectTimer.current = setTimeout(() => router.navigate({ to: '/dashboard' }), 3000)
         },
     })
@@ -30,8 +33,10 @@ export function VerifyEmailPage() {
         mutationFn: resendVerificationEmailFn,
     })
 
+    const hasStartedVerification = useRef(false)
     useEffect(() => {
-        if (token) {
+        if (token && !hasStartedVerification.current) {
+            hasStartedVerification.current = true
             verifyEmail.mutate(token)
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -44,7 +49,7 @@ export function VerifyEmailPage() {
     }, [])
 
     return (
-        <div className="flex flex-col min-h-screen bg-black/[0.02]">
+        <div className="flex flex-col min-h-screen bg-bg dark:bg-background">
             <UnauthorizedHeader />
 
             <main className="flex-1 flex items-center justify-center px-4 py-16">

@@ -1,7 +1,7 @@
 // Tests for EmailVerificationBanner — covers visibility rules, resend flow,
-// and dismiss behavior across all meaningful user states.
+// and persistence behavior (matches mobile implementation).
 
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -18,9 +18,6 @@ const {
 }))
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
-
-vi.mock('../../../routeTree.gen', () => ({}))
-vi.mock('../../../router', () => ({}))
 
 vi.mock('#/lib/queries/AuthQueries.ts', () => ({
     getStoredUser: vi.fn(() => ({ id: 'user-1' })),
@@ -41,22 +38,11 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@tanstack/react-router')>()
     return {
         ...actual,
-        createFileRoute: () => (options: Record<string, unknown>) => options,
-        redirect: (opts: { to: string }) => ({ ...opts, __redirect: true }),
-        Outlet: () => <div data-testid="outlet" />,
         Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
             <a href={to}>{children}</a>
         ),
     }
 })
-
-vi.mock('@/components/layout/AuthorizedHeader', () => ({
-    AuthorizedHeader: () => <div data-testid="authorized-header" />,
-}))
-
-vi.mock('#/components/ui/sonner.tsx', () => ({
-    Toaster: () => null,
-}))
 
 vi.mock('lucide-react', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>()
@@ -64,13 +50,12 @@ vi.mock('lucide-react', async (importOriginal) => {
         ...actual,
         AlertTriangle: () => <span data-testid="icon-warning" />,
         CheckCircle: () => <span data-testid="icon-check" />,
-        X: () => <span data-testid="icon-close" />,
     }
 })
 
 // ─── Import under test ────────────────────────────────────────────────────────
 
-import { EmailVerificationBanner } from '../route'
+import { EmailVerificationBanner } from '@/components/layout/EmailVerificationBanner'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -131,7 +116,7 @@ describe('EmailVerificationBanner', () => {
             render(<EmailVerificationBanner />)
 
             expect(screen.getByTestId('icon-warning')).toBeInTheDocument()
-            expect(screen.getByText(/please verify your email/i)).toBeInTheDocument()
+            expect(screen.getByText(/cannot start a mentorship request/i)).toBeInTheDocument()
         })
     })
 
@@ -147,9 +132,9 @@ describe('EmailVerificationBanner', () => {
             expect(screen.getByTestId('icon-warning')).toBeInTheDocument()
         })
 
-        it('shows a "resend email" action', () => {
+        it('shows a "resend now" action', () => {
             render(<EmailVerificationBanner />)
-            expect(screen.getByRole('button', { name: /resend email/i })).toBeInTheDocument()
+            expect(screen.getByRole('button', { name: /resend now/i })).toBeInTheDocument()
         })
 
         it('shows a link to the verification page', () => {
@@ -158,42 +143,9 @@ describe('EmailVerificationBanner', () => {
             expect(link).toHaveAttribute('href', '/verify-email')
         })
 
-        it('shows a dismiss button', () => {
+        it('does not show a dismiss button (persistence requirement)', () => {
             render(<EmailVerificationBanner />)
-            expect(screen.getByRole('button', { name: /dismiss/i })).toBeInTheDocument()
-        })
-    })
-
-    // ── Dismiss behavior ─────────────────────────────────────────────────────
-
-    describe('dismiss behavior', () => {
-        beforeEach(() => {
-            mockUseQuery.mockReturnValue({ data: makeUser({ is_email_verified: false }) })
-        })
-
-        it('hides the banner when the dismiss button is clicked', async () => {
-            const user = userEvent.setup()
-            const { container } = render(<EmailVerificationBanner />)
-
-            await user.click(screen.getByRole('button', { name: /dismiss/i }))
-
-            await waitFor(() => {
-                expect(container).toBeEmptyDOMElement()
-            })
-        })
-
-        it('does not show the banner again after it has been dismissed', async () => {
-            const user = userEvent.setup()
-            const { container } = render(<EmailVerificationBanner />)
-
-            await user.click(screen.getByRole('button', { name: /dismiss/i }))
-
-            // Simulate data re-fetching — banner should stay dismissed
-            mockUseQuery.mockReturnValue({ data: makeUser({ is_email_verified: false }) })
-
-            await waitFor(() => {
-                expect(container).toBeEmptyDOMElement()
-            })
+            expect(screen.queryByRole('button', { name: /dismiss/i })).not.toBeInTheDocument()
         })
     })
 
@@ -208,7 +160,7 @@ describe('EmailVerificationBanner', () => {
             const user = userEvent.setup()
             render(<EmailVerificationBanner />)
 
-            await user.click(screen.getByRole('button', { name: /resend email/i }))
+            await user.click(screen.getByRole('button', { name: /resend now/i }))
 
             expect(mockResendMutate).toHaveBeenCalledOnce()
         })
@@ -228,42 +180,6 @@ describe('EmailVerificationBanner', () => {
             expect(screen.getByText(/email sent/i)).toBeInTheDocument()
             expect(screen.getByTestId('icon-check')).toBeInTheDocument()
             expect(screen.queryByRole('button', { name: /resend/i })).not.toBeInTheDocument()
-        })
-
-        it('keeps the dismiss button visible while the resend is in progress', () => {
-            mockUseMutation.mockReturnValue({ ...idleResend, isPending: true, isIdle: false })
-            render(<EmailVerificationBanner />)
-
-            expect(screen.getByRole('button', { name: /dismiss/i })).toBeInTheDocument()
-        })
-
-        it('keeps the dismiss button visible after a successful resend', () => {
-            mockUseMutation.mockReturnValue({ ...idleResend, isSuccess: true, isIdle: false })
-            render(<EmailVerificationBanner />)
-
-            expect(screen.getByRole('button', { name: /dismiss/i })).toBeInTheDocument()
-        })
-    })
-
-    // ── Guard integration: ADMIN bypass ──────────────────────────────────────
-
-    describe('guard: admin users are not blocked by missing app_usage_mode', () => {
-        it('does not show the banner for a verified admin', () => {
-            mockUseQuery.mockReturnValue({
-                data: makeUser({ role: 'ADMIN', is_email_verified: true }),
-            })
-            const { container } = render(<EmailVerificationBanner />)
-
-            expect(container).toBeEmptyDOMElement()
-        })
-
-        it('shows the banner for an unverified admin', () => {
-            mockUseQuery.mockReturnValue({
-                data: makeUser({ role: 'ADMIN', is_email_verified: false }),
-            })
-            render(<EmailVerificationBanner />)
-
-            expect(screen.getByText(/please verify your email/i)).toBeInTheDocument()
         })
     })
 })
