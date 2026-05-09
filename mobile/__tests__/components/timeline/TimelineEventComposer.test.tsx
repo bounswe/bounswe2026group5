@@ -2,13 +2,14 @@ import { fireEvent, render, waitFor, act } from "@testing-library/react-native";
 import React from "react";
 
 import { TimelineEventComposer } from "@/components/timeline/TimelineEventComposer";
-import { pickPostMediaFile } from "@/lib/uploads/picker";
+import { pickPostImageFile } from "@/lib/uploads/picker";
 import { uploadPostMedia } from "@/lib/queries/uploads";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
 jest.mock("@/lib/uploads/picker", () => ({
-  pickPostMediaFile: jest.fn(),
+  pickPostImageFile: jest.fn(),
+  pickPostDocumentFile: jest.fn(),
 }));
 
 jest.mock("@/lib/queries/uploads", () => ({
@@ -18,7 +19,7 @@ jest.mock("@/lib/queries/uploads", () => ({
 describe("TimelineEventComposer", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (pickPostMediaFile as jest.Mock).mockResolvedValue({
+    (pickPostImageFile as jest.Mock).mockResolvedValue({
       uri: "file:///tmp/milestone.webp",
       name: "milestone.webp",
       type: "image/webp",
@@ -69,7 +70,7 @@ describe("TimelineEventComposer", () => {
     );
 
     await act(async () => {
-      fireEvent.press(getByTestId("timeline-composer-media-button"));
+      fireEvent.press(getByTestId("timeline-composer-image-button"));
     });
     
     await waitFor(() => {

@@ -92,3 +92,34 @@ jest.mock("expo-asset", () => ({
     loadAsync: jest.fn(() => Promise.resolve()),
   },
 }));
+
+// Mock Firebase
+jest.mock("firebase/app", () => ({
+  initializeApp: jest.fn(),
+  getApps: jest.fn(() => []),
+  getApp: jest.fn(),
+}));
+
+jest.mock("firebase/auth", () => ({
+  getAuth: jest.fn(() => ({})),
+  onAuthStateChanged: jest.fn((_auth, cb) => {
+    // Optionally trigger callback with null user for default
+    return jest.fn(); // unsubscribe
+  }),
+  signInWithCustomToken: jest.fn(() => Promise.resolve()),
+  initializeAuth: jest.fn(),
+  getReactNativePersistence: jest.fn(),
+}));
+
+jest.mock("firebase/firestore", () => ({
+  getFirestore: jest.fn(() => ({})),
+  collection: jest.fn(),
+  query: jest.fn(),
+  orderBy: jest.fn(),
+  limit: jest.fn(),
+  onSnapshot: jest.fn(() => jest.fn()),
+  doc: jest.fn(),
+  updateDoc: jest.fn(() => Promise.resolve()),
+  setDoc: jest.fn(() => Promise.resolve()),
+  getDoc: jest.fn(() => Promise.resolve({ exists: () => false })),
+}));

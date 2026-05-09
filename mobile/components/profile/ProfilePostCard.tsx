@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { type Href, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Image, Linking, Text, TouchableOpacity, View } from "react-native";
+import { getAbsoluteUrl } from "@/lib/api/config";
 
 import { BasicFormattedText } from "@/components/ui/BasicFormattedText";
 import { FocusedImageModal } from "@/components/ui/FocusedImageModal";
@@ -131,6 +132,7 @@ export function ProfilePostCard({
     router.push(route as Href);
   };
 
+
   return (
     <View
       testID={`post-card-${post.id}`}
@@ -141,7 +143,7 @@ export function ProfilePostCard({
           {post.author?.picture_url ? (
             <Image
               testID={`post-card-avatar-${post.id}`}
-              source={{ uri: post.author.picture_url }}
+              source={{ uri: getAbsoluteUrl(post.author.picture_url) }}
               className="h-10 w-10 rounded-full bg-surface-active dark:bg-surface-active-dark"
               resizeMode="cover"
             />
@@ -256,11 +258,11 @@ export function ProfilePostCard({
         <TouchableOpacity
           testID={`post-card-media-button-${post.id}`}
           activeOpacity={0.9}
-          onPress={() => setFocusedImageUrl(post.media_url ?? null)}
+          onPress={() => setFocusedImageUrl(getAbsoluteUrl(post.media_url))}
         >
           <Image
             testID={`post-card-media-${post.id}`}
-            source={{ uri: post.media_url }}
+            source={{ uri: getAbsoluteUrl(post.media_url) }}
             className={`mt-3 w-full rounded-xl bg-surface-active dark:bg-surface-active-dark ${
               expanded ? "h-72" : "h-52"
             }`}
@@ -274,7 +276,7 @@ export function ProfilePostCard({
           testID={`post-card-attachment-${post.id}`}
           activeOpacity={0.82}
           onPress={() => {
-            void Linking.openURL(post.media_url ?? "");
+            void Linking.openURL(getAbsoluteUrl(post.media_url ?? ""));
           }}
           className="mt-3 flex-row items-center gap-3 rounded-xl border border-divider bg-surface-active px-3 py-3 dark:border-divider-dark dark:bg-surface-active-dark"
         >

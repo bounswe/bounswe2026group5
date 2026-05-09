@@ -52,10 +52,32 @@ export async function pickProfilePictureFile(): Promise<LocalUploadFile | null> 
   };
 }
 
-export async function pickPostMediaFile(): Promise<LocalUploadFile | null> {
+export async function pickPostImageFile(): Promise<LocalUploadFile | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    allowsMultipleSelection: false,
+    mediaTypes: ["images"],
+    quality: 0.8,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.fileSize, LIMITS.POST)) return null;
+
+  const type = asset.mimeType ?? "image/jpeg";
+  const extension = extensionFromMimeType(type);
+
+  return {
+    uri: asset.uri,
+    name: asset.fileName ?? `post-image.${extension}`,
+    type,
+  };
+}
+
+export async function pickPostDocumentFile(): Promise<LocalUploadFile | null> {
   const DocumentPicker = await import("expo-document-picker");
   const result = await DocumentPicker.getDocumentAsync({
-    type: ["image/*", "application/pdf"],
+    type: ["application/pdf", "image/*"],
     copyToCacheDirectory: true,
     multiple: false,
   });
@@ -67,10 +89,13 @@ export async function pickPostMediaFile(): Promise<LocalUploadFile | null> {
 
   return {
     uri: asset.uri,
-    name: asset.name || "attachment",
+    name: asset.name || "post-attachment",
     type: asset.mimeType || "application/octet-stream",
   };
 }
+
+// Keep pickPostMediaFile as an alias for backward compatibility
+export const pickPostMediaFile = pickPostDocumentFile;
 
 export async function pickMessageImageFile(): Promise<LocalUploadFile | null> {
   const result = await ImagePicker.launchImageLibraryAsync({
@@ -114,6 +139,45 @@ export async function pickMessagePdfFile(): Promise<LocalUploadFile | null> {
   };
 }
 
+export async function pickMessageAudioFile(): Promise<LocalUploadFile | null> {
+  const DocumentPicker = await import("expo-document-picker");
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ["audio/*"],
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.size, LIMITS.CHAT)) return null;
+
+  return {
+    uri: asset.uri,
+    name: asset.name || "audio-attachment.mp3",
+    type: asset.mimeType || "audio/mpeg",
+  };
+}
+
+export async function pickMessageDeviceFile(): Promise<LocalUploadFile | null> {
+  const DocumentPicker = await import("expo-document-picker");
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ["*/*"], // Truly generic
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.size, LIMITS.CHAT)) return null;
+
+  return {
+    uri: asset.uri,
+    name: asset.name || "file-attachment",
+    type: asset.mimeType || "application/octet-stream",
+  };
+}
+
 // Deprecated alias for backward compatibility
 export const pickImageFile = pickProfilePictureFile;
-export const pickPostImageFile = pickPostMediaFile;

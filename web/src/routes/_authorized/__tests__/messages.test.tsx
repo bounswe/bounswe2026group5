@@ -5,16 +5,18 @@ import { MessagesPage } from '../messages'
 
 globalThis.HTMLElement.prototype.scrollIntoView = vi.fn()
 
-const { mockUseConversations, mockUseMessages, mockUseSendMessage } = vi.hoisted(() => ({
+const { mockUseConversations, mockUseMessages, mockUseSendMessage, mockUseMarkRead } = vi.hoisted(() => ({
   mockUseConversations: vi.fn(),
   mockUseMessages: vi.fn(),
   mockUseSendMessage: vi.fn(),
+  mockUseMarkRead: vi.fn(),
 }))
 
 vi.mock('#/lib/queries/MessagingQueries.ts', () => ({
   useConversations: () => mockUseConversations(),
   useMessages: (id: string) => mockUseMessages(id),
   useSendMessage: (id: string) => mockUseSendMessage(id),
+  useMarkRead: (id: string) => mockUseMarkRead(id),
 }))
 
 vi.mock('#/lib/queries/AuthQueries.ts', () => ({
@@ -67,6 +69,7 @@ describe('MessagesPage', () => {
     mockUseConversations.mockReturnValue({ data: MOCK_CONVERSATIONS, isLoading: false })
     mockUseMessages.mockReturnValue({ data: MOCK_MESSAGES, isLoading: false })
     mockUseSendMessage.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
+    mockUseMarkRead.mockReturnValue({ mutate: vi.fn() })
   })
 
   it('renders the conversation list', () => {

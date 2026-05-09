@@ -2,14 +2,15 @@ import { fireEvent, render, waitFor, act } from "@testing-library/react-native";
 import React from "react";
 
 import { CommunityPostComposer } from "@/components/community/CommunityPostComposer";
-import { pickPostMediaFile } from "@/lib/uploads/picker";
+import { pickPostImageFile } from "@/lib/uploads/picker";
 import { uploadPostMedia } from "@/lib/queries/uploads";
 import type { ReactTestInstance } from "react-test-renderer";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
 jest.mock("@/lib/uploads/picker", () => ({
-  pickPostMediaFile: jest.fn(),
+  pickPostImageFile: jest.fn(),
+  pickPostDocumentFile: jest.fn(),
 }));
 
 jest.mock("@/lib/queries/uploads", () => ({
@@ -23,7 +24,7 @@ function expandComposer(getByTestId: (testID: string) => ReactTestInstance) {
 describe("CommunityPostComposer", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (pickPostMediaFile as jest.Mock).mockResolvedValue({
+    (pickPostImageFile as jest.Mock).mockResolvedValue({
       uri: "file:///tmp/community-photo.png",
       name: "community-photo.png",
       type: "image/png",
@@ -76,7 +77,7 @@ describe("CommunityPostComposer", () => {
     expandComposer(getByTestId);
 
     await act(async () => {
-      fireEvent.press(getByTestId("community-composer-media-button"));
+      fireEvent.press(getByTestId("community-composer-image-button"));
     });
     
     await waitFor(() => {

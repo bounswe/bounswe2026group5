@@ -15,6 +15,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
+from firebase_admin import auth
 
 from .models import AuthProvider, EmailVerificationToken, PasswordResetToken, Report, User
 from .oauth import OAuthVerificationError, verify_google_id_token
@@ -49,9 +50,20 @@ def build_auth_response(user: User, refresh: RefreshToken | None = None) -> dict
     if refresh is None:
         refresh = RefreshToken.for_user(user)
 
+    # Generate a Firebase custom token for real-time messaging
+    firebase_token = None
+    try:
+        from messaging.firebase import get_firebase_app
+        app = get_firebase_app()
+        if app:
+            firebase_token = auth.create_custom_token(str(user.id), app=app).decode("utf-8")
+    except Exception:
+        logger.exception("Failed to generate Firebase custom token for user %s", user.id)
+
     return {
         "access_token": str(refresh.access_token),
         "refresh_token": str(refresh),
+        "firebase_token": firebase_token,
         "user": UserResponseSerializer(user).data,
     }
 
@@ -287,10 +299,10 @@ class UserAppUsageModeMeAPIView(APIView):
 
 
 def _send_email_verification_email(user: User, raw_token: str) -> None:
-    verify_path = getattr(settings, "EMAIL_VERIFICATION_URL_PATH", "/verify-email")
+    verify_path = "/verify-email"
     base_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
     verify_link = f"{base_url}{verify_path}?token={raw_token}"
-    lifetime_hours = getattr(settings, "EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS", 24)
+    lifetime_hours = 24
 
     subject = "Verify your Neighborship email address"
     body = (
@@ -311,10 +323,10 @@ def _send_email_verification_email(user: User, raw_token: str) -> None:
 
 
 def _send_password_reset_email(user: User, raw_token: str) -> None:
-    reset_path = getattr(settings, "PASSWORD_RESET_URL_PATH", "/reset-password")
+    reset_path = "/reset-password"
     base_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
     reset_link = f"{base_url}{reset_path}?token={raw_token}"
-    lifetime = getattr(settings, "PASSWORD_RESET_TOKEN_LIFETIME_MINUTES", 30)
+    lifetime = 30
 
     subject = "Reset your Neighborship password"
     body = (

@@ -21,9 +21,31 @@ def get_firebase_app():
                 logger.warning(f"Firebase service account file not found at {cred_path}")
                 return None
 
-            cred = credentials.Certificate(str(cred_path))
-            _firebase_app = firebase_admin.initialize_app(cred)
+            # Robust check for existing apps to avoid concurrent initialization errors
+            app_name = "messaging"
+            for app in firebase_admin._apps.values():
+                if app.name == app_name:
+                    _firebase_app = app
+                    logger.debug(f"Firebase app '{app_name}' already exists in _apps, reusing it")
+                    return _firebase_app
+
+            try:
+                # Double check with get_app in case it was just added
+                _firebase_app = firebase_admin.get_app(app_name)
+                logger.debug(f"Firebase app '{app_name}' already exists via get_app, reusing it")
+            except ValueError:
+                # App doesn't exist, create it
+                cred = credentials.Certificate(str(cred_path))
+                _firebase_app = firebase_admin.initialize_app(cred, name=app_name)
+                logger.debug(f"Firebase app '{app_name}' initialized")
         except Exception as e:
+            # Last ditch effort: if it failed because it exists, just get it
+            if "already exists" in str(e):
+                try:
+                    _firebase_app = firebase_admin.get_app("messaging")
+                    return _firebase_app
+                except Exception:
+                    pass
             logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
             return None
     return _firebase_app
@@ -68,7 +90,7 @@ def send_push_notification(
         return
 
     try:
-        response = messaging.send_each(messages)
+        response = messaging.send_each(messages, app=app)
         logger.info(
             f"Successfully sent push notification: {response.success_count} success, {response.failure_count} failure"
         )

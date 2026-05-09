@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { getAbsoluteUrl } from "@/lib/api/config";
 
 import { pickImageFile } from "@/lib/uploads/picker";
 import type { LocalUploadFile } from "@/lib/queries/uploads";
@@ -182,7 +183,7 @@ export function EditProfileModal({
                       {previewUrl ? (
                         <Image
                           testID="avatar-preview"
-                          source={{ uri: previewUrl }}
+                          source={{ uri: getAbsoluteUrl(previewUrl) }}
                           className="h-full w-full"
                           resizeMode="cover"
                         />
