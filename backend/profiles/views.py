@@ -2551,6 +2551,7 @@ class CommunityTagWorkshopLeaveAPIView(ProfileLookupMixin, APIView):
                     "(2) cannot withdraw after workshop end time"
                 )
             ),
+            403: OpenApiResponse(description="Workshop authors cannot leave participation."),
             404: OpenApiResponse(description="Workshop or community tag not found."),
         },
         description=(
@@ -2573,6 +2574,12 @@ class CommunityTagWorkshopLeaveAPIView(ProfileLookupMixin, APIView):
             participant_profile = Profile.objects.get(user=request.user)
         except Profile.DoesNotExist:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        if workshop.author_id == participant_profile.id:
+            return Response(
+                {"detail": "Workshop authors cannot remove their participation."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # Check user is enrolled
         participation = WorkshopParticipant.objects.filter(

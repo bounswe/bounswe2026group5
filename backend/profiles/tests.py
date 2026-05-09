@@ -5561,3 +5561,22 @@ class CommunityTagWorkshopsAPITests(TestCase):
             participant=self.member_profile,
         )
         self.assertTrue(participation.show_on_profile)
+
+    def test_author_cannot_leave_workshop_participation(self) -> None:
+        workshop = self._create_workshop()
+        WorkshopParticipant.objects.create(
+            workshop=workshop,
+            participant=self.mentor_profile,
+            show_on_profile=False,
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_token}")
+        response = self.client.post(self._leave_url(workshop.id), {}, format="json")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(
+            WorkshopParticipant.objects.filter(
+                workshop=workshop,
+                participant=self.mentor_profile,
+            ).exists()
+        )
