@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { Loader2, Plus, Pencil, Trash2, Trophy, Users, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -148,7 +149,10 @@ function ProfilePostCard({
                             {label}
                         </span>
                         {post.category === 'MCTE' && (
-                            <Badge variant="secondary" className="text-xs">Milestone</Badge>
+                            <Badge variant="secondary" className="text-xs">Mentorship Journey</Badge>
+                        )}
+                        {post.category === 'CoP' && (
+                            <Badge variant="secondary" className="text-xs">Community</Badge>
                         )}
                     </div>
                     {canEdit && (
@@ -186,6 +190,51 @@ function ProfilePostCard({
                     >
                         {post.media_url}
                     </a>
+                )}
+                {post.category === 'MCTE' && post.mentorship_partner && (
+                    <Muted className="text-xs">
+                        From the mentorship journey with{' '}
+                        <Link
+                            to="/profiles/$username"
+                            params={{ username: post.mentorship_partner }}
+                            className="text-accent hover:underline"
+                        >
+                            @{post.mentorship_partner}
+                        </Link>
+                    </Muted>
+                )}
+                {post.category === 'CoP' && post.community_name && (
+                    <Muted className="text-xs">
+                        In{' '}
+                        {post.community_slug ? (
+                            <Link
+                                to="/communities/$communitySlug"
+                                params={{ communitySlug: post.community_slug }}
+                                className="text-accent hover:underline"
+                            >
+                                {post.community_name}
+                            </Link>
+                        ) : (
+                            post.community_name
+                        )}{' '}
+                        community
+                        {post.tagged_users && post.tagged_users.length > 0 && (
+                            <>, with{' '}
+                                {post.tagged_users.map((u, i) => (
+                                    <span key={u.user_id}>
+                                        <Link
+                                            to="/profiles/$username"
+                                            params={{ username: u.username }}
+                                            className="text-accent hover:underline"
+                                        >
+                                            @{u.username}
+                                        </Link>
+                                        {i < post.tagged_users!.length - 1 && ', '}
+                                    </span>
+                                ))}
+                            </>
+                        )}
+                    </Muted>
                 )}
                 <Muted className="text-xs">{formatTimestamp(post.timestamp)}</Muted>
             </CardContent>
