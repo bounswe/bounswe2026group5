@@ -40,6 +40,14 @@ const {
 
 vi.mock('../../../routeTree.gen', () => ({}))
 vi.mock('../../../router', () => ({}))
+vi.mock('../../../queryClient', () => ({
+    queryClient: {
+        setQueryData: vi.fn(),
+        invalidateQueries: vi.fn(),
+        refetchQueries: vi.fn(),
+        clear: vi.fn(),
+    },
+}))
 
 vi.mock('#/lib/queries/AuthQueries.ts', () => ({
     verifyEmailFn: mockVerifyEmailFn,
@@ -61,7 +69,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
     return {
         ...actual,
         createFileRoute: () => () => ({ update: vi.fn().mockReturnThis() }),
-        useRouter: () => ({ navigate: mockNavigate }),
+        useRouter: () => ({ navigate: mockNavigate, invalidate: vi.fn() }),
         Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
             <a href={to}>{children}</a>
         ),
@@ -281,7 +289,7 @@ describe('Email verification page', () => {
             expect(screen.getByText(/automatically redirected/i)).toBeInTheDocument()
         })
 
-        it('navigates to the dashboard after 3 seconds on success', () => {
+        it('navigates to the dashboard after 3 seconds on success', async () => {
             vi.useFakeTimers()
 
             let capturedOnSuccess: (() => void) | undefined
@@ -294,7 +302,7 @@ describe('Email verification page', () => {
 
             render(<VerifyEmailPage />)
 
-            capturedOnSuccess?.()
+            await capturedOnSuccess?.()
             vi.advanceTimersByTime(3000)
 
             expect(mockNavigate).toHaveBeenCalledWith({ to: '/dashboard' })
