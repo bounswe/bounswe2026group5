@@ -5551,3 +5551,147 @@ class CommunityTagWorkshopsAPITests(TestCase):
             participant=self.member_profile,
         )
         self.assertTrue(participation.show_on_profile)
+
+
+class ProfileWorkshopAttendanceAPITests(TestCase):
+    """Tests for profile-scoped workshop attendance endpoints."""
+
+    def setUp(self) -> None:
+        self.client = APIClient()
+
+        self.owner_user = User.objects.create_user(
+            email="attendance.owner@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+            is_email_verified=True,
+        )
+        self.viewer_user = User.objects.create_user(
+            email="attendance.viewer@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+            is_email_verified=True,
+        )
+        self.author_user = User.objects.create_user(
+            email="attendance.author@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+            is_email_verified=True,
+        )
+
+        self.owner_profile = Profile.objects.create(
+            user=self.owner_user,
+            display_name="Attendance Owner",
+        )
+        self.viewer_profile = Profile.objects.create(
+            user=self.viewer_user,
+            display_name="Attendance Viewer",
+        )
+        self.author_profile = Profile.objects.create(
+            user=self.author_user,
+            display_name="Workshop Author",
+        )
+
+        self.tag = CommunityTag.objects.create(
+            name="Attendance Community",
+            created_by=self.author_profile,
+        )
+
+        now = timezone.now()
+        self.upcoming_workshop = Workshop.objects.create(
+            community=self.tag,
+            author=self.author_profile,
+            title="Upcoming Workshop",
+            description="Upcoming event",
+            scheduled_at=now + timedelta(days=1),
+            end_at=now + timedelta(days=1, hours=2),
+            max_participants=10,
+        )
+        self.past_workshop = Workshop.objects.create(
+            community=self.tag,
+            author=self.author_profile,
+            title="Past Workshop",
+            description="Past event",
+            scheduled_at=now - timedelta(days=3),
+            end_at=now - timedelta(days=3, hours=-2),
+            max_participants=10,
+            status=Workshop.Status.COMPLETED,
+        )
+
+        WorkshopParticipant.objects.create(
+            workshop=self.upcoming_workshop,
+            participant=self.owner_profile,
+            show_on_profile=False,
+        )
+        WorkshopParticipant.objects.create(
+            workshop=self.past_workshop,
+            participant=self.owner_profile,
+            show_on_profile=True,
+        )
+
+        self.owner_token = _token_for_profile_tests(self.owner_user)
+        self.viewer_token = _token_for_profile_tests(self.viewer_user)
+
+    def test_me_attendance_list_returns_all_owner_records(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.get("/api/profiles/me/workshops/attendance/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(response.data["attending_count"], 1)
+        self.assertEqual(response.data["attended_count"], 1)
+
+    def test_public_profile_attendance_hides_private_records(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.viewer_token}")
+
+        response = self.client.get(
+            f"/api/profiles/{self.owner_profile.username}/workshops/attendance/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        titles = {row["workshop_title"] for row in response.data["results"]}
+        self.assertIn("Past Workshop", titles)
+        self.assertNotIn("Upcoming Workshop", titles)
+
+    def test_me_can_patch_visibility_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.patch(
+            f"/api/profiles/me/workshops/attendance/{self.upcoming_workshop.id}/",
+            {"show_on_profile": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["show_on_profile"])
+
+        record = WorkshopParticipant.objects.get(
+            workshop=self.upcoming_workshop,
+            participant=self.owner_profile,
+        )
+        self.assertTrue(record.show_on_profile)
+
+    def test_me_can_delete_upcoming_attendance_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.delete(
+            f"/api/profiles/me/workshops/attendance/{self.upcoming_workshop.id}/"
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(
+            WorkshopParticipant.objects.filter(
+                workshop=self.upcoming_workshop,
+                participant=self.owner_profile,
+            ).exists()
+        )
+
+    def test_me_cannot_delete_attended_workshop_attendance(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.delete(
+            f"/api/profiles/me/workshops/attendance/{self.past_workshop.id}/"
+        )
+
+        self.assertEqual(response.status_code, 400)

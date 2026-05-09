@@ -28,7 +28,10 @@ from .views import (
     PopularMentorsListAPIView,
     PopularTagsListAPIView,
     PostMediaUploadAPIView,
+    ProfileWorkshopAttendanceListAPIView,
     ProfileByUsernameAPIView,
+    MyWorkshopAttendanceDetailAPIView,
+    MyWorkshopAttendanceListAPIView,
     ProfileMeAPIView,
     ProfilePictureUploadAPIView,
     ProfilePostsListAPIView,
@@ -44,6 +47,16 @@ urlpatterns = [
     path("me/", ProfileMeAPIView.as_view(), name="profile-me"),
     path("me/picture/", ProfilePictureUploadAPIView.as_view(), name="profile-picture-upload"),
     path("me/uploads/", PostMediaUploadAPIView.as_view(), name="post-media-upload"),
+    path(
+        "me/workshops/attendance/",
+        MyWorkshopAttendanceListAPIView.as_view(),
+        name="profile-me-workshop-attendance-list",
+    ),
+    path(
+        "me/workshops/attendance/<uuid:workshop_id>/",
+        MyWorkshopAttendanceDetailAPIView.as_view(),
+        name="profile-me-workshop-attendance-detail",
+    ),
     path("me/posts/", MyProfilePostsCollectionAPIView.as_view(), name="profile-posts-me-create"),
     path(
         "me/posts/<uuid:event_id>/",
@@ -87,6 +100,11 @@ urlpatterns = [
         "<str:username>/reviews/",
         ProfileReviewsByUsernameAPIView.as_view(),
         name="profile-reviews",
+    ),
+    path(
+        "<str:username>/workshops/attendance/",
+        ProfileWorkshopAttendanceListAPIView.as_view(),
+        name="profile-workshop-attendance-list",
     ),
     path("<str:username>/posts/", ProfilePostsListAPIView.as_view(), name="profile-posts-list"),
     # Community Tags

@@ -24,6 +24,9 @@ from accounts.models import AppUsageMode, UserRole
 from accounts.permissions import IsEmailVerified, IsUser
 from mentorship.models import Feedback, MentorshipRequest, Workshop, WorkshopParticipant
 from mentorship.serializers import (
+    WorkshopAttendanceFeedSerializer,
+    WorkshopAttendanceItemSerializer,
+    WorkshopAttendanceQueryParamsSerializer,
     WorkshopCreateSerializer,
     WorkshopDetailSerializer,
     WorkshopFeedSerializer,
@@ -2665,5 +2668,283 @@ class CommunityTagWorkshopMyParticipationAPIView(ProfileLookupMixin, APIView):
                 workshop__community_id=tag_id,
                 participant=profile,
             )
+            .first()
+        )
+
+
+class MyWorkshopAttendanceListAPIView(ProfileLookupMixin, APIView):
+    """List authenticated user's attending/attended workshops from profile context."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        operation_id="profile_me_workshop_attendance_list",
+        parameters=[
+            OpenApiParameter(
+                name="status",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.STR,
+                enum=["all", "attending", "attended"],
+                description="Filter workshop attendance by attendance status.",
+            ),
+            OpenApiParameter(
+                name="offset",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Zero-based index of the first item to include. Default: 0.",
+            ),
+            OpenApiParameter(
+                name="limit",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Maximum number of items to return. Default: 50. Maximum: 200.",
+            ),
+        ],
+        responses={
+            200: WorkshopAttendanceFeedSerializer,
+            400: OpenApiResponse(description="Invalid query parameters."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "List authenticated user's workshop attendance from profile page context. "
+            "Returns both attending and attended counts and paginated results."
+        ),
+        tags=["Profiles"],
+    )
+    def get(self, request: Request) -> Response:
+        """Return authenticated user's workshop attendance records."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        params_serializer = WorkshopAttendanceQueryParamsSerializer(data=request.query_params)
+        params_serializer.is_valid(raise_exception=True)
+        params = params_serializer.validated_data
+
+        payload = self._build_attendance_payload(
+            participant_profile=profile,
+            include_private=True,
+            status_filter=params["status"],
+            offset=params["offset"],
+            limit=params["limit"],
+            request=request,
+        )
+        return Response(payload, status=status.HTTP_200_OK)
+
+    def _build_attendance_payload(
+        self,
+        *,
+        participant_profile: Profile,
+        include_private: bool,
+        status_filter: str,
+        offset: int,
+        limit: int,
+        request: Request,
+    ) -> dict[str, object]:
+        """Build attendance payload with counts and paginated result rows."""
+        queryset = WorkshopParticipant.objects.select_related(
+            "workshop",
+            "workshop__community",
+            "workshop__author",
+            "workshop__author__user",
+            "participant",
+            "participant__user",
+        ).filter(participant=participant_profile)
+
+        if not include_private:
+            queryset = queryset.filter(show_on_profile=True)
+
+        now = timezone.now()
+        attending_count = queryset.filter(workshop__end_at__gt=now).count()
+        attended_count = queryset.filter(workshop__end_at__lte=now).count()
+
+        if status_filter == "attending":
+            queryset = queryset.filter(workshop__end_at__gt=now)
+        elif status_filter == "attended":
+            queryset = queryset.filter(workshop__end_at__lte=now)
+
+        queryset = queryset.order_by("-workshop__scheduled_at", "-joined_at")
+        total_count = queryset.count()
+        rows = list(queryset[offset : offset + limit])
+
+        serialized_rows = WorkshopAttendanceItemSerializer(
+            rows,
+            many=True,
+            context={"request": request},
+        ).data
+
+        return {
+            "count": total_count,
+            "attending_count": attending_count,
+            "attended_count": attended_count,
+            "offset": offset,
+            "limit": limit,
+            "results": serialized_rows,
+        }
+
+
+class ProfileWorkshopAttendanceListAPIView(MyWorkshopAttendanceListAPIView):
+    """List a user's visible workshop attendance from their profile page."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        operation_id="profile_user_workshop_attendance_list",
+        parameters=[
+            OpenApiParameter(
+                name="status",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.STR,
+                enum=["all", "attending", "attended"],
+                description="Filter workshop attendance by attendance status.",
+            ),
+            OpenApiParameter(
+                name="offset",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Zero-based index of the first item to include. Default: 0.",
+            ),
+            OpenApiParameter(
+                name="limit",
+                location=OpenApiParameter.QUERY,
+                required=False,
+                type=OpenApiTypes.INT,
+                description="Maximum number of items to return. Default: 50. Maximum: 200.",
+            ),
+        ],
+        responses={
+            200: WorkshopAttendanceFeedSerializer,
+            400: OpenApiResponse(description="Invalid query parameters."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description=(
+            "List a profile user's workshop attendance. "
+            "Only records where show_on_profile=true are visible to other users."
+        ),
+        tags=["Profiles"],
+    )
+    def get(self, request: Request, username: str) -> Response:
+        """Return profile user's workshop attendance with privacy filtering."""
+        profile = self._get_profile_or_404(username)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        params_serializer = WorkshopAttendanceQueryParamsSerializer(data=request.query_params)
+        params_serializer.is_valid(raise_exception=True)
+        params = params_serializer.validated_data
+
+        include_private = bool(request.user.is_authenticated and request.user == profile.user)
+        payload = self._build_attendance_payload(
+            participant_profile=profile,
+            include_private=include_private,
+            status_filter=params["status"],
+            offset=params["offset"],
+            limit=params["limit"],
+            request=request,
+        )
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class MyWorkshopAttendanceDetailAPIView(ProfileLookupMixin, APIView):
+    """Manage authenticated user's attendance and visibility for a specific workshop."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        operation_id="profile_me_workshop_attendance_detail_get",
+        responses={
+            200: WorkshopAttendanceItemSerializer,
+            404: OpenApiResponse(description="Attendance not found."),
+        },
+        tags=["Profiles"],
+    )
+    def get(self, request: Request, workshop_id: str) -> Response:
+        """Return current user's attendance row for a workshop."""
+        attendance = self._get_my_attendance_or_404(request, workshop_id)
+        if attendance is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(
+            WorkshopAttendanceItemSerializer(attendance, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        operation_id="profile_me_workshop_attendance_detail_patch",
+        request=WorkshopParticipantCreateSerializer,
+        responses={
+            200: WorkshopAttendanceItemSerializer,
+            404: OpenApiResponse(description="Attendance not found."),
+        },
+        tags=["Profiles"],
+    )
+    def patch(self, request: Request, workshop_id: str) -> Response:
+        """Update current user's show_on_profile for a workshop attendance."""
+        attendance = self._get_my_attendance_or_404(request, workshop_id)
+        if attendance is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        payload = WorkshopParticipantCreateSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        attendance.show_on_profile = payload.validated_data.get(
+            "show_on_profile", attendance.show_on_profile
+        )
+        attendance.save(update_fields=["show_on_profile"])
+
+        return Response(
+            WorkshopAttendanceItemSerializer(attendance, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        operation_id="profile_me_workshop_attendance_detail_delete",
+        request=None,
+        responses={
+            204: OpenApiResponse(description="Attendance removed successfully."),
+            400: OpenApiResponse(description="Cannot remove attendance after workshop end time."),
+            404: OpenApiResponse(description="Attendance not found."),
+        },
+        tags=["Profiles"],
+    )
+    def delete(self, request: Request, workshop_id: str) -> Response:
+        """Remove current user's workshop attendance if workshop has not ended."""
+        attendance = self._get_my_attendance_or_404(request, workshop_id)
+        if attendance is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        if attendance.workshop.is_past_end_time():
+            return Response(
+                {"detail": "Cannot remove attendance after workshop has ended."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        attendance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _get_my_attendance_or_404(
+        self,
+        request: Request,
+        workshop_id: str,
+    ) -> WorkshopParticipant | None:
+        """Resolve authenticated user's workshop attendance by workshop ID."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return None
+
+        return (
+            WorkshopParticipant.objects.select_related(
+                "workshop",
+                "workshop__community",
+                "workshop__author",
+                "workshop__author__user",
+                "participant",
+                "participant__user",
+            )
+            .filter(workshop_id=workshop_id, participant=profile)
             .first()
         )

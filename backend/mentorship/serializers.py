@@ -784,3 +784,66 @@ class WorkshopParticipantCreateSerializer(serializers.Serializer):
     """Write serializer for updating participant visibility preferences."""
 
     show_on_profile = serializers.BooleanField(default=False, required=False)
+
+
+class WorkshopAttendanceQueryParamsSerializer(serializers.Serializer):
+    """Query params for profile-scoped workshop attendance endpoints."""
+
+    status = serializers.ChoiceField(
+        choices=["all", "attending", "attended"],
+        required=False,
+        default="all",
+    )
+    offset = serializers.IntegerField(required=False, default=0, min_value=0)
+    limit = serializers.IntegerField(required=False, default=50, min_value=1, max_value=200)
+
+
+class WorkshopAttendanceItemSerializer(serializers.ModelSerializer):
+    """Profile-facing serializer for one workshop attendance item."""
+
+    workshop_id = serializers.UUIDField(source="workshop.id", read_only=True)
+    workshop_title = serializers.CharField(source="workshop.title", read_only=True)
+    workshop_description = serializers.CharField(source="workshop.description", read_only=True)
+    workshop_status = serializers.CharField(source="workshop.status", read_only=True)
+    workshop_scheduled_at = serializers.DateTimeField(source="workshop.scheduled_at", read_only=True)
+    workshop_end_at = serializers.DateTimeField(source="workshop.end_at", read_only=True)
+    community_id = serializers.UUIDField(source="workshop.community.id", read_only=True)
+    community_name = serializers.CharField(source="workshop.community.name", read_only=True)
+    author = ProfileSummarySerializer(source="workshop.author", read_only=True)
+    attendance_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkshopParticipant
+        fields = (
+            "id",
+            "workshop_id",
+            "workshop_title",
+            "workshop_description",
+            "workshop_status",
+            "workshop_scheduled_at",
+            "workshop_end_at",
+            "community_id",
+            "community_name",
+            "author",
+            "joined_at",
+            "show_on_profile",
+            "attendance_status",
+        )
+        read_only_fields = fields
+
+    def get_attendance_status(self, obj: WorkshopParticipant) -> str:
+        """Return attending when workshop is upcoming/ongoing, otherwise attended."""
+        if obj.workshop.end_at > timezone.now():
+            return "attending"
+        return "attended"
+
+
+class WorkshopAttendanceFeedSerializer(serializers.Serializer):
+    """Paginated envelope for profile workshop attendance responses."""
+
+    count = serializers.IntegerField(read_only=True)
+    attending_count = serializers.IntegerField(read_only=True)
+    attended_count = serializers.IntegerField(read_only=True)
+    offset = serializers.IntegerField(read_only=True)
+    limit = serializers.IntegerField(read_only=True)
+    results = WorkshopAttendanceItemSerializer(many=True, read_only=True)
