@@ -10,12 +10,12 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useGoogleLogin } from '@react-oauth/google'
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { CalendarDays, Search, TrendingUp } from 'lucide-react'
-import { useGoogleLogin } from '@react-oauth/google'
 
-import { handleAuthSuccess, loginFn, googleLoginFn } from "#/lib/queries/AuthQueries.ts"
 import { requestForToken } from "#/lib/firebase-client"
+import { googleLoginFn, handleAuthSuccess, loginFn } from "#/lib/queries/AuthQueries.ts"
 import { useMutation } from "@tanstack/react-query"
 import { useState } from "react"
 
@@ -83,14 +83,14 @@ export function LoginPage() {
         <div className="grid min-h-screen lg:grid-cols-[5fr_4fr]">
 
             <aside className="lg:flex flex-col px-14 py-12 bg-petal border-r border-line">
-                <Display className="mb-10">Campus Tutor</Display>
+                <Display className="mb-10">Neighborship</Display>
                 <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4 rise-in">
                     <Body className="island-kicker">Peer tutoring platform</Body>
                     <Display as="h2" className="leading-[1.2] max-w-xs">
                         Study better,<br />together.
                     </Display>
                     <Body className="text-(--color-brand-ink-soft) max-w-90">
-                        Find tutors from your own campus, book sessions around your
+                        Find mentors from your own campus, book sessions around your
                         schedule, and actually understand the material.
                     </Body>
                     <ul className="flex flex-col gap-6">

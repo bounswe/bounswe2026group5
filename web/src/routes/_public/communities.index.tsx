@@ -32,7 +32,7 @@ import type { CommunityTag } from '@/lib/queries/CommunityQueries.ts'
 const PAGE_SIZE = 6
 const SECTION_CLASS = 'w-full max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 lg:px-20 xl:px-28'
 
-export const Route = createFileRoute('/_authorized/communities/')({
+export const Route = createFileRoute('/_public/communities/')({
     component: CommunitiesPage,
 })
 
@@ -47,8 +47,8 @@ interface CommunityRowProps {
     communities: CommunityTag[]
     myIds: Set<string>
     onView: (id: string) => void
-    onJoin: (id: string) => void
-    onLeave: (id: string) => void
+    onJoin: ((id: string) => void) | undefined
+    onLeave: ((id: string) => void) | undefined
     joiningId: string | null
     leavingId: string | null
 }
@@ -238,6 +238,9 @@ export function CommunitiesPage() {
         }
     }, [leaveMutation])
 
+    const onJoin = me ? handleJoin : undefined
+    const onLeave = me ? handleLeave : undefined
+
     return (
         <div className="py-10 sm:py-16 rise-in flex flex-col gap-12">
 
@@ -266,14 +269,16 @@ export function CommunitiesPage() {
                                 <X className="h-4 w-4" />
                             </Button>
                         )}
-                        <Button
-                            className="shrink-0 bg-accent hover:bg-accent-light text-white shadow-sm flex items-center gap-1.5"
-                            size="sm"
-                            onClick={() => setShowCreateModal(true)}
-                        >
-                            <Plus className="h-4 w-4" />
-                            <span className="hidden sm:inline">Create</span>
-                        </Button>
+                        {me && (
+                            <Button
+                                className="shrink-0 bg-accent hover:bg-accent-light text-white shadow-sm flex items-center gap-1.5"
+                                size="sm"
+                                onClick={() => setShowCreateModal(true)}
+                            >
+                                <Plus className="h-4 w-4" />
+                                <span className="hidden sm:inline">Create</span>
+                            </Button>
+                        )}
                     </div>
                 </section>
             </div>
@@ -289,8 +294,8 @@ export function CommunitiesPage() {
                             communities={myCommunities}
                             myIds={myIds}
                             onView={handleView}
-                            onJoin={handleJoin}
-                            onLeave={handleLeave}
+                            onJoin={onJoin}
+                            onLeave={onLeave}
                             joiningId={joiningId}
                             leavingId={leavingId}
                         />
@@ -304,8 +309,8 @@ export function CommunitiesPage() {
                             communities={popularCommunities}
                             myIds={myIds}
                             onView={handleView}
-                            onJoin={handleJoin}
-                            onLeave={handleLeave}
+                            onJoin={onJoin}
+                            onLeave={onLeave}
                             joiningId={joiningId}
                             leavingId={leavingId}
                         />
@@ -332,7 +337,7 @@ export function CommunitiesPage() {
                                 ? (<>No communities found matching <span className="font-semibold text-ink">"{debouncedQuery}"</span>.</>)
                                 : 'No communities yet.'}
                         </p>
-                        {!debouncedQuery && (
+                        {!debouncedQuery && me && (
                             <p className="text-ink-soft text-sm mt-2">
                                 Be the first to{' '}
                                 <button
@@ -353,8 +358,8 @@ export function CommunitiesPage() {
                                 community={community}
                                 isMember={myIds.has(community.id)}
                                 onViewCommunity={handleView}
-                                onJoin={handleJoin}
-                                onLeave={handleLeave}
+                                onJoin={onJoin}
+                                onLeave={onLeave}
                                 isJoining={joiningId === community.id}
                                 isLeaving={leavingId === community.id}
                                 className="h-full"

@@ -1,5 +1,5 @@
+import { NavLink } from '@/components/NavLink'
 import { Muted } from '@/components/Typography'
-import {NavLink} from '@/components/NavLink'
 
 const FOOTER_LINKS = [
     { to: '/discover', label: 'Discover' },
@@ -28,7 +28,7 @@ export function UnauthorizedFooter() {
 
                 {/* Copyright */}
                 <Muted as="span" className="text-xs">
-                    © {new Date().getFullYear()} Campus Tutor
+                    © {new Date().getFullYear()} Neighborship
                 </Muted>
 
             </div>

@@ -1,13 +1,13 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { ArrowLeft, CheckCircle, Mail } from 'lucide-react'
+import { forgotPasswordFn } from '#/lib/queries/AuthQueries.ts'
+import { Body, Display, Heading, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Display, Heading, Body, Muted } from '@/components/Typography'
-import { forgotPasswordFn } from '#/lib/queries/AuthQueries.ts'
+import { useMutation } from '@tanstack/react-query'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { ArrowLeft, CheckCircle, Mail } from 'lucide-react'
+import { useState } from 'react'
 
 export const Route = createFileRoute('/_unauthorized/forgot-password')({
     component: ForgotPasswordPage,
@@ -40,7 +40,7 @@ export function ForgotPasswordPage() {
     return (
         <div className="grid min-h-screen lg:grid-cols-[5fr_4fr]">
             <aside className="hidden lg:flex flex-col px-14 py-12 bg-petal border-r border-line">
-                <Display className="mb-10">Campus Tutor</Display>
+                <Display className="mb-10">Neighborship</Display>
                 <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4 rise-in">
                     <Body className="island-kicker">Account Recovery</Body>
                     <Display as="h2" className="leading-[1.2] max-w-xs">

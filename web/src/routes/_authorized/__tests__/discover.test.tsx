@@ -113,7 +113,7 @@ vi.mock('@/lib/queries/DiscoverQueries.ts', async (importOriginal) => {
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
-import { DiscoverPage } from '../discover'
+import { DiscoverPage } from '../../_public/discover'
 
 function renderDiscover() {
   const queryClient = new QueryClient({

@@ -30,7 +30,7 @@ export function AuthorizedHeader() {
                 to="/dashboard"
                 className="font-bold font-display tracking-tight text-lg text-ink"
             >
-              Mentorship
+              Neighborship
             </Link>
 
             <nav className="hidden sm:flex items-center gap-1" aria-label="Main navigation">
