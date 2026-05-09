@@ -1,5 +1,5 @@
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
-import { useOwnProfile, useUpdateProfile } from '#/lib/queries/ProfileQueries.ts'
+import { useOwnProfile, useUpdateProfile, useUploadProfilePicture } from '#/lib/queries/ProfileQueries.ts'
 import { SkillPicker } from '@/components/SkillPicker'
 import { Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
@@ -8,9 +8,10 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, X } from 'lucide-react'
-import { useState } from 'react'
+import { Camera, Loader2, X } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { toast } from 'sonner'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -35,12 +36,28 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
     const { data: me } = useQuery(meQueryOptions)
     const { data: profileData } = useOwnProfile()
     const updateProfile = useUpdateProfile()
+    const uploadPicture = useUploadProfilePicture()
     const queryClient = useQueryClient()
+    const pictureInputRef = useRef<HTMLInputElement>(null)
 
     const [bio, setBio] = useState(initialValues.bio)
     const [skills, setSkills] = useState<string[]>(initialValues.skills)
     const [title, setTitle] = useState(initialValues.title ?? '')
     const [showInitialsOnly, setShowInitialsOnly] = useState(initialValues.show_initials_only ?? false)
+
+    function handlePictureChange(file: File) {
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Image must be under 5 MB')
+            return
+        }
+        uploadPicture.mutate(file, {
+            onSuccess: () => {
+                queryClient.invalidateQueries({ queryKey: ['profiles', 'me'] })
+                queryClient.invalidateQueries({ queryKey: ['profiles', me?.username] })
+            },
+            onError: () => toast.error('Failed to upload picture. Please try again.'),
+        })
+    }
 
     const isMentor = mode === 'MENTOR'
 
@@ -102,6 +119,42 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
 
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+                    {/* Profile picture */}
+                    <div className="flex flex-col items-center gap-2">
+                        <input
+                            ref={pictureInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handlePictureChange(f) }}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => pictureInputRef.current?.click()}
+                            className="relative group rounded-full focus:outline-none focus:ring-2 focus:ring-accent"
+                            aria-label="Change profile picture"
+                        >
+                            {profileData?.picture_url ? (
+                                <img
+                                    src={profileData.picture_url}
+                                    alt="Profile"
+                                    className="h-20 w-20 rounded-full object-cover"
+                                />
+                            ) : (
+                                <div className="h-20 w-20 rounded-full bg-accent text-white text-2xl font-bold flex items-center justify-center">
+                                    {me?.username?.[0]?.toUpperCase() ?? '?'}
+                                </div>
+                            )}
+                            <span className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                {uploadPicture.isPending
+                                    ? <Loader2 className="h-6 w-6 text-white animate-spin" />
+                                    : <Camera className="h-6 w-6 text-white" />
+                                }
+                            </span>
+                        </button>
+                        <Muted className="text-xs">Click to change photo</Muted>
+                    </div>
 
                     {/* Title — mentor only */}
                     {isMentor && (

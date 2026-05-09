@@ -66,11 +66,26 @@ async function fetchMessages(conversationId: string, page = 1, pageSize = 50): P
     return res.json()
 }
 
-async function sendMessage(conversationId: string, body: string): Promise<Message> {
+async function sendMessage(
+    conversationId: string,
+    body: string,
+    attachment?: File,
+): Promise<Message> {
+    const headers = authHeaders()
+    let reqBody: BodyInit
+    if (attachment) {
+        const form = new FormData()
+        form.append('body', body)
+        form.append('attachment', attachment)
+        reqBody = form
+    } else {
+        (headers as Record<string, string>)['Content-Type'] = 'application/json'
+        reqBody = JSON.stringify({ body })
+    }
     const res = await fetch(`${API_BASE_URL}/messages/conversations/${conversationId}/`, {
         method: 'POST',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body }),
+        headers,
+        body: reqBody,
     })
     if (!res.ok) await throwApiError(res)
     return res.json()
@@ -179,7 +194,8 @@ export function useMessages(conversationId: string) {
 
 export function useSendMessage(conversationId: string) {
     return useMutation({
-        mutationFn: (body: string) => sendMessage(conversationId, body),
+        mutationFn: ({ body, attachment }: { body: string; attachment?: File }) =>
+            sendMessage(conversationId, body, attachment),
     })
 }
 

@@ -12,11 +12,11 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Muted } from '@/components/Typography'
+import { MediaUploadField } from '@/components/MediaUploadField'
 import {
     useProfilePosts,
     useCreateProfilePost,
@@ -26,6 +26,14 @@ import {
     type ProfilePostCreatePayload,
     type ProfilePostUpdatePayload,
 } from '#/lib/queries/ProfilePostQueries.ts'
+
+// ---- Helpers ----
+
+function mediaFileName(url: string): string {
+    const raw = url.split('/').pop()?.split('?')[0] ?? 'media'
+    // Backend prepends a 32-char hex UUID + underscore; strip it if present
+    return /^[a-f0-9]{32}_/.test(raw) ? raw.slice(33) : raw
+}
 
 // ---- Types ----
 
@@ -188,7 +196,7 @@ function ProfilePostCard({
                         rel="noopener noreferrer"
                         className="text-xs text-accent underline truncate"
                     >
-                        {post.media_url}
+                        {mediaFileName(post.media_url)}
                     </a>
                 )}
                 {post.category === 'MCTE' && post.mentorship_partner && (
@@ -315,13 +323,9 @@ function CreatePostDialog({
                         <p className="text-xs text-ink-soft text-right">{form.content.length}/2000</p>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="create_media_url">Media URL (optional)</Label>
-                        <Input
-                            id="create_media_url"
-                            value={form.media_url ?? ''}
-                            onChange={e => setForm(f => ({ ...f, media_url: e.target.value }))}
-                            placeholder="https://..."
-                            type="url"
+                        <Label>Media (optional)</Label>
+                        <MediaUploadField
+                            onUrl={url => setForm(f => ({ ...f, media_url: url ?? undefined }))}
                         />
                     </div>
                     <DialogFooter className="mt-2">
@@ -418,13 +422,10 @@ function EditPostDialog({
                         <p className="text-xs text-ink-soft text-right">{(form.content ?? '').length}/2000</p>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="edit_media_url">Media URL (optional)</Label>
-                        <Input
-                            id="edit_media_url"
-                            value={(form.media_url as string) ?? ''}
-                            onChange={e => setForm(f => ({ ...f, media_url: e.target.value }))}
-                            placeholder="https://..."
-                            type="url"
+                        <Label>Media (optional)</Label>
+                        <MediaUploadField
+                            currentUrl={post.media_url}
+                            onUrl={url => setForm(f => ({ ...f, media_url: url }))}
                         />
                     </div>
                     <DialogFooter className="mt-2">

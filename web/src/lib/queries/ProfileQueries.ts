@@ -135,6 +135,25 @@ export function useUpdateUsername() {
     })
 }
 
+async function uploadProfilePicture(file: File): Promise<{ picture_url: string }> {
+    const token = localStorage.getItem('access_token')
+    const form = new FormData()
+    form.append('picture', file)
+    const res = await fetch(`${API_BASE_URL}/profiles/me/picture/`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+    })
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
+export function useUploadProfilePicture() {
+    return useMutation({
+        mutationFn: (file: File) => uploadProfilePicture(file),
+    })
+}
+
 // ---- Public mentor reviews ----
 
 export interface PublicReview {
