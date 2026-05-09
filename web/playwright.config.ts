@@ -21,20 +21,15 @@ export default defineConfig({
   },
 
   projects: [
-    // 1. Setup Project (Only runs when needed)
     { 
       name: 'setup', 
       testMatch: /auth.setup\.ts/ 
     },
-
-    // 2. Standard Project (For your existing E2E tests - stays as Guest)
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: /accessibility\.spec\.ts/, // Ignore accessibility here
+      testIgnore: /accessibility\.spec\.ts/,
     },
-
-    // 3. Accessibility Project (Dedicated for your audit)
     {
       name: 'accessibility',
       use: { 

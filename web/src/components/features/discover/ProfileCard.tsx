@@ -87,10 +87,10 @@ export function ProfileCard({
           {profile.skills?.slice(0, 3).map((skill) => (
             <span
               key={skill}
-                  className="px-3 py-1 bg-accent-muted text-accent text-xs font-bold uppercase tracking-wider rounded-full"
-              >
-            {skill}
-          </span>
+              className="px-3 py-1 bg-accent-muted text-primary text-xs font-bold uppercase tracking-wider rounded-full border border-accent/10"
+            >
+              {skill}
+            </span>
           ))}
         </div>
 
