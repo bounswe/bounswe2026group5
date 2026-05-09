@@ -197,6 +197,11 @@ export default function CommunityScreen() {
                     communities.find((tag) => tag.id === post.community_id)
                       ?.name ?? null
                   }
+                  onCommunityPress={(communityId) =>
+                    router.push(
+                      `/(tabs)/community/${encodeURIComponent(communityId)}?from=community`,
+                    )
+                  }
                 />
               ))}
             </View>

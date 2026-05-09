@@ -243,6 +243,19 @@ export function useMarkNotificationReadMutation(username?: string) {
   });
 }
 
+export function useMarkAllNotificationsReadMutation(username?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => apiPost<{ detail: string }>("/api/notifications/mark-all-read/"),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: notificationsQueryKey(username),
+      });
+    },
+  });
+}
+
 export function useRegisterFCMTokenMutation() {
   return useMutation({
     mutationFn: ({

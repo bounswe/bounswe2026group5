@@ -2,6 +2,7 @@
 import { queryClient, router } from "#/router.tsx"
 import { throwApiError } from "#/lib/apiError.ts"
 import { queryOptions, useMutation } from "@tanstack/react-query"
+import { signInWithFirebase } from "#/lib/firebase-client"
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -20,6 +21,7 @@ export interface User {
 interface AuthResponse {
     access_token: string
     refresh_token: string
+    firebase_token?: string
     user: User
 }
 
@@ -65,7 +67,14 @@ export const meQueryOptions = queryOptions({
         }
 
         if (!res.ok) return null
-        return await res.json() as Promise<User>
+        const data = await res.json() as User & { firebase_token?: string }
+        
+        // If a firebase token is returned in the me response, sign in
+        if (data.firebase_token) {
+            signInWithFirebase(data.firebase_token)
+        }
+        
+        return data as User
     },
     staleTime: 5 * 60 * 1000,
     gcTime: Infinity,
@@ -84,6 +93,10 @@ export function handleAuthSuccess(data: AuthResponse) {
     localStorage.setItem('refresh_token', data.refresh_token)
     localStorage.setItem('id', data.user.id)
     queryClient.setQueryData(['me'], data.user)
+    
+    if (data.firebase_token) {
+        signInWithFirebase(data.firebase_token)
+    }
 }
 
 export async function logout() {

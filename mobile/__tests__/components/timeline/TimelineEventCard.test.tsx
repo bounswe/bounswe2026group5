@@ -113,4 +113,26 @@ describe("TimelineEventCard", () => {
     expect(getByText("Private progress update")).toBeTruthy();
     expect(queryByText("Shown on profile")).toBeNull();
   });
+
+  it("uses the shared social moment icon", () => {
+    const { getByTestId } = render(
+      <TimelineEventCard
+        event={makeEvent({
+          id: "mcte-social",
+          category: "MCTE",
+          event_type: "social",
+          content: "Met for a pairing session",
+          payload: {},
+        })}
+        expanded={false}
+        isFirst={true}
+        isLast={true}
+        onToggle={jest.fn()}
+      />,
+    );
+
+    expect(getByTestId("journey-event-icon-mcte-social").props.name).toBe(
+      "people-outline",
+    );
+  });
 });

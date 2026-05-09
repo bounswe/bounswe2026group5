@@ -182,6 +182,14 @@ export class TestDataApi {
     return response.json() as Promise<AvailabilitySlot[]>;
   }
 
+  async bookAvailabilitySlot(menteeAuth: AuthResponse, mentorUsername: string, slotId: string) {
+    const response = await this.request.post(`${API_BASE_URL}/profiles/${mentorUsername}/availability-slots/${slotId}/book/`, {
+      headers: this.authHeaders(menteeAuth),
+    });
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<AvailabilitySlot>;
+  }
+
   async fetchMyRequests(auth: AuthResponse) {
     const response = await this.request.get(`${API_BASE_URL}/mentorship/requests/me/`, {
       headers: this.authHeaders(auth),
@@ -244,6 +252,39 @@ export class TestDataApi {
     });
     expect(response.ok()).toBeTruthy();
     return response.json() as Promise<Notification[]>;
+  }
+
+  async fetchConversations(auth: AuthResponse) {
+    const response = await this.request.get(`${API_BASE_URL}/messages/conversations/`, {
+      headers: this.authHeaders(auth),
+    });
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<any[]>;
+  }
+
+  async sendMessage(auth: AuthResponse, conversationId: string, body: string) {
+    const response = await this.request.post(`${API_BASE_URL}/messages/conversations/${conversationId}/`, {
+      headers: this.authHeaders(auth),
+      data: { body },
+    });
+    expect(response.ok()).toBeTruthy();
+    return response.json();
+  }
+
+  async fetchMessages(auth: AuthResponse, conversationId: string) {
+    const response = await this.request.get(`${API_BASE_URL}/messages/conversations/${conversationId}/`, {
+      headers: this.authHeaders(auth),
+    });
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<any[]>;
+  }
+
+  async reportMessage(auth: AuthResponse, messageId: string, data: { reason: string; description?: string }) {
+    const response = await this.request.post(`${API_BASE_URL}/messages/${messageId}/report/`, {
+      headers: this.authHeaders(auth),
+      data,
+    });
+    return response;
   }
 
   async fetchMatchFeedback(auth: AuthResponse, matchId: string) {

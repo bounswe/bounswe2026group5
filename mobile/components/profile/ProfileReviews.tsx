@@ -59,8 +59,6 @@ export function ProfileReviews({
 
   return (
     <View className="gap-3">
-      <View className="rounded-2xl border border-divider/20 bg-surface-card dark:bg-surface-card-dark px-4 py-3">
-      </View>
       {reviews.map((review) => (
         <View
           key={`${review.created_at}-${review.text}`}

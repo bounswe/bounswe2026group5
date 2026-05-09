@@ -10,7 +10,7 @@ test.describe('AT-005: Messaging and Moderation', () => {
 
     const runId = Date.now();
     const api = new TestDataApi(request);
-
+    
     // 1. Seed Users
     const mentorSeed: UserSeed = {
       email: `dr_ayse.${runId}@example.com`,
@@ -75,11 +75,11 @@ test.describe('AT-005: Messaging and Moderation', () => {
       const conversationThread = menteePage.getByText(mentorSeed.displayName);
       await expect(conversationThread).toBeVisible();
       await conversationThread.click();
-
+      
       // Wait for URL synchronization
       await expect(menteePage).toHaveURL(/conversationId=/, { timeout: 10000 });
       await expect(menteePage.getByText('No messages yet')).toBeVisible();
-
+      
       const url = menteePage.url();
       const match = url.match(/conversationId=([^&]+)/);
       conversationId = match ? match[1] : '';
@@ -125,11 +125,11 @@ test.describe('AT-005: Messaging and Moderation', () => {
     await test.step('7. Reporting Workflow Initiation', async () => {
       const mentorMessage = menteePage.getByText('Thank you Cem! I have prepared some exercises.');
       await mentorMessage.hover();
-
+      
       const reportBtn = menteePage.locator('button[title="Report Message"]').first();
       await expect(reportBtn).toBeVisible();
       await reportBtn.click();
-
+      
       const modalHeading = menteePage.getByRole('heading', { name: 'Report Message', exact: true });
       await expect(modalHeading).toBeVisible();
     });
@@ -137,21 +137,21 @@ test.describe('AT-005: Messaging and Moderation', () => {
     await test.step('8. Submit Moderation Report', async () => {
       await menteePage.locator('select').selectOption({ label: 'Inappropriate Content' });
       await menteePage.getByRole('button', { name: /submit report/i }).click();
-      await expect(menteePage.getByText(/report submitted/i).first()).toBeVisible();
+      await expect(menteePage.getByText(/report submitted/i)).toBeVisible();
     });
 
     await test.step('9. User-Level Idempotency: Cannot report same user twice', async () => {
       // Find a message from the same mentor (dr_ayse) - we can use the same one
       const mentorMessage = menteePage.getByText('Thank you Cem! I have prepared some exercises.');
       await mentorMessage.hover();
-
+      
       const reportBtn = menteePage.locator('button[title="Report Message"]').first();
       await reportBtn.click();
-
+      
       // Select any reason and submit
       await menteePage.locator('select').selectOption({ label: 'Spam' });
       await menteePage.getByRole('button', { name: /submit report/i }).click();
-
+      
       // Should show the "already reported this user" error
       await expect(menteePage.getByText(/already reported this user/i)).toBeVisible();
       await menteePage.keyboard.press('Escape'); // Close dialog

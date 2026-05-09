@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from mentorship.serializers import ProfileSummarySerializer
 
+from accounts.models import Report
 from .models import Conversation, Message
 
 
@@ -14,6 +15,7 @@ class ConversationSerializer(serializers.ModelSerializer):
     match_id = serializers.UUIDField(source="match.id", read_only=True)
     mentor = ProfileSummarySerializer(source="match.mentor", read_only=True)
     mentee = ProfileSummarySerializer(source="match.mentee", read_only=True)
+    unread_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
@@ -22,10 +24,28 @@ class ConversationSerializer(serializers.ModelSerializer):
             "match_id",
             "mentor",
             "mentee",
+            "unread_count",
             "created_at",
             "updated_at",
         )
         read_only_fields = fields
+
+    def get_unread_count(self, obj: Conversation) -> int:
+        """Return the number of unread messages for the current user in this conversation."""
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return 0
+        
+        # We MUST use the Profile ID, not the User ID, because messages and receipts 
+        # are linked to Profiles.
+        profile = getattr(request.user, 'profile', None)
+        if not profile:
+            return 0
+            
+        return obj.messages.exclude(sender_id=profile.id).exclude(
+            read_receipts__user_id=profile.id, 
+            read_receipts__status="read"
+        ).count()
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -34,6 +54,8 @@ class MessageSerializer(serializers.ModelSerializer):
     conversation_id = serializers.UUIDField(source="conversation.id", read_only=True)
     sender = ProfileSummarySerializer(read_only=True)
     attachment_url = serializers.SerializerMethodField()
+    read_receipts = serializers.SerializerMethodField()
+    status_for_me = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -43,6 +65,9 @@ class MessageSerializer(serializers.ModelSerializer):
             "sender",
             "body",
             "attachment_url",
+            "original_filename",
+            "read_receipts",
+            "status_for_me",
             "created_at",
         )
         read_only_fields = (
@@ -50,6 +75,9 @@ class MessageSerializer(serializers.ModelSerializer):
             "conversation_id",
             "sender",
             "attachment_url",
+            "original_filename",
+            "read_receipts",
+            "status_for_me",
             "created_at",
         )
 
@@ -59,6 +87,26 @@ class MessageSerializer(serializers.ModelSerializer):
             return None
         request = self.context.get("request")
         return request.build_absolute_uri(obj.attachment.url) if request else obj.attachment.url
+
+    def get_read_receipts(self, obj: Message) -> dict:
+        """Return read receipt statuses for all users."""
+        receipts = {}
+        for receipt in obj.read_receipts.all():
+            receipts[str(receipt.user_id)] = receipt.status
+        return receipts
+
+    def get_status_for_me(self, obj: Message) -> str:
+        """Return the status of this message for the current user."""
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return "sent"
+        
+        # Use Profile ID because ReadReceipts are linked to Profiles
+        profile = getattr(request.user, 'profile', None)
+        if not profile:
+            return "sent"
+            
+        return obj.get_status_for_user(str(profile.id))
 
 
 class MessageCreateSerializer(serializers.Serializer):
@@ -102,5 +150,3 @@ class MessageCreateSerializer(serializers.Serializer):
             )
 
         return attachment
-
-

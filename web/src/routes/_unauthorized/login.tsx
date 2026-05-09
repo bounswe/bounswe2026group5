@@ -15,6 +15,7 @@ import { CalendarDays, Search, TrendingUp } from 'lucide-react'
 import { useGoogleLogin } from '@react-oauth/google'
 
 import { handleAuthSuccess, loginFn, googleLoginFn } from "#/lib/queries/AuthQueries.ts"
+import { requestForToken } from "#/lib/firebase-client"
 import { useMutation } from "@tanstack/react-query"
 import { useState } from "react"
 
@@ -37,6 +38,8 @@ export function LoginPage() {
         mutationFn: loginFn,
         onSuccess: (data) => {
             handleAuthSuccess(data)
+            // Trigger prompt asynchronously (don't await)
+            requestForToken(true).catch(() => {})
             router.navigate({
                 to: '/dashboard',
             })
@@ -47,6 +50,8 @@ export function LoginPage() {
         mutationFn: googleLoginFn,
         onSuccess: (data) => {
             handleAuthSuccess(data)
+            // Trigger prompt asynchronously (don't await)
+            requestForToken(true).catch(() => {})
             router.navigate({
                 to: '/dashboard',
             })

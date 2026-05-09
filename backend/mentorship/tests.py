@@ -2349,6 +2349,18 @@ class MCTEAPITests(FeedbackAPIBaseTestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["media_url"], "https://cdn.example.com/media/progress-1.png")
 
+    def test_create_mcte_with_relative_media_url_returns_201(self) -> None:
+        relative_path = "/media/journey/test.png"
+        response = self._make_event(
+            self.mentor_client,
+            media_url=relative_path,
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["media_url"], relative_path)
+        # Verify DB
+        event = TimelineEvent.objects.get(id=response.data["id"])
+        self.assertEqual(event.media_url, relative_path)
+
     def test_create_mcte_by_mentee_returns_201(self) -> None:
         response = self._make_event(self.mentee_client, event_type="social", content="First coffee")
         self.assertEqual(response.status_code, 201)

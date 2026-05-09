@@ -2,13 +2,14 @@ import { fireEvent, render, waitFor, act } from "@testing-library/react-native";
 import React from "react";
 
 import { ProfilePostComposer } from "@/components/profile/ProfilePostComposer";
-import { pickPostMediaFile } from "@/lib/uploads/picker";
+import { pickPostImageFile } from "@/lib/uploads/picker";
 import { uploadPostMedia } from "@/lib/queries/uploads";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
 jest.mock("@/lib/uploads/picker", () => ({
-  pickPostMediaFile: jest.fn(),
+  pickPostImageFile: jest.fn(),
+  pickPostDocumentFile: jest.fn(),
 }));
 
 jest.mock("@/lib/queries/uploads", () => ({
@@ -18,7 +19,7 @@ jest.mock("@/lib/queries/uploads", () => ({
 describe("ProfilePostComposer", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (pickPostMediaFile as jest.Mock).mockResolvedValue({
+    (pickPostImageFile as jest.Mock).mockResolvedValue({
       uri: "file:///tmp/profile-photo.jpg",
       name: "profile-photo.jpg",
       type: "image/jpeg",
@@ -64,7 +65,7 @@ describe("ProfilePostComposer", () => {
     );
 
     await act(async () => {
-      fireEvent.press(getByTestId("profile-composer-media-button"));
+      fireEvent.press(getByTestId("profile-composer-image-button"));
     });
 
     await waitFor(() => {
@@ -102,7 +103,7 @@ describe("ProfilePostComposer", () => {
     );
 
     await act(async () => {
-      fireEvent.press(getByTestId("profile-composer-media-button"));
+      fireEvent.press(getByTestId("profile-composer-image-button"));
     });
     
     await waitFor(() => {
@@ -142,7 +143,7 @@ describe("ProfilePostComposer", () => {
     );
 
     await act(async () => {
-      fireEvent.press(getByTestId("profile-composer-media-button"));
+      fireEvent.press(getByTestId("profile-composer-image-button"));
     });
     
     await findByTestId("profile-composer-media-preview");

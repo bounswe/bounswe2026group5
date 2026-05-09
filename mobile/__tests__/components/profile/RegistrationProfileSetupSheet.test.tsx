@@ -32,6 +32,17 @@ describe("RegistrationProfileSetupSheet", () => {
     expect(getByText("Display Name")).toBeTruthy();
   });
 
+  it("strips numeric suffixes from the suggested display name", () => {
+    const { getByDisplayValue } = render(
+      <RegistrationProfileSetupSheet
+        {...baseProps}
+        username="rating_mentor_1778101658092"
+      />,
+    );
+
+    expect(getByDisplayValue("Rating Mentor")).toBeTruthy();
+  });
+
   it("blocks submit when the username is invalid", () => {
     const onSubmit = jest.fn();
     const { getByLabelText, getByText } = render(
@@ -45,6 +56,20 @@ describe("RegistrationProfileSetupSheet", () => {
     expect(
       getByText("Use only letters, numbers, and underscores."),
     ).toBeTruthy();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("blocks submit when the display name contains numbers", () => {
+    const onSubmit = jest.fn();
+    const { getByLabelText, getByText } = render(
+      <RegistrationProfileSetupSheet {...baseProps} onSubmit={onSubmit} />,
+    );
+
+    fireEvent.changeText(getByLabelText("Display Name"), "Mentor 123");
+    fireEvent.press(getByText("React Native"));
+    fireEvent.press(getByText("Save and continue"));
+
+    expect(getByText("Display name cannot contain numbers.")).toBeTruthy();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

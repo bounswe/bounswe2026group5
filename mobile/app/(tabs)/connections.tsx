@@ -43,6 +43,7 @@ import {
   type DashboardRequestItem,
   type MentorshipRequest,
 } from "@/lib/queries/mentorship";
+import { useMessaging } from "@/hooks/useMessaging";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -225,6 +226,7 @@ function MentorConnections({
     matchIds: string[];
   } | null>(null);
 
+  const { sendMessageTo } = useMessaging();
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const respondMutation = useRespondToMentorshipRequestMutation();
@@ -275,14 +277,7 @@ function MentorConnections({
       .values(),
   );
 
-  const handleMessage = (username: string) => {
-    const conv = conversations.find(
-      (c) => c.mentor.username === username || c.mentee.username === username,
-    );
-    if (conv) {
-      router.push(`/messages/${conv.id}` as Href);
-    }
-  };
+  const handleMessage = (username: string) => sendMessageTo(username);
 
   const handleMenteeMore = ({
     name,
@@ -553,6 +548,7 @@ function MenteeConnections({
     matchIds: string[];
   } | null>(null);
 
+  const { sendMessageTo } = useMessaging();
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
@@ -628,14 +624,7 @@ function MenteeConnections({
       .values(),
   );
 
-  const handleMessage = (username: string) => {
-    const conv = conversations.find(
-      (c) => c.mentor.username === username || c.mentee.username === username,
-    );
-    if (conv) {
-      router.push(`/messages/${conv.id}` as Href);
-    }
-  };
+  const handleMessage = (username: string) => sendMessageTo(username);
 
   const handleMore = ({
     name,

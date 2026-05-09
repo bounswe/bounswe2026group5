@@ -16,7 +16,7 @@ export interface ProfilePostAuthor {
 export interface ProfilePost {
     id: string
     source_id: string
-    category: 'PrP' | 'MCTE'
+    category: 'PrP' | 'MCTE' | 'CoP'
     event_type: 'achievement' | 'social' | 'progress'
     content: string
     media_url: string | null
@@ -25,6 +25,11 @@ export interface ProfilePost {
     last_edited: string | null
     show_on_profile: boolean
     actor_role: string
+    mentorship_partner: string | null
+    community_id: string | null
+    community_name: string | null
+    community_slug: string | null
+    tagged_users: { user_id: string; username: string }[] | null
     author: ProfilePostAuthor
 }
 

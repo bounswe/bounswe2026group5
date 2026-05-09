@@ -1,18 +1,20 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, useRef, useEffect, type FormEvent } from 'react'
+import { useMessageQueue } from '#/hooks/useMessageQueue'
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 import {
     useConversations,
+    useMarkRead,
     useMessages,
     useSendMessage,
     type Conversation,
+    type Message,
 } from '#/lib/queries/MessagingQueries.ts'
-import { useNotifications, useMarkAllNotificationsRead } from '#/lib/queries/NotificationQueries.ts'
-import { getInitials } from '#/lib/utils.ts'
+import { useMarkAllNotificationsRead, useNotifications } from '#/lib/queries/NotificationQueries.ts'
+import { cn, getInitials } from '#/lib/utils.ts'
 import { Button } from '@/components/ui/button'
-import { Loader2, MessageSquare, Send } from 'lucide-react'
-import { cn } from '#/lib/utils.ts'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { createFileRoute } from '@tanstack/react-router'
+import { Check, CheckCheck, Loader2, MessageSquare, Send } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
 
 export const Route = createFileRoute('/_authorized/messages')({
     component: MessagesPage,
@@ -27,7 +29,13 @@ export const Route = createFileRoute('/_authorized/messages')({
 
 export function MessagesPage() {
     const { conversationId } = Route.useSearch()
+    const navigate = Route.useNavigate()
     const [selectedId, setSelectedId] = useState<string | null>(conversationId || null)
+
+    const handleSelect = (id: string) => {
+        setSelectedId(id)
+        navigate({ search: { conversationId: id } })
+    }
 
     const { data: notifications = [] } = useNotifications()
     const { mutate: markAllRead } = useMarkAllNotificationsRead()
@@ -50,7 +58,7 @@ export function MessagesPage() {
     return (
         <div className="p-4 md:p-6 h-[calc(100vh-3.5rem)]">
             <div className="flex h-full rounded-xl border border-line overflow-hidden shadow-sm bg-background max-w-5xl mx-auto">
-                <ConversationList selectedId={selectedId} onSelect={setSelectedId} />
+                <ConversationList selectedId={selectedId} onSelect={handleSelect} />
                 <MessageThread conversationId={selectedId} />
             </div>
         </div>
@@ -65,8 +73,8 @@ function ConversationList({
     selectedId,
     onSelect,
 }: {
-    selectedId: string | null
-    onSelect: (id: string) => void
+    readonly selectedId: string | null
+    readonly onSelect: (id: string) => void
 }) {
     const { data: me } = useQuery(meQueryOptions)
     const { data: conversations = [], isLoading } = useConversations()
@@ -108,10 +116,10 @@ function ConversationItem({
     isSelected,
     onSelect,
 }: {
-    conversation: Conversation
-    myUsername: string
-    isSelected: boolean
-    onSelect: () => void
+    readonly conversation: Conversation
+    readonly myUsername: string
+    readonly isSelected: boolean
+    readonly onSelect: () => void
 }) {
     const other =
         conversation.mentor.username === myUsername
@@ -131,6 +139,11 @@ function ConversationItem({
                 <p className="text-sm font-medium text-ink truncate">{other.display_name}</p>
                 <p className="text-xs text-ink-soft truncate">@{other.username}</p>
             </div>
+            {conversation.unread_count > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white shadow-sm">
+                    {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
+                </span>
+            )}
         </button>
     )
 }
@@ -139,7 +152,7 @@ function ConversationItem({
 // Message Thread (right pane)
 // ---------------------------------------------------------------------------
 
-function MessageThread({ conversationId }: { conversationId: string | null }) {
+function MessageThread({ conversationId }: { readonly conversationId: string | null }) {
     if (!conversationId) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 text-ink-soft">
@@ -152,32 +165,96 @@ function MessageThread({ conversationId }: { conversationId: string | null }) {
     return <Thread conversationId={conversationId} />
 }
 
-function Thread({ conversationId }: { conversationId: string }) {
+function Thread({ conversationId }: { readonly conversationId: string }) {
     const { data: me } = useQuery(meQueryOptions)
-    const { data: messages = [], isLoading } = useMessages(conversationId)
+    const { data: messages = [], isLoading, loadMore, hasMore } = useMessages(conversationId)
+    const { mutate: markRead } = useMarkRead(conversationId)
     const sendMessage = useSendMessage(conversationId)
     const queryClient = useQueryClient()
+    const { enqueueMessage, updateMessageStatus, dequeueMessage } = useMessageQueue(conversationId)
     const [text, setText] = useState('')
-    const bottomRef = useRef<HTMLDivElement>(null)
 
+    // Mark conversation as read when opening
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, [messages])
+        if (conversationId) {
+            markRead()
+        }
+    }, [conversationId, markRead])
+    
+    const scrollContainerRef = useRef<HTMLDivElement>(null)
+    const bottomRef = useRef<HTMLDivElement>(null)
+    const [isAtBottom, setIsAtBottom] = useState(true)
 
-    async function handleSubmit(e: FormEvent) {
-        e.preventDefault()
-        const body = text.trim()
-        if (!body || sendMessage.isPending) return
-        setText('')
-        await sendMessage.mutateAsync(body)
-        queryClient.invalidateQueries({ queryKey: ['messaging', 'messages', conversationId] })
+    // Handle auto-scroll to bottom
+    useEffect(() => {
+        if (isAtBottom) {
+            bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }
+    }, [messages, isAtBottom])
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const target = e.currentTarget
+        const atTop = target.scrollTop === 0
+        const atBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 100
+        
+        setIsAtBottom(atBottom)
+
+        if (atTop && hasMore && !isLoading) {
+            // Store height to maintain scroll position after loading
+            const oldHeight = target.scrollHeight
+            loadMore()
+            
+            // Adjust scroll position after render
+            requestAnimationFrame(() => {
+                if (target) {
+                    target.scrollTop = target.scrollHeight - oldHeight
+                }
+            })
+        }
     }
+
+    const handleSubmit = useCallback(
+        async (e: SyntheticEvent) => {
+            e.preventDefault()
+            const body = text.trim()
+            if (!body || sendMessage.isPending) return
+
+            setIsAtBottom(true) // Force scroll to bottom for new message
+            const queuedMsg = enqueueMessage(body)
+            setText('')
+
+            try {
+                updateMessageStatus(queuedMsg.tempId, 'sending')
+                await sendMessage.mutateAsync(body)
+                dequeueMessage(queuedMsg.tempId)
+                queryClient.invalidateQueries({ queryKey: ['messaging', 'messages', conversationId] })
+            } catch (error) {
+                updateMessageStatus(queuedMsg.tempId, 'failed', error instanceof Error ? error.message : 'Failed to send')
+                console.error('[Messages] Error sending message:', error)
+            }
+        },
+        [text, sendMessage, enqueueMessage, updateMessageStatus, dequeueMessage, queryClient, conversationId],
+    )
 
     return (
         <div className="flex-1 flex flex-col min-w-0">
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3">
-                {isLoading ? (
+            <div 
+                ref={scrollContainerRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3"
+            >
+                {hasMore && (
+                    <div className="flex justify-center py-2">
+                        {isLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-ink-soft" />
+                        ) : (
+                            <p className="text-[10px] text-ink-soft italic">Scroll up to load more</p>
+                        )}
+                    </div>
+                )}
+                
+                {isLoading && messages.length === 0 ? (
                     <div className="flex justify-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
                     </div>
@@ -189,44 +266,11 @@ function Thread({ conversationId }: { conversationId: string }) {
                     messages.map(msg => {
                         const isMe = msg.sender.username === me?.username
                         return (
-                            <div
+                            <MessageBubble
                                 key={msg.id}
-                                className={cn('flex items-end gap-2', isMe && 'flex-row-reverse')}
-                            >
-                                {!isMe && (
-                                    <Avatar
-                                        name={msg.sender.display_name}
-                                        pictureUrl={msg.sender.picture_url}
-                                        size="sm"
-                                    />
-                                )}
-                                <div
-                                    className={cn(
-                                        'max-w-[70%] rounded-2xl px-4 py-2 text-sm',
-                                        isMe
-                                            ? 'bg-accent text-white rounded-br-sm'
-                                            : 'bg-accent-muted text-ink rounded-bl-sm',
-                                    )}
-                                >
-                                    <p className="whitespace-pre-wrap break-words">{msg.body}</p>
-                                    {msg.attachment_url && (
-                                        <a
-                                            href={msg.attachment_url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="block mt-1 underline text-xs opacity-80"
-                                        >
-                                            Attachment
-                                        </a>
-                                    )}
-                                    <time className={cn('block text-[10px] mt-1 opacity-60', isMe ? 'text-right' : '')}>
-                                        {new Date(msg.created_at).toLocaleTimeString([], {
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                        })}
-                                    </time>
-                                </div>
-                            </div>
+                                message={msg}
+                                isMe={isMe}
+                            />
                         )
                     })
                 )}
@@ -244,7 +288,7 @@ function Thread({ conversationId }: { conversationId: string }) {
                     onKeyDown={e => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault()
-                            handleSubmit(e as unknown as FormEvent)
+                            handleSubmit(e as unknown as SyntheticEvent)
                         }
                     }}
                     placeholder="Type a message… (Enter to send)"
@@ -270,7 +314,86 @@ function Thread({ conversationId }: { conversationId: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Avatar helper
+// Message Bubble with status indicators
+// ---------------------------------------------------------------------------
+
+import { ReportMessageDialog } from '@/components/ReportMessageDialog'
+
+function MessageBubble({
+    message,
+    isMe,
+}: {
+    readonly message: Message
+    readonly isMe: boolean
+}) {
+    const getStatusIcon = () => {
+        const status = message.status_for_me
+        if (status === 'read') {
+            return <CheckCheck className="h-3 w-3 text-white/80" />
+        }
+        if (status === 'delivered') {
+            return <CheckCheck className="h-3 w-3 text-white/80" />
+        }
+        if (status === 'sent' || status === 'sending') {
+            return <Check className="h-3 w-3 text-white/60" />
+        }
+        return null
+    }
+
+    const isSending = message.status_for_me === 'sending'
+
+    return (
+        <div className={cn('flex items-end gap-2 group', isMe && 'flex-row-reverse')}>
+            {!isMe && (
+                <Avatar
+                    name={message.sender.display_name}
+                    pictureUrl={message.sender.picture_url}
+                    size="sm"
+                />
+            )}
+            <div
+                className={cn(
+                    'max-w-[70%] rounded-2xl px-4 py-2 text-sm relative',
+                    isMe
+                        ? 'bg-accent text-white rounded-br-sm'
+                        : 'bg-accent-muted text-ink rounded-bl-sm',
+                    isSending && 'opacity-70',
+                )}
+            >
+                <p className="whitespace-pre-wrap wrap-break-word">{message.body}</p>
+                {message.attachment_url && (
+                    <a
+                        href={message.attachment_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block mt-1 underline text-xs opacity-80"
+                    >
+                        Attachment
+                    </a>
+                )}
+                <div className={cn('flex items-center gap-1 text-[10px] mt-1', isMe ? 'justify-end' : 'justify-start')}>
+                    <time className="opacity-80">
+                        {new Date(message.created_at).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                        })}
+                    </time>
+                    {isMe && getStatusIcon()}
+                </div>
+            </div>
+
+            {!isMe && (
+                <div className="opacity-40 group-hover:opacity-100 transition-opacity">
+                    <ReportMessageDialog
+                        messageId={message.id}
+                        reportedUsername={message.sender.username}
+                    />
+                </div>
+            )}
+        </div>
+    )
+}
+
 // ---------------------------------------------------------------------------
 
 function Avatar({
@@ -278,9 +401,9 @@ function Avatar({
     pictureUrl,
     size,
 }: {
-    name: string
-    pictureUrl: string | null
-    size: 'sm' | 'md'
+    readonly name: string
+    readonly pictureUrl: string | null
+    readonly size: 'sm' | 'md'
 }) {
     const dim = size === 'sm' ? 'h-7 w-7 text-xs' : 'h-9 w-9 text-sm'
     if (pictureUrl) {
