@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router'
 
-export const Route = createFileRoute('/_authorized/communities')({
+export const Route = createFileRoute('/_public/communities')({
     component: () => <Outlet />,
 })

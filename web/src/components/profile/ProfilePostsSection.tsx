@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { Loader2, Plus, Pencil, Trash2, Trophy, Users, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,11 +12,11 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Muted } from '@/components/Typography'
+import { MediaUploadField } from '@/components/MediaUploadField'
 import {
     useProfilePosts,
     useCreateProfilePost,
@@ -25,6 +26,14 @@ import {
     type ProfilePostCreatePayload,
     type ProfilePostUpdatePayload,
 } from '#/lib/queries/ProfilePostQueries.ts'
+
+// ---- Helpers ----
+
+function mediaFileName(url: string): string {
+    const raw = url.split('/').pop()?.split('?')[0] ?? 'media'
+    // Backend prepends a 32-char hex UUID + underscore; strip it if present
+    return /^[a-f0-9]{32}_/.test(raw) ? raw.slice(33) : raw
+}
 
 // ---- Types ----
 
@@ -148,7 +157,10 @@ function ProfilePostCard({
                             {label}
                         </span>
                         {post.category === 'MCTE' && (
-                            <Badge variant="secondary" className="text-xs">Milestone</Badge>
+                            <Badge variant="secondary" className="text-xs">Mentorship Journey</Badge>
+                        )}
+                        {post.category === 'CoP' && (
+                            <Badge variant="secondary" className="text-xs">Community</Badge>
                         )}
                     </div>
                     {canEdit && (
@@ -184,8 +196,53 @@ function ProfilePostCard({
                         rel="noopener noreferrer"
                         className="text-xs text-accent underline truncate"
                     >
-                        {post.media_url}
+                        {mediaFileName(post.media_url)}
                     </a>
+                )}
+                {post.category === 'MCTE' && post.mentorship_partner && (
+                    <Muted className="text-xs">
+                        From the mentorship journey with{' '}
+                        <Link
+                            to="/profiles/$username"
+                            params={{ username: post.mentorship_partner }}
+                            className="text-accent hover:underline"
+                        >
+                            @{post.mentorship_partner}
+                        </Link>
+                    </Muted>
+                )}
+                {post.category === 'CoP' && post.community_name && (
+                    <Muted className="text-xs">
+                        In{' '}
+                        {post.community_slug ? (
+                            <Link
+                                to="/communities/$communitySlug"
+                                params={{ communitySlug: post.community_slug }}
+                                className="text-accent hover:underline"
+                            >
+                                {post.community_name}
+                            </Link>
+                        ) : (
+                            post.community_name
+                        )}{' '}
+                        community
+                        {post.tagged_users && post.tagged_users.length > 0 && (
+                            <>, with{' '}
+                                {post.tagged_users.map((u, i) => (
+                                    <span key={u.user_id}>
+                                        <Link
+                                            to="/profiles/$username"
+                                            params={{ username: u.username }}
+                                            className="text-accent hover:underline"
+                                        >
+                                            @{u.username}
+                                        </Link>
+                                        {i < post.tagged_users!.length - 1 && ', '}
+                                    </span>
+                                ))}
+                            </>
+                        )}
+                    </Muted>
                 )}
                 <Muted className="text-xs">{formatTimestamp(post.timestamp)}</Muted>
             </CardContent>
@@ -266,13 +323,9 @@ function CreatePostDialog({
                         <p className="text-xs text-ink-soft text-right">{form.content.length}/2000</p>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="create_media_url">Media URL (optional)</Label>
-                        <Input
-                            id="create_media_url"
-                            value={form.media_url ?? ''}
-                            onChange={e => setForm(f => ({ ...f, media_url: e.target.value }))}
-                            placeholder="https://..."
-                            type="url"
+                        <Label>Media (optional)</Label>
+                        <MediaUploadField
+                            onUrl={url => setForm(f => ({ ...f, media_url: url ?? undefined }))}
                         />
                     </div>
                     <DialogFooter className="mt-2">
@@ -369,13 +422,10 @@ function EditPostDialog({
                         <p className="text-xs text-ink-soft text-right">{(form.content ?? '').length}/2000</p>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="edit_media_url">Media URL (optional)</Label>
-                        <Input
-                            id="edit_media_url"
-                            value={(form.media_url as string) ?? ''}
-                            onChange={e => setForm(f => ({ ...f, media_url: e.target.value }))}
-                            placeholder="https://..."
-                            type="url"
+                        <Label>Media (optional)</Label>
+                        <MediaUploadField
+                            currentUrl={post.media_url}
+                            onUrl={url => setForm(f => ({ ...f, media_url: url }))}
                         />
                     </div>
                     <DialogFooter className="mt-2">

@@ -59,6 +59,7 @@ jest.mock("@/lib/queries/MessagingQueries", () => ({
     mutateAsync: mockMutateAsync,
     isPending: mockSendIsPending,
   }),
+  useMarkRead: () => ({ mutate: jest.fn() }),
 }));
 
 jest.mock("@/lib/queries/reporting", () => ({

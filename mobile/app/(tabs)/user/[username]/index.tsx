@@ -399,8 +399,14 @@ export default function MentorProfileScreen() {
   const toast = useToast();
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const currentUsername = useAuthStore((state) => state.user?.username);
-  const params = useLocalSearchParams<{ username?: string }>();
+  const params = useLocalSearchParams<{
+    username?: string;
+    from?: string | string[];
+    tagId?: string | string[];
+  }>();
   const username = getUsernameParam(params.username);
+  const source = getUsernameParam(params.from);
+  const sourceTagId = getUsernameParam(params.tagId);
 
   const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -921,6 +927,16 @@ export default function MentorProfileScreen() {
     Boolean(profile) &&
     Boolean(currentUsername) &&
     profile?.username !== currentUsername;
+  const handleBackPress = () => {
+    if (source === "community" && sourceTagId) {
+      router.replace(
+        `/(tabs)/community/${encodeURIComponent(sourceTagId)}?from=community` as any,
+      );
+      return;
+    }
+
+    router.back();
+  };
 
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
@@ -930,7 +946,8 @@ export default function MentorProfileScreen() {
       >
         <View className="flex-row items-center px-4 py-3">
           <TouchableOpacity
-            onPress={() => router.back()}
+            testID="user-profile-back-button"
+            onPress={handleBackPress}
             className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-gray-100"
           >
             <Ionicons name="chevron-back" size={20} color="#111827" />

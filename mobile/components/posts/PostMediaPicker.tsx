@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Text, TouchableOpacity, View } from "react-native";
+import { getAbsoluteUrl } from "@/lib/api/config";
 
-import { pickPostMediaFile } from "@/lib/uploads/picker";
+import { pickPostImageFile, pickPostDocumentFile } from "@/lib/uploads/picker";
 import type { LocalUploadFile } from "@/lib/queries/uploads";
 
 interface PostMediaPickerProps {
@@ -26,13 +27,16 @@ export function PostMediaPicker({
   onError,
   testIDPrefix,
 }: Readonly<PostMediaPickerProps>) {
-  const handlePick = async () => {
+  const handlePick = async (type: "image" | "file") => {
     if (disabled) {
       return;
     }
 
     try {
-      const nextMedia = await pickPostMediaFile();
+      const nextMedia = type === "image" 
+        ? await pickPostImageFile() 
+        : await pickPostDocumentFile();
+      
       if (nextMedia) {
         onChange(nextMedia);
       }
@@ -58,22 +62,41 @@ export function PostMediaPicker({
           </Text>
         </View>
 
-        <TouchableOpacity
-          testID={`${testIDPrefix}-media-button`}
-          activeOpacity={0.85}
-          disabled={disabled}
-          onPress={handlePick}
-          className="h-10 flex-row items-center justify-center gap-1.5 rounded-full bg-surface-active px-3 dark:bg-surface-active-dark"
-        >
-          <Ionicons
-            name={media ? "sync-outline" : "add-circle-outline"}
-            size={16}
-            color="#2f7d68"
-          />
-          <Text className="text-xs font-bold text-primary dark:text-primary-dim">
-            {media ? "Change" : "Add"}
-          </Text>
-        </TouchableOpacity>
+        <View className="flex-row items-center gap-2">
+          <TouchableOpacity
+            testID={`${testIDPrefix}-image-button`}
+            activeOpacity={0.85}
+            disabled={disabled}
+            onPress={() => handlePick("image")}
+            className="h-10 flex-row items-center justify-center gap-1.5 rounded-full bg-surface-active px-3 dark:bg-surface-active-dark"
+          >
+            <Ionicons
+              name={media ? "sync-outline" : "image-outline"}
+              size={16}
+              color="#2f7d68"
+            />
+            <Text className="text-xs font-bold text-primary dark:text-primary-dim">
+              {media ? "Change" : "Image"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID={`${testIDPrefix}-file-button`}
+            activeOpacity={0.85}
+            disabled={disabled}
+            onPress={() => handlePick("file")}
+            className="h-10 flex-row items-center justify-center gap-1.5 rounded-full bg-surface-active px-3 dark:bg-surface-active-dark"
+          >
+            <Ionicons
+              name="folder-outline"
+              size={16}
+              color="#2f7d68"
+            />
+            <Text className="text-xs font-bold text-primary dark:text-primary-dim">
+              File
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {media ? (
@@ -81,7 +104,7 @@ export function PostMediaPicker({
           {isImage ? (
             <Image
               testID={`${testIDPrefix}-media-preview`}
-              source={{ uri: media.uri }}
+              source={{ uri: getAbsoluteUrl(media.uri) }}
               resizeMode="cover"
               className="h-36 w-full rounded-xl bg-surface-active dark:bg-surface-active-dark"
             />

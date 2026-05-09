@@ -58,6 +58,7 @@ function buildDisplayNameSuggestion(username: string): string {
   }
 
   return username
+    .replaceAll(/\d+/g, " ")
     .replaceAll(".", " ")
     .replaceAll("_", " ")
     .replaceAll("-", " ")
@@ -65,6 +66,20 @@ function buildDisplayNameSuggestion(username: string): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function validateDisplayName(value: string): string {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "Display name is required.";
+  }
+
+  if (/\d/.test(trimmedValue)) {
+    return "Display name cannot contain numbers.";
+  }
+
+  return "";
 }
 
 function formatUsername(username: string): string {
@@ -202,9 +217,7 @@ export function RegistrationProfileSetupSheet({
     const trimmedBio = bio.trim();
 
     const nextUsernameError = validateUsername(trimmedUsername);
-    const nextDisplayNameError = trimmedDisplayName
-      ? ""
-      : "Display name is required.";
+    const nextDisplayNameError = validateDisplayName(trimmedDisplayName);
     const nextSkillsError =
       selectedSkills.length === 0 ? "Please select at least one skill." : "";
 

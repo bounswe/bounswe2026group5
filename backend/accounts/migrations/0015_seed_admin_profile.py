@@ -42,7 +42,6 @@ def seed_admin_with_profile(apps, schema_editor):
             user=user,
             username=user.username,
             display_name="System Admin",
-            is_visible=False,
         )
 
 

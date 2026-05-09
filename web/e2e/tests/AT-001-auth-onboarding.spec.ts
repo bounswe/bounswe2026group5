@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { AuthApi } from '../api/AuthApi';
+import { AdminModerationPage } from '../pages/AdminModerationPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { LandingPage } from '../pages/LandingPage';
 import { LoginPage } from '../pages/LoginPage';
 import { OnboardingPage } from '../pages/OnboardingPage';
 import { RegisterPage } from '../pages/RegisterPage';
-import { AdminModerationPage } from '../pages/AdminModerationPage';
 
 test.describe('AT-001: Authentication & Onboarding', () => {
   test.use({ actionTimeout: 5000 });
@@ -98,7 +98,7 @@ test.describe('AT-001: Authentication & Onboarding', () => {
       // Step 11: Valid last name
       await onboardingPage.fillInput('Newuser');
       await onboardingPage.clickContinue();
-      await onboardingPage.expectQuestion(/How will you use Campus Tutor/i);
+      await onboardingPage.expectQuestion(/How will you use Neighborship/i);
 
       // Step 12: Empty role
       await onboardingPage.clickContinue();

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Modal, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { getAbsoluteUrl } from "@/lib/api/config";
 
 const BIO_PREVIEW_LENGTH = 240;
 
@@ -34,6 +35,7 @@ export function ProfileHeader({
   onEdit,
 }: Readonly<ProfileHeaderProps>) {
   const [isBioExpanded, setIsBioExpanded] = useState(false);
+  const [isAvatarPreviewOpen, setAvatarPreviewOpen] = useState(false);
 
   useEffect(() => {
     setIsBioExpanded(false);
@@ -54,7 +56,7 @@ export function ProfileHeader({
       {/* 1. Cover Photo Area */}
       <View className="h-32 bg-surface-active dark:bg-surface-active-dark w-full">
         {coverUrl ? (
-          <Image source={{ uri: coverUrl }} className="w-full h-full" />
+          <Image source={{ uri: getAbsoluteUrl(coverUrl) }} className="w-full h-full" />
         ) : (
           <View className="flex-1 bg-surface-active dark:bg-surface-active-dark border-b border-divider dark:border-divider-dark" />
         )}
@@ -63,12 +65,17 @@ export function ProfileHeader({
       {/* 2. Top Row: Avatar & Top-Right Actions */}
       <View className="flex-row justify-between px-4 -mt-12">
         {/* Left: Overlapping Avatar */}
-        <View className="w-24 h-24 bg-surface-card dark:bg-surface-card-dark rounded-full p-1 shadow-sm border border-divider dark:border-divider-dark">
+        <Pressable
+          testID={imageUrl ? "profile-avatar-button" : undefined}
+          disabled={!imageUrl}
+          onPress={() => setAvatarPreviewOpen(true)}
+          className="w-24 h-24 bg-surface-card dark:bg-surface-card-dark rounded-full p-1 shadow-sm border border-divider dark:border-divider-dark"
+        >
           <View className="w-full h-full bg-surface dark:bg-surface-dark rounded-full items-center justify-center overflow-hidden">
             {imageUrl ? (
               <Image
                 testID="profile-avatar-image"
-                source={{ uri: imageUrl }}
+                source={{ uri: getAbsoluteUrl(imageUrl) }}
                 className="w-full h-full"
               />
             ) : (
@@ -80,7 +87,7 @@ export function ProfileHeader({
               </Text>
             )}
           </View>
-        </View>
+        </Pressable>
 
         {/* Right: Rating & Edit Button */}
         <View className="flex-row items-center pt-14 gap-2">
@@ -164,6 +171,28 @@ export function ProfileHeader({
           </View>
         </View>
       ) : null}
+
+      <Modal
+        visible={isAvatarPreviewOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAvatarPreviewOpen(false)}
+      >
+        <Pressable
+          testID="profile-avatar-preview-backdrop"
+          className="flex-1 items-center justify-center bg-black/80 px-6"
+          onPress={() => setAvatarPreviewOpen(false)}
+        >
+          {imageUrl ? (
+            <Image
+              testID="profile-avatar-preview-image"
+              source={{ uri: imageUrl }}
+              className="h-80 w-80 max-w-full rounded-3xl bg-surface-card"
+              resizeMode="cover"
+            />
+          ) : null}
+        </Pressable>
+      </Modal>
     </View>
   );
 }

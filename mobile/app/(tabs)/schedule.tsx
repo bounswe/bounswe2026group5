@@ -21,8 +21,9 @@ import {
   useMentorshipMeetingSessionsQuery,
   useRescheduleSessionMutation,
 } from "@/lib/queries/mentorship";
-import React, { useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { useRefreshControl } from "@/hooks/use-refresh-control";
+import React, { useCallback, useMemo, useState } from "react";
+import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { Calendar, DateData } from "react-native-calendars";
 import {
   SafeAreaView,
@@ -166,6 +167,10 @@ export default function ScheduleScreen() {
   const selectedSessions = sessions.filter(
     (session) => session.rawDate === selectedDate,
   );
+  const refreshSchedule = useCallback(async () => {
+    await meetingSessionsQuery.refetch();
+  }, [meetingSessionsQuery]);
+  const { refreshing, onRefresh } = useRefreshControl(refreshSchedule);
 
   return (
     <SafeAreaView
@@ -184,7 +189,13 @@ export default function ScheduleScreen() {
         </View>
       </View>
 
-      <ScrollView className="flex-1 pt-4" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1 pt-4"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {queryError ? (
           <View className="px-4 mb-4">
             <ErrorBanner message={queryError} />

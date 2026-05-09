@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiGet, apiPatch, apiPost } from "@/lib/api/client";
+import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api/client";
 
 /** Minimal author shape embedded in each profile post. */
 export interface ProfilePostAuthor {
@@ -9,6 +9,11 @@ export interface ProfilePostAuthor {
   display_name: string;
   picture_url: string;
   title: string;
+}
+
+export interface ProfilePostTaggedUser {
+  user_id: string;
+  username: string;
 }
 
 export type ProfilePostCategory = "PrP" | "MCTE" | "CoP";
@@ -36,6 +41,9 @@ export interface ProfilePost {
   last_edited: string | null;
   show_on_profile: boolean;
   community_id: string | null;
+  community_name?: string | null;
+  community_slug?: string | null;
+  tagged_users?: ProfilePostTaggedUser[];
   actor_role: string | null;
   author: ProfilePostAuthor | null;
 }
@@ -47,6 +55,17 @@ export interface CreateProfilePostPayload {
   timestamp?: string | null;
 }
 
+export interface UpdateProfilePostPayload {
+  eventId: string;
+  event_type?: ProfilePost["event_type"];
+  content?: string;
+  media_url?: string | null;
+}
+
+export interface DeleteProfilePostPayload {
+  eventId: string;
+}
+
 export interface ProfilePostFeedResponse {
   count: number;
   offset: number;
@@ -55,11 +74,12 @@ export interface ProfilePostFeedResponse {
 }
 
 interface UpdateProfilePayload {
-  username: string;
+  username?: string;
   display_name?: string;
   bio?: string;
   skills?: string[];
   picture_url?: string;
+  share_precise_location?: boolean;
 }
 
 interface ProfilePatchResponse {
@@ -71,8 +91,16 @@ interface ProfilePatchResponse {
   title: string;
   is_visible: boolean;
   show_initials_only: boolean;
+  share_precise_location: boolean;
   created_at: string;
   updated_at: string;
+}
+
+interface OwnProfileSettingsResponse {
+  id: string;
+  username: string;
+  display_name: string;
+  share_precise_location: boolean;
 }
 
 interface PublicProfileRatingResponse {
@@ -145,6 +173,17 @@ export function useUpdateOwnProfileMutation() {
 }
 
 /**
+ * Retrieve own profile fields needed by settings.
+ */
+export function useOwnProfileSettingsQuery() {
+  return useQuery({
+    queryKey: ["profiles", "me", "settings"],
+    queryFn: () => apiGet<OwnProfileSettingsResponse>("/api/profiles/me/"),
+    staleTime: 60_000,
+  });
+}
+
+/**
  * Create a new profile post for the authenticated user.
  */
 export function useCreateProfilePostMutation(currentUsername?: string) {
@@ -161,6 +200,39 @@ export function useCreateProfilePostMutation(currentUsername?: string) {
           ...(payload.timestamp ? { timestamp: payload.timestamp } : {}),
         },
       ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["profiles", currentUsername ?? "anonymous", "posts"],
+      });
+      await queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    },
+  });
+}
+
+export function useUpdateProfilePostMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ eventId, ...payload }: UpdateProfilePostPayload) =>
+      apiPatch<ProfilePost, Omit<UpdateProfilePostPayload, "eventId">>(
+        `/api/profiles/me/posts/${encodeURIComponent(eventId)}/`,
+        payload,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["profiles", currentUsername ?? "anonymous", "posts"],
+      });
+      await queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    },
+  });
+}
+
+export function useDeleteProfilePostMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ eventId }: DeleteProfilePostPayload) =>
+      apiDelete<void>(`/api/profiles/me/posts/${encodeURIComponent(eventId)}/`),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ["profiles", currentUsername ?? "anonymous", "posts"],

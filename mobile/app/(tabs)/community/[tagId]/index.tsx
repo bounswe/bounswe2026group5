@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CommunityPostComposer } from "@/components/community/CommunityPostComposer";
 import { ProfilePostCard } from "@/components/profile/ProfilePostCard";
+import { ProfilePostEditSheet } from "@/components/profile/ProfilePostEditSheet";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
@@ -21,9 +22,13 @@ import { useAuthStore } from "@/lib/auth/store";
 import {
   useCommunityPostsQuery,
   useCreateCommunityPostMutation,
+  useDeleteCommunityPostMutation,
+  useUpdateCommunityPostMutation,
+  type CommunityPost,
 } from "@/lib/queries/communityPosts";
 import {
   useCommunityTagDetailQuery,
+  useCommunityTaggableUsersQuery,
   useJoinCommunityTagMutation,
   useLeaveCommunityTagMutation,
 } from "@/lib/queries/communityTags";
@@ -67,13 +72,20 @@ export default function CommunityDetailScreen() {
   const source = Array.isArray(params.from) ? params.from[0] : params.from;
   const currentUsername = useAuthStore((state) => state.user?.username);
   const detailQuery = useCommunityTagDetailQuery(tagId);
+  const taggableUsersQuery = useCommunityTaggableUsersQuery(
+    tagId,
+    Boolean(tagId && detailQuery.data?.is_member),
+  );
   const joinMutation = useJoinCommunityTagMutation(currentUsername);
   const leaveMutation = useLeaveCommunityTagMutation(currentUsername);
   const createPostMutation = useCreateCommunityPostMutation(currentUsername);
+  const updatePostMutation = useUpdateCommunityPostMutation(currentUsername);
+  const deletePostMutation = useDeleteCommunityPostMutation(currentUsername);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
-  const [posts, setPosts] = useState<ProfilePost[]>([]);
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null);
   useAutoClearMessage(successMessage, setSuccessMessage);
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
 
@@ -110,6 +122,7 @@ export default function CommunityDetailScreen() {
         setActionError(null);
         setSuccessMessage(null);
         setShowLeaveConfirmation(false);
+        setSelectedPost(null);
       },
       [],
     ),
@@ -196,6 +209,62 @@ export default function CommunityDetailScreen() {
     }
   };
 
+  const handleUpdatePost = async (
+    post: CommunityPost | ProfilePost,
+    payload: Omit<
+      Parameters<typeof updatePostMutation.mutateAsync>[0],
+      "tagId" | "eventId"
+    >,
+  ) => {
+    if (!tagId) {
+      return;
+    }
+
+    try {
+      setActionError(null);
+      const updatedPost = await updatePostMutation.mutateAsync({
+        tagId,
+        eventId: post.id,
+        ...payload,
+      });
+      setPosts((previousPosts) =>
+        previousPosts.map((item) =>
+          item.id === updatedPost.id ? updatedPost : item,
+        ),
+      );
+      setSelectedPost(null);
+      setSuccessMessage("Community post updated.");
+    } catch (error) {
+      setActionError(
+        getErrorMessage(error, "Could not update this community post."),
+      );
+    }
+  };
+
+  const handleDeletePost = async (post: CommunityPost | ProfilePost) => {
+    if (!tagId) {
+      return;
+    }
+
+    try {
+      setActionError(null);
+      await deletePostMutation.mutateAsync({
+        tagId,
+        eventId: post.id,
+        show_on_profile: post.show_on_profile,
+      });
+      setPosts((previousPosts) =>
+        previousPosts.filter((item) => item.id !== post.id),
+      );
+      setSelectedPost(null);
+      setSuccessMessage("Community post deleted.");
+    } catch (error) {
+      setActionError(
+        getErrorMessage(error, "Could not delete this community post."),
+      );
+    }
+  };
+
   const handleLoadMore = () => {
     if (!postsQuery.isFetching && hasMore) {
       setOffset((previousOffset) => previousOffset + PAGE_SIZE);
@@ -263,7 +332,9 @@ export default function CommunityDetailScreen() {
       {tag?.is_member ? (
         <CommunityPostComposer
           isSubmitting={createPostMutation.isPending}
+          isLoadingTaggableUsers={taggableUsersQuery.isLoading}
           onSubmit={handleCreatePost}
+          taggableUsers={taggableUsersQuery.data?.results ?? []}
         />
       ) : (
         <View className="mb-6 rounded-2xl border border-dashed border-divider bg-surface-card/60 px-4 py-4 dark:border-divider-dark dark:bg-surface-card-dark/60">
@@ -417,9 +488,20 @@ export default function CommunityDetailScreen() {
           <ProfilePostCard
             post={item}
             expanded
+            canManage={item.author?.username === currentUsername}
             communityLabel={tag?.name ?? null}
+            mentionSourceCommunityId={tag?.id ?? null}
+            onEdit={(post) => setSelectedPost(post as CommunityPost)}
+            onCommunityPress={() => {
+              if (tag) {
+                router.push(
+                  `/(tabs)/community/${encodeURIComponent(tag.id)}?from=community`,
+                );
+              }
+            }}
           />
         )}
+        ItemSeparatorComponent={() => <View className="h-3" />}
         ListHeaderComponent={headerContent}
         ListEmptyComponent={
           postsQuery.isLoading && offset === 0 ? (
@@ -471,6 +553,17 @@ export default function CommunityDetailScreen() {
           await updateMembership("leave");
           setShowLeaveConfirmation(false);
         }}
+      />
+
+      <ProfilePostEditSheet
+        post={selectedPost}
+        isDeleting={deletePostMutation.isPending}
+        isLoadingTaggableUsers={taggableUsersQuery.isLoading}
+        isSaving={updatePostMutation.isPending}
+        onClose={() => setSelectedPost(null)}
+        onDelete={handleDeletePost}
+        onSave={handleUpdatePost}
+        taggableUsers={taggableUsersQuery.data?.results ?? []}
       />
     </View>
   );

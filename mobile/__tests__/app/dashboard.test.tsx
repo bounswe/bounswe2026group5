@@ -1,10 +1,12 @@
 import DashboardScreen from "@/app/(tabs)/index";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
+import { ScrollView } from "react-native";
 
 const mockPush = jest.fn();
 const mockRequestsRefetch = jest.fn();
 const mockSessionsRefetch = jest.fn();
+const mockMatchesRefetch = jest.fn();
 const mockResendMutateAsync = jest.fn();
 const mockRespondMutateAsync = jest.fn();
 const mockCancelMutateAsync = jest.fn();
@@ -228,6 +230,7 @@ jest.mock("@/lib/queries/mentorship", () => {
       data: mockMatches,
       isLoading: false,
       isError: false,
+      refetch: mockMatchesRefetch,
     }),
     useMentorshipMeetingSessionsQuery: () => ({
       data: mockMappedSessions,
@@ -316,6 +319,21 @@ describe("DashboardScreen session navigation", () => {
     fireEvent.press(getByText("View All"));
 
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/connections");
+  });
+
+  it("supports pull to refresh on the dashboard", async () => {
+    const { UNSAFE_getAllByType } = render(<DashboardScreen />);
+
+    const [dashboardScrollView] = UNSAFE_getAllByType(ScrollView);
+    const refreshControl = dashboardScrollView.props.refreshControl;
+
+    await act(async () => {
+      await refreshControl.props.onRefresh();
+    });
+
+    expect(mockRequestsRefetch).toHaveBeenCalled();
+    expect(mockSessionsRefetch).toHaveBeenCalled();
+    expect(mockMatchesRefetch).toHaveBeenCalled();
   });
 
   it("accepts and rejects pending requests from dashboard cards", async () => {

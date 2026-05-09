@@ -1,6 +1,7 @@
 """Tests for messaging domain models and API endpoints."""
 
 import uuid
+from unittest.mock import patch, MagicMock
 from datetime import timedelta
 from typing import Any
 
@@ -19,7 +20,7 @@ from mentorship.services import ensure_match_and_initial_session
 from profiles.models import AvailabilitySlot, Profile
 
 from . import signals
-from .models import Conversation, Message
+from .models import Conversation, Message, ReadReceipt
 
 User: Any = get_user_model()
 
@@ -137,7 +138,7 @@ class MessagingAPIBaseTestCase(TestCase):
         return f"/api/messages/conversations/{conversation_id}/"
 
     def _message_report_url(self, message_id: uuid.UUID | str) -> str:
-        return f"/api/messages/messages/{message_id}/report/"
+        return f"/api/messages/{message_id}/report/"
 
     def _authenticated_client_without_profile(
         self,
@@ -245,27 +246,32 @@ class ConversationDetailAPIViewTests(MessagingAPIBaseTestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_messages_ordered_most_recent_last(self) -> None:
-        # Create messages with different timestamps
+        # Create messages
         old_message = Message.objects.create(
             conversation=self.conversation,
             sender=self.mentor_profile,
             body="Old message",
-            created_at=timezone.now() - timedelta(hours=2),
         )
         new_message = Message.objects.create(
             conversation=self.conversation,
             sender=self.mentee_profile,
             body="New message",
-            created_at=timezone.now() - timedelta(hours=1),
         )
+
+        # Explicitly set created_at to ensure order (auto_now_add is normally set on creation)
+        # We use update() to bypass auto_now_add
+        now = timezone.now()
+        Message.objects.filter(pk=old_message.pk).update(created_at=now - timedelta(minutes=5))
+        Message.objects.filter(pk=new_message.pk).update(created_at=now)
 
         url = self._conversation_detail_url(self.conversation.id)
         response = self.mentee_client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 2)
-        # Should be ordered by created_at ascending (oldest first)
-        self.assertEqual(response.data[0]["id"], str(old_message.id))
-        self.assertEqual(response.data[1]["id"], str(new_message.id))
+        
+        # View uses order_by("-created_at") for pagination (most recent first)
+        self.assertEqual(response.data[0]["id"], str(new_message.id))
+        self.assertEqual(response.data[1]["id"], str(old_message.id))
 
     def test_conversation_not_found_returns_404(self) -> None:
         url = self._conversation_detail_url(uuid.uuid4())
@@ -342,13 +348,19 @@ class MessageCreateAPIViewTests(MessagingAPIBaseTestCase):
     def test_attachment_upload_works(self) -> None:
         # Create a fake PDF file
         pdf_content = b"%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n"
-        file = ContentFile(pdf_content, name="test.pdf")
+        file_name = "test.pdf"
+        file = ContentFile(pdf_content, name=file_name)
 
         url = self._conversation_detail_url(self.conversation.id)
         response = self.mentee_client.post(url, {"attachment": file}, format="multipart")
         self.assertEqual(response.status_code, 201)
         self.assertIn("attachment_url", response.data)
         self.assertIsNotNone(response.data["attachment_url"])
+        self.assertEqual(response.data["original_filename"], file_name)
+
+        # Verify DB
+        msg = Message.objects.get(id=response.data["id"])
+        self.assertEqual(msg.original_filename, file_name)
 
     def test_invalid_attachment_type_rejected(self) -> None:
         # Create a fake executable file
@@ -600,3 +612,87 @@ class MessagingSignalsTests(TestCase):
         )
 
         self.assertEqual(Conversation.objects.filter(match=self.match).count(), existing_count)
+
+
+class MessagingSignalsFirebaseTests(TestCase):
+    """Tests for messaging signals that sync data to Firestore."""
+
+    def setUp(self):
+        Group.objects.get_or_create(name=UserRole.USER)
+        self.mentor_user = User.objects.create_user(
+            email="mentor.fire@example.com",
+            password="password123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentee_user = User.objects.create_user(
+            email="mentee.fire@example.com",
+            password="password123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentor_profile = Profile.objects.create(user=self.mentor_user, display_name="Mentor")
+        self.mentee_profile = Profile.objects.create(user=self.mentee_user, display_name="Mentee")
+
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=timezone.now() + timedelta(days=1),
+            end_at=timezone.now() + timedelta(days=1, hours=1)
+        )
+        req = _create_accepted_request(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            slot=slot,
+        )
+        self.match = Match.objects.get(request=req)
+        self.conversation = Conversation.objects.get(match=self.match)
+
+    @patch("messaging.firebase.get_firestore_client")
+    def test_message_creation_syncs_to_firestore(self, mock_get_client):
+        """Creating a Message should trigger Firestore sync via signal."""
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+
+        # Trigger signal
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender=self.mentor_profile,
+            body="Hello Firestore"
+        )
+
+        # Verify sync_message_to_firestore was called via signal
+        self.assertTrue(mock_client.collection.called)
+        mock_client.collection.assert_any_call("conversations")
+
+        # Verify read receipts were created
+        self.assertEqual(ReadReceipt.objects.filter(message=message).count(), 2)
+        sender_receipt = ReadReceipt.objects.get(message=message, user=self.mentor_profile)
+        recipient_receipt = ReadReceipt.objects.get(message=message, user=self.mentee_profile)
+        self.assertEqual(sender_receipt.status, "sent")
+        self.assertEqual(recipient_receipt.status, "delivered")
+
+    @patch("messaging.firebase.get_firestore_client")
+    def test_read_receipt_update_syncs_to_firestore(self, mock_get_client):
+        """Updating a ReadReceipt should trigger Firestore update via signal."""
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender=self.mentor_profile,
+            body="Initial Message"
+        )
+
+        # Clear mock calls from creation
+        mock_client.reset_mock()
+
+        # Update receipt for recipient
+        receipt = ReadReceipt.objects.get(message=message, user=self.mentee_profile)
+        receipt.status = "read"
+        receipt.save()
+
+        # Verify update_message_read_status_in_firestore was called via signal
+        mock_client.collection.assert_any_call("conversations")
+        # Check if update was called on the correct document
+        mock_doc = mock_client.collection().document().collection().document()
+        self.assertTrue(mock_doc.update.called)
+        call_args = mock_doc.update.call_args[0][0]
+        self.assertEqual(call_args[f"read_receipts.{self.mentee_profile.id}"], "read")

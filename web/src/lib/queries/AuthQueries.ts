@@ -2,6 +2,7 @@
 import { queryClient, router } from "#/router.tsx"
 import { throwApiError } from "#/lib/apiError.ts"
 import { queryOptions, useMutation } from "@tanstack/react-query"
+import { signInWithFirebase } from "#/lib/firebase-client"
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -13,12 +14,14 @@ export interface User {
     auth_provider: string
     app_usage_mode: "MENTEE" | "MENTOR" | "ADMIN"
     is_active: boolean
+    is_email_verified: boolean
     created_at: string
 }
 
 interface AuthResponse {
     access_token: string
     refresh_token: string
+    firebase_token?: string
     user: User
 }
 
@@ -64,7 +67,14 @@ export const meQueryOptions = queryOptions({
         }
 
         if (!res.ok) return null
-        return await res.json() as Promise<User>
+        const data = await res.json() as User & { firebase_token?: string }
+        
+        // If a firebase token is returned in the me response, sign in
+        if (data.firebase_token) {
+            signInWithFirebase(data.firebase_token)
+        }
+        
+        return data as User
     },
     staleTime: 5 * 60 * 1000,
     gcTime: Infinity,
@@ -83,6 +93,10 @@ export function handleAuthSuccess(data: AuthResponse) {
     localStorage.setItem('refresh_token', data.refresh_token)
     localStorage.setItem('id', data.user.id)
     queryClient.setQueryData(['me'], data.user)
+    
+    if (data.firebase_token) {
+        signInWithFirebase(data.firebase_token)
+    }
 }
 
 export async function logout() {
@@ -173,6 +187,26 @@ export async function resetPasswordFn(data: { token: string; new_password: strin
         body: JSON.stringify(data),
     })
     if (!res.ok) await throwApiError(res)
+}
+
+export async function verifyEmailFn(token: string) {
+    const res = await fetch(`${API_BASE_URL}/auth/verify-email/?token=${encodeURIComponent(token)}`)
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
+export async function resendVerificationEmailFn() {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`${API_BASE_URL}/auth/resend-verification/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({}),
+    })
+    if (!res.ok) await throwApiError(res)
+    return res.json()
 }
 
 export function clearAuthState() {

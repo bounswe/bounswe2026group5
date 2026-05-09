@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { getAbsoluteUrl } from "@/lib/api/config";
 
 import { pickImageFile } from "@/lib/uploads/picker";
 import type { LocalUploadFile } from "@/lib/queries/uploads";
@@ -33,6 +34,20 @@ interface EditProfileModalProps {
   onClose: () => void;
   initialData: UserProfileData;
   onSave: (data: SaveProfileData) => Promise<boolean | void> | boolean | void;
+}
+
+function validateDisplayName(value: string): string | null {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "Name cannot be empty!";
+  }
+
+  if (/\d/.test(trimmedValue)) {
+    return "Display name cannot contain numbers.";
+  }
+
+  return null;
 }
 
 export function EditProfileModal({
@@ -78,8 +93,9 @@ export function EditProfileModal({
   };
 
   const handleSave = async () => {
-    if (!name.trim()) {
-      alert("Name cannot be empty!");
+    const displayNameError = validateDisplayName(name);
+    if (displayNameError) {
+      alert(displayNameError);
       return;
     }
 
@@ -167,7 +183,7 @@ export function EditProfileModal({
                       {previewUrl ? (
                         <Image
                           testID="avatar-preview"
-                          source={{ uri: previewUrl }}
+                          source={{ uri: getAbsoluteUrl(previewUrl) }}
                           className="h-full w-full"
                           resizeMode="cover"
                         />

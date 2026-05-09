@@ -65,7 +65,9 @@ jest.mock("@/components/discover/DiscoverFilterModal", () => ({
     visible,
     communityTags,
     selectedCommunityTags,
+    selectedDistanceKm,
     onToggleCommunityTag,
+    onSelectDistanceKm,
     onClear,
     onApply,
   }: any) => {
@@ -90,6 +92,12 @@ jest.mock("@/components/discover/DiscoverFilterModal", () => ({
             </Text>
           </TouchableOpacity>
         ))}
+        <TouchableOpacity
+          testID="distance-filter-15"
+          onPress={() => onSelectDistanceKm(15)}
+        >
+          <Text>{selectedDistanceKm === 15 ? "Selected 15 km" : "15 km"}</Text>
+        </TouchableOpacity>
         <TouchableOpacity testID="filter-clear-button" onPress={onClear} />
         <TouchableOpacity testID="filter-apply-button" onPress={onApply} />
       </View>
@@ -245,6 +253,29 @@ describe("DiscoverScreen", () => {
 
     await waitFor(() => {
       expect(fetchDiscoverPopularProfiles).toHaveBeenLastCalledWith(8);
+    });
+  });
+
+  it("filters mentors by selected distance radius", async () => {
+    const { getByTestId } = render(<DiscoverScreen />);
+
+    await waitFor(() => {
+      expect(fetchDiscoverPopularProfiles).toHaveBeenCalledWith(8);
+    });
+
+    fireEvent.press(getByTestId("filter-button"));
+    fireEvent.press(getByTestId("distance-filter-15"));
+    fireEvent.press(getByTestId("filter-apply-button"));
+
+    await waitFor(() => {
+      expect(fetchDiscoverProfiles).toHaveBeenCalledWith({
+        page: 1,
+        pageSize: 8,
+        query: "",
+        skills: [],
+        tags: [],
+        distanceKm: 15,
+      });
     });
   });
 

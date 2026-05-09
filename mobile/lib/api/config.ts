@@ -39,6 +39,21 @@ function devFallbackBaseUrl(): string {
 const resolvedBaseUrl = normalizeUrl(configuredBaseUrl || devFallbackBaseUrl());
 
 export const API_BASE_URL = resolvedBaseUrl;
+export function getAbsoluteUrl(path: string | null | undefined): string {
+  if (!path) return "";
+  if (
+    path.startsWith("http://") ||
+    path.startsWith("https://") ||
+    path.startsWith("file://") ||
+    path.startsWith("content://") ||
+    path.startsWith("ph://") ||
+    path.startsWith("assets-library://") ||
+    path.startsWith("data:")
+  ) {
+    return path;
+  }
+  return `${API_BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+}
 
 export const API_ACCESS_TOKEN = process.env.EXPO_PUBLIC_ACCESS_TOKEN ?? "";
 

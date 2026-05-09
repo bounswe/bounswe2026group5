@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "@/constants/api";
+import { useAuthStore } from "@/lib/auth/store";
 
 import {
   type DiscoverMentorProfile,
@@ -12,6 +13,9 @@ interface DiscoverProfilesParams {
   query?: string;
   skills?: string[];
   tags?: string[];
+  latitude?: number;
+  longitude?: number;
+  distanceKm?: number;
 }
 
 interface DiscoverResultsResponse {
@@ -68,9 +72,24 @@ export async function fetchDiscoverProfiles(
     }
   });
 
+  if (typeof params.latitude === "number") {
+    url.searchParams.set("lat", String(params.latitude));
+  }
+
+  if (typeof params.longitude === "number") {
+    url.searchParams.set("lng", String(params.longitude));
+  }
+
+  if (typeof params.distanceKm === "number") {
+    url.searchParams.set("distanceKm", String(params.distanceKm));
+  }
+
+  const accessToken = useAuthStore.getState().accessToken;
+
   const response = await fetch(url.toString(), {
     headers: {
       Accept: "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
   });
 

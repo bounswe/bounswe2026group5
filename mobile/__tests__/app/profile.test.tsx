@@ -87,9 +87,28 @@ jest.mock("@/lib/queries/profile", () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),
+  useUpdateProfilePostMutation: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useDeleteProfilePostMutation: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
   useProfilePostsQuery: () => ({
     data: { count: 0, results: [] },
     isLoading: false,
+  }),
+}));
+
+jest.mock("@/lib/queries/communityPosts", () => ({
+  useUpdateCommunityPostMutation: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useDeleteCommunityPostMutation: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
   }),
 }));
 
@@ -103,6 +122,10 @@ jest.mock("@/lib/queries/uploads", () => ({
 jest.mock("@/lib/queries/communityTags", () => ({
   useMyCommunityTagsQuery: (username?: string) =>
     mockMyCommunitiesQuery(username),
+  useCommunityTaggableUsersQuery: () => ({
+    data: { count: 0, results: [] },
+    isLoading: false,
+  }),
 }));
 
 const mockRouterPush = jest.fn();
@@ -305,6 +328,17 @@ describe("ProfileScreen Layout", () => {
       expect(getByTestId("profile-avatar-image").props.source).toEqual({
         uri: "https://cdn.example.com/new-avatar.jpg",
       });
+    });
+  });
+
+  it("opens the avatar image centered when the profile photo is pressed", async () => {
+    const { findByTestId, getByTestId } = render(<ProfileScreen />);
+
+    await findByTestId("profile-avatar-image");
+    fireEvent.press(getByTestId("profile-avatar-button"));
+
+    expect(getByTestId("profile-avatar-preview-image").props.source).toEqual({
+      uri: "https://cdn.example.com/current.jpg",
     });
   });
 

@@ -1,20 +1,21 @@
-import {createFileRoute, Link, useRouter} from '@tanstack/react-router'
-import { z } from 'zod'
-import { useState } from 'react'
+import { requestForToken } from "#/lib/firebase-client"
+import { googleLoginFn, handleAuthSuccess, registerFn } from "#/lib/queries/AuthQueries.ts"
+import { Body, Display, Heading, Muted } from "@/components/Typography"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
     Card,
     CardContent,
     CardFooter,
 } from "@/components/ui/card"
-import { Heading, Body, Display, Muted } from "@/components/Typography"
-import { User, Mail } from 'lucide-react'
-import {useMutation} from "@tanstack/react-query";
-import {handleAuthSuccess, registerFn, googleLoginFn} from "#/lib/queries/AuthQueries.ts";
+import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useGoogleLogin } from '@react-oauth/google'
+import { useMutation } from "@tanstack/react-query"
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
+import { Mail, User } from 'lucide-react'
+import { useState } from 'react'
+import { z } from 'zod'
 
 
 
@@ -68,6 +69,7 @@ export function RegisterPage() {
         mutationFn: registerFn,
         onSuccess: (data) => {
             handleAuthSuccess(data)
+            requestForToken(true).catch(() => {})
             router.navigate({ to: '/gettingToKnowYou' })
         },
         onError: (error) => {
@@ -79,6 +81,7 @@ export function RegisterPage() {
         mutationFn: googleLoginFn,
         onSuccess: (data) => {
             handleAuthSuccess(data)
+            requestForToken(true).catch(() => {})
             router.navigate({ to: '/dashboard' })
         },
         onError: (error) => {
@@ -122,7 +125,7 @@ export function RegisterPage() {
         <div className="grid min-h-screen lg:grid-cols-[5fr_4fr]">
             {/* Left Column: Editorial Content */}
             <aside className="lg:flex flex-col px-14 py-12 bg-petal border-r border-line relative overflow-hidden">
-                <Display className="mb-10 relative z-10">Campus Tutor</Display>
+                <Display className="mb-10 relative z-10">Neighborship</Display>
 
                 <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4 relative z-10 rise-in">
                     <Body className="island-kicker">Academic Editorial Excellence</Body>

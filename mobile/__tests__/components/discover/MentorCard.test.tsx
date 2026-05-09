@@ -41,4 +41,13 @@ describe("Discover MentorCard", () => {
     expect(queryByTestId("discover-avatar-ada-image")).toBeNull();
     expect(getByText("AL")).toBeTruthy();
   });
+
+  it("renders mentor distance when the backend returns it", () => {
+    const { getByTestId, getByText } = render(
+      <MentorCard profile={{ ...profile, distance_km: 2.47 }} />,
+    );
+
+    expect(getByTestId("mentor-distance-ada")).toBeTruthy();
+    expect(getByText("2.5 km away")).toBeTruthy();
+  });
 });

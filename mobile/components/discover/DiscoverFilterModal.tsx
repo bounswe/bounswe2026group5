@@ -14,14 +14,18 @@ import {
 import { DiscoverSearchBar } from "@/components/discover/DiscoverSearchBar";
 import { type CommunityTag } from "@/lib/queries/communityTags";
 
+const DISTANCE_OPTIONS_KM = [5, 15, 25, 50];
+
 interface DiscoverFilterModalProps {
   visible: boolean;
   allSkills: string[];
   communityTags: CommunityTag[];
   selectedSkills: Set<string>;
   selectedCommunityTags: Set<string>;
+  selectedDistanceKm: number | null;
   onToggleSkill: (skill: string) => void;
   onToggleCommunityTag: (tagSlug: string) => void;
+  onSelectDistanceKm: (distanceKm: number | null) => void;
   onClear: () => void;
   onApply: () => void;
   onClose: () => void;
@@ -33,8 +37,10 @@ export function DiscoverFilterModal({
   communityTags,
   selectedSkills,
   selectedCommunityTags,
+  selectedDistanceKm,
   onToggleSkill,
   onToggleCommunityTag,
+  onSelectDistanceKm,
   onClear,
   onApply,
   onClose,
@@ -52,7 +58,9 @@ export function DiscoverFilterModal({
     [communityTags, selectedCommunityTags],
   );
   const hasSelectedFilters =
-    selectedSkillList.length > 0 || selectedCommunityList.length > 0;
+    selectedSkillList.length > 0 ||
+    selectedCommunityList.length > 0 ||
+    selectedDistanceKm !== null;
 
   useEffect(() => {
     if (visible) {
@@ -150,6 +158,18 @@ export function DiscoverFilterModal({
                       </Text>
                     </TouchableOpacity>
                   ))}
+                  {selectedDistanceKm !== null ? (
+                    <TouchableOpacity
+                      testID="selected-distance-filter"
+                      activeOpacity={1}
+                      onPress={() => onSelectDistanceKm(null)}
+                      className="px-3 py-2 rounded-full border bg-surface-active dark:bg-surface-active-dark border-primary"
+                    >
+                      <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
+                        {selectedDistanceKm} km
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               </View>
             ) : null}
@@ -158,6 +178,43 @@ export function DiscoverFilterModal({
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
+              <View className="mb-5">
+                <Text className="mb-2 text-xs font-bold uppercase tracking-wider text-on-surface-muted dark:text-on-surface-muted-dark">
+                  Distance
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {DISTANCE_OPTIONS_KM.map((distanceKm) => {
+                    const selected = selectedDistanceKm === distanceKm;
+
+                    return (
+                      <TouchableOpacity
+                        testID={`distance-filter-${distanceKm}`}
+                        activeOpacity={1}
+                        key={distanceKm}
+                        onPress={() =>
+                          onSelectDistanceKm(selected ? null : distanceKm)
+                        }
+                        className={`px-3 py-2 rounded-full border ${
+                          selected
+                            ? "bg-primary border-primary"
+                            : "bg-surface-card dark:bg-surface-card-dark border-divider dark:border-divider-dark"
+                        }`}
+                      >
+                        <Text
+                          className={`text-sm font-semibold ${
+                            selected
+                              ? "text-white"
+                              : "text-on-surface dark:text-on-surface-dark"
+                          }`}
+                        >
+                          {distanceKm} km
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
               {filteredCommunityTags.length > 0 ? (
                 <View className="mb-5">
                   <Text className="mb-2 text-xs font-bold uppercase tracking-wider text-on-surface-muted dark:text-on-surface-muted-dark">

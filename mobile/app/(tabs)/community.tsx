@@ -8,14 +8,17 @@ import {
   useMyCommunityTagsQuery,
 } from "@/lib/queries/communityTags";
 import { useRouter } from "expo-router";
+import { useCallback } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useRefreshControl } from "@/hooks/use-refresh-control";
 
 const plannedFeedItems = [
   "Join communities to see their latest posts here.",
@@ -75,6 +78,13 @@ export default function CommunityScreen() {
   const openCommunity = (tag: CommunityTag) => {
     router.push(`/(tabs)/community/${encodeURIComponent(tag.id)}?from=community`);
   };
+  const refreshCommunity = useCallback(async () => {
+    await Promise.all([
+      myCommunitiesQuery.refetch(),
+      communityFeedQuery.refetch(),
+    ]);
+  }, [communityFeedQuery, myCommunitiesQuery]);
+  const { refreshing, onRefresh } = useRefreshControl(refreshCommunity);
 
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
@@ -94,6 +104,9 @@ export default function CommunityScreen() {
         className="flex-1 px-4 pt-4"
         contentContainerStyle={{ paddingBottom: 140 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         <View className="mb-6">
           <View className="flex-row items-center justify-between mb-3">
@@ -196,6 +209,11 @@ export default function CommunityScreen() {
                   communityLabel={
                     communities.find((tag) => tag.id === post.community_id)
                       ?.name ?? null
+                  }
+                  onCommunityPress={(communityId) =>
+                    router.push(
+                      `/(tabs)/community/${encodeURIComponent(communityId)}?from=community`,
+                    )
                   }
                 />
               ))}

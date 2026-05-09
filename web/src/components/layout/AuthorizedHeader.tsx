@@ -30,10 +30,10 @@ export function AuthorizedHeader() {
                 to="/dashboard"
                 className="font-bold font-display tracking-tight text-lg text-ink"
             >
-              Mentorship
+              Neighborship
             </Link>
 
-            <nav className="hidden sm:flex items-center gap-1">
+            <nav className="hidden sm:flex items-center gap-1" aria-label="Main navigation">
               <Link
                   to="/dashboard"
                   activeProps={{ className: "bg-accent-muted text-ink font-semibold" }}
@@ -105,9 +105,11 @@ export function AuthorizedHeader() {
                 to="/profiles/$username"
                 params={{ username: me?.username ?? '' }}
                 aria-label="Open profile page"
-                className="h-8 w-8 rounded-full bg-accent text-background flex items-center justify-center text-sm font-bold shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                className="h-8 w-8 rounded-full overflow-hidden bg-accent text-background flex items-center justify-center text-sm font-bold shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             >
-              {initials}
+              {profile?.picture_url
+                ? <img src={profile.picture_url} alt={initials} className="h-full w-full object-cover" />
+                : initials}
             </Link>
             <Button
                 variant="ghost"

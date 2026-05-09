@@ -1,7 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -15,18 +21,25 @@ import {
 import { EditSkillsModal } from "@/components/profile/EditSkillsModal";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfilePostComposer } from "@/components/profile/ProfilePostComposer";
+import { ProfilePostEditSheet } from "@/components/profile/ProfilePostEditSheet";
 import { ProfilePostsPreview } from "@/components/profile/ProfilePostsPreview";
 import { ProfileReviews } from "@/components/profile/ProfileReviews";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { useRefreshControl } from "@/hooks/use-refresh-control";
 
 import { API_BASE_URL } from "@/constants/api";
 import { useAuthStore } from "@/lib/auth/store";
 import { useProfileVisibilityStore } from "@/lib/profile/preferences";
 import {
+  useDeleteCommunityPostMutation,
+  useUpdateCommunityPostMutation,
+} from "@/lib/queries/communityPosts";
+import {
   type CommunityTag,
   useMyCommunityTagsQuery,
+  useCommunityTaggableUsersQuery,
 } from "@/lib/queries/communityTags";
 import {
   mapAvailabilityToSchedule,
@@ -36,9 +49,12 @@ import {
 } from "@/lib/queries/mentorship";
 import {
   type ProfileReview,
+  type ProfilePost,
   useCreateProfilePostMutation,
+  useDeleteProfilePostMutation,
   useProfileRatingQuery,
   useProfileReviewsQuery,
+  useUpdateProfilePostMutation,
   useUpdateOwnProfileMutation,
 } from "@/lib/queries/profile";
 import {
@@ -106,7 +122,7 @@ function renderSkillsSection({
   }
 
   return (
-    <View className="mb-6">
+    <View className="mb-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 pt-4">
       <SkillsCloud
         title={skillsTitle}
         skills={skillsData}
@@ -148,7 +164,7 @@ function renderCommunitiesSection({
   }
 
   return (
-    <View className="mb-6">
+    <View className="mb-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4">
       <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
         Communities
       </Text>
@@ -179,11 +195,15 @@ function renderPostsSection({
   onViewAll,
   onCompose,
   communityLabelsById,
+  onEditPost,
+  onOpenCommunity,
 }: {
   currentUsername?: string;
   onViewAll: () => void;
   onCompose: () => void;
   communityLabelsById: Record<string, string>;
+  onEditPost: (post: ProfilePost) => void;
+  onOpenCommunity: (communityId: string) => void;
 }) {
   if (!currentUsername) {
     return null;
@@ -195,6 +215,9 @@ function renderPostsSection({
       onViewAll={onViewAll}
       onCompose={onCompose}
       communityLabelsById={communityLabelsById}
+      canManagePosts
+      onEditPost={onEditPost}
+      onOpenCommunity={onOpenCommunity}
     />
   );
 }
@@ -214,7 +237,11 @@ function renderAvailabilitySection({
     return null;
   }
 
-  return <AvailabilityPreview schedule={availabilityData} onEdit={onEdit} />;
+  return (
+    <View className="mb-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 pt-4">
+      <AvailabilityPreview schedule={availabilityData} onEdit={onEdit} />
+    </View>
+  );
 }
 
 function renderReviewsSection({
@@ -239,7 +266,7 @@ function renderReviewsSection({
   }
 
   return (
-    <View className="mt-6">
+    <View className="mt-2 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4">
       <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
         Reviews
       </Text>
@@ -285,6 +312,14 @@ export default function ProfileScreen() {
   const updateProfileMutation = useUpdateOwnProfileMutation();
   const createProfilePostMutation =
     useCreateProfilePostMutation(currentUsername);
+  const updateProfilePostMutation =
+    useUpdateProfilePostMutation(currentUsername);
+  const deleteProfilePostMutation =
+    useDeleteProfilePostMutation(currentUsername);
+  const updateCommunityPostMutation =
+    useUpdateCommunityPostMutation(currentUsername);
+  const deleteCommunityPostMutation =
+    useDeleteCommunityPostMutation(currentUsername);
   const profileRatingQuery = useProfileRatingQuery(currentUsername);
   const myCommunitiesQuery = useMyCommunityTagsQuery(currentUsername);
 
@@ -318,12 +353,20 @@ export default function ProfileScreen() {
 
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [isAvailabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [isEditProfileModalOpen, setEditProfileModalOpen] = useState(false);
   const [isProfileHidden, setIsProfileHidden] = useState<boolean | null>(null);
   const [reviewsPage, setReviewsPage] = useState(1);
   const [reviews, setReviews] = useState<ProfileReview[]>([]);
   const [isPostComposerOpen, setPostComposerOpen] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<ProfilePost | null>(null);
+  const selectedCommunityPostTagId =
+    selectedPost?.category === "CoP" ? selectedPost.community_id : null;
+  const taggableUsersQuery = useCommunityTaggableUsersQuery(
+    selectedCommunityPostTagId ?? undefined,
+    Boolean(selectedCommunityPostTagId),
+  );
 
   const isMentorMode = appUsageMode === "MENTOR";
   const shouldShowSkills = isMentorMode ? showExpertise : showEagerToLearn;
@@ -390,7 +433,7 @@ export default function ProfileScreen() {
       mounted = false;
       controller.abort();
     };
-  }, [currentUsername]);
+  }, [currentUsername, refreshVersion]);
 
   useEffect(() => {
     if (!reviewsQuery.data) {
@@ -457,7 +500,7 @@ export default function ProfileScreen() {
       mounted = false;
       controller.abort();
     };
-  }, []);
+  }, [refreshVersion]);
 
   const availabilityData = useMemo(
     () => mapAvailabilityToSchedule(availabilityQuery.data ?? []),
@@ -593,6 +636,65 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleSavePost = async (
+    post: ProfilePost,
+    payload: {
+      content: string;
+      event_type: ProfilePost["event_type"];
+      show_on_profile?: boolean;
+      tagged_users?: string[];
+    },
+  ) => {
+    try {
+      setPageError(null);
+
+      if (post.category === "PrP") {
+        await updateProfilePostMutation.mutateAsync({
+          eventId: post.id,
+          content: payload.content,
+          event_type: payload.event_type,
+        });
+      } else if (post.category === "CoP" && post.community_id) {
+        await updateCommunityPostMutation.mutateAsync({
+          tagId: post.community_id,
+          eventId: post.id,
+          content: payload.content,
+          event_type: payload.event_type,
+          show_on_profile: payload.show_on_profile,
+          tagged_users: payload.tagged_users,
+        });
+      }
+
+      setSelectedPost(null);
+    } catch (error) {
+      setPageError(
+        error instanceof Error ? error.message : "Could not update post.",
+      );
+    }
+  };
+
+  const handleDeletePost = async (post: ProfilePost) => {
+    try {
+      setPageError(null);
+
+      if (post.category === "PrP") {
+        await deleteProfilePostMutation.mutateAsync({ eventId: post.id });
+      } else if (post.category === "CoP" && post.community_id) {
+        await deleteCommunityPostMutation.mutateAsync({
+          tagId: post.community_id,
+          eventId: post.id,
+          show_on_profile: post.show_on_profile,
+        });
+      }
+
+      setSelectedPost(null);
+    } catch (error) {
+      setPageError(
+        error instanceof Error ? error.message : "Could not delete post.",
+      );
+    }
+  };
+
   const openSkillsModal = (
     title: string,
     skills: string[],
@@ -606,6 +708,27 @@ export default function ProfileScreen() {
   );
   const rating = Number.isFinite(normalizedRating) ? normalizedRating : 0;
   const reviewCount = profileRatingQuery.data?.review_count ?? 0;
+  const refreshProfile = useCallback(async () => {
+    setReviewsPage(1);
+    setPageError(null);
+    setRefreshVersion((version) => version + 1);
+    await Promise.all([
+      availabilityQuery.refetch(),
+      mentorshipMatchesQuery.refetch(),
+      mentorshipRequestsQuery.refetch(),
+      profileRatingQuery.refetch(),
+      myCommunitiesQuery.refetch(),
+      reviewsQuery.refetch(),
+    ]);
+  }, [
+    availabilityQuery,
+    mentorshipMatchesQuery,
+    mentorshipRequestsQuery,
+    myCommunitiesQuery,
+    profileRatingQuery,
+    reviewsQuery,
+  ]);
+  const { refreshing, onRefresh } = useRefreshControl(refreshProfile);
 
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
@@ -634,6 +757,9 @@ export default function ProfileScreen() {
         className="flex-1"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 160 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {pageError ? (
           <View className="px-4 pt-4">
@@ -676,6 +802,11 @@ export default function ProfileScreen() {
             onViewAll: () => router.push("/(tabs)/profile/posts" as any),
             onCompose: () => setPostComposerOpen(true),
             communityLabelsById,
+            onEditPost: setSelectedPost,
+            onOpenCommunity: (communityId) =>
+              router.push(
+                `/(tabs)/community/${encodeURIComponent(communityId)}?from=profile`,
+              ),
           })}
 
           {renderAvailabilitySection({
@@ -755,6 +886,22 @@ export default function ProfileScreen() {
             return false;
           }
         }}
+      />
+      <ProfilePostEditSheet
+        post={selectedPost}
+        isDeleting={
+          deleteProfilePostMutation.isPending ||
+          deleteCommunityPostMutation.isPending
+        }
+        isLoadingTaggableUsers={taggableUsersQuery.isLoading}
+        isSaving={
+          updateProfilePostMutation.isPending ||
+          updateCommunityPostMutation.isPending
+        }
+        onClose={() => setSelectedPost(null)}
+        onDelete={handleDeletePost}
+        onSave={handleSavePost}
+        taggableUsers={taggableUsersQuery.data?.results ?? []}
       />
     </View>
   );

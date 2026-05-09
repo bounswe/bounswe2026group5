@@ -7,7 +7,7 @@ import { logout, meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/Aut
 import { useOwnProfile, useUpdateProfile, useUpdateUsername } from "#/lib/queries/ProfileQueries.ts"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export const Route = createFileRoute('/_onBoarding/gettingToKnowYou')({
     loader: ({ context }) => context.queryClient.ensureQueryData(meQueryOptions),
@@ -48,20 +48,26 @@ const BASE_QUESTIONS: Question[] = [
         question: "What's your first name?",
         clarification: "This will appear on your profile.",
         type: 'text',
-        validate: ({ firstName }) =>
-            firstName.trim().length < 2 ? "First name must be at least 2 characters." : null,
+        validate: ({ firstName }) => {
+            if (firstName.trim().length < 2) return "First name must be at least 2 characters."
+            if (!/^[a-zA-ZÀ-ÿ\s'-]+$/.test(firstName.trim())) return "First name can only contain letters."
+            return null
+        },
     },
     {
         key: 'lastName',
         question: "What's your last name?",
         clarification: "This will appear on your profile.",
         type: 'text',
-        validate: ({ lastName }) =>
-            lastName.trim().length < 2 ? "Last name must be at least 2 characters." : null,
+        validate: ({ lastName }) => {
+            if (lastName.trim().length < 2) return "Last name must be at least 2 characters."
+            if (!/^[a-zA-ZÀ-ÿ\s'-]+$/.test(lastName.trim())) return "Last name can only contain letters."
+            return null
+        },
     },
     {
         key: 'primaryUsage',
-        question: "How will you use Campus Tutor ?",
+        question: "How will you use Neighborship ?",
         clarification: "This helps us personalize your experience.",
         type: 'choice',
         validate: ({ primaryUsage }) =>

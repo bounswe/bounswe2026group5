@@ -32,7 +32,7 @@ import type { CommunityTag } from '@/lib/queries/CommunityQueries.ts'
 const PAGE_SIZE = 6
 const SECTION_CLASS = 'w-full max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 lg:px-20 xl:px-28'
 
-export const Route = createFileRoute('/_authorized/communities/')({
+export const Route = createFileRoute('/_public/communities/')({
     component: CommunitiesPage,
 })
 
@@ -47,8 +47,8 @@ interface CommunityRowProps {
     communities: CommunityTag[]
     myIds: Set<string>
     onView: (id: string) => void
-    onJoin: (id: string) => void
-    onLeave: (id: string) => void
+    onJoin: ((id: string) => void) | undefined
+    onLeave: ((id: string) => void) | undefined
     joiningId: string | null
     leavingId: string | null
 }
@@ -111,11 +111,14 @@ interface CreateCommunityModalProps {
 function CreateCommunityModal({ open, onClose }: CreateCommunityModalProps) {
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
+    const [nameError, setNameError] = useState('')
     const { mutateAsync, isPending } = useCreateCommunityMutation()
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!name.trim()) return
+        if (name.trim().length < 3) { setNameError("Name must be at least 3 characters."); return }
+        if (/^\d+$/.test(name.trim())) { setNameError("Name cannot be only numbers."); return }
+        setNameError('')
         try {
             await mutateAsync({ name: name.trim(), description: description.trim() })
             toast.success(`Community "${name.trim()}" created!`)
@@ -130,6 +133,7 @@ function CreateCommunityModal({ open, onClose }: CreateCommunityModalProps) {
     const handleClose = () => {
         setName('')
         setDescription('')
+        setNameError('')
         onClose()
     }
 
@@ -145,12 +149,16 @@ function CreateCommunityModal({ open, onClose }: CreateCommunityModalProps) {
                         <Input
                             id="community-name"
                             value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            onChange={(e) => { setName(e.target.value); setNameError('') }}
                             placeholder="e.g. Frontend Istanbul"
                             maxLength={120}
                             required
+                            aria-invalid={!!nameError}
                         />
-                        <p className="text-xs text-ink-soft">{name.length}/120 · Name cannot be changed later.</p>
+                        {nameError
+                            ? <p className="text-xs text-destructive">{nameError}</p>
+                            : <p className="text-xs text-ink-soft">{name.length}/120 · Name cannot be changed later.</p>
+                        }
                     </div>
                     <div className="flex flex-col gap-1.5">
                         <Label htmlFor="community-desc">Description</Label>
@@ -169,7 +177,7 @@ function CreateCommunityModal({ open, onClose }: CreateCommunityModalProps) {
                         <Button
                             type="submit"
                             className="bg-accent hover:bg-accent-light text-white"
-                            disabled={!name.trim() || isPending}
+                            disabled={name.trim().length < 3 || isPending}
                         >
                             {isPending ? 'Creating...' : 'Create'}
                         </Button>
@@ -238,6 +246,9 @@ export function CommunitiesPage() {
         }
     }, [leaveMutation])
 
+    const onJoin = me ? handleJoin : undefined
+    const onLeave = me ? handleLeave : undefined
+
     return (
         <div className="py-10 sm:py-16 rise-in flex flex-col gap-12">
 
@@ -266,14 +277,16 @@ export function CommunitiesPage() {
                                 <X className="h-4 w-4" />
                             </Button>
                         )}
-                        <Button
-                            className="shrink-0 bg-accent hover:bg-accent-light text-white shadow-sm flex items-center gap-1.5"
-                            size="sm"
-                            onClick={() => setShowCreateModal(true)}
-                        >
-                            <Plus className="h-4 w-4" />
-                            <span className="hidden sm:inline">Create</span>
-                        </Button>
+                        {me && (
+                            <Button
+                                className="shrink-0 bg-accent hover:bg-accent-light text-white shadow-sm flex items-center gap-1.5"
+                                size="sm"
+                                onClick={() => setShowCreateModal(true)}
+                            >
+                                <Plus className="h-4 w-4" />
+                                <span className="hidden sm:inline">Create</span>
+                            </Button>
+                        )}
                     </div>
                 </section>
             </div>
@@ -289,8 +302,8 @@ export function CommunitiesPage() {
                             communities={myCommunities}
                             myIds={myIds}
                             onView={handleView}
-                            onJoin={handleJoin}
-                            onLeave={handleLeave}
+                            onJoin={onJoin}
+                            onLeave={onLeave}
                             joiningId={joiningId}
                             leavingId={leavingId}
                         />
@@ -304,8 +317,8 @@ export function CommunitiesPage() {
                             communities={popularCommunities}
                             myIds={myIds}
                             onView={handleView}
-                            onJoin={handleJoin}
-                            onLeave={handleLeave}
+                            onJoin={onJoin}
+                            onLeave={onLeave}
                             joiningId={joiningId}
                             leavingId={leavingId}
                         />
@@ -332,7 +345,7 @@ export function CommunitiesPage() {
                                 ? (<>No communities found matching <span className="font-semibold text-ink">"{debouncedQuery}"</span>.</>)
                                 : 'No communities yet.'}
                         </p>
-                        {!debouncedQuery && (
+                        {!debouncedQuery && me && (
                             <p className="text-ink-soft text-sm mt-2">
                                 Be the first to{' '}
                                 <button
@@ -353,8 +366,8 @@ export function CommunitiesPage() {
                                 community={community}
                                 isMember={myIds.has(community.id)}
                                 onViewCommunity={handleView}
-                                onJoin={handleJoin}
-                                onLeave={handleLeave}
+                                onJoin={onJoin}
+                                onLeave={onLeave}
                                 isJoining={joiningId === community.id}
                                 isLeaving={leavingId === community.id}
                                 className="h-full"
