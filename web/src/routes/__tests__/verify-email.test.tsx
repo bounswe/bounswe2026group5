@@ -24,6 +24,7 @@ const {
     mockGetStoredUser,
     mockVerifyEmailFn,
     mockResendVerificationEmailFn,
+    mockInvalidateQueries,
 } = vi.hoisted(() => ({
     mockVerifyMutate: vi.fn(),
     mockResendMutate: vi.fn(),
@@ -32,6 +33,7 @@ const {
     mockGetStoredUser: vi.fn(),
     mockVerifyEmailFn: vi.fn(),
     mockResendVerificationEmailFn: vi.fn(),
+    mockInvalidateQueries: vi.fn(),
 }))
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
@@ -50,6 +52,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
     return {
         ...actual,
         useMutation: (options: Record<string, unknown>) => mockUseMutation(options),
+        useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
     }
 })
 
