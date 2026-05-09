@@ -111,6 +111,8 @@ async function registerForPushNotificationsAsync(
   Notifications: NotificationsModule,
 ) {
   let token;
+  const canAttemptPushRegistration =
+    Device.isDevice || Platform.OS === "android";
 
   // Always set up the default channel for Android
   await Notifications.setNotificationChannelAsync("default", {
@@ -120,7 +122,13 @@ async function registerForPushNotificationsAsync(
     lightColor: "#FF231F7C",
   });
 
-  if (Device.isDevice) {
+  if (canAttemptPushRegistration) {
+    if (!Device.isDevice) {
+      console.log(
+        "Attempting push token registration on Android emulator with Google Play services.",
+      );
+    }
+
     const { status: existingStatus } =
       await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -150,7 +158,9 @@ async function registerForPushNotificationsAsync(
       console.error("Error getting push token:", e);
     }
   } else {
-    console.log("Must use physical device for Push Notifications");
+    console.log(
+      "Push token registration requires a physical device on this platform.",
+    );
   }
 
   return token;
