@@ -111,11 +111,14 @@ interface CreateCommunityModalProps {
 function CreateCommunityModal({ open, onClose }: CreateCommunityModalProps) {
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
+    const [nameError, setNameError] = useState('')
     const { mutateAsync, isPending } = useCreateCommunityMutation()
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!name.trim()) return
+        if (name.trim().length < 3) { setNameError("Name must be at least 3 characters."); return }
+        if (/^\d+$/.test(name.trim())) { setNameError("Name cannot be only numbers."); return }
+        setNameError('')
         try {
             await mutateAsync({ name: name.trim(), description: description.trim() })
             toast.success(`Community "${name.trim()}" created!`)
@@ -130,6 +133,7 @@ function CreateCommunityModal({ open, onClose }: CreateCommunityModalProps) {
     const handleClose = () => {
         setName('')
         setDescription('')
+        setNameError('')
         onClose()
     }
 
@@ -145,12 +149,16 @@ function CreateCommunityModal({ open, onClose }: CreateCommunityModalProps) {
                         <Input
                             id="community-name"
                             value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            onChange={(e) => { setName(e.target.value); setNameError('') }}
                             placeholder="e.g. Frontend Istanbul"
                             maxLength={120}
                             required
+                            aria-invalid={!!nameError}
                         />
-                        <p className="text-xs text-ink-soft">{name.length}/120 · Name cannot be changed later.</p>
+                        {nameError
+                            ? <p className="text-xs text-destructive">{nameError}</p>
+                            : <p className="text-xs text-ink-soft">{name.length}/120 · Name cannot be changed later.</p>
+                        }
                     </div>
                     <div className="flex flex-col gap-1.5">
                         <Label htmlFor="community-desc">Description</Label>
@@ -169,7 +177,7 @@ function CreateCommunityModal({ open, onClose }: CreateCommunityModalProps) {
                         <Button
                             type="submit"
                             className="bg-accent hover:bg-accent-light text-white"
-                            disabled={!name.trim() || isPending}
+                            disabled={name.trim().length < 3 || isPending}
                         >
                             {isPending ? 'Creating...' : 'Create'}
                         </Button>
