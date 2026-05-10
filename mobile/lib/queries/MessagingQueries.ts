@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPostMultipart } from "@/lib/api/client";
+import { apiGet, apiPost, apiPostMultipart } from "@/lib/api/client";
 import { appendUploadFile, type LocalUploadFile } from "@/lib/queries/uploads";
 import { useFirestoreMessages } from "@/hooks/useFirestoreMessages";
 import { isFirebaseAvailable } from "@/lib/firebase-client";
@@ -158,7 +158,7 @@ export function useMarkRead(conversationId: string) {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async () => {
-            return apiGet(`/api/messages/conversations/${conversationId}/mark-read/`);
+            return apiPost(`/api/messages/conversations/${conversationId}/mark-read/`);
         },
         onMutate: async () => {
             await queryClient.cancelQueries({ queryKey: ['messaging', 'conversations'] });
