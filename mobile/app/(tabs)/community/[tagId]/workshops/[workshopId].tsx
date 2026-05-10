@@ -1,16 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { WorkshopEditorSheet } from "@/components/community/WorkshopEditorSheet";
+import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   isWorkshopActive,
+  useDeleteCommunityWorkshopMutation,
   useCommunityWorkshopDetailQuery,
   useJoinCommunityWorkshopMutation,
   useLeaveCommunityWorkshopMutation,
+  useUpdateCommunityWorkshopMutation,
 } from "@/lib/queries/workshops";
 import { ActivityIndicator, ScrollView } from "react-native";
 
@@ -62,6 +67,12 @@ export default function WorkshopDetailScreen() {
   const detailQuery = useCommunityWorkshopDetailQuery(tagId, workshopId);
   const joinMutation = useJoinCommunityWorkshopMutation(currentUsername);
   const leaveMutation = useLeaveCommunityWorkshopMutation(currentUsername);
+  const updateWorkshopMutation =
+    useUpdateCommunityWorkshopMutation(currentUsername);
+  const deleteWorkshopMutation =
+    useDeleteCommunityWorkshopMutation(currentUsername);
+  const [isEditSheetOpen, setEditSheetOpen] = useState(false);
+  const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
 
   const workshop = detailQuery.data;
   const isAuthor = workshop?.author?.username === currentUsername;
@@ -72,10 +83,28 @@ export default function WorkshopDetailScreen() {
   const canLeave = Boolean(workshop) && !isAuthor && isActive && isEnrolled;
 
   const goBack = () => {
+    if (source === "community") {
+      router.replace("/(tabs)/community");
+      return;
+    }
+
+    if (source === "dashboard") {
+      router.replace("/(tabs)");
+      return;
+    }
+
+    if (source === "schedule") {
+      router.replace("/(tabs)/schedule");
+      return;
+    }
+
+    if (source === "profile") {
+      router.replace("/(tabs)/profile");
+      return;
+    }
+
     router.replace(
-      source === "community"
-        ? "/(tabs)/community"
-        : `/(tabs)/community/${encodeURIComponent(tagId ?? "")}?from=community`,
+      `/(tabs)/community/${encodeURIComponent(tagId ?? "")}?from=community`,
     );
   };
 
@@ -115,6 +144,66 @@ export default function WorkshopDetailScreen() {
       toast.error(
         getDetailErrorMessage(error, "Could not leave this workshop."),
         { title: "Workshop leave failed" },
+      );
+    }
+  };
+
+  const handleSaveWorkshop = async ({
+    title,
+    description,
+    scheduled_at,
+    end_at,
+    max_participants,
+  }: {
+    title: string;
+    description: string;
+    scheduled_at: string;
+    end_at: string;
+    max_participants: number;
+  }) => {
+    if (!tagId || !workshopId) {
+      return false;
+    }
+
+    try {
+      await updateWorkshopMutation.mutateAsync({
+        tagId,
+        workshopId,
+        title,
+        description,
+        scheduled_at,
+        end_at,
+        max_participants,
+      });
+      await detailQuery.refetch();
+      toast.success("Workshop updated successfully.");
+      return true;
+    } catch (error) {
+      toast.error(
+        getDetailErrorMessage(error, "Could not update this workshop."),
+        { title: "Workshop update failed" },
+      );
+      return false;
+    }
+  };
+
+  const handleCancelWorkshop = async () => {
+    if (!tagId || !workshopId || !workshop) {
+      return;
+    }
+
+    try {
+      await deleteWorkshopMutation.mutateAsync({
+        tagId,
+        workshopId,
+      });
+      toast.success(`Cancelled ${workshop.title}.`);
+      setShowCancelConfirmation(false);
+      goBack();
+    } catch (error) {
+      toast.error(
+        getDetailErrorMessage(error, "Could not cancel this workshop."),
+        { title: "Workshop cancellation failed" },
       );
     }
   };
@@ -198,9 +287,20 @@ export default function WorkshopDetailScreen() {
                 <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
                   {workshop.title}
                 </Text>
-                <Text className="mt-1 text-sm font-semibold text-primary dark:text-primary-dim">
-                  {workshop.community_name}
-                </Text>
+                <TouchableOpacity
+                  testID="workshop-detail-community-link"
+                  activeOpacity={0.75}
+                  onPress={() =>
+                    router.push(
+                      `/(tabs)/community/${encodeURIComponent(workshop.community_id)}?from=community`,
+                    )
+                  }
+                  className="self-start"
+                >
+                  <Text className="mt-1 text-sm font-semibold text-primary dark:text-primary-dim">
+                    {workshop.community_name}
+                  </Text>
+                </TouchableOpacity>
               </View>
               <View
                 className={`rounded-full px-3 py-1 ${
@@ -267,6 +367,28 @@ export default function WorkshopDetailScreen() {
                 <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
                   You are hosting this workshop.
                 </Text>
+                <View className="mt-4 flex-row gap-3">
+                  <TouchableOpacity
+                    testID="workshop-detail-edit-button"
+                    activeOpacity={0.85}
+                    onPress={() => setEditSheetOpen(true)}
+                    className="flex-1 rounded-xl border border-primary/40 px-4 py-3 dark:border-primary-dim/40"
+                  >
+                    <Text className="text-center text-sm font-bold text-primary dark:text-primary-dim">
+                      Edit workshop
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    testID="workshop-detail-cancel-button"
+                    activeOpacity={0.85}
+                    onPress={() => setShowCancelConfirmation(true)}
+                    className="flex-1 rounded-xl border border-error/60 px-4 py-3 dark:border-red-900/60"
+                  >
+                    <Text className="text-center text-sm font-bold text-error dark:text-red-200">
+                      Cancel workshop
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : canJoin ? (
               <TouchableOpacity
@@ -343,6 +465,28 @@ export default function WorkshopDetailScreen() {
           ) : null}
         </ScrollView>
       )}
+
+      <WorkshopEditorSheet
+        visible={isEditSheetOpen}
+        workshop={workshop ?? null}
+        isSubmitting={updateWorkshopMutation.isPending}
+        onClose={() => setEditSheetOpen(false)}
+        onSubmit={handleSaveWorkshop}
+      />
+
+      <ConfirmationSheet
+        visible={showCancelConfirmation}
+        title="Cancel workshop?"
+        message="This will cancel the workshop for everyone and stop new participants from joining."
+        confirmLabel="Cancel Workshop"
+        cancelLabel="Keep Workshop"
+        variant="destructive"
+        isConfirming={deleteWorkshopMutation.isPending}
+        onCancel={() => setShowCancelConfirmation(false)}
+        onConfirm={() => {
+          void handleCancelWorkshop();
+        }}
+      />
     </View>
   );
 }

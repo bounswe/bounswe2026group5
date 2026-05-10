@@ -6,6 +6,8 @@ const mockReplace = jest.fn();
 const mockDetailQuery = jest.fn();
 const mockJoinMutation = jest.fn();
 const mockLeaveMutation = jest.fn();
+const mockUpdateMutation = jest.fn();
+const mockDeleteMutation = jest.fn();
 const mockToastSuccess = jest.fn();
 const mockToastError = jest.fn();
 let mockTagId: string | undefined = "tag-1";
@@ -16,6 +18,19 @@ let mockAuthUser = {
 };
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+jest.mock("@react-native-community/datetimepicker", () => {
+  const { View } = require("react-native");
+  const MockDateTimePicker = (props: Record<string, unknown>) => {
+    return <View {...props} />;
+  };
+  return {
+    __esModule: true,
+    default: MockDateTimePicker,
+    DateTimePickerAndroid: {
+      open: jest.fn(),
+    },
+  };
+});
 
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({
@@ -25,6 +40,7 @@ jest.mock("expo-router", () => ({
   }),
   useRouter: () => ({
     replace: mockReplace,
+    push: mockReplace,
   }),
 }));
 
@@ -54,12 +70,18 @@ jest.mock("@/lib/queries/workshops", () => {
       mockJoinMutation(username),
     useLeaveCommunityWorkshopMutation: (username?: string) =>
       mockLeaveMutation(username),
+    useUpdateCommunityWorkshopMutation: (username?: string) =>
+      mockUpdateMutation(username),
+    useDeleteCommunityWorkshopMutation: (username?: string) =>
+      mockDeleteMutation(username),
   };
 });
 
 describe("WorkshopDetailScreen", () => {
   const joinMutateAsync = jest.fn();
   const leaveMutateAsync = jest.fn();
+  const updateMutateAsync = jest.fn();
+  const deleteMutateAsync = jest.fn();
   const refetch = jest.fn();
   const baseWorkshop = {
     id: "workshop-1",
@@ -124,6 +146,16 @@ describe("WorkshopDetailScreen", () => {
       mutateAsync: leaveMutateAsync,
       isPending: false,
     });
+    mockUpdateMutation.mockReturnValue({
+      mutateAsync: updateMutateAsync,
+      isPending: false,
+    });
+    mockDeleteMutation.mockReturnValue({
+      mutateAsync: deleteMutateAsync,
+      isPending: false,
+    });
+    updateMutateAsync.mockResolvedValue({});
+    deleteMutateAsync.mockResolvedValue({});
   });
 
   it("renders workshop detail and joins when the user is eligible", async () => {
@@ -189,11 +221,76 @@ describe("WorkshopDetailScreen", () => {
     expect(queryByTestId("workshop-detail-leave-button")).toBeNull();
   });
 
+  it("lets the author edit workshop details", async () => {
+    mockAuthUser = {
+      username: "mentor_user",
+    };
+
+    const { getByTestId, getByText } = render(<WorkshopDetailScreen />);
+
+    fireEvent.press(getByTestId("workshop-detail-edit-button"));
+    fireEvent.changeText(
+      getByTestId("workshop-editor-title-input"),
+      "Prompt Engineering Advanced",
+    );
+    fireEvent.press(getByTestId("workshop-editor-save"));
+
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tagId: "tag-1",
+          workshopId: "workshop-1",
+          title: "Prompt Engineering Advanced",
+          max_participants: 10,
+        }),
+      );
+      expect(refetch).toHaveBeenCalled();
+    });
+
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      "Workshop updated successfully.",
+    );
+    expect(getByText("Prompt Engineering 101")).toBeTruthy();
+  });
+
+  it("asks for confirmation before cancelling an authored workshop", async () => {
+    mockAuthUser = {
+      username: "mentor_user",
+    };
+
+    const { getByTestId, findByText } = render(<WorkshopDetailScreen />);
+
+    fireEvent.press(getByTestId("workshop-detail-cancel-button"));
+    fireEvent.press(await findByText("Cancel Workshop"));
+
+    await waitFor(() => {
+      expect(deleteMutateAsync).toHaveBeenCalledWith({
+        tagId: "tag-1",
+        workshopId: "workshop-1",
+      });
+    });
+
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      "Cancelled Prompt Engineering 101.",
+    );
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/community");
+  });
+
   it("returns to the community tab from the back button", () => {
     const { getByTestId } = render(<WorkshopDetailScreen />);
 
     fireEvent.press(getByTestId("workshop-detail-back-button"));
 
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)/community");
+  });
+
+  it("opens the linked community from the workshop header label", () => {
+    const { getByTestId } = render(<WorkshopDetailScreen />);
+
+    fireEvent.press(getByTestId("workshop-detail-community-link"));
+
+    expect(mockReplace).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1?from=community",
+    );
   });
 });

@@ -1,5 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Text, TouchableOpacity, View } from "react-native";
+import {
+  type GestureResponderEvent,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 import {
   type CommunityWorkshopListItem,
@@ -45,12 +50,19 @@ function getWorkshopStatusLabel(workshop: CommunityWorkshopListItem) {
 export function WorkshopCard({
   workshop,
   onPress,
+  onCommunityPress,
 }: Readonly<{
   workshop: CommunityWorkshopListItem;
   onPress?: (workshop: CommunityWorkshopListItem) => void;
+  onCommunityPress?: (workshop: CommunityWorkshopListItem) => void;
 }>) {
   const isActive = isWorkshopActive(workshop);
   const statusLabel = getWorkshopStatusLabel(workshop);
+
+  const handleCommunityPress = (event: GestureResponderEvent) => {
+    event?.stopPropagation?.();
+    onCommunityPress?.(workshop);
+  };
 
   return (
     <TouchableOpacity
@@ -66,9 +78,16 @@ export function WorkshopCard({
           <Text className="text-base font-extrabold text-on-surface dark:text-on-surface-dark">
             {workshop.title}
           </Text>
-          <Text className="mt-1 text-xs font-semibold uppercase tracking-wide text-primary dark:text-primary-dim">
-            {workshop.community_name}
-          </Text>
+          <TouchableOpacity
+            testID={`community-workshop-community-link-${workshop.id}`}
+            activeOpacity={0.75}
+            onPress={handleCommunityPress}
+            className="self-start"
+          >
+            <Text className="mt-1 text-xs font-semibold uppercase tracking-wide text-primary dark:text-primary-dim">
+              {workshop.community_name}
+            </Text>
+          </TouchableOpacity>
         </View>
         <View
           className={`rounded-full px-2.5 py-1 ${
