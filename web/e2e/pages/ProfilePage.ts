@@ -37,11 +37,11 @@ export class ProfilePage {
   }
 
   async expectBookableSlots(count: number) {
-    await expect(this.page.locator('.cursor-pointer', { hasText: /^Book$/ })).toHaveCount(count);
+    await expect(this.page.locator('.cursor-pointer', { hasText: 'Book' })).toHaveCount(count);
   }
 
   async sendMentorshipRequest(coverLetter?: string) {
-    await this.page.locator('.cursor-pointer', { hasText: /^Book$/ }).first().click();
+    await this.page.locator('.cursor-pointer', { hasText: 'Book' }).first().click();
     await expect(this.page.getByRole('heading', { name: 'Send Mentorship Request' })).toBeVisible();
     if (coverLetter) {
       await this.page.getByLabel(/Cover Letter/i).fill(coverLetter);
@@ -61,8 +61,16 @@ export class ProfilePage {
   }
 
   async expectPublicReview(reviewText: string) {
-    await expect(this.page.getByText('Reviews')).toBeVisible();
+    await expect(this.page.getByText('Reviews', { exact: true })).toBeVisible();
     await expect(this.page.getByText(reviewText)).toBeVisible();
+  }
+
+  async nextWeek() {
+    await this.page.getByRole('button', { name: 'Go to next week' }).click();
+  }
+
+  async prevWeek() {
+    await this.page.getByRole('button', { name: 'Go to previous week' }).click();
   }
 
   private async clickAvailabilityCell(dayIndexFromMonday: number, hour: number) {

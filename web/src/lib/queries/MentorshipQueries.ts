@@ -31,6 +31,7 @@ export interface MentorshipRequest {
     slot_end_time: string
     status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED'
     cover_letter: string
+    is_mentor_overloaded: boolean
     created_at: string
     responded_at: string | null
 }

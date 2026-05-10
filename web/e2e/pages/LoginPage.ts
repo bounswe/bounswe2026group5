@@ -29,6 +29,6 @@ export class LoginPage {
   }
 
   async expectInlineError(text: string | RegExp) {
-    await expect(this.page.getByText(text)).toBeVisible();
+    await expect(this.page.locator('main').getByText(text)).toBeVisible();
   }
 }

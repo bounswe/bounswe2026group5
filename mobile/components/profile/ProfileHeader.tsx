@@ -83,7 +83,13 @@ export function ProfileHeader({
                 testID="profile-avatar-fallback"
                 className="text-3xl font-bold text-on-surface-soft dark:text-on-surface-soft-dark"
               >
-                {name.charAt(0)}
+                {name
+                  .trim()
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((p) => p[0])
+                  .join("")
+                  .toUpperCase()}
               </Text>
             )}
           </View>

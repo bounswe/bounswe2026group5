@@ -1,6 +1,7 @@
 // web/src/routes/_authorized/dashboard.tsx
 import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import { useMeetingSessions, useMyRequests, useRespondToRequest, matchFeedbackQueryOptions } from "#/lib/queries/MentorshipQueries.ts"
+import { useOwnProfile } from "#/lib/queries/ProfileQueries.ts"
 import { useNotifications, useMarkAllNotificationsRead, NOTIFICATION_INVALIDATION_MAP } from "#/lib/queries/NotificationQueries.ts"
 import { getInitials } from "#/lib/utils.ts"
 import { Body, Heading, Muted } from '@/components/Typography'
@@ -9,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { NotificationItem } from '@/components/notifications/NotificationItem'
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowRight, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, Star, XCircle, X as XIcon, ShieldCheck, Users } from 'lucide-react'
+import { ArrowRight, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, Star, XCircle, X as XIcon, ShieldCheck, Users, AlertTriangle, Info } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo } from "react"
 import type { Notification } from "#/lib/queries/NotificationQueries.ts"
 import { RatingModal } from '#/components/RatingModal.tsx'
@@ -248,6 +249,7 @@ function AdminDashboardView() {
 
 function MenteeDashboardView() {
   const { data: me } = useQuery(meQueryOptions)
+  const { data: ownProfile } = useOwnProfile()
   const { data: upcomingSessions = [], isLoading: sessionsLoading } = useMeetingSessions({
     role: 'mentee',
     status: 'upcoming',
@@ -483,8 +485,14 @@ function MenteeDashboardView() {
                   </Card>
               )}
 
-              {sentRequests.map(req => (
-                  <Card key={req.id} className="island-shell border-line shadow-sm hover:shadow-md transition-shadow bg-white">
+               {sentRequests.map(req => (
+                  <Card key={req.id} className="island-shell border-line shadow-sm hover:shadow-md transition-shadow bg-white overflow-hidden">
+                    {req.is_mentor_overloaded && (
+                      <div className="bg-amber-50/50 border-b border-amber-100 px-4 py-2 flex items-center gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="text-[10px] font-bold text-amber-700 uppercase tracking-tight">Mentor at Capacity</span>
+                      </div>
+                    )}
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -564,6 +572,7 @@ function MenteeDashboardView() {
 function MentorDashboardView() {
   const queryClient = useQueryClient()
   const { data: me } = useQuery(meQueryOptions)
+  const { data: ownProfile } = useOwnProfile()
   const { data: allRequests = [], isLoading: requestsLoading } = useMyRequests()
   const respondToRequest = useRespondToRequest()
   const { data: upcomingSessions = [], isLoading: sessionsLoading } = useMeetingSessions({
@@ -610,7 +619,19 @@ function MentorDashboardView() {
       <div className="grid grid-cols-1 lg:grid-cols-[5fr_4fr] gap-8 items-start">
 
         {/* LEFT COLUMN: Upcoming Sessions */}
-        <div className="flex flex-col gap-10">
+        <div className="flex flex-col gap-8">
+          {ownProfile?.is_overloaded && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <Body className="font-bold text-amber-900 text-sm">Capacity Warning</Body>
+                <Body className="text-amber-800 text-sm leading-relaxed">
+                  You currently have <strong>{ownProfile.active_matches_count}</strong> active mentorships. 
+                  Make sure you have enough time for new learners before accepting more requests.
+                </Body>
+              </div>
+            </div>
+          )}
           <section className="space-y-5">
             <Heading as="h3" className="text-xl flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-accent" />
@@ -731,6 +752,13 @@ function MentorDashboardView() {
                 const responded = respondedIds[req.id]
                 return (
                     <Card key={req.id} className="island-shell border-line border-l-4 border-l-accent shadow-sm hover:shadow-md transition-shadow bg-white">
+                      {req.is_mentor_overloaded && (
+                        <div className="bg-amber-50/50 border-b border-amber-100 px-4 py-2 flex items-center gap-2">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                          <span className="text-[11px] font-bold text-amber-700 uppercase tracking-tight">At Capacity</span>
+                          <span className="text-[11px] text-amber-600 font-medium">— You already have many active sessions.</span>
+                        </div>
+                      )}
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3">

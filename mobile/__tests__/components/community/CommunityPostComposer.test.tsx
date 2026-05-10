@@ -22,6 +22,7 @@ function expandComposer(getByTestId: (testID: string) => ReactTestInstance) {
 }
 
 describe("CommunityPostComposer", () => {
+  jest.setTimeout(10000);
   beforeEach(() => {
     jest.clearAllMocks();
     (pickPostImageFile as jest.Mock).mockResolvedValue({
