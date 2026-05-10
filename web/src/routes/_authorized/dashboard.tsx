@@ -108,13 +108,22 @@ export function DashboardHome() {
   const { mutate: markAllRead } = useMarkAllNotificationsRead()
   const queryClient = useQueryClient()
 
-  // Show only unread notifications.
-  // The useEffect below auto-marks them as read once displayed, and the polling
-  // refetch will update is_read on the next cycle, removing them from this list.
-  const displayNotifications = useMemo(() => {
-    return notifications
-      .filter(n => !n.is_read)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  const [displayNotifications, setDisplayNotifications] = useState<Notification[]>([])
+
+  // Show only unread notifications initially, but keep them on screen even after
+  // they are marked read. They will disappear when navigating away and coming back.
+  useEffect(() => {
+    if (notifications.length === 0) return
+
+    setDisplayNotifications(prev => {
+      const prevIds = new Set(prev.map(n => n.id))
+      const newUnread = notifications.filter(n => !n.is_read && !prevIds.has(n.id))
+      if (newUnread.length === 0) return prev
+      
+      return [...prev, ...newUnread].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+    })
   }, [notifications])
 
   const seenIds = useRef<Set<string>>(new Set())

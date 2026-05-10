@@ -3,10 +3,20 @@ import { Display, Body, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
 import { useQuery } from '@tanstack/react-query'
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
-import { useMyMatches } from '#/lib/queries/MentorshipQueries.ts'
+import { useMyMatches, useDeactivateMatch } from '#/lib/queries/MentorshipQueries.ts'
 import { getInitials } from '#/lib/utils.ts'
-import { Loader2, UserCircle, BookOpen } from 'lucide-react'
+import { Loader2, UserCircle, BookOpen, AlertCircle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '@/components/ui/dialog'
+import { toast } from 'sonner'
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 export const Route = createFileRoute('/_authorized/connections/')({
     component: ConnectionsPage,
@@ -17,6 +27,9 @@ export function ConnectionsPage() {
     const { data: matches = [], isLoading } = useMyMatches()
 
     const isMentor = me?.app_usage_mode === 'MENTOR'
+    const queryClient = useQueryClient()
+    const deactivateMutation = useDeactivateMatch()
+    const [deactivateTarget, setDeactivateTarget] = useState<string | null>(null)
 
     const connections = matches
         .filter(m => m.is_active)
@@ -62,11 +75,52 @@ export function ConnectionsPage() {
                                 displayName={user.display_name}
                                 pictureUrl={user.picture_url}
                                 title={'title' in user ? user.title : null}
+                                onDeactivate={() => setDeactivateTarget(user.matchId)}
                             />
                         ))}
                     </div>
                 </section>
             )}
+
+            <Dialog open={!!deactivateTarget} onOpenChange={open => !open && setDeactivateTarget(null)}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>End Match?</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-ink-soft mt-1">
+                        Are you sure you want to end this match? This will end the active mentorship connection.
+                    </p>
+                    <DialogFooter className="mt-4">
+                        <Button type="button" variant="outline" onClick={() => setDeactivateTarget(null)}>
+                            Keep Connection
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            disabled={deactivateMutation.isPending}
+                            onClick={() => {
+                                if (deactivateTarget) {
+                                    deactivateMutation.mutate(deactivateTarget, {
+                                        onSuccess: () => {
+                                            toast.success('Mentorship match ended successfully.')
+                                            setDeactivateTarget(null)
+                                            queryClient.invalidateQueries({ queryKey: ['mentorship', 'matches'] })
+                                        },
+                                        onError: () => {
+                                            toast.error('Failed to end match. Please try again.')
+                                        }
+                                    })
+                                }
+                            }}
+                        >
+                            {deactivateMutation.isPending ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                'Remove'
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
@@ -82,9 +136,10 @@ interface ConnectionCardProps {
     displayName: string
     pictureUrl: string | null
     title: string | null
+    onDeactivate: () => void
 }
 
-function ConnectionCard({ matchId, username, displayName, pictureUrl, title }: ConnectionCardProps) {
+function ConnectionCard({ matchId, username, displayName, pictureUrl, title, onDeactivate }: ConnectionCardProps) {
     return (
         <Card className="island-shell border-line shadow-sm hover:shadow-md transition-shadow bg-white">
             <CardContent className="pt-6 flex flex-col items-center text-center gap-4">
@@ -133,6 +188,15 @@ function ConnectionCard({ matchId, username, displayName, pictureUrl, title }: C
                             View Journey
                         </Button>
                     </Link>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onDeactivate}
+                        className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors gap-2 mt-1"
+                    >
+                        <AlertCircle className="w-4 h-4" />
+                        End Match
+                    </Button>
                 </div>
             </CardContent>
         </Card>
