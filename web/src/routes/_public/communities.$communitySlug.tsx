@@ -890,6 +890,18 @@ export function CommunityDetailPage() {
                     {deletePost && (
                         <DeletePostDialog communityId={community.id} post={deletePost} open={!!deletePost} onOpenChange={(open) => { if (!open) setDeletePost(null) }} />
                     )}
+                    <WorkshopDetailModal
+                        workshop={selectedWorkshop}
+                        tagId={community.id}
+                        open={workshopDetailOpen}
+                        onClose={() => { setWorkshopDetailOpen(false); setSelectedWorkshop(null) }}
+                        currentUsername={me?.username}
+                    />
+                    <CreateWorkshopDialog
+                        tagId={community.id}
+                        open={createWorkshopOpen}
+                        onClose={() => setCreateWorkshopOpen(false)}
+                    />
                 </>
             )}
         </div>
