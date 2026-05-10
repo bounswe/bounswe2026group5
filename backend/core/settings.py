@@ -174,7 +174,7 @@ USE_TZ = True
 # ==============================================================================
 STATIC_URL = "static/"
 
-GS_BUCKET_NAME = "neighborship-bucket"
+GS_BUCKET_NAME = os.getenv("GS_BUCKET_NAME")
 
 if GS_BUCKET_NAME and not DEBUG:
     STORAGES = {
