@@ -33,6 +33,7 @@ import {
   useLeaveCommunityTagMutation,
 } from "@/lib/queries/communityTags";
 import type { ProfilePost } from "@/lib/queries/profile";
+import { useCreateCommunityWorkshopMutation } from "@/lib/queries/workshops";
 
 const PAGE_SIZE = 12;
 
@@ -71,6 +72,7 @@ export default function CommunityDetailScreen() {
   const tagId = Array.isArray(params.tagId) ? params.tagId[0] : params.tagId;
   const source = Array.isArray(params.from) ? params.from[0] : params.from;
   const currentUsername = useAuthStore((state) => state.user?.username);
+  const currentUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const detailQuery = useCommunityTagDetailQuery(tagId);
   const taggableUsersQuery = useCommunityTaggableUsersQuery(
     tagId,
@@ -79,6 +81,8 @@ export default function CommunityDetailScreen() {
   const joinMutation = useJoinCommunityTagMutation(currentUsername);
   const leaveMutation = useLeaveCommunityTagMutation(currentUsername);
   const createPostMutation = useCreateCommunityPostMutation(currentUsername);
+  const createWorkshopMutation =
+    useCreateCommunityWorkshopMutation(currentUsername);
   const updatePostMutation = useUpdateCommunityPostMutation(currentUsername);
   const deletePostMutation = useDeleteCommunityPostMutation(currentUsername);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -241,6 +245,43 @@ export default function CommunityDetailScreen() {
     }
   };
 
+  const handleCreateWorkshop = async ({
+    title,
+    description,
+    scheduled_at,
+    end_at,
+    max_participants,
+  }: {
+    title: string;
+    description?: string;
+    scheduled_at: string;
+    end_at: string;
+    max_participants: number;
+  }) => {
+    if (!tagId) {
+      return false;
+    }
+
+    try {
+      setActionError(null);
+      await createWorkshopMutation.mutateAsync({
+        tagId,
+        title,
+        description,
+        scheduled_at,
+        end_at,
+        max_participants,
+      });
+      setSuccessMessage(
+        tag ? `Workshop created in ${tag.name}.` : "Workshop created.",
+      );
+      return true;
+    } catch (error) {
+      setActionError(getErrorMessage(error, "Could not create this workshop."));
+      return false;
+    }
+  };
+
   const handleDeletePost = async (post: CommunityPost | ProfilePost) => {
     if (!tagId) {
       return;
@@ -331,9 +372,13 @@ export default function CommunityDetailScreen() {
 
       {tag?.is_member ? (
         <CommunityPostComposer
-          isSubmitting={createPostMutation.isPending}
+          isSubmitting={
+            createPostMutation.isPending || createWorkshopMutation.isPending
+          }
           isLoadingTaggableUsers={taggableUsersQuery.isLoading}
           onSubmit={handleCreatePost}
+          onSubmitWorkshop={handleCreateWorkshop}
+          allowWorkshopCreation={currentUsageMode === "MENTOR"}
           taggableUsers={taggableUsersQuery.data?.results ?? []}
         />
       ) : (

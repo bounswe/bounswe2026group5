@@ -14,9 +14,14 @@ const mockJoinMutation = jest.fn();
 const mockLeaveMutation = jest.fn();
 const mockCommunityPostsQuery = jest.fn();
 const mockCreateCommunityPostMutation = jest.fn();
+const mockCreateCommunityWorkshopMutation = jest.fn();
 const mockUpdateCommunityPostMutation = jest.fn();
 const mockDeleteCommunityPostMutation = jest.fn();
 let focusCleanup: (() => void) | undefined;
+let mockAuthUser = {
+  username: "student",
+  app_usage_mode: "MENTEE",
+};
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 
@@ -38,9 +43,7 @@ jest.mock("@react-navigation/native", () => ({
 jest.mock("@/lib/auth/store", () => ({
   useAuthStore: (selector: (state: any) => unknown) =>
     selector({
-      user: {
-        username: "student",
-      },
+      user: mockAuthUser,
     }),
 }));
 
@@ -65,15 +68,25 @@ jest.mock("@/lib/queries/communityPosts", () => ({
     mockDeleteCommunityPostMutation(username),
 }));
 
+jest.mock("@/lib/queries/workshops", () => ({
+  useCreateCommunityWorkshopMutation: (username?: string) =>
+    mockCreateCommunityWorkshopMutation(username),
+}));
+
 describe("CommunityDetailScreen", () => {
   const joinMutateAsync = jest.fn();
   const leaveMutateAsync = jest.fn();
+  const createWorkshopMutateAsync = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
     focusCleanup = undefined;
     mockTagId = "tag-1";
     mockFrom = undefined;
+    mockAuthUser = {
+      username: "student",
+      app_usage_mode: "MENTEE",
+    };
     mockDetailQuery.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -119,6 +132,14 @@ describe("CommunityDetailScreen", () => {
     });
     mockCreateCommunityPostMutation.mockReturnValue({
       mutateAsync: jest.fn(),
+      isPending: false,
+    });
+    createWorkshopMutateAsync.mockResolvedValue({
+      id: "workshop-1",
+      title: "Mentor Clinic",
+    });
+    mockCreateCommunityWorkshopMutation.mockReturnValue({
+      mutateAsync: createWorkshopMutateAsync,
       isPending: false,
     });
     mockUpdateCommunityPostMutation.mockReturnValue({
@@ -261,5 +282,62 @@ describe("CommunityDetailScreen", () => {
     fireEvent.press(getByTestId("community-detail-back-button"));
 
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)/discover");
+  });
+
+  it("lets mentors create workshops from the composer", async () => {
+    mockAuthUser = {
+      username: "mentor_user",
+      app_usage_mode: "MENTOR",
+    };
+    mockDetailQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      refetch: mockDetailRefetch,
+      data: {
+        id: "tag-1",
+        name: "Backend Guild",
+        slug: "backend-guild",
+        description: "API design and Django patterns",
+        member_count: 12,
+        created_by_username: "ada",
+        is_member: true,
+        created_at: "2026-04-20T00:00:00Z",
+      },
+    });
+
+    const { getByPlaceholderText, getByTestId, findByText } = render(
+      <CommunityDetailScreen />,
+    );
+
+    fireEvent.press(getByTestId("community-composer-toggle"));
+    fireEvent.press(getByTestId("community-composer-mode-workshop"));
+    fireEvent.changeText(
+      getByPlaceholderText("Workshop title"),
+      "Backend Clinic",
+    );
+    fireEvent.changeText(
+      getByPlaceholderText("Workshop description"),
+      "Serializer deep dive",
+    );
+    fireEvent.changeText(getByPlaceholderText("YYYY-MM-DD"), "2026-05-20");
+    fireEvent.changeText(getByPlaceholderText("Max participants"), "20");
+    fireEvent.changeText(getByPlaceholderText("Start HH:mm"), "13:30");
+    fireEvent.changeText(getByPlaceholderText("End HH:mm"), "15:00");
+
+    await act(async () => {
+      fireEvent.press(getByTestId("community-composer-submit"));
+    });
+
+    await waitFor(() => {
+      expect(createWorkshopMutateAsync).toHaveBeenCalledWith({
+        tagId: "tag-1",
+        title: "Backend Clinic",
+        description: "Serializer deep dive",
+        scheduled_at: "2026-05-20T10:30:00.000Z",
+        end_at: "2026-05-20T12:00:00.000Z",
+        max_participants: 20,
+      });
+    });
+    expect(await findByText("Workshop created in Backend Guild.")).toBeTruthy();
   });
 });

@@ -160,4 +160,75 @@ describe("CommunityPostComposer", () => {
       getByPlaceholderText("What is happening in this community?"),
     ).toBeTruthy();
   });
+
+  it("submits workshop payloads for mentor-only workshop mode", async () => {
+    const onSubmit = jest.fn();
+    const onSubmitWorkshop = jest.fn().mockResolvedValue(true);
+
+    const { getByPlaceholderText, getByTestId } = render(
+      <CommunityPostComposer
+        onSubmit={onSubmit}
+        onSubmitWorkshop={onSubmitWorkshop}
+        allowWorkshopCreation
+      />,
+    );
+
+    expandComposer(getByTestId);
+    fireEvent.press(getByTestId("community-composer-mode-workshop"));
+
+    fireEvent.changeText(
+      getByPlaceholderText("Workshop title"),
+      " Mobile Testing Clinic ",
+    );
+    fireEvent.changeText(
+      getByPlaceholderText("Workshop description"),
+      " Walkthrough for flaky tests ",
+    );
+    fireEvent.changeText(getByPlaceholderText("YYYY-MM-DD"), "2026-05-20");
+    fireEvent.changeText(getByPlaceholderText("Max participants"), "18");
+    fireEvent.changeText(getByPlaceholderText("Start HH:mm"), "14:00");
+    fireEvent.changeText(getByPlaceholderText("End HH:mm"), "16:00");
+
+    await act(async () => {
+      fireEvent.press(getByTestId("community-composer-submit"));
+    });
+
+    await waitFor(() => {
+      expect(onSubmitWorkshop).toHaveBeenCalledWith({
+        title: "Mobile Testing Clinic",
+        description: "Walkthrough for flaky tests",
+        scheduled_at: "2026-05-20T11:00:00.000Z",
+        end_at: "2026-05-20T13:00:00.000Z",
+        max_participants: 18,
+      });
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("validates workshop end time before submit", async () => {
+    const onSubmitWorkshop = jest.fn();
+
+    const { getByPlaceholderText, getByTestId, findByTestId } = render(
+      <CommunityPostComposer
+        onSubmit={jest.fn()}
+        onSubmitWorkshop={onSubmitWorkshop}
+        allowWorkshopCreation
+      />,
+    );
+
+    expandComposer(getByTestId);
+    fireEvent.press(getByTestId("community-composer-mode-workshop"));
+    fireEvent.changeText(getByPlaceholderText("Workshop title"), "Workshop");
+    fireEvent.changeText(getByPlaceholderText("YYYY-MM-DD"), "2026-05-20");
+    fireEvent.changeText(getByPlaceholderText("Max participants"), "10");
+    fireEvent.changeText(getByPlaceholderText("Start HH:mm"), "16:00");
+    fireEvent.changeText(getByPlaceholderText("End HH:mm"), "15:00");
+
+    await act(async () => {
+      fireEvent.press(getByTestId("community-composer-submit"));
+    });
+
+    expect(await findByTestId("community-composer-form-error")).toBeTruthy();
+    expect(onSubmitWorkshop).not.toHaveBeenCalled();
+  });
 });
