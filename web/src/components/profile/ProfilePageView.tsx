@@ -311,6 +311,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
               </div>
             </div>
           </section>
+          <ProfileWorkshopsSection username={profile.username} />
           {isAuthenticatedViewer && (
               <ProfilePostsSection username={profile.username} isOwner={isOwner} />
           )}
@@ -399,6 +400,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                 />
 
             </section>
+            <ProfileWorkshopsSection username={profile.username} />
             {isAuthenticatedViewer && (
                 <ProfilePostsSection username={profile.username} isOwner={isOwner} />
             )}

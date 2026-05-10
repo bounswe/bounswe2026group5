@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/table"
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Globe, Loader2, X } from 'lucide-react'
+import { BookOpen, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Globe, Loader2, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { myWorkshopAttendanceQueryOptions } from '#/lib/queries/WorkshopQueries.ts'
 
 export const Route = createFileRoute('/_authorized/schedule')({
   component: SchedulePage,
