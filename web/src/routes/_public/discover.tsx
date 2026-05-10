@@ -156,7 +156,7 @@ export function DiscoverPage() {
                         <MentorRow
                             title="Popular Mentors"
                             subtitle="Highest rated mentors trusted by the most mentees in the network."
-                            icon={<TrendingUp className="h-5 w-5 text-accent" />}
+                            icon={<TrendingUp className="h-5 w-5 text-accent" aria-hidden="true" />}
                             profiles={popularMentors}
                             onViewProfile={handleViewProfile}
                             onSendMessage={sendMessageTo}
@@ -168,7 +168,7 @@ export function DiscoverPage() {
                         <MentorRow
                             title="Recently Joined"
                             subtitle="Fresh perspectives, mentors who just joined and are ready to take on mentees."
-                            icon={<Sparkles className="h-5 w-5 text-amber-500" />}
+                            icon={<Sparkles className="h-5 w-5 text-amber-500" aria-hidden="true" />}
                             profiles={recentMentors}
                             onViewProfile={handleViewProfile}
                             onSendMessage={sendMessageTo}
@@ -221,7 +221,7 @@ export function DiscoverPage() {
                         <Button
                             onClick={() => fetchNextPage()}
                             disabled={isFetching}
-                            className="bg-accent hover:bg-accent-light text-white px-12 py-6 rounded-full text-sm font-bold uppercase tracking-widest shadow-md hover:-translate-y-0.5 transition-all duration-300"
+                            className="bg-accent hover:bg-accent-light text-white px-10 shadow-sm hover:-translate-y-0.5 transition-all duration-200"
                         >
                             {isFetching ? 'Loading...' : 'Load More'}
                         </Button>
