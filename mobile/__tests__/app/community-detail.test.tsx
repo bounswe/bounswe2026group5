@@ -233,7 +233,7 @@ describe("CommunityDetailScreen", () => {
   });
 
   it("joins a community and refreshes detail", async () => {
-    const { getByTestId, findByText } = render(<CommunityDetailScreen />);
+    const { getByTestId, queryByText } = render(<CommunityDetailScreen />);
 
     fireEvent.press(getByTestId("community-membership-button"));
 
@@ -241,25 +241,26 @@ describe("CommunityDetailScreen", () => {
       expect(joinMutateAsync).toHaveBeenCalledWith("tag-1");
     });
     expect(mockDetailRefetch).toHaveBeenCalled();
-    expect(await findByText("You joined Backend Guild.")).toBeTruthy();
+    expect(mockToastSuccess).toHaveBeenCalledWith("You joined Backend Guild.");
+    expect(queryByText("You joined Backend Guild.")).toBeNull();
   });
 
-  it("clears transient success banners when leaving the detail screen", async () => {
-    const { getByTestId, queryByText, findByText } = render(
+  it("keeps join success in toast notifications instead of inline banners", async () => {
+    const { getByTestId, queryByText } = render(
       <CommunityDetailScreen />,
     );
 
     fireEvent.press(getByTestId("community-membership-button"));
 
-    expect(await findByText("You joined Backend Guild.")).toBeTruthy();
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith("You joined Backend Guild.");
+    });
 
     act(() => {
       focusCleanup?.();
     });
 
-    await waitFor(() => {
-      expect(queryByText("You joined Backend Guild.")).toBeNull();
-    });
+    expect(queryByText("You joined Backend Guild.")).toBeNull();
   });
 
   it("asks for confirmation before leaving a joined community", async () => {

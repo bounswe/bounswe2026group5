@@ -25,11 +25,10 @@ import {
 import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { SuccessCard } from "@/components/ui/SuccessCard";
+import { useToast } from "@/components/ui/ToastProvider";
 import { useRefreshControl } from "@/hooks/use-refresh-control";
 
 import { useAuthStore } from "@/lib/auth/store";
-import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
 import {
   MENTOR_MENTEE_CAPACITY_WARNING,
   shouldWarnBeforeAcceptingMentee,
@@ -842,6 +841,7 @@ export default function ConnectionsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const { user } = useAuthStore();
 
   const submitFeedbackMutation = useSubmitMatchFeedbackMutation();
@@ -851,22 +851,19 @@ export default function ConnectionsScreen() {
     role: "Mentee";
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  useAutoClearMessage(successMessage, setSuccessMessage);
 
   const handleFeedbackSubmit = async (rating: number, text?: string) => {
     if (!feedbackConnection?.matchId) return;
 
     try {
       setActionError(null);
-      setSuccessMessage(null);
       await submitFeedbackMutation.mutateAsync({
         matchId: feedbackConnection.matchId,
         rating,
         text,
       });
       setFeedbackConnection(null);
-      setSuccessMessage("Thank you for your feedback!");
+      toast.success("Thank you for your feedback!");
     } catch (error) {
       setActionError(
         error instanceof Error ? error.message : "Could not submit feedback.",
@@ -927,16 +924,10 @@ export default function ConnectionsScreen() {
           </View>
         ) : null}
 
-        {successMessage ? (
-          <View className="mb-4">
-            <SuccessCard message={successMessage} />
-          </View>
-        ) : null}
-
         {isMentor ? (
           <MentorConnections
             onError={setActionError}
-            onSuccess={setSuccessMessage}
+            onSuccess={toast.success}
             onOpenFeedback={(matchId, name, role) =>
               setFeedbackConnection({ matchId, userName: name, role })
             }
@@ -944,7 +935,7 @@ export default function ConnectionsScreen() {
         ) : (
           <MenteeConnections
             onError={setActionError}
-            onSuccess={setSuccessMessage}
+            onSuccess={toast.success}
             onOpenFeedback={(matchId, name, role) =>
               setFeedbackConnection({ matchId, userName: name, role })
             }

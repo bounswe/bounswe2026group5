@@ -310,18 +310,23 @@ describe("DashboardScreen session navigation", () => {
 
   it("warns unverified users and resends verification email on request", async () => {
     mockIsEmailVerified = false;
-    const { findByText, getByTestId } = render(<DashboardScreen />);
+    const { findByText, getByTestId, queryByText } = render(<DashboardScreen />);
 
     expect(await findByText("Verify your email")).toBeTruthy();
 
     fireEvent.press(getByTestId("resend-verification-button"));
 
-    expect(mockResendMutateAsync).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockResendMutateAsync).toHaveBeenCalledTimes(1);
+      expect(mockToastSuccess).toHaveBeenCalledWith(
+        "If your email is unverified, a new verification link has been sent.",
+      );
+    });
     expect(
-      await findByText(
+      queryByText(
         "If your email is unverified, a new verification link has been sent.",
       ),
-    ).toBeTruthy();
+    ).toBeNull();
   });
 
   it("shows request query errors", () => {
@@ -397,7 +402,7 @@ describe("DashboardScreen session navigation", () => {
   it("accepts and rejects pending requests from dashboard cards", async () => {
     mockMappedRequests = [defaultRequest];
 
-    const { getByTestId, findByText } = render(<DashboardScreen />);
+    const { getByTestId, queryByText } = render(<DashboardScreen />);
 
     fireEvent.press(getByTestId("request-accept-Grace Hopper"));
 
@@ -407,7 +412,10 @@ describe("DashboardScreen session navigation", () => {
         action: "accept",
       });
     });
-    expect(await findByText("Request accepted successfully.")).toBeTruthy();
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      "Request accepted successfully.",
+    );
+    expect(queryByText("Request accepted successfully.")).toBeNull();
 
     fireEvent.press(getByTestId("request-decline-Grace Hopper"));
 
@@ -417,7 +425,10 @@ describe("DashboardScreen session navigation", () => {
         action: "reject",
       });
     });
-    expect(await findByText("Request rejected successfully.")).toBeTruthy();
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      "Request rejected successfully.",
+    );
+    expect(queryByText("Request rejected successfully.")).toBeNull();
   });
 
   it("opens request details and navigates to requester profile", async () => {

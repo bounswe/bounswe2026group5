@@ -20,11 +20,9 @@ import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { SuccessCard } from "@/components/ui/SuccessCard";
 import { useToast } from "@/components/ui/ToastProvider";
 
 import { useAuthStore } from "@/lib/auth/store";
-import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
 import { useRefreshControl } from "@/hooks/use-refresh-control";
 import {
   MENTOR_MENTEE_CAPACITY_WARNING,
@@ -163,8 +161,6 @@ export default function DashboardScreen() {
     useState<DashboardSessionItem | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  useAutoClearMessage(successMessage, setSuccessMessage);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
@@ -189,7 +185,6 @@ export default function DashboardScreen() {
 
     try {
       setActionError(null);
-      setSuccessMessage(null);
       await respondMutation.mutateAsync({
         requestId,
         action,
@@ -197,7 +192,7 @@ export default function DashboardScreen() {
       setSelectedRequest(null);
       requestsQuery.refetch();
       meetingSessionsQuery.refetch();
-      setSuccessMessage(
+      toast.success(
         action === "accept"
           ? "Request accepted successfully."
           : "Request rejected successfully.",
@@ -241,9 +236,8 @@ export default function DashboardScreen() {
   const handleResendVerification = async () => {
     try {
       setActionError(null);
-      setSuccessMessage(null);
       const response = await resendVerificationMutation.mutateAsync();
-      setSuccessMessage(response.detail);
+      toast.success(response.detail);
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -260,7 +254,6 @@ export default function DashboardScreen() {
 
     try {
       setActionError(null);
-      setSuccessMessage(null);
       await cancelSessionMutation.mutateAsync(selectedSession.sessionId);
       setSelectedSession(null);
       toast.success("The session was cancelled.");
@@ -289,7 +282,6 @@ export default function DashboardScreen() {
     setRescheduleSessionId(selectedSession.sessionId);
     setRescheduleSessionMentorUsername(selectedMentorUsername);
     setRescheduleCurrentSlotId(selectedSession.id);
-    setSuccessMessage(null);
     setShowRescheduleSheet(true);
   };
 
@@ -356,12 +348,6 @@ export default function DashboardScreen() {
                   : "Resend Verification Email"}
               </Text>
             </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {successMessage ? (
-          <View className="mb-4">
-            <SuccessCard message={successMessage} />
           </View>
         ) : null}
 

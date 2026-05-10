@@ -18,9 +18,7 @@ import { ProfilePostCard } from "@/components/profile/ProfilePostCard";
 import { ProfilePostEditSheet } from "@/components/profile/ProfilePostEditSheet";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { SuccessCard } from "@/components/ui/SuccessCard";
 import { useToast } from "@/components/ui/ToastProvider";
-import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
 import { ApiError } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/auth/store";
 import {
@@ -111,11 +109,9 @@ export default function CommunityDetailScreen() {
   const updatePostMutation = useUpdateCommunityPostMutation(currentUsername);
   const deletePostMutation = useDeleteCommunityPostMutation(currentUsername);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null);
-  useAutoClearMessage(successMessage, setSuccessMessage);
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
 
   const isMutating = joinMutation.isPending || leaveMutation.isPending;
@@ -149,7 +145,6 @@ export default function CommunityDetailScreen() {
     useCallback(
       () => () => {
         setActionError(null);
-        setSuccessMessage(null);
         setShowLeaveConfirmation(false);
         setSelectedPost(null);
       },
@@ -186,13 +181,12 @@ export default function CommunityDetailScreen() {
 
     try {
       setActionError(null);
-      setSuccessMessage(null);
       if (action === "leave") {
         await leaveMutation.mutateAsync(tagId);
-        setSuccessMessage(`You left ${tag.name}.`);
+        toast.success(`You left ${tag.name}.`);
       } else {
         await joinMutation.mutateAsync(tagId);
-        setSuccessMessage(`You joined ${tag.name}.`);
+        toast.success(`You joined ${tag.name}.`);
       }
       detailQuery.refetch();
     } catch (error) {
@@ -231,7 +225,7 @@ export default function CommunityDetailScreen() {
         tagId,
         ...payload,
       });
-      setSuccessMessage(
+      toast.success(
         tag ? `Posted to ${tag.name}.` : "Posted to this community.",
       );
       setOffset(0);
@@ -268,7 +262,7 @@ export default function CommunityDetailScreen() {
         ),
       );
       setSelectedPost(null);
-      setSuccessMessage("Community post updated.");
+      toast.success("Community post updated.");
     } catch (error) {
       setActionError(
         getErrorMessage(error, "Could not update this community post."),
@@ -329,7 +323,7 @@ export default function CommunityDetailScreen() {
         previousPosts.filter((item) => item.id !== post.id),
       );
       setSelectedPost(null);
-      setSuccessMessage("Community post deleted.");
+      toast.success("Community post deleted.");
     } catch (error) {
       setActionError(
         getErrorMessage(error, "Could not delete this community post."),
@@ -345,12 +339,6 @@ export default function CommunityDetailScreen() {
 
   const headerContent = (
     <View>
-      {successMessage ? (
-        <View className="mb-4">
-          <SuccessCard message={successMessage} />
-        </View>
-      ) : null}
-
       {actionError ? (
         <View className="mb-4">
           <ErrorBanner message={actionError} />
