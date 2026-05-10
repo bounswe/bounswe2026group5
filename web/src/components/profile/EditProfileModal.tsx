@@ -128,7 +128,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                         className="rounded-xl p-1.5 hover:bg-accent-muted transition-colors text-ink-soft hover:text-ink"
                         aria-label="Close"
                     >
-                        <X className="h-5 w-5" />
+                        <X className="h-5 w-5" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -161,7 +161,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                                     {me?.username?.[0]?.toUpperCase() ?? '?'}
                                 </div>
                             )}
-                            <span className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center" aria-hidden="true">
                                 {uploadPicture.isPending
                                     ? <Loader2 className="h-6 w-6 text-white animate-spin" />
                                     : <Camera className="h-6 w-6 text-white" />
@@ -185,7 +185,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                                 className="bg-background"
                                 aria-invalid={!!errors.title}
                             />
-                            {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
+                            {errors.title && <p className="text-xs text-destructive" role="alert">{errors.title}</p>}
                         </div>
                     )}
 
@@ -205,7 +205,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                         />
                         <div className="flex justify-between items-center">
                             {errors.bio
-                                ? <p className="text-xs text-destructive">{errors.bio}</p>
+                                ? <p className="text-xs text-destructive" role="alert">{errors.bio}</p>
                                 : <span />
                             }
                             <Muted className="text-xs">{bio.length} / 500</Muted>
@@ -227,11 +227,12 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                     {/* Show initials only toggle */}
                     <div className="flex items-center gap-4 rounded-xl border border-line p-4 bg-black/[0.02]">
                         <Switch
+                            id="show-initials-toggle"
                             checked={showInitialsOnly}
                             onCheckedChange={setShowInitialsOnly}
                         />
                         <div>
-                            <p className="text-sm font-medium text-ink">Show initials only</p>
+                            <label htmlFor="show-initials-toggle" className="text-sm font-medium text-ink cursor-pointer">Show initials only</label>
                             <Muted className="text-xs">Your full name and picture will be hidden from others.</Muted>
                         </div>
                     </div>
@@ -247,8 +248,11 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                         className="bg-accent hover:bg-accent/90 text-white min-w-[90px]"
                         onClick={handleSave}
                         disabled={updateProfile.isPending}
+                        aria-busy={updateProfile.isPending}
                     >
-                        {updateProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                        {updateProfile.isPending
+                            ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /><span className="sr-only">Saving…</span></>
+                            : 'Save'}
                     </Button>
                 </div>
 

@@ -42,10 +42,11 @@ interface ProfilePageViewProps {
 
 function StarRow({ rating }: { rating: number }) {
     return (
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0.5" aria-label={`${rating} out of 5 stars`}>
             {[1, 2, 3, 4, 5].map(n => (
                 <Star
                     key={n}
+                    aria-hidden="true"
                     className={`h-3.5 w-3.5 ${n <= rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`}
                 />
             ))}
@@ -67,7 +68,7 @@ function MentorReviewsList({ username }: { username: string }) {
     }
 
     if (!data || data.results.length === 0) {
-        return <p className="text-sm text-gray-500 italic">No public reviews yet.</p>
+        return <p className="text-sm text-ink-soft italic">No public reviews yet.</p>
     }
 
     const totalPages = Math.ceil(data.count / pageSize)
@@ -95,8 +96,9 @@ function MentorReviewsList({ username }: { username: string }) {
                         disabled={page === 1}
                         onClick={() => setPage(p => p - 1)}
                         className="h-7 px-2"
+                        aria-label="Previous page"
                     >
-                        <ChevronLeft className="h-4 w-4" />
+                        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                     </Button>
                     <Muted className="text-xs">{page} / {totalPages}</Muted>
                     <Button
@@ -105,8 +107,9 @@ function MentorReviewsList({ username }: { username: string }) {
                         disabled={page === totalPages}
                         onClick={() => setPage(p => p + 1)}
                         className="h-7 px-2"
+                        aria-label="Next page"
                     >
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
                     </Button>
                 </div>
             )}
@@ -165,7 +168,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
   )
 
   const bioCard = (
-      <Card className="border-line bg-white/70 shadow-sm">
+      <Card className="border-line bg-card shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg">Bio</CardTitle>
         </CardHeader>
@@ -196,16 +199,16 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
               <div className="space-y-6">
                 {avatarBlock}
                 {bioCard}
-                <Card className="border-line bg-white/70 shadow-sm">
+                <Card className="border-line bg-card shadow-sm">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-amber-500" />
+                      <Sparkles className="h-4 w-4 text-amber-500" aria-hidden="true" />
                       Eager to Learn
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     {profile.skills.length === 0 ? (
-                        <p className="text-gray-500 italic">No skills listed</p>
+                        <p className="text-ink-soft italic">No skills listed</p>
                     ) : (
                         <div className="flex flex-wrap gap-2">
                             {profile.skills.map(skill => (
@@ -242,13 +245,13 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                     <div className="space-y-6">
                         {avatarBlock}
                         {bioCard}
-                        <Card className="border-line bg-white/70 shadow-sm">
+                        <Card className="border-line bg-card shadow-sm">
                             <CardHeader>
                                 <CardTitle className="text-lg">Expertise</CardTitle>
                             </CardHeader>
                             <CardContent>
                                 {profile.skills.length === 0 ? (
-                                    <p className="text-gray-500 italic">No skills listed</p>
+                                    <p className="text-ink-soft italic">No skills listed</p>
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
                                         {profile.skills.map(skill => (
@@ -264,10 +267,10 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                             </CardContent>
                         </Card>
 
-                        <Card className="border-line bg-white/70 shadow-sm">
+                        <Card className="border-line bg-card shadow-sm">
                             <CardHeader>
                                 <CardTitle className="text-lg flex items-center gap-2">
-                                    <Star className="h-4 w-4 text-amber-500" />
+                                    <Star className="h-4 w-4 text-amber-500" aria-hidden="true" />
                                     Reviews
                                 </CardTitle>
                             </CardHeader>
@@ -278,15 +281,15 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                     </div>
 
                     <aside className="space-y-4">
-                        <Card className="border-line bg-white/80 shadow-sm">
+                        <Card className="border-line bg-card shadow-sm">
                             <CardHeader>
                                 <CardTitle className="text-lg">Snapshot</CardTitle>
                             </CardHeader>
                             <CardContent className="grid gap-3">
                                 <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
                                     <Muted className="text-xs uppercase tracking-wider">Average Rating</Muted>
-                                    <p className="text-2xl font-semibold text-ink mt-1 flex items-center gap-1">
-                                        <Star className="h-4 w-4 fill-current text-amber-500" />
+                                    <p className="text-2xl font-semibold text-ink mt-1 flex items-center gap-1" aria-label={`Average rating: ${profile.average_rating.toFixed(1)} out of 5`}>
+                                        <Star className="h-4 w-4 fill-current text-amber-500" aria-hidden="true" />
                                         {profile.average_rating.toFixed(1)}
                                     </p>
                                 </div>
