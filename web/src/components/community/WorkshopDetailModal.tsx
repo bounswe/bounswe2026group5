@@ -120,8 +120,8 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
                     <DialogHeader>
                         <div className="flex items-start gap-3 pr-6">
                             <div className="flex-1 min-w-0">
-                                <DialogTitle className="text-lg leading-snug">{workshop.title}</DialogTitle>
-                                <Muted className="text-sm mt-0.5">{workshop.community_name}</Muted>
+                                <DialogTitle className="text-lg leading-snug">{resolved.title}</DialogTitle>
+                                <Muted className="text-sm mt-0.5">{resolved.community_name}</Muted>
                             </div>
                             <WorkshopStatusBadge status={resolved.status} isFull={resolved.is_full} />
                         </div>
@@ -148,25 +148,25 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
 
                         {/* Host */}
                         <div className="flex items-center gap-3">
-                            {workshop.author.picture_url ? (
-                                <img src={workshop.author.picture_url} alt={workshop.author.display_name} className="h-9 w-9 rounded-full object-cover border border-white/50 shrink-0" />
+                            {resolved.author.picture_url ? (
+                                <img src={resolved.author.picture_url} alt={resolved.author.display_name} className="h-9 w-9 rounded-full object-cover border border-white/50 shrink-0" />
                             ) : (
-                                <div className={cn('h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border border-white/50', avatarColor(workshop.author.display_name))}>
-                                    {miniInitials(workshop.author.display_name)}
+                                <div className={cn('h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border border-white/50', avatarColor(resolved.author.display_name))}>
+                                    {miniInitials(resolved.author.display_name)}
                                 </div>
                             )}
                             <div>
-                                <Link to="/profiles/$username" params={{ username: workshop.author.username }} className="text-sm font-medium text-ink hover:underline">
-                                    {workshop.author.display_name}
+                                <Link to="/profiles/$username" params={{ username: resolved.author.username }} className="text-sm font-medium text-ink hover:underline">
+                                    {resolved.author.display_name}
                                 </Link>
-                                {workshop.author.title && <p className="text-xs text-ink-soft">{workshop.author.title}</p>}
+                                {resolved.author.title && <p className="text-xs text-ink-soft">{resolved.author.title}</p>}
                                 <p className="text-xs text-ink-soft">Host</p>
                             </div>
                         </div>
 
                         {/* Description */}
-                        {workshop.description && (
-                            <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{workshop.description}</p>
+                        {resolved.description && (
+                            <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{resolved.description}</p>
                         )}
 
                         {/* Participants */}

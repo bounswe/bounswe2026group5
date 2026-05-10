@@ -90,7 +90,7 @@ export interface WorkshopUpdatePayload {
     scheduled_at?: string
     end_at?: string
     max_participants?: number
-    status?: 'SCHEDULED'
+    status?: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED'
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +170,7 @@ export async function deleteCommunityWorkshop(tagId: string, workshopId: string)
     if (!res.ok) await throwApiError(res)
 }
 
-export async function joinWorkshop(tagId: string, workshopId: string): Promise<CommunityWorkshopDetail> {
+export async function joinWorkshop(tagId: string, workshopId: string): Promise<WorkshopParticipant> {
     const res = await fetch(
         `${API_BASE_URL}/profiles/tags/${encodeURIComponent(tagId)}/workshops/${encodeURIComponent(workshopId)}/join/`,
         { method: 'POST', headers: authHeaders() },
@@ -300,7 +300,7 @@ export function useJoinWorkshopMutation(tagId: string) {
         onSuccess: async (_data, workshopId) => {
             await queryClient.invalidateQueries({ queryKey: workshopQueryKeys.detail(tagId, workshopId) })
             await queryClient.invalidateQueries({ queryKey: workshopQueryKeys.community(tagId) })
-            await queryClient.invalidateQueries({ queryKey: workshopQueryKeys.myAttendance() })
+            await queryClient.invalidateQueries({ queryKey: ['workshops', 'attendance'] })
         },
     })
 }
@@ -312,7 +312,7 @@ export function useLeaveWorkshopMutation(tagId: string) {
         onSuccess: async (_data, workshopId) => {
             await queryClient.invalidateQueries({ queryKey: workshopQueryKeys.detail(tagId, workshopId) })
             await queryClient.invalidateQueries({ queryKey: workshopQueryKeys.community(tagId) })
-            await queryClient.invalidateQueries({ queryKey: workshopQueryKeys.myAttendance() })
+            await queryClient.invalidateQueries({ queryKey: ['workshops', 'attendance'] })
         },
     })
 }
