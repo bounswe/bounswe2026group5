@@ -220,3 +220,76 @@ export function isEmailVerificationRequiredError(error: unknown): boolean {
     error.message.trim() === EMAIL_VERIFICATION_REQUIRED_MESSAGE
   );
 }
+
+export async function forgotPassword(email: string): Promise<void> {
+  const url = `${API_BASE_URL}${AUTH_BASE_PATH}/forgot-password/`;
+
+  if (__DEV__) {
+    console.log("[Auth] forgotPassword request", { url });
+  }
+
+  const response = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "omit",
+    body: JSON.stringify({ email }),
+  });
+
+  if (__DEV__) {
+    console.log("[Auth] forgotPassword response", { status: response.status, ok: response.ok });
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}) as Record<string, unknown>);
+    const msg =
+      (errorData as { detail?: string }).detail ||
+      (errorData as { email?: string[] }).email?.[0] ||
+      "Something went wrong. Please check your connection and try again.";
+
+    if (__DEV__) {
+      console.error("[Auth] forgotPassword error", { status: response.status, errorData });
+    }
+
+    throw new Error(msg);
+  }
+}
+
+export function useForgotPasswordMutation() {
+  return useMutation({ mutationFn: forgotPassword });
+}
+
+export async function resetPassword(data: {
+  token: string;
+  new_password: string;
+  confirm_password: string;
+}): Promise<void> {
+  const url = `${API_BASE_URL}${AUTH_BASE_PATH}/reset-password/`;
+  const response = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "omit",
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}) as Record<string, unknown>);
+    const err = errorData as {
+      detail?: string;
+      token?: string[];
+      new_password?: string[];
+      confirm_password?: string[];
+      non_field_errors?: string[];
+    };
+    const msg =
+      err.token?.[0] ||
+      err.new_password?.[0] ||
+      err.confirm_password?.[0] ||
+      err.non_field_errors?.[0] ||
+      err.detail ||
+      "Password reset failed. The link may have expired.";
+    throw new Error(msg);
+  }
+}
+
+export function useResetPasswordMutation() {
+  return useMutation({ mutationFn: resetPassword });
+}

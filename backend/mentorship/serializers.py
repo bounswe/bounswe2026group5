@@ -804,6 +804,29 @@ class WorkshopParticipantCreateSerializer(serializers.Serializer):
     show_on_profile = serializers.BooleanField(default=False, required=False)
 
 
+class WorkshopAttendanceUpdateSerializer(serializers.Serializer):
+    """Write serializer for profile-scoped attendance updates."""
+
+    show_on_profile = serializers.BooleanField(required=False)
+    title = serializers.CharField(max_length=255, required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
+    scheduled_at = serializers.DateTimeField(required=False)
+    end_at = serializers.DateTimeField(required=False)
+    max_participants = serializers.IntegerField(min_value=1, required=False)
+    status = serializers.ChoiceField(
+        choices=[Workshop.Status.SCHEDULED, Workshop.Status.COMPLETED, Workshop.Status.CANCELLED],
+        required=False,
+    )
+
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Require at least one supported attendance/workshop field."""
+        if not data:
+            raise serializers.ValidationError(
+                "Provide at least one updatable field for attendance or workshop."
+            )
+        return data
+
+
 class WorkshopAttendanceQueryParamsSerializer(serializers.Serializer):
     """Query params for profile-scoped workshop attendance endpoints."""
 

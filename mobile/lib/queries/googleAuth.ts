@@ -17,7 +17,7 @@ const GOOGLE_SIGN_IN_UNAVAILABLE =
 
 type GoogleSignInModule = {
   GoogleSignin: {
-    configure: (options: { webClientId: string; offlineAccess: boolean }) => void;
+    configure: (options: { webClientId: string; iosClientId?: string; offlineAccess: boolean }) => void;
     hasPlayServices: (options: {
       showPlayServicesUpdateDialog: boolean;
     }) => Promise<unknown>;
@@ -66,6 +66,7 @@ export function configureGoogleSignIn() {
   const { GoogleSignin } = googleSignIn;
   GoogleSignin.configure({
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "",
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
     offlineAccess: false,
   });
 }

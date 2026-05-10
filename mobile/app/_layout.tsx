@@ -106,6 +106,14 @@ function RootLayoutContent() {
                 name="verify-email"
                 options={{ headerShown: false }}
               />
+              <Stack.Screen
+                name="forgot-password"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="reset-password"
+                options={{ headerShown: false }}
+              />
             </Stack>
           )}
         </PushNotificationManager>
