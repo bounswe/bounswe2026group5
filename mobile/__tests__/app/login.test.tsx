@@ -167,14 +167,12 @@ describe("LoginScreen", () => {
     expect(getByLabelText("Hide password")).toBeTruthy();
   });
 
-  it("logs the current forgot-password placeholder action", () => {
+  it("navigates to the forgot-password screen when the link is pressed", () => {
     const { getByLabelText } = render(<LoginScreen />);
 
     fireEvent.press(getByLabelText("Forgot password"));
 
-    expect(logSpy).toHaveBeenCalledWith(
-      "TODO: Navigate to forgot-password screen",
-    );
+    expect(mockPush).toHaveBeenCalledWith("/forgot-password");
   });
 
   it("navigates to the dashboard after Google login for an onboarded user", async () => {

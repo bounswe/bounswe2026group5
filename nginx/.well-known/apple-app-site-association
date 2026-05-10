@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "XXXXXXXXXX.com.bounswe2026group5.neighborship",
+        "paths": [
+          "/verify-email",
+          "/reset-password"
+        ]
+      }
+    ]
+  }
+}

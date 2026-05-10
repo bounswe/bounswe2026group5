@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.bounswe2026group5.neighborship",
+      "sha256_cert_fingerprints": [
+        "32:65:DE:93:6F:E2:46:09:7A:D4:31:11:A4:96:5C:BF:86:AD:08:8C:25:12:AA:2C:B8:72:55:7B:4E:A3:9C:7D" 
+      ]
+    }
+  }
+]
