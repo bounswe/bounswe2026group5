@@ -13,8 +13,8 @@ import {
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 import { Display, Body, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import {
     Dialog,
     DialogContent,
@@ -117,7 +117,7 @@ function JourneyPage() {
             {/* Header */}
             <header className="flex flex-col gap-4 max-w-2xl">
                 <Link to="/connections" className="inline-flex items-center gap-1.5 text-ink-soft hover:text-ink text-sm transition-colors w-fit">
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="w-4 h-4" aria-hidden="true" />
                     Back to Connections
                 </Link>
                 <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -134,9 +134,9 @@ function JourneyPage() {
                     </div>
                     <Button
                         onClick={() => setCreateOpen(true)}
-                        className="rounded-full bg-accent hover:bg-accent/90 text-white gap-2 shrink-0"
+                        className="rounded-full bg-accent hover:bg-accent-light text-white gap-2 shrink-0"
                     >
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-4 h-4" aria-hidden="true" />
                         Add Entry
                     </Button>
                 </div>
@@ -144,8 +144,8 @@ function JourneyPage() {
 
             {/* Timeline */}
             {isLoading ? (
-                <div className="flex justify-center py-16">
-                    <Loader2 className="h-6 w-6 animate-spin text-ink-soft" />
+                <div className="flex justify-center py-16" role="status" aria-label="Loading journey">
+                    <Loader2 className="h-6 w-6 animate-spin text-ink-soft" aria-hidden="true" />
                 </div>
             ) : isError ? (
                 <ErrorState />
@@ -153,20 +153,25 @@ function JourneyPage() {
                 <EmptyState />
             ) : (
                 <section aria-label="Journey timeline">
-                    <div className="relative flex flex-col gap-0">
-                        {feed.results.map((event, index) => (
-                            <TimelineEventItem
-                                key={event.id}
-                                event={event}
-                                isLast={index === feed.results.length - 1}
-                                currentUsername={me?.username}
-                                onEdit={setEditEvent}
-                                onDelete={setDeleteEvent}
-                            />
-                        ))}
+                    <div className="island-shell rounded-xl overflow-hidden shadow-md">
+                        <div className="px-6 py-4 border-b border-line flex items-center justify-between">
+                            <span className="text-sm font-semibold text-ink">Timeline</span>
+                            <span className="text-xs text-ink-soft">{feed.count} {feed.count === 1 ? 'event' : 'events'}</span>
+                        </div>
+                        <div className="flex flex-col gap-3 p-4">
+                            {feed.results.map((event) => (
+                                <TimelineEventItem
+                                    key={event.id}
+                                    event={event}
+                                    currentUsername={me?.username}
+                                    onEdit={setEditEvent}
+                                    onDelete={setDeleteEvent}
+                                />
+                            ))}
+                        </div>
                     </div>
                     {feed.count > feed.results.length && (
-                        <p className="mt-6 text-center text-ink-soft text-sm">
+                        <p className="mt-4 text-center text-ink-soft text-sm">
                             Showing {feed.results.length} of {feed.count} events
                         </p>
                     )}
@@ -205,21 +210,20 @@ function JourneyPage() {
 
 interface TimelineEventItemProps {
     event: JourneyEvent
-    isLast: boolean
     currentUsername: string | undefined
     onEdit: (e: JourneyEvent) => void
     onDelete: (e: JourneyEvent) => void
 }
 
-function TimelineEventItem({ event, isLast, currentUsername, onEdit, onDelete }: TimelineEventItemProps) {
+function TimelineEventItem({ event, currentUsername, onEdit, onDelete }: TimelineEventItemProps) {
     if (event.category === 'AGTE') {
-        return <AGTEItem event={event} isLast={isLast} />
+        return <AGTEItem event={event} />
     }
     const isOwner = !!currentUsername && event.author?.username === currentUsername
-    return <MCTEItem event={event} isLast={isLast} isOwner={isOwner} onEdit={onEdit} onDelete={onDelete} />
+    return <MCTEItem event={event} isOwner={isOwner} onEdit={onEdit} onDelete={onDelete} />
 }
 
-function AGTEItem({ event, isLast }: { event: JourneyEvent; isLast: boolean }) {
+function AGTEItem({ event }: { event: JourneyEvent }) {
     const meta = AGTE_META[event.type] ?? { label: event.type, Icon: AlertCircle, color: 'text-ink-soft' }
     const { Icon, label, color } = meta
 
@@ -229,18 +233,12 @@ function AGTEItem({ event, isLast }: { event: JourneyEvent; isLast: boolean }) {
     const cancelReason = payload['cancel_reason'] as string | undefined
 
     return (
-        <div className="relative flex gap-4 pb-8">
-            {/* Vertical line */}
-            {!isLast && (
-                <div className="absolute left-5 top-10 bottom-0 w-px bg-line" />
-            )}
-            {/* Dot */}
-            <div className={`mt-1 w-10 h-10 rounded-full bg-surface border border-line flex items-center justify-center shrink-0 z-10 ${color}`}>
-                <Icon className="w-5 h-5" />
+        <div className="rounded-lg border border-line bg-mist/50 px-4 py-3 flex items-start gap-3">
+            <div className={cn('mt-0.5 w-8 h-8 rounded-full bg-surface border border-line flex items-center justify-center shrink-0', color)}>
+                <Icon className="w-4 h-4" aria-hidden="true" />
             </div>
-            {/* Content */}
-            <div className="flex flex-col gap-1 pt-1.5 min-w-0">
-                <p className={`font-semibold text-sm ${color}`}>{label}</p>
+            <div className="flex flex-col gap-0.5 min-w-0">
+                <p className={cn('font-semibold text-sm', color)}>{label}</p>
                 {startAt && (
                     <p className="text-xs text-ink-soft">
                         {formatSessionTime(startAt)}
@@ -258,13 +256,11 @@ function AGTEItem({ event, isLast }: { event: JourneyEvent; isLast: boolean }) {
 
 function MCTEItem({
     event,
-    isLast,
     isOwner,
     onEdit,
     onDelete,
 }: {
     event: JourneyEvent
-    isLast: boolean
     isOwner: boolean
     onEdit: (e: JourneyEvent) => void
     onDelete: (e: JourneyEvent) => void
@@ -273,61 +269,56 @@ function MCTEItem({
     const { Icon, label, variant } = meta
 
     return (
-        <div className="relative flex gap-4 pb-8">
-            {!isLast && (
-                <div className="absolute left-5 top-10 bottom-0 w-px bg-line" />
-            )}
-            <div className="mt-1 w-10 h-10 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center shrink-0 z-10 text-accent">
-                <Icon className="w-5 h-5" />
+        <div className="rounded-lg border border-line bg-card px-4 py-3 flex items-start gap-3">
+            <div className="mt-0.5 w-8 h-8 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center shrink-0 text-accent">
+                <Icon className="w-4 h-4" aria-hidden="true" />
             </div>
-            <Card className="flex-1 border-line shadow-sm bg-white">
-                <CardContent className="pt-4 pb-4 flex flex-col gap-2">
-                    <div className="flex items-start justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2">
-                            <Badge variant={variant} className="text-xs">{label}</Badge>
-                            {event.author && (
-                                <Muted className="text-xs">by @{event.author.username}</Muted>
-                            )}
-                        </div>
-                        {isOwner && (
-                            <div className="flex items-center gap-1">
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-ink-soft hover:text-ink"
-                                    onClick={() => onEdit(event)}
-                                    aria-label="Edit entry"
-                                >
-                                    <Pencil className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-ink-soft hover:text-red-500"
-                                    onClick={() => onDelete(event)}
-                                    aria-label="Delete entry"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                            </div>
+            <div className="flex flex-col gap-2 flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                        <Badge variant={variant} className="text-xs">{label}</Badge>
+                        {event.author && (
+                            <Muted className="text-xs">by @{event.author.username}</Muted>
                         )}
                     </div>
-                    {event.content && (
-                        <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{event.content}</p>
+                    {isOwner && (
+                        <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-ink-soft hover:text-ink"
+                                onClick={() => onEdit(event)}
+                                aria-label="Edit entry"
+                            >
+                                <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-ink-soft hover:text-red-500"
+                                onClick={() => onDelete(event)}
+                                aria-label="Delete entry"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                            </Button>
+                        </div>
                     )}
-                    {event.media_url && (
-                        <a
-                            href={event.media_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-accent underline truncate"
-                        >
-                            {mediaFileName(event.media_url)}
-                        </a>
-                    )}
-                    <Muted className="text-xs">{formatTimestamp(event.timestamp)}</Muted>
-                </CardContent>
-            </Card>
+                </div>
+                {event.content && (
+                    <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{event.content}</p>
+                )}
+                {event.media_url && (
+                    <a
+                        href={event.media_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-accent-aa underline truncate"
+                    >
+                        {mediaFileName(event.media_url)}
+                    </a>
+                )}
+                <Muted className="text-xs">{formatTimestamp(event.timestamp)}</Muted>
+            </div>
         </div>
     )
 }
@@ -424,14 +415,14 @@ function CreateMCTEDialog({ matchId, open, onOpenChange }: CreateMCTEDialogProps
                             Also share this on my profile
                         </Label>
                     </div>
-                    <DialogFooter className="mt-2">
+                    <DialogFooter className="mt-2 border-t border-lineg">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancel
                         </Button>
                         <Button
                             type="submit"
                             disabled={!form.content.trim() || createMutation.isPending}
-                            className="bg-accent hover:bg-accent/90 text-white"
+                            className="bg-accent hover:bg-accent-light text-white"
                         >
                             {createMutation.isPending ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -530,7 +521,7 @@ function EditMCTEDialog({ matchId, event, open, onOpenChange }: EditMCTEDialogPr
                         <Button
                             type="submit"
                             disabled={!form.content?.trim() || editMutation.isPending}
-                            className="bg-accent hover:bg-accent/90 text-white"
+                            className="bg-accent hover:bg-accent-light text-white"
                         >
                             {editMutation.isPending ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -620,7 +611,7 @@ function EmptyState() {
 function ErrorState() {
     return (
         <div className="py-24 flex flex-col items-center gap-3 text-center">
-            <AlertCircle className="w-8 h-8 text-red-400" />
+            <AlertCircle className="w-8 h-8 text-red-400" aria-hidden="true" />
             <p className="text-ink text-lg font-semibold">Could not load journey</p>
             <p className="text-ink-soft text-sm max-w-sm">
                 You may not have access to this journey, or something went wrong. Please try again.
