@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api/client";
 
@@ -296,6 +301,61 @@ export function useCommunityWorkshopsQuery(
     enabled: Boolean(params.tagId) && enabled,
     staleTime: 30_000,
   });
+}
+
+export function useMyCommunityWorkshopsFeedQuery(
+  tagIds: string[],
+  limitPerCommunity = 5,
+  enabled = true,
+) {
+  const uniqueTagIds = [...new Set(tagIds.filter(Boolean))];
+  const queries = useQueries({
+    queries: uniqueTagIds.map((tagId) => ({
+      queryKey: workshopsQueryKeys.communityList(tagId, limitPerCommunity, 0),
+      queryFn: () =>
+        fetchCommunityWorkshops({
+          tagId,
+          limit: limitPerCommunity,
+          offset: 0,
+        }),
+      enabled: enabled && uniqueTagIds.length > 0,
+      staleTime: 30_000,
+    })),
+  });
+
+  const workshops = queries
+    .flatMap((query) => query.data?.results ?? [])
+    .sort((left, right) => {
+      const leftActive = isWorkshopActive(left);
+      const rightActive = isWorkshopActive(right);
+
+      if (leftActive !== rightActive) {
+        return leftActive ? -1 : 1;
+      }
+
+      if (leftActive) {
+        return (
+          new Date(left.scheduled_at).getTime() -
+          new Date(right.scheduled_at).getTime()
+        );
+      }
+
+      return (
+        new Date(right.scheduled_at).getTime() -
+        new Date(left.scheduled_at).getTime()
+      );
+    });
+
+  return {
+    data: workshops,
+    isLoading: queries.some((query) => query.isLoading),
+    isFetching: queries.some((query) => query.isFetching),
+    isError: queries.some((query) => query.isError),
+    error: queries.find((query) => query.error)?.error,
+    refetch: async () => {
+      await Promise.all(queries.map((query) => query.refetch()));
+    },
+  };
 }
 
 export function useCommunityWorkshopDetailQuery(

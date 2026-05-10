@@ -5,6 +5,7 @@ import React from "react";
 const mockPush = jest.fn();
 const mockMyCommunitiesQuery = jest.fn();
 const mockCommunityFeedQuery = jest.fn();
+const mockWorkshopsFeedQuery = jest.fn();
 let mockUsername: string | undefined = "student";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
@@ -54,6 +55,17 @@ jest.mock("@/lib/queries/communityPosts", () => ({
     mockCommunityFeedQuery(...args),
 }));
 
+jest.mock("@/lib/queries/workshops", () => {
+  const actual = jest.requireActual<Record<string, unknown>>(
+    "@/lib/queries/workshops",
+  );
+  return {
+    ...actual,
+    useMyCommunityWorkshopsFeedQuery: (...args: unknown[]) =>
+      mockWorkshopsFeedQuery(...args),
+  };
+});
+
 describe("CommunityScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -67,6 +79,13 @@ describe("CommunityScreen", () => {
       data: [],
       isLoading: false,
       isError: false,
+      refetch: jest.fn(),
+    });
+    mockWorkshopsFeedQuery.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
     });
   });
 
@@ -212,6 +231,64 @@ describe("CommunityScreen", () => {
     expect(getByTestId("community-feed-post-post-2")).toBeTruthy();
     expect(getAllByText("Backend Guild").length).toBeGreaterThan(1);
     expect(getAllByText("AI Lab").length).toBeGreaterThan(1);
+  });
+
+  it("renders a horizontal workshop rail and opens workshop detail", () => {
+    mockMyCommunitiesQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [
+        {
+          id: "tag-1",
+          name: "AI Lab",
+          slug: "ai-lab",
+          description: "Machine learning",
+          member_count: 6,
+          created_at: "2026-04-21T00:00:00Z",
+        },
+      ],
+    });
+    mockWorkshopsFeedQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+      data: [
+        {
+          id: "workshop-1",
+          community_id: "tag-1",
+          community_name: "AI Lab",
+          author: {
+            id: "mentor-1",
+            username: "mentor_ai",
+            display_name: "Mentor AI",
+            picture_url: "",
+            title: "Mentor",
+          },
+          title: "Prompt Engineering 101",
+          description: "Hands-on prompting clinic",
+          scheduled_at: "2026-06-10T13:30:00.000Z",
+          end_at: "2026-06-10T15:00:00.000Z",
+          max_participants: 10,
+          participant_count: 4,
+          is_full: false,
+          status: "SCHEDULED",
+          current_user_enrolled: false,
+          created_at: "2026-05-20T00:00:00.000Z",
+          updated_at: "2026-05-20T00:00:00.000Z",
+        },
+      ],
+    });
+
+    const { getByTestId, getByText } = render(<CommunityScreen />);
+
+    expect(mockWorkshopsFeedQuery).toHaveBeenCalledWith(["tag-1"], 4, true);
+    expect(getByTestId("community-workshops-rail")).toBeTruthy();
+    expect(getByText("Prompt Engineering 101")).toBeTruthy();
+
+    fireEvent.press(getByTestId("community-workshop-card-workshop-1"));
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1/workshops/workshop-1?from=community",
+    );
   });
 
   it("still renders the empty state when the user is not restored yet", () => {
