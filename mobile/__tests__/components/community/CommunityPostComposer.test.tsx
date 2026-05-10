@@ -7,6 +7,19 @@ import { uploadPostMedia } from "@/lib/queries/uploads";
 import type { ReactTestInstance } from "react-test-renderer";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+jest.mock("@react-native-community/datetimepicker", () => {
+  const { View } = require("react-native");
+  const MockDateTimePicker = (props: Record<string, unknown>) => {
+    return <View {...props} />;
+  };
+  return {
+    __esModule: true,
+    default: MockDateTimePicker,
+    DateTimePickerAndroid: {
+      open: jest.fn(),
+    },
+  };
+});
 
 jest.mock("@/lib/uploads/picker", () => ({
   pickPostImageFile: jest.fn(),
@@ -15,6 +28,14 @@ jest.mock("@/lib/uploads/picker", () => ({
 
 jest.mock("@/lib/queries/uploads", () => ({
   uploadPostMedia: jest.fn(),
+}));
+
+const mockToastWarning = jest.fn();
+
+jest.mock("@/components/ui/ToastProvider", () => ({
+  useToast: () => ({
+    warning: (...args: unknown[]) => mockToastWarning(...args),
+  }),
 }));
 
 function expandComposer(getByTestId: (testID: string) => ReactTestInstance) {
@@ -184,10 +205,33 @@ describe("CommunityPostComposer", () => {
       getByPlaceholderText("Workshop description"),
       " Walkthrough for flaky tests ",
     );
-    fireEvent.changeText(getByPlaceholderText("YYYY-MM-DD"), "2026-05-20");
-    fireEvent.changeText(getByPlaceholderText("Max participants"), "18");
-    fireEvent.changeText(getByPlaceholderText("Start HH:mm"), "14:00");
-    fireEvent.changeText(getByPlaceholderText("End HH:mm"), "16:00");
+    fireEvent.press(getByTestId("community-composer-workshop-date-trigger"));
+    fireEvent(
+      getByTestId("community-composer-workshop-picker"),
+      "onChange",
+      { type: "set" },
+      new Date(2026, 4, 20, 0, 0),
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
+    fireEvent.changeText(getByPlaceholderText("Capacity"), "18");
+    fireEvent.press(
+      getByTestId("community-composer-workshop-start-time-trigger"),
+    );
+    fireEvent(
+      getByTestId("community-composer-workshop-picker"),
+      "onChange",
+      { type: "set" },
+      new Date(2026, 4, 20, 14, 0),
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
+    fireEvent.press(getByTestId("community-composer-workshop-end-time-trigger"));
+    fireEvent(
+      getByTestId("community-composer-workshop-picker"),
+      "onChange",
+      { type: "set" },
+      new Date(2026, 4, 20, 16, 0),
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
 
     await act(async () => {
       fireEvent.press(getByTestId("community-composer-submit"));
@@ -219,16 +263,43 @@ describe("CommunityPostComposer", () => {
     expandComposer(getByTestId);
     fireEvent.press(getByTestId("community-composer-mode-workshop"));
     fireEvent.changeText(getByPlaceholderText("Workshop title"), "Workshop");
-    fireEvent.changeText(getByPlaceholderText("YYYY-MM-DD"), "2026-05-20");
-    fireEvent.changeText(getByPlaceholderText("Max participants"), "10");
-    fireEvent.changeText(getByPlaceholderText("Start HH:mm"), "16:00");
-    fireEvent.changeText(getByPlaceholderText("End HH:mm"), "15:00");
+    fireEvent.press(getByTestId("community-composer-workshop-date-trigger"));
+    fireEvent(
+      getByTestId("community-composer-workshop-picker"),
+      "onChange",
+      { type: "set" },
+      new Date(2026, 4, 20, 0, 0),
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
+    fireEvent.changeText(getByPlaceholderText("Capacity"), "10");
+    fireEvent.press(
+      getByTestId("community-composer-workshop-start-time-trigger"),
+    );
+    fireEvent(
+      getByTestId("community-composer-workshop-picker"),
+      "onChange",
+      { type: "set" },
+      new Date(2026, 4, 20, 16, 0),
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
+    fireEvent.press(getByTestId("community-composer-workshop-end-time-trigger"));
+    fireEvent(
+      getByTestId("community-composer-workshop-picker"),
+      "onChange",
+      { type: "set" },
+      new Date(2026, 4, 20, 15, 0),
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
 
     await act(async () => {
       fireEvent.press(getByTestId("community-composer-submit"));
     });
 
     expect(await findByTestId("community-composer-form-error")).toBeTruthy();
+    expect(mockToastWarning).toHaveBeenCalledWith(
+      "Workshop end time must be after the start time.",
+      { title: "Workshop details" },
+    );
     expect(onSubmitWorkshop).not.toHaveBeenCalled();
   });
 });

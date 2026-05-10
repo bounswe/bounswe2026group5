@@ -17,7 +17,9 @@ import { ProfilePostEditSheet } from "@/components/profile/ProfilePostEditSheet"
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SuccessCard } from "@/components/ui/SuccessCard";
+import { useToast } from "@/components/ui/ToastProvider";
 import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
+import { ApiError } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   useCommunityPostsQuery,
@@ -51,6 +53,14 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function getWorkshopCreateErrorMessage(error: unknown) {
+  if (error instanceof ApiError && error.status >= 500) {
+    return "Workshop creation failed on the server. The backend may still be missing the workshop migration or deployment update.";
+  }
+
+  return getErrorMessage(error, "Could not create this workshop.");
+}
+
 function getCommunityMembershipLabel(
   isMember: boolean | undefined,
   isMutating: boolean,
@@ -65,6 +75,7 @@ function getCommunityMembershipLabel(
 export default function CommunityDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const toast = useToast();
   const params = useLocalSearchParams<{
     tagId?: string | string[];
     from?: string | string[];
@@ -277,7 +288,8 @@ export default function CommunityDetailScreen() {
       );
       return true;
     } catch (error) {
-      setActionError(getErrorMessage(error, "Could not create this workshop."));
+      const message = getWorkshopCreateErrorMessage(error);
+      toast.error(message, { title: "Workshop creation failed" });
       return false;
     }
   };

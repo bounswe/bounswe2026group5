@@ -1,4 +1,5 @@
 import CommunityDetailScreen from "@/app/(tabs)/community/[tagId]/index";
+import { ApiError } from "@/lib/api/client";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 
@@ -17,6 +18,7 @@ const mockCreateCommunityPostMutation = jest.fn();
 const mockCreateCommunityWorkshopMutation = jest.fn();
 const mockUpdateCommunityPostMutation = jest.fn();
 const mockDeleteCommunityPostMutation = jest.fn();
+const mockToastError = jest.fn();
 let focusCleanup: (() => void) | undefined;
 let mockAuthUser = {
   username: "student",
@@ -24,6 +26,19 @@ let mockAuthUser = {
 };
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+jest.mock("@react-native-community/datetimepicker", () => {
+  const { View } = require("react-native");
+  const MockDateTimePicker = (props: Record<string, unknown>) => {
+    return <View {...props} />;
+  };
+  return {
+    __esModule: true,
+    default: MockDateTimePicker,
+    DateTimePickerAndroid: {
+      open: jest.fn(),
+    },
+  };
+});
 
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ tagId: mockTagId, from: mockFrom }),
@@ -71,6 +86,12 @@ jest.mock("@/lib/queries/communityPosts", () => ({
 jest.mock("@/lib/queries/workshops", () => ({
   useCreateCommunityWorkshopMutation: (username?: string) =>
     mockCreateCommunityWorkshopMutation(username),
+}));
+
+jest.mock("@/components/ui/ToastProvider", () => ({
+  useToast: () => ({
+    error: (...args: unknown[]) => mockToastError(...args),
+  }),
 }));
 
 describe("CommunityDetailScreen", () => {
@@ -305,7 +326,7 @@ describe("CommunityDetailScreen", () => {
       },
     });
 
-    const { getByPlaceholderText, getByTestId, findByText } = render(
+    const { getByPlaceholderText, getByTestId, findByText, queryByText } = render(
       <CommunityDetailScreen />,
     );
 
@@ -319,10 +340,33 @@ describe("CommunityDetailScreen", () => {
       getByPlaceholderText("Workshop description"),
       "Serializer deep dive",
     );
-    fireEvent.changeText(getByPlaceholderText("YYYY-MM-DD"), "2026-05-20");
-    fireEvent.changeText(getByPlaceholderText("Max participants"), "20");
-    fireEvent.changeText(getByPlaceholderText("Start HH:mm"), "13:30");
-    fireEvent.changeText(getByPlaceholderText("End HH:mm"), "15:00");
+    fireEvent.press(getByTestId("community-composer-workshop-date-trigger"));
+    fireEvent(
+      getByTestId("community-composer-workshop-picker"),
+      "onChange",
+      { type: "set" },
+      new Date(2026, 4, 20, 0, 0),
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
+    fireEvent.changeText(getByPlaceholderText("Capacity"), "20");
+    fireEvent.press(
+      getByTestId("community-composer-workshop-start-time-trigger"),
+    );
+    fireEvent(
+      getByTestId("community-composer-workshop-picker"),
+      "onChange",
+      { type: "set" },
+      new Date(2026, 4, 20, 13, 30),
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
+    fireEvent.press(getByTestId("community-composer-workshop-end-time-trigger"));
+    fireEvent(
+      getByTestId("community-composer-workshop-picker"),
+      "onChange",
+      { type: "set" },
+      new Date(2026, 4, 20, 15, 0),
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
 
     await act(async () => {
       fireEvent.press(getByTestId("community-composer-submit"));
@@ -339,5 +383,85 @@ describe("CommunityDetailScreen", () => {
       });
     });
     expect(await findByText("Workshop created in Backend Guild.")).toBeTruthy();
+  });
+
+  it("shows a clearer message when workshop creation hits a server 500", async () => {
+    mockAuthUser = {
+      username: "mentor_user",
+      app_usage_mode: "MENTOR",
+    };
+    mockDetailQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      refetch: mockDetailRefetch,
+      data: {
+        id: "tag-1",
+        name: "AI & ML Enthusiasts",
+        slug: "ai-ml-enthusiasts",
+        description: "Discuss practical machine learning.",
+        member_count: 6,
+        created_by_username: "ada",
+        is_member: true,
+        created_at: "2026-04-20T00:00:00Z",
+      },
+    });
+    createWorkshopMutateAsync.mockRejectedValueOnce(
+      new ApiError(500, "Request failed with status 500"),
+    );
+
+    const { getByPlaceholderText, getByTestId, queryByText } = render(
+      <CommunityDetailScreen />,
+    );
+
+    fireEvent.press(getByTestId("community-composer-toggle"));
+    fireEvent.press(getByTestId("community-composer-mode-workshop"));
+    fireEvent.changeText(
+      getByPlaceholderText("Workshop title"),
+      "Test workshop",
+    );
+    fireEvent.changeText(
+      getByPlaceholderText("Workshop description"),
+      "This is a test",
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-date-trigger"));
+    fireEvent(
+      getByTestId("community-composer-workshop-picker"),
+      "onChange",
+      { type: "set" },
+      new Date(2026, 5, 10, 0, 0),
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
+    fireEvent.changeText(getByPlaceholderText("Capacity"), "10");
+    fireEvent.press(
+      getByTestId("community-composer-workshop-start-time-trigger"),
+    );
+    fireEvent(
+      getByTestId("community-composer-workshop-picker"),
+      "onChange",
+      { type: "set" },
+      new Date(2026, 5, 10, 13, 30),
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
+    fireEvent.press(getByTestId("community-composer-workshop-end-time-trigger"));
+    fireEvent(
+      getByTestId("community-composer-workshop-picker"),
+      "onChange",
+      { type: "set" },
+      new Date(2026, 5, 10, 15, 0),
+    );
+    fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
+
+    await act(async () => {
+      fireEvent.press(getByTestId("community-composer-submit"));
+    });
+
+    const expectedMessage =
+      "Workshop creation failed on the server. The backend may still be missing the workshop migration or deployment update.";
+    await waitFor(() => {
+      expect(queryByText(expectedMessage)).toBeNull();
+    });
+    expect(mockToastError).toHaveBeenCalledWith(expectedMessage, {
+      title: "Workshop creation failed",
+    });
   });
 });

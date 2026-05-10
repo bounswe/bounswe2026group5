@@ -1,7 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+} from "@react-native-community/datetimepicker";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
+  Platform,
   Switch,
   Text,
   TextInput,
@@ -10,6 +15,7 @@ import {
 } from "react-native";
 
 import { PostMediaPicker } from "@/components/posts/PostMediaPicker";
+import { useToast } from "@/components/ui/ToastProvider";
 import { uploadPostMedia } from "@/lib/queries/uploads";
 import type { LocalUploadFile } from "@/lib/queries/uploads";
 import type { CreateCommunityPostPayload } from "@/lib/queries/communityPosts";
@@ -25,6 +31,8 @@ const EVENT_TYPES: {
   { value: "social", label: "Social", icon: "people-outline" },
   { value: "progress", label: "Progress", icon: "trending-up-outline" },
 ];
+
+type WorkshopPickerMode = "date" | "startTime" | "endTime" | null;
 
 export function CommunityPostComposer({
   isSubmitting,
@@ -45,6 +53,7 @@ export function CommunityPostComposer({
   allowWorkshopCreation?: boolean;
   taggableUsers?: CommunityTaggableUser[];
 }>) {
+  const toast = useToast();
   const [isExpanded, setIsExpanded] = useState(false);
   const [mode, setMode] = useState<"post" | "workshop">("post");
   const [eventType, setEventType] =
@@ -57,18 +66,20 @@ export function CommunityPostComposer({
   const [formError, setFormError] = useState<string | null>(null);
   const [workshopTitle, setWorkshopTitle] = useState("");
   const [workshopDescription, setWorkshopDescription] = useState("");
-  const [workshopDate, setWorkshopDate] = useState("");
-  const [workshopStartTime, setWorkshopStartTime] = useState("");
-  const [workshopEndTime, setWorkshopEndTime] = useState("");
+  const [workshopDate, setWorkshopDate] = useState<Date | null>(null);
+  const [workshopStartTime, setWorkshopStartTime] = useState<Date | null>(null);
+  const [workshopEndTime, setWorkshopEndTime] = useState<Date | null>(null);
   const [workshopMaxParticipants, setWorkshopMaxParticipants] = useState("");
+  const [activePicker, setActivePicker] = useState<WorkshopPickerMode>(null);
+  const [pickerDraftValue, setPickerDraftValue] = useState(new Date());
 
   const isBusy = Boolean(isSubmitting) || isUploadingMedia;
   const canSubmit =
     mode === "workshop"
       ? workshopTitle.trim().length > 0 &&
-        workshopDate.trim().length > 0 &&
-        workshopStartTime.trim().length > 0 &&
-        workshopEndTime.trim().length > 0 &&
+        workshopDate !== null &&
+        workshopStartTime !== null &&
+        workshopEndTime !== null &&
         workshopMaxParticipants.trim().length > 0 &&
         !isBusy
       : content.trim().length > 0 && !isBusy;
@@ -128,10 +139,12 @@ export function CommunityPostComposer({
     setFormError(null);
     setWorkshopTitle("");
     setWorkshopDescription("");
-    setWorkshopDate("");
-    setWorkshopStartTime("");
-    setWorkshopEndTime("");
+    setWorkshopDate(null);
+    setWorkshopStartTime(null);
+    setWorkshopEndTime(null);
     setWorkshopMaxParticipants("");
+    setActivePicker(null);
+    setPickerDraftValue(new Date());
   };
 
   const insertMention = (username: string) => {
@@ -139,21 +152,110 @@ export function CommunityPostComposer({
     setContent(`${prefix}@${username} `);
   };
 
-  const buildWorkshopDateTime = (dateValue: string, timeValue: string) => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue.trim())) {
-      return null;
+  const formatWorkshopDate = (value: Date | null) => {
+    if (!value) {
+      return "Select date";
     }
 
-    if (!/^\d{2}:\d{2}$/.test(timeValue.trim())) {
-      return null;
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatWorkshopTime = (value: Date | null) => {
+    if (!value) {
+      return "Select time";
     }
 
-    const parsed = new Date(`${dateValue.trim()}T${timeValue.trim()}:00`);
-    if (Number.isNaN(parsed.getTime())) {
-      return null;
+    const hours = String(value.getHours()).padStart(2, "0");
+    const minutes = String(value.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  };
+
+  const buildWorkshopDateTime = (dateValue: Date, timeValue: Date) => {
+    const combined = new Date(dateValue);
+    combined.setHours(
+      timeValue.getHours(),
+      timeValue.getMinutes(),
+      0,
+      0,
+    );
+
+    return combined.toISOString();
+  };
+
+  const showWorkshopValidationError = (message: string) => {
+    setFormError(message);
+    toast.warning(message, { title: "Workshop details" });
+  };
+
+  const openPicker = (pickerMode: Exclude<WorkshopPickerMode, null>) => {
+    setFormError(null);
+    const nextValue =
+      pickerMode === "date"
+        ? workshopDate ?? new Date()
+        : pickerMode === "startTime"
+          ? workshopStartTime ?? new Date()
+          : workshopEndTime ?? workshopStartTime ?? new Date();
+
+    if (Platform.OS === "android") {
+      DateTimePickerAndroid.open({
+        value: nextValue,
+        mode: pickerMode === "date" ? "date" : "time",
+        is24Hour: true,
+        onChange: (event, selectedValue) => {
+          if (event.type === "dismissed" || !selectedValue) {
+            return;
+          }
+
+          if (pickerMode === "date") {
+            setWorkshopDate(selectedValue);
+          } else if (pickerMode === "startTime") {
+            setWorkshopStartTime(selectedValue);
+          } else {
+            setWorkshopEndTime(selectedValue);
+          }
+        },
+      });
+      return;
     }
 
-    return parsed.toISOString();
+    setPickerDraftValue(nextValue);
+    setActivePicker(pickerMode);
+  };
+
+  const handleWorkshopPickerChange = (
+    event: { type?: string },
+    selectedValue?: Date,
+  ) => {
+    if (event.type === "dismissed") {
+      setActivePicker(null);
+      return;
+    }
+
+    if (!selectedValue || !activePicker) {
+      return;
+    }
+
+    setPickerDraftValue(selectedValue);
+    setFormError(null);
+  };
+
+  const confirmPickerSelection = () => {
+    if (!activePicker) {
+      return;
+    }
+
+    if (activePicker === "date") {
+      setWorkshopDate(pickerDraftValue);
+    } else if (activePicker === "startTime") {
+      setWorkshopStartTime(pickerDraftValue);
+    } else {
+      setWorkshopEndTime(pickerDraftValue);
+    }
+
+    setActivePicker(null);
   };
 
   const handleSubmit = async () => {
@@ -166,29 +268,34 @@ export function CommunityPostComposer({
 
     if (mode === "workshop") {
       if (!onSubmitWorkshop) {
-        setFormError("Workshop creation is not available right now.");
+        showWorkshopValidationError(
+          "Workshop creation is not available right now.",
+        );
         return;
       }
 
-      const scheduled_at = buildWorkshopDateTime(
-        workshopDate,
-        workshopStartTime,
-      );
+      if (!workshopDate || !workshopStartTime || !workshopEndTime) {
+        showWorkshopValidationError(
+          "Pick a workshop date, start time, and end time.",
+        );
+        return;
+      }
+
+      const scheduled_at = buildWorkshopDateTime(workshopDate, workshopStartTime);
       const end_at = buildWorkshopDateTime(workshopDate, workshopEndTime);
       const maxParticipants = Number(workshopMaxParticipants.trim());
 
-      if (!scheduled_at || !end_at) {
-        setFormError("Enter a valid date and time in the requested format.");
-        return;
-      }
-
-      if (!(maxParticipants > 0)) {
-        setFormError("Maximum participants must be greater than 0.");
+      if (!Number.isInteger(maxParticipants) || !(maxParticipants > 0)) {
+        showWorkshopValidationError(
+          "Maximum participants must be a whole number greater than 0.",
+        );
         return;
       }
 
       if (new Date(end_at).getTime() <= new Date(scheduled_at).getTime()) {
-        setFormError("Workshop end time must be after the start time.");
+        showWorkshopValidationError(
+          "Workshop end time must be after the start time.",
+        );
         return;
       }
 
@@ -320,6 +427,7 @@ export function CommunityPostComposer({
                   setMedia(null);
                   setMediaError(null);
                   setFormError(null);
+                  setActivePicker(null);
                   setMode("workshop");
                 }}
                 className={`flex-1 rounded-xl border px-3 py-2.5 ${
@@ -500,47 +608,79 @@ export function CommunityPostComposer({
                 className="mt-3 min-h-[110px] rounded-xl border border-divider bg-surface px-3 py-3 text-on-surface dark:border-divider-dark dark:bg-surface-dark dark:text-on-surface-dark"
               />
               <View className="mt-3 flex-row gap-3">
-                <TextInput
-                  testID="community-composer-workshop-date"
-                  value={workshopDate}
-                  onChangeText={setWorkshopDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#8b8d98"
-                  autoCapitalize="none"
-                  className="flex-1 rounded-xl border border-divider bg-surface px-3 py-3 text-on-surface dark:border-divider-dark dark:bg-surface-dark dark:text-on-surface-dark"
-                />
+                <TouchableOpacity
+                  testID="community-composer-workshop-date-trigger"
+                  activeOpacity={0.82}
+                  onPress={() => openPicker("date")}
+                  className="flex-1 flex-row items-center gap-2 rounded-xl border border-divider bg-surface px-3 py-3 dark:border-divider-dark dark:bg-surface-dark"
+                >
+                  <Ionicons name="calendar-outline" size={18} color="#737686" />
+                  <Text
+                    className={`flex-1 text-sm ${
+                      workshopDate
+                        ? "text-on-surface dark:text-on-surface-dark"
+                        : "text-on-surface-muted dark:text-on-surface-muted-dark"
+                    }`}
+                  >
+                    {formatWorkshopDate(workshopDate)}
+                  </Text>
+                </TouchableOpacity>
                 <TextInput
                   testID="community-composer-workshop-capacity"
                   value={workshopMaxParticipants}
-                  onChangeText={setWorkshopMaxParticipants}
-                  placeholder="Max participants"
+                  onChangeText={(nextValue) =>
+                    setWorkshopMaxParticipants(
+                      nextValue.replace(/[^0-9]/g, ""),
+                    )
+                  }
+                  placeholder="Capacity"
                   placeholderTextColor="#8b8d98"
                   keyboardType="number-pad"
-                  className="w-28 rounded-xl border border-divider bg-surface px-3 py-3 text-on-surface dark:border-divider-dark dark:bg-surface-dark dark:text-on-surface-dark"
+                  className="w-32 rounded-xl border border-divider bg-surface px-3 py-3 text-on-surface dark:border-divider-dark dark:bg-surface-dark dark:text-on-surface-dark"
                 />
               </View>
               <View className="mt-3 flex-row gap-3">
-                <TextInput
-                  testID="community-composer-workshop-start-time"
-                  value={workshopStartTime}
-                  onChangeText={setWorkshopStartTime}
-                  placeholder="Start HH:mm"
-                  placeholderTextColor="#8b8d98"
-                  autoCapitalize="none"
-                  className="flex-1 rounded-xl border border-divider bg-surface px-3 py-3 text-on-surface dark:border-divider-dark dark:bg-surface-dark dark:text-on-surface-dark"
-                />
-                <TextInput
-                  testID="community-composer-workshop-end-time"
-                  value={workshopEndTime}
-                  onChangeText={setWorkshopEndTime}
-                  placeholder="End HH:mm"
-                  placeholderTextColor="#8b8d98"
-                  autoCapitalize="none"
-                  className="flex-1 rounded-xl border border-divider bg-surface px-3 py-3 text-on-surface dark:border-divider-dark dark:bg-surface-dark dark:text-on-surface-dark"
-                />
+                <TouchableOpacity
+                  testID="community-composer-workshop-start-time-trigger"
+                  activeOpacity={0.82}
+                  onPress={() => openPicker("startTime")}
+                  className="flex-1 flex-row items-center gap-2 rounded-xl border border-divider bg-surface px-3 py-3 dark:border-divider-dark dark:bg-surface-dark"
+                >
+                  <Ionicons name="time-outline" size={18} color="#737686" />
+                  <Text
+                    className={`flex-1 text-sm ${
+                      workshopStartTime
+                        ? "text-on-surface dark:text-on-surface-dark"
+                        : "text-on-surface-muted dark:text-on-surface-muted-dark"
+                    }`}
+                  >
+                    {workshopStartTime
+                      ? `Start ${formatWorkshopTime(workshopStartTime)}`
+                      : "Start time"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  testID="community-composer-workshop-end-time-trigger"
+                  activeOpacity={0.82}
+                  onPress={() => openPicker("endTime")}
+                  className="flex-1 flex-row items-center gap-2 rounded-xl border border-divider bg-surface px-3 py-3 dark:border-divider-dark dark:bg-surface-dark"
+                >
+                  <Ionicons name="time-outline" size={18} color="#737686" />
+                  <Text
+                    className={`flex-1 text-sm ${
+                      workshopEndTime
+                        ? "text-on-surface dark:text-on-surface-dark"
+                        : "text-on-surface-muted dark:text-on-surface-muted-dark"
+                    }`}
+                  >
+                    {workshopEndTime
+                      ? `End ${formatWorkshopTime(workshopEndTime)}`
+                      : "End time"}
+                  </Text>
+                </TouchableOpacity>
               </View>
               <Text className="mt-2 text-xs text-on-surface-soft dark:text-on-surface-soft-dark">
-                Use local time. Example: 2026-05-20, 14:00, 16:00.
+                Use local time. Pick the workshop date first, then choose start and end.
               </Text>
               {formError ? (
                 <Text
@@ -571,6 +711,59 @@ export function CommunityPostComposer({
             )}
           </TouchableOpacity>
         </>
+      ) : null}
+
+      {Platform.OS === "ios" && activePicker ? (
+        <Modal
+          testID="community-composer-workshop-picker-modal"
+          transparent
+          animationType="fade"
+          visible
+          onRequestClose={() => setActivePicker(null)}
+        >
+          <View className="flex-1 items-center justify-end bg-black/35 px-4 pb-8">
+            <View className="w-full max-w-[420px] rounded-3xl border border-divider bg-surface-card p-4 dark:border-divider-dark dark:bg-surface-card-dark">
+              <Text className="text-base font-extrabold text-on-surface dark:text-on-surface-dark">
+                {activePicker === "date"
+                  ? "Select workshop date"
+                  : activePicker === "startTime"
+                    ? "Select start time"
+                    : "Select end time"}
+              </Text>
+              <DateTimePicker
+                testID="community-composer-workshop-picker"
+                value={pickerDraftValue}
+                mode={activePicker === "date" ? "date" : "time"}
+                is24Hour
+                display="spinner"
+                onChange={handleWorkshopPickerChange}
+                style={{ alignSelf: "stretch", height: 180 }}
+              />
+              <View className="mt-3 flex-row gap-3">
+                <TouchableOpacity
+                  testID="community-composer-workshop-picker-cancel"
+                  activeOpacity={0.82}
+                  onPress={() => setActivePicker(null)}
+                  className="flex-1 rounded-xl border border-divider px-4 py-3 dark:border-divider-dark"
+                >
+                  <Text className="text-center text-sm font-bold text-on-surface dark:text-on-surface-dark">
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  testID="community-composer-workshop-picker-confirm"
+                  activeOpacity={0.82}
+                  onPress={confirmPickerSelection}
+                  className="flex-1 rounded-xl bg-primary px-4 py-3 dark:bg-primary-dim"
+                >
+                  <Text className="text-center text-sm font-bold text-white">
+                    Confirm
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       ) : null}
     </View>
   );
