@@ -18,6 +18,7 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 import { useResetPasswordMutation } from "@/lib/queries/auth";
+import { useAuthStore } from "@/lib/auth/store";
 
 export default function ResetPasswordScreen() {
   const params = useLocalSearchParams<{ token?: string }>();
@@ -30,20 +31,23 @@ export default function ResetPasswordScreen() {
   const [localError, setLocalError] = useState<string | null>(null);
 
   const resetPasswordMutation = useResetPasswordMutation();
+  const logout = useAuthStore((state) => state.logout);
 
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme];
 
-  // Auto-redirect to login on success
+  // Clear local session and redirect to login on success.
+  // Backend blacklists all JWTs on reset, so stored tokens are now invalid.
   useEffect(() => {
     if (resetPasswordMutation.isSuccess) {
+      logout();
       const timer = setTimeout(() => {
         router.replace("/login" as Href);
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [resetPasswordMutation.isSuccess]);
+  }, [resetPasswordMutation.isSuccess, logout]);
 
   const handleSubmit = async () => {
     setLocalError(null);

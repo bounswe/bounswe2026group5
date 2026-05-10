@@ -223,14 +223,34 @@ export function isEmailVerificationRequiredError(error: unknown): boolean {
 
 export async function forgotPassword(email: string): Promise<void> {
   const url = `${API_BASE_URL}${AUTH_BASE_PATH}/forgot-password/`;
+
+  if (__DEV__) {
+    console.log("[Auth] forgotPassword request", { url });
+  }
+
   const response = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "omit",
     body: JSON.stringify({ email }),
   });
-  if (!response.ok && response.status !== 400) {
-    throw new Error("Something went wrong. Please check your connection and try again.");
+
+  if (__DEV__) {
+    console.log("[Auth] forgotPassword response", { status: response.status, ok: response.ok });
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}) as Record<string, unknown>);
+    const msg =
+      (errorData as { detail?: string }).detail ||
+      (errorData as { email?: string[] }).email?.[0] ||
+      "Something went wrong. Please check your connection and try again.";
+
+    if (__DEV__) {
+      console.error("[Auth] forgotPassword error", { status: response.status, errorData });
+    }
+
+    throw new Error(msg);
   }
 }
 

@@ -39,14 +39,11 @@ export default function ForgotPasswordScreen() {
 
     try {
       await forgotPasswordMutation.mutateAsync(email.trim());
+    } catch {
+      // Intentionally ignored: always show the generic success state to prevent
+      // account enumeration (security requirement from issue spec).
+    } finally {
       setSubmitted(true);
-    } catch (error) {
-      // network/server failure — show error banner so user can retry
-      setLocalError(
-        error instanceof Error
-          ? error.message
-          : "Something went wrong. Please check your connection and try again.",
-      );
     }
   };
 
@@ -99,7 +96,7 @@ export default function ForgotPasswordScreen() {
               Forgot Password
             </Text>
             <Text className="text-base font-medium text-on-surface-soft dark:text-on-surface-soft-dark">
-              Enter your email and we'll send you a secure link to reset your
+              Enter your email and we will send you a secure link to reset your
               password. The link expires in 30 minutes.
             </Text>
           </View>
@@ -141,6 +138,7 @@ export default function ForgotPasswordScreen() {
                   />
                   <TextInput
                     className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
+                    style={{ paddingVertical: 0, lineHeight: undefined }}
                     placeholder="Enter your email"
                     placeholderTextColor={theme.textMuted}
                     value={email}
