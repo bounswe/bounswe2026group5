@@ -25,6 +25,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { MediaUploadField } from '@/components/MediaUploadField'
+import { MediaAttachment } from '@/components/MediaAttachment'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
@@ -50,10 +51,6 @@ export const Route = createFileRoute('/_authorized/connections/$matchId')({
     component: JourneyPage,
 })
 
-function mediaFileName(url: string): string {
-    const raw = url.split('/').pop()?.split('?')[0] ?? 'media'
-    return /^[a-f0-9]{32}_/.test(raw) ? raw.slice(33) : raw
-}
 
 // ---------------------------------------------------------------------------
 // AGTE event metadata
@@ -307,16 +304,7 @@ function MCTEItem({
                 {event.content && (
                     <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{event.content}</p>
                 )}
-                {event.media_url && (
-                    <a
-                        href={event.media_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-accent-aa underline truncate"
-                    >
-                        {mediaFileName(event.media_url)}
-                    </a>
-                )}
+                {event.media_url && <MediaAttachment url={event.media_url} />}
                 <Muted className="text-xs">{formatTimestamp(event.timestamp)}</Muted>
             </div>
         </div>

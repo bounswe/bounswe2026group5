@@ -9,7 +9,8 @@ import {
     type Message,
 } from '#/lib/queries/MessagingQueries.ts'
 import { useMarkAllNotificationsRead, useNotifications } from '#/lib/queries/NotificationQueries.ts'
-import { cn, getInitials } from '#/lib/utils.ts'
+import { cn, getAbsoluteMediaUrl, getInitials } from '#/lib/utils.ts'
+import { MediaAttachment } from '@/components/MediaAttachment'
 import { Button } from '@/components/ui/button'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
@@ -398,14 +399,11 @@ function MessageBubble({
             >
                 <p className="whitespace-pre-wrap wrap-break-word">{message.body}</p>
                 {message.attachment_url && (
-                    <a
-                        href={message.attachment_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block mt-1 underline text-xs opacity-80"
-                    >
-                        Attachment
-                    </a>
+                    <MediaAttachment
+                        url={message.attachment_url}
+                        imgClassName="mt-1 max-h-48 w-full rounded-lg border-0 object-contain"
+                        linkClassName="mt-1 block underline text-xs opacity-80 text-inherit"
+                    />
                 )}
                 <div className={cn('flex items-center gap-1 text-[10px] mt-1', isMe ? 'justify-end' : 'justify-start')}>
                     <time className="opacity-80">
@@ -445,7 +443,7 @@ function Avatar({
     if (pictureUrl) {
         return (
             <img
-                src={pictureUrl}
+                src={getAbsoluteMediaUrl(pictureUrl)}
                 alt={name}
                 className={cn('rounded-full object-cover shrink-0', dim)}
             />

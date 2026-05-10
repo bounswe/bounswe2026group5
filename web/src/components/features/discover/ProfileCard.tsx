@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Body } from '@/components/Typography'
-import { cn } from '@/lib/utils'
+import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
 import type { PublicMentorProfile } from '@/lib/queries/DiscoverQueries.ts'
 
 interface ProfileCardProps {
@@ -35,7 +35,7 @@ function ProfileAvatar({
   if (pictureUrl && !showInitialsOnly) {
     return (
         <img
-            src={pictureUrl}
+            src={getAbsoluteMediaUrl(pictureUrl)}
             alt={displayName}
             className="h-20 w-20 rounded-full object-cover shrink-0 border border-line shadow-sm"
         />

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { getAbsoluteMediaUrl } from '@/lib/utils'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Camera, Loader2, X } from 'lucide-react'
 import { useRef, useState } from 'react'
@@ -151,7 +152,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                         >
                             {profileData?.picture_url ? (
                                 <img
-                                    src={profileData.picture_url}
+                                    src={getAbsoluteMediaUrl(profileData.picture_url)}
                                     alt="Profile"
                                     className="h-20 w-20 rounded-full object-cover"
                                 />

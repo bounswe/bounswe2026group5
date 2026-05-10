@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { logout, meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import { useQuery } from "@tanstack/react-query"
 import { useProfile } from "#/lib/queries/ProfileQueries.ts"
-import { getInitials } from "#/lib/utils.ts"
+import { getAbsoluteMediaUrl, getInitials } from "#/lib/utils.ts"
 import { useNotifications } from "#/lib/queries/NotificationQueries.ts"
 
 export function AuthorizedHeader() {
@@ -116,7 +116,7 @@ export function AuthorizedHeader() {
                 className="h-8 w-8 rounded-full overflow-hidden bg-accent text-background flex items-center justify-center text-sm font-bold shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             >
               {profile?.picture_url
-                ? <img src={profile.picture_url} alt={initials} className="h-full w-full object-cover" />
+                ? <img src={getAbsoluteMediaUrl(profile.picture_url)} alt={initials} className="h-full w-full object-cover" />
                 : initials}
             </Link>
             <Button

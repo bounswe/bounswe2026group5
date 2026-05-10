@@ -18,6 +18,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { MediaUploadField } from '@/components/MediaUploadField'
+import { MediaAttachment } from '@/components/MediaAttachment'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
     communityDetailQueryOptions,
@@ -36,14 +37,10 @@ import {
 } from '@/lib/queries/CommunityQueries.ts'
 import { meQueryOptions } from '@/lib/queries/AuthQueries.ts'
 import { useMessaging } from '@/lib/queries/MessagingQueries.ts'
-import { cn } from '@/lib/utils'
+import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { PublicMentorProfile } from '@/lib/queries/DiscoverQueries.ts'
 
-function mediaFileName(url: string): string {
-    const raw = url.split('/').pop()?.split('?')[0] ?? 'media'
-    return /^[a-f0-9]{32}_/.test(raw) ? raw.slice(33) : raw
-}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -92,7 +89,7 @@ function UserAvatar({
     if (pictureUrl) {
         return (
             <img
-                src={pictureUrl}
+                src={getAbsoluteMediaUrl(pictureUrl)}
                 alt={displayName}
                 className={cn('rounded-full object-cover shrink-0 border border-line', dim)}
             />
@@ -223,11 +220,7 @@ function CommunityPostCard({
                 </Muted>
             )}
 
-            {post.media_url && (
-                <a href={post.media_url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent-aa underline truncate">
-                    {mediaFileName(post.media_url)}
-                </a>
-            )}
+            {post.media_url && <MediaAttachment url={post.media_url} />}
         </div>
     )
 }

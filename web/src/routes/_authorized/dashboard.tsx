@@ -2,7 +2,7 @@
 import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import { useMeetingSessions, useMyRequests, useRespondToRequest, matchFeedbackQueryOptions } from "#/lib/queries/MentorshipQueries.ts"
 import { useNotifications, useMarkAllNotificationsRead, NOTIFICATION_INVALIDATION_MAP } from "#/lib/queries/NotificationQueries.ts"
-import { getInitials } from "#/lib/utils.ts"
+import { getAbsoluteMediaUrl, getInitials } from "#/lib/utils.ts"
 import { Body, Heading, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -347,7 +347,7 @@ function MenteeDashboardView() {
                       <div className="flex items-center gap-3">
                         {session.mentor.picture_url ? (
                             <img
-                                src={session.mentor.picture_url}
+                                src={getAbsoluteMediaUrl(session.mentor.picture_url)}
                                 alt={session.mentor.display_name}
                                 className="h-11 w-11 rounded-full object-cover border border-white/50 shadow-sm"
                             />
@@ -417,7 +417,7 @@ function MenteeDashboardView() {
                       <div className="flex items-center gap-3">
                         {session.mentor.picture_url ? (
                           <img
-                            src={session.mentor.picture_url}
+                            src={getAbsoluteMediaUrl(session.mentor.picture_url)}
                             alt={session.mentor.display_name}
                             className="h-10 w-10 rounded-full object-cover border border-white/50 shadow-sm"
                           />
@@ -490,7 +490,7 @@ function MenteeDashboardView() {
                         <div className="flex items-center gap-3">
                           {req.mentor.picture_url ? (
                               <img
-                                  src={req.mentor.picture_url}
+                                  src={getAbsoluteMediaUrl(req.mentor.picture_url)}
                                   alt={req.mentor.display_name}
                                   className="h-11 w-11 rounded-full object-cover border border-white/50 shadow-sm"
                               />
@@ -654,7 +654,7 @@ function MentorDashboardView() {
                         <div className="flex items-center gap-3">
                           {session.mentee.picture_url ? (
                               <img
-                                  src={session.mentee.picture_url}
+                                  src={getAbsoluteMediaUrl(session.mentee.picture_url)}
                                   alt={displayName}
                                   className="h-11 w-11 rounded-full object-cover border border-white/50 shadow-sm"
                               />

@@ -5,7 +5,7 @@ import { Star, Sparkles, Pencil, EyeOff, ChevronLeft, ChevronRight } from 'lucid
 import { EditProfileModal } from '#/components/profile/EditProfileModal.tsx'
 import { ProfilePostsSection } from '#/components/profile/ProfilePostsSection.tsx'
 import { useState } from 'react'
-import { getInitials } from '#/lib/utils.ts'
+import { getAbsoluteMediaUrl, getInitials } from '#/lib/utils.ts'
 import { AvailabilityCalendar } from "#/components/profile/AvailabilityCalendar.tsx";
 import { useAvailabilitySlots } from "#/lib/queries/ProfileTimeSlotQueries.ts";
 import { useMentorReviews } from '#/lib/queries/ProfileQueries.ts'
@@ -125,7 +125,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
       <div className="flex flex-wrap items-center gap-5">
         {profile.picture_url && !profile.show_initials_only ? (
             <img
-                src={profile.picture_url}
+                src={getAbsoluteMediaUrl(profile.picture_url)}
                 alt={`${profile.full_name} profile picture`}
                 className="h-20 w-20 rounded-2xl object-cover ring-1 ring-line"
             />

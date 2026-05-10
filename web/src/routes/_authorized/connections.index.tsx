@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useQuery } from '@tanstack/react-query'
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 import { useMyMatches } from '#/lib/queries/MentorshipQueries.ts'
-import { getInitials } from '#/lib/utils.ts'
+import { getAbsoluteMediaUrl, getInitials } from '#/lib/utils.ts'
 import { Loader2, UserCircle, BookOpen } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 
@@ -90,7 +90,7 @@ function ConnectionCard({ matchId, username, displayName, pictureUrl, title }: C
             <CardContent className="pt-6 flex flex-col items-center text-center gap-4">
                 {pictureUrl ? (
                     <img
-                        src={pictureUrl}
+                        src={getAbsoluteMediaUrl(pictureUrl)}
                         alt={displayName}
                         className="h-20 w-20 rounded-2xl object-cover ring-1 ring-line"
                     />

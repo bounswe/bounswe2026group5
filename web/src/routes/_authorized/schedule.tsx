@@ -1,6 +1,6 @@
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 import { useMeetingSessions } from '#/lib/queries/MentorshipQueries.ts'
-import { getInitials } from '#/lib/utils.ts'
+import { getAbsoluteMediaUrl, getInitials } from '#/lib/utils.ts'
 import { Body, Heading } from '@/components/Typography'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -102,7 +102,7 @@ function ScheduleTable({ sessions, peerLabel }: ScheduleTableProps) {
                     <div className="flex items-center gap-2">
                       {session.peerPicture ? (
                           <img
-                              src={session.peerPicture}
+                              src={getAbsoluteMediaUrl(session.peerPicture)}
                               alt={session.peerName}
                               className="h-7 w-7 rounded-full object-cover border border-white/50 shadow-sm"
                           />
