@@ -31,6 +31,7 @@ import { useRefreshControl } from "@/hooks/use-refresh-control";
 
 import { API_BASE_URL } from "@/constants/api";
 import { useAuthStore } from "@/lib/auth/store";
+import { useAvatarVersionStore } from "@/lib/profile/avatarVersion";
 import { useProfileVisibilityStore } from "@/lib/profile/preferences";
 import {
   useDeleteCommunityPostMutation,
@@ -58,8 +59,8 @@ import {
   useUpdateOwnProfileMutation,
 } from "@/lib/queries/profile";
 import {
-  deleteProfilePicture,
-  uploadProfilePicture,
+  useDeleteProfilePictureMutation,
+  useUploadProfilePictureMutation,
 } from "@/lib/queries/uploads";
 
 const PROFILE_DEFAULTS = {
@@ -302,6 +303,10 @@ export default function ProfileScreen() {
   const authUser = useAuthStore((state) => state.user);
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const currentUsername = useAuthStore((state) => state.user?.username);
+  const bumpAvatarVersion = useAvatarVersionStore((state) => state.bump);
+  const currentUserAvatarVersion = useAvatarVersionStore((state) =>
+    currentUsername ? state.versions[currentUsername] : undefined,
+  );
   const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
   const mentorshipMatchesQuery = useMentorshipMatchesQuery(
     currentUsername || "",
@@ -310,6 +315,10 @@ export default function ProfileScreen() {
     currentUsername || "",
   );
   const updateProfileMutation = useUpdateOwnProfileMutation();
+  const uploadProfilePictureMutation =
+    useUploadProfilePictureMutation(currentUsername);
+  const deleteProfilePictureMutation =
+    useDeleteProfilePictureMutation(currentUsername);
   const createProfilePostMutation =
     useCreateProfilePostMutation(currentUsername);
   const updateProfilePostMutation =
@@ -582,13 +591,21 @@ export default function ProfileScreen() {
       });
 
       if (updatedData.pictureFile) {
-        const pictureResponse = await uploadProfilePicture(
+        const pictureResponse = await uploadProfilePictureMutation.mutateAsync(
           updatedData.pictureFile,
         );
         pictureUrl = pictureResponse.picture_url;
       } else if (updatedData.removePicture) {
-        const pictureResponse = await deleteProfilePicture();
+        const pictureResponse =
+          await deleteProfilePictureMutation.mutateAsync();
         pictureUrl = pictureResponse.picture_url;
+      }
+
+      if (
+        (updatedData.pictureFile || updatedData.removePicture) &&
+        currentUsername
+      ) {
+        bumpAvatarVersion(currentUsername);
       }
 
       setUserData({
@@ -778,6 +795,7 @@ export default function ProfileScreen() {
           showRating={isMentorMode}
           showMenteesHelped={isMentorMode}
           imageUrl={userData.pictureUrl || undefined}
+          imageCacheKey={currentUserAvatarVersion}
           onEdit={() => setEditProfileModalOpen(true)}
         />
 

@@ -1,4 +1,5 @@
 import ProfileScreen from "@/app/(tabs)/profile/index";
+import { useAvatarVersionStore } from "@/lib/profile/avatarVersion";
 import { fireEvent, render, waitFor, act } from "@testing-library/react-native";
 import React from "react";
 import { Alert } from "react-native";
@@ -113,10 +114,14 @@ jest.mock("@/lib/queries/communityPosts", () => ({
 }));
 
 jest.mock("@/lib/queries/uploads", () => ({
-  uploadProfilePicture: (...args: unknown[]) =>
-    mockUploadProfilePicture(...args),
-  deleteProfilePicture: (...args: unknown[]) =>
-    mockDeleteProfilePicture(...args),
+  useUploadProfilePictureMutation: () => ({
+    mutateAsync: (...args: unknown[]) => mockUploadProfilePicture(...args),
+    isPending: false,
+  }),
+  useDeleteProfilePictureMutation: () => ({
+    mutateAsync: (...args: unknown[]) => mockDeleteProfilePicture(...args),
+    isPending: false,
+  }),
 }));
 
 jest.mock("@/lib/queries/communityTags", () => ({
@@ -141,6 +146,7 @@ jest.spyOn(Alert, "alert");
 describe("ProfileScreen Layout", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useAvatarVersionStore.setState({ versions: {} });
     mockAuthUser = {
       username: "Ali Aydin",
       app_usage_mode: "MENTOR",
@@ -325,9 +331,9 @@ describe("ProfileScreen Layout", () => {
         name: "avatar.jpg",
         type: "image/jpeg",
       });
-      expect(getByTestId("profile-avatar-image").props.source).toEqual({
-        uri: "https://cdn.example.com/new-avatar.jpg",
-      });
+      expect(getByTestId("profile-avatar-image").props.source.uri).toContain(
+        "https://cdn.example.com/new-avatar.jpg",
+      );
     });
   });
 
