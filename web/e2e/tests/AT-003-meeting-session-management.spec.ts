@@ -185,7 +185,6 @@ test.describe('AT-003: Meeting Session Management', () => {
       const menteeSchedule = new SchedulePage(page);
 
       await menteeDashboard.goto();
-      await page.reload();
       await menteeDashboard.expectNotification('Session Canceled', mentor.displayName);
 
       await menteeSchedule.goto();

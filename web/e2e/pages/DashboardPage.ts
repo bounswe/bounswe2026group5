@@ -30,7 +30,7 @@ export class DashboardPage {
   }
 
   async expectNotification(title: string, messagePart: string) {
-    await expect(this.page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
+    await expect(this.page.getByRole('heading', { name: /Notifications/i })).toBeVisible();
     const notification = this.page.locator('.border-l-4', { hasText: title }).filter({ hasText: messagePart }).first();
     await expect(notification).toBeVisible();
   }

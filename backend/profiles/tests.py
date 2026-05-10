@@ -5740,6 +5740,52 @@ class ProfileWorkshopAttendanceAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+    def test_author_can_patch_workshop_fields_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.author_token}")
+
+        response = self.client.patch(
+            f"/api/profiles/me/workshops/attendance/{self.authored_workshop.id}/",
+            {"title": "Authored Workshop Updated", "max_participants": 25},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.authored_workshop.refresh_from_db()
+        self.assertEqual(self.authored_workshop.title, "Authored Workshop Updated")
+        self.assertEqual(self.authored_workshop.max_participants, 25)
+
+    def test_non_author_cannot_patch_workshop_fields_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.patch(
+            f"/api/profiles/me/workshops/attendance/{self.upcoming_workshop.id}/",
+            {"title": "Should not work"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_author_delete_from_profile_cancels_workshop(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.author_token}")
+
+        response = self.client.delete(
+            f"/api/profiles/me/workshops/attendance/{self.authored_workshop.id}/"
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.authored_workshop.refresh_from_db()
+        self.assertEqual(self.authored_workshop.status, Workshop.Status.CANCELLED)
+
+    def test_attendance_participants_list_available_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.get(
+            f"/api/profiles/me/workshops/attendance/{self.upcoming_workshop.id}/participants/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.data["count"], 1)
 from django.urls import reverse
 
 class MentorQualitySignalsTests(APITestCase):
@@ -5910,48 +5956,4 @@ class MentorOverloadTests(APITestCase):
         # Check the first request in list
         self.assertEqual(response.data[0]["is_mentor_overloaded"], True)
 
-    def test_author_can_patch_workshop_fields_from_profile(self) -> None:
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.author_token}")
 
-        response = self.client.patch(
-            f"/api/profiles/me/workshops/attendance/{self.authored_workshop.id}/",
-            {"title": "Authored Workshop Updated", "max_participants": 25},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.authored_workshop.refresh_from_db()
-        self.assertEqual(self.authored_workshop.title, "Authored Workshop Updated")
-        self.assertEqual(self.authored_workshop.max_participants, 25)
-
-    def test_non_author_cannot_patch_workshop_fields_from_profile(self) -> None:
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
-
-        response = self.client.patch(
-            f"/api/profiles/me/workshops/attendance/{self.upcoming_workshop.id}/",
-            {"title": "Should not work"},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 403)
-
-    def test_author_delete_from_profile_cancels_workshop(self) -> None:
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.author_token}")
-
-        response = self.client.delete(
-            f"/api/profiles/me/workshops/attendance/{self.authored_workshop.id}/"
-        )
-
-        self.assertEqual(response.status_code, 204)
-        self.authored_workshop.refresh_from_db()
-        self.assertEqual(self.authored_workshop.status, Workshop.Status.CANCELLED)
-
-    def test_attendance_participants_list_available_from_profile(self) -> None:
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
-
-        response = self.client.get(
-            f"/api/profiles/me/workshops/attendance/{self.upcoming_workshop.id}/participants/"
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertGreaterEqual(response.data["count"], 1)
