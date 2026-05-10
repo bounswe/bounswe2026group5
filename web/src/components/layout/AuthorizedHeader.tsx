@@ -30,7 +30,7 @@ export function AuthorizedHeader() {
                 to="/dashboard"
                 className="flex items-center gap-2 font-bold font-display tracking-tight text-lg text-ink"
             >
-              <img src="/icon.png" alt="Neighborship" className="h-7 w-7 rounded-lg" />
+              <img src="/icon.png" alt="" aria-hidden="true" className="h-7 w-7 rounded-lg" />
               Neighborship
             </Link>
 
