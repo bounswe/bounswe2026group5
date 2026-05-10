@@ -272,8 +272,19 @@ export async function resetPassword(data: {
   });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}) as Record<string, unknown>);
+    const err = errorData as {
+      detail?: string;
+      token?: string[];
+      new_password?: string[];
+      confirm_password?: string[];
+      non_field_errors?: string[];
+    };
     const msg =
-      (errorData as { detail?: string }).detail ||
+      err.token?.[0] ||
+      err.new_password?.[0] ||
+      err.confirm_password?.[0] ||
+      err.non_field_errors?.[0] ||
+      err.detail ||
       "Password reset failed. The link may have expired.";
     throw new Error(msg);
   }

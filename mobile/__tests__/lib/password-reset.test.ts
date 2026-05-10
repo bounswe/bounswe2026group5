@@ -105,4 +105,54 @@ describe("resetPassword", () => {
       "Password reset failed",
     );
   });
+
+  it("throws with the token field error when present", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ token: ["Invalid or expired token."] }),
+    });
+
+    await expect(resetPassword(payload)).rejects.toThrow(
+      "Invalid or expired token.",
+    );
+  });
+
+  it("throws with new_password field error for policy violations", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({
+        new_password: ["This password is too short."],
+      }),
+    });
+
+    await expect(resetPassword(payload)).rejects.toThrow(
+      "This password is too short.",
+    );
+  });
+
+  it("throws with confirm_password field error when passwords do not match", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({
+        confirm_password: ["Passwords do not match."],
+      }),
+    });
+
+    await expect(resetPassword(payload)).rejects.toThrow(
+      "Passwords do not match.",
+    );
+  });
+
+  it("throws with non_field_errors when present", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({
+        non_field_errors: ["Passwords must not match your old password."],
+      }),
+    });
+
+    await expect(resetPassword(payload)).rejects.toThrow(
+      "Passwords must not match your old password.",
+    );
+  });
 });
