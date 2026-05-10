@@ -314,7 +314,7 @@ function MenteeDashboardView() {
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
               {!sessionsLoading && upcomingSessions.length > 0 && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent-aa text-xs font-bold">
                   {upcomingSessions.length}
                 </span>
               )}
@@ -373,7 +373,7 @@ function MenteeDashboardView() {
                         <Link
                             to="/profiles/$username"
                             params={{ username: session.mentor.username }}
-                            className="text-xs text-accent hover:underline underline-offset-4"
+                            className="text-xs text-accent-aa hover:underline underline-offset-4"
                         >
                           View profile
                         </Link>
@@ -383,7 +383,7 @@ function MenteeDashboardView() {
                   </Card>
               ))}
               <Link to="/schedule" className="block mt-2">
-                <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
+                <Button variant="ghost" className="w-full text-accent-aa hover:bg-accent/10">
                   {upcomingSessions.length > 3
                       ? `View all ${upcomingSessions.length} sessions`
                       : 'View Full Schedule'
@@ -460,7 +460,7 @@ function MenteeDashboardView() {
             <Heading as="h3" className="text-xl flex items-center gap-2">
               Sent Requests
               {!requestsLoading && sentRequests.length > 0 && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent-aa text-xs font-bold">
                   {sentRequests.length}
                 </span>
               )}
@@ -511,7 +511,7 @@ function MenteeDashboardView() {
                           <Link
                               to="/profiles/$username"
                               params={{ username: req.mentor.username }}
-                              className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
+                              className="text-xs text-accent-aa hover:underline underline-offset-4 shrink-0"
                           >
                             View profile
                           </Link>
@@ -616,7 +616,7 @@ function MentorDashboardView() {
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
               {!sessionsLoading && upcomingSessions.length > 0 && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent-aa text-xs font-bold">
                   {upcomingSessions.length}
                 </span>
               )}
@@ -678,7 +678,7 @@ function MentorDashboardView() {
                               <Link
                                   to="/profiles/$username"
                                   params={{ username: session.mentee.username }}
-                                  className="text-xs text-accent hover:underline underline-offset-4"
+                                  className="text-xs text-accent-aa hover:underline underline-offset-4"
                               >
                                 View profile
                               </Link>
@@ -691,7 +691,7 @@ function MentorDashboardView() {
               })}
 
               <Link to="/schedule" className="block mt-2">
-                <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
+                <Button variant="ghost" className="w-full text-accent-aa hover:bg-accent/10">
                   {upcomingSessions.length > 3
                       ? `View all ${upcomingSessions.length} sessions`
                       : 'View Full Schedule'
@@ -708,7 +708,7 @@ function MentorDashboardView() {
             <Heading as="h3" className="text-xl flex items-center gap-2">
               Incoming Requests
               {!requestsLoading && displayRequests.length > 0 && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent-aa text-xs font-bold">
                   {pendingRequests.length}
                 </span>
               )}
@@ -746,7 +746,7 @@ function MentorDashboardView() {
                           <Link
                               to="/profiles/$username"
                               params={{ username: req.mentee.username }}
-                              className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
+                              className="text-xs text-accent-aa hover:underline underline-offset-4 shrink-0"
                           >
                             View profile
                           </Link>
@@ -807,7 +807,7 @@ function MentorDashboardView() {
                 )
               })}
               {pendingRequests.length > 3 && (
-                  <Button variant="ghost" className="w-full text-accent hover:bg-accent/10 mt-2">
+                  <Button variant="ghost" className="w-full text-accent-aa hover:bg-accent/10 mt-2">
                     View all {pendingRequests.length} requests <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
               )}
