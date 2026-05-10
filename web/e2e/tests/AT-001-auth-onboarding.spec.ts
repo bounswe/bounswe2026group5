@@ -252,7 +252,7 @@ test.describe('AT-001: Authentication & Onboarding', () => {
       await loginPage.fillEmail(TEST_EMAIL);
       await loginPage.fillPassword(TEST_PASSWORD);
       await loginPage.submit();
-      await loginPage.expectInlineError(/This account is banned|banned/i);
+      await loginPage.expectInlineError('This account is banned.');
 
       // Step 35: Resolve Report
       await loginPage.fillEmail(process.env.ADMIN_EMAIL || 'admin@test.com');

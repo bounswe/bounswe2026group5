@@ -13,6 +13,7 @@ export interface PendingRequestCardProps {
   slot_end_time: string | null;
   requestType?: "incoming" | "outgoing";
   isReschedule?: boolean;
+  isMentorOverloaded?: boolean;
   isNew?: boolean;
   avatarUrl?: string;
   disabled?: boolean;
@@ -30,6 +31,7 @@ export function PendingRequestCard({
   slot_end_time,
   requestType = "incoming",
   isReschedule,
+  isMentorOverloaded,
   isNew,
   avatarUrl,
   disabled,
@@ -94,6 +96,13 @@ export function PendingRequestCard({
             <View testID="pending-reschedule-badge" className="bg-amber-100 px-2 py-1 rounded ml-2">
               <Text className="text-[10px] font-black text-amber-700 uppercase">
                 Reschedule
+              </Text>
+            </View>
+          )}
+          {isMentorOverloaded && (
+            <View className="bg-amber-100 px-2 py-1 rounded ml-2">
+              <Text className="text-[10px] font-black text-amber-700 uppercase">
+                {isIncoming ? "At Capacity" : "Busy"}
               </Text>
             </View>
           )}

@@ -359,6 +359,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                 onClick={() => setWeekOffset(o => Math.max(o - 1, -4))}
                                 disabled={weekOffset <= -4}
                                 className="h-7 w-7 p-0"
+                                aria-label="Go to previous week"
                             >
                                 <ChevronLeft className="h-4 w-4" />
                             </Button>
@@ -368,6 +369,7 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                 onClick={() => setWeekOffset(o => Math.min(o + 1, 4))}
                                 disabled={weekOffset >= 4}
                                 className="h-7 w-7 p-0"
+                                aria-label="Go to next week"
                             >
                                 <ChevronRight className="h-4 w-4" />
                             </Button>

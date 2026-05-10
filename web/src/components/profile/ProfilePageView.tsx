@@ -25,6 +25,7 @@ interface MentorMappedProfile extends BaseMappedProfile {
   isMentor: true
   title: string
   average_rating: number
+  review_count: number
   total_mentee_count: number
 }
 
@@ -288,6 +289,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                                     <p className="text-2xl font-semibold text-ink mt-1 flex items-center gap-1">
                                         <Star className="h-4 w-4 fill-current text-amber-500" />
                                         {profile.average_rating.toFixed(1)}
+                                        <span className="text-sm font-normal text-ink-soft">({profile.review_count} reviews)</span>
                                     </p>
                                 </div>
                                 <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">

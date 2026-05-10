@@ -27,6 +27,8 @@ import { useAuthStore } from "@/lib/auth/store";
 import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
 import { useRefreshControl } from "@/hooks/use-refresh-control";
 import {
+  MENTOR_AT_CAPACITY_NOTICE,
+  MENTOR_OVERLOAD_WARNING,
   MENTOR_MENTEE_CAPACITY_WARNING,
   shouldWarnBeforeAcceptingMentee,
 } from "@/lib/mentorship/capacity";
@@ -44,6 +46,7 @@ import {
   type DashboardRequestItem,
   type DashboardSessionItem,
 } from "@/lib/queries/mentorship";
+import { useOwnProfileSettingsQuery } from "@/lib/queries/profile";
 
 function mapDashboardRequestToCardProps(
   request: DashboardRequestItem,
@@ -61,6 +64,7 @@ function mapDashboardRequestToCardProps(
     slot_end_time: null,
     requestType: request.type,
     isReschedule: request.isReschedule,
+    isMentorOverloaded: request.isMentorOverloaded,
   };
 }
 
@@ -81,6 +85,7 @@ export default function DashboardScreen() {
     { status: "upcoming" },
   );
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
+  const ownProfileQuery = useOwnProfileSettingsQuery();
   const respondMutation = useRespondToMentorshipRequestMutation();
   const cancelSessionMutation = useCancelSessionMutation(currentUsername);
   const rescheduleSessionMutation =
@@ -324,6 +329,16 @@ export default function DashboardScreen() {
             <ErrorBanner message={actionError} />
           </View>
         ) : null}
+        
+        {appUsageMode === "MENTOR" && ownProfileQuery.data?.is_overloaded && (
+          <View className="mb-4">
+            <ErrorBanner
+              variant="warning"
+              title={MENTOR_OVERLOAD_WARNING.title}
+              message={MENTOR_OVERLOAD_WARNING.message}
+            />
+          </View>
+        )}
 
         {/* Requests Section */}
         <View className="mb-6">
@@ -413,9 +428,12 @@ export default function DashboardScreen() {
         disabled={respondMutation.isPending}
         acceptanceWarning={
           selectedRequest?.requestType !== "outgoing" &&
-          appUsageMode === "MENTOR" &&
-          shouldShowCapacityWarning
-            ? MENTOR_MENTEE_CAPACITY_WARNING
+          appUsageMode === "MENTOR"
+            ? selectedRequest?.isMenteeOverloaded
+              ? MENTEE_AT_CAPACITY_NOTICE
+              : shouldShowCapacityWarning
+                ? MENTOR_MENTEE_CAPACITY_WARNING
+                : undefined
             : undefined
         }
       />

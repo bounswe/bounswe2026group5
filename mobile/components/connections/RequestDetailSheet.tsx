@@ -77,6 +77,19 @@ export function RequestDetailSheet({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 16 }}
           >
+            {request.isMentorOverloaded && (
+              <View className="px-6 pt-4">
+                <ErrorBanner
+                  variant="warning"
+                  title={isIncoming ? "At Capacity" : "Mentor Busy"}
+                  message={
+                    isIncoming
+                      ? "You already have many active mentorships. Consider your capacity before accepting."
+                      : "This mentor has many active sessions and may take longer to respond."
+                  }
+                />
+              </View>
+            )}
             {/* Profile Header */}
             <View className="items-center px-6 pt-6 pb-5">
               {/* Avatar with verified badge */}
