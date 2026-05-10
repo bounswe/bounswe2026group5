@@ -57,18 +57,18 @@ export const Route = createFileRoute('/_authorized/connections/$matchId')({
 // ---------------------------------------------------------------------------
 
 const AGTE_META: Record<string, { label: string; Icon: React.ElementType; color: string }> = {
-    request_accepted: { label: 'Mentorship began', Icon: Handshake, color: 'text-green-600' },
+    request_accepted: { label: 'Mentorship began', Icon: Handshake, color: 'text-green-700' },
     session_scheduled: { label: 'Session scheduled', Icon: CalendarCheck, color: 'text-blue-600' },
-    session_rescheduled: { label: 'Session rescheduled', Icon: CalendarClock, color: 'text-amber-600' },
-    session_canceled: { label: 'Session canceled', Icon: CalendarX, color: 'text-red-500' },
-    session_completed: { label: 'Session completed', Icon: CalendarCheck2, color: 'text-green-600' },
+    session_rescheduled: { label: 'Session rescheduled', Icon: CalendarClock, color: 'text-amber-700' },
+    session_canceled: { label: 'Session canceled', Icon: CalendarX, color: 'text-red-600' },
+    session_completed: { label: 'Session completed', Icon: CalendarCheck2, color: 'text-green-700' },
     mentorship_ended: { label: 'Mentorship ended', Icon: Flag, color: 'text-ink-soft' },
 }
 
-const MCTE_META: Record<string, { label: string; Icon: React.ElementType; variant: 'default' | 'secondary' | 'outline' }> = {
-    achievement: { label: 'Achievement', Icon: Trophy, variant: 'default' },
-    social: { label: 'Social', Icon: Users, variant: 'secondary' },
-    progress: { label: 'Progress', Icon: TrendingUp, variant: 'outline' },
+const MCTE_META: Record<string, { label: string; Icon: React.ElementType; className: string }> = {
+    achievement: { label: 'Achievement', Icon: Trophy, className: 'bg-amber-100 text-amber-700 border-amber-200' },
+    social: { label: 'Social', Icon: Users, className: 'bg-blue-100 text-blue-700 border-blue-200' },
+    progress: { label: 'Progress', Icon: TrendingUp, className: 'bg-green-100 text-green-700 border-green-200' },
 }
 
 // ---------------------------------------------------------------------------
@@ -262,8 +262,8 @@ function MCTEItem({
     onEdit: (e: JourneyEvent) => void
     onDelete: (e: JourneyEvent) => void
 }) {
-    const meta = MCTE_META[event.type] ?? { label: event.type, Icon: AlertCircle, variant: 'outline' as const }
-    const { Icon, label, variant } = meta
+    const meta = MCTE_META[event.type] ?? { label: event.type, Icon: AlertCircle, className: 'bg-surface text-ink-soft border-line' }
+    const { Icon, label, className } = meta
 
     return (
         <div className="rounded-lg border border-line bg-card px-4 py-3 flex items-start gap-3">
@@ -273,7 +273,7 @@ function MCTEItem({
             <div className="flex flex-col gap-2 flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
-                        <Badge variant={variant} className="text-xs">{label}</Badge>
+                        <Badge variant="outline" className={cn('text-xs border', className)}>{label}</Badge>
                         {event.author && (
                             <Muted className="text-xs">by @{event.author.username}</Muted>
                         )}
@@ -375,7 +375,7 @@ function CreateMCTEDialog({ matchId, open, onOpenChange }: CreateMCTEDialogProps
                         </Select>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="content">Content <span className="text-red-500">*</span></Label>
+                        <Label htmlFor="content">Content <span className="text-red-600" aria-hidden="true">*</span></Label>
                         <Textarea
                             id="content"
                             value={form.content}
@@ -473,7 +473,7 @@ function EditMCTEDialog({ matchId, event, open, onOpenChange }: EditMCTEDialogPr
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
                     <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="edit_content">Content <span className="text-red-500">*</span></Label>
+                        <Label htmlFor="edit_content">Content <span className="text-red-600" aria-hidden="true">*</span></Label>
                         <Textarea
                             id="edit_content"
                             value={form.content ?? ''}
