@@ -106,6 +106,12 @@ jest.mock("@/components/ui/ToastProvider", () => ({
 }));
 
 describe("CommunityDetailScreen", () => {
+  const buildWorkshopDateTime = (dateValue: Date, timeValue: Date) => {
+    const combined = new Date(dateValue);
+    combined.setHours(timeValue.getHours(), timeValue.getMinutes(), 0, 0);
+    return combined.toISOString();
+  };
+
   const joinMutateAsync = jest.fn();
   const leaveMutateAsync = jest.fn();
   const createWorkshopMutateAsync = jest.fn();
@@ -375,7 +381,9 @@ describe("CommunityDetailScreen", () => {
       new Date(2026, 4, 20, 13, 30),
     );
     fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
-    fireEvent.press(getByTestId("community-composer-workshop-end-time-trigger"));
+    fireEvent.press(
+      getByTestId("community-composer-workshop-end-time-trigger"),
+    );
     fireEvent(
       getByTestId("community-composer-workshop-picker"),
       "onChange",
@@ -388,13 +396,17 @@ describe("CommunityDetailScreen", () => {
       fireEvent.press(getByTestId("community-composer-submit"));
     });
 
+    const expectedDate = new Date(2026, 4, 20, 0, 0);
+    const expectedStart = new Date(2026, 4, 20, 13, 30);
+    const expectedEnd = new Date(2026, 4, 20, 15, 0);
+
     await waitFor(() => {
       expect(createWorkshopMutateAsync).toHaveBeenCalledWith({
         tagId: "tag-1",
         title: "Backend Clinic",
         description: "Serializer deep dive",
-        scheduled_at: "2026-05-20T10:30:00.000Z",
-        end_at: "2026-05-20T12:00:00.000Z",
+        scheduled_at: buildWorkshopDateTime(expectedDate, expectedStart),
+        end_at: buildWorkshopDateTime(expectedDate, expectedEnd),
         max_participants: 20,
       });
     });
@@ -460,7 +472,9 @@ describe("CommunityDetailScreen", () => {
       new Date(2026, 5, 10, 13, 30),
     );
     fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
-    fireEvent.press(getByTestId("community-composer-workshop-end-time-trigger"));
+    fireEvent.press(
+      getByTestId("community-composer-workshop-end-time-trigger"),
+    );
     fireEvent(
       getByTestId("community-composer-workshop-picker"),
       "onChange",
@@ -630,7 +644,9 @@ describe("CommunityDetailScreen", () => {
 
     const { getByTestId } = render(<CommunityDetailScreen />);
 
-    fireEvent.press(getByTestId("community-workshop-community-link-workshop-1"));
+    fireEvent.press(
+      getByTestId("community-workshop-community-link-workshop-1"),
+    );
 
     expect(mockPush).toHaveBeenCalledWith(
       "/(tabs)/community/tag-1?from=community",

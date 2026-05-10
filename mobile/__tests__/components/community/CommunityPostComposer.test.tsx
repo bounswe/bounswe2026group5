@@ -1,9 +1,9 @@
-import { fireEvent, render, waitFor, act } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 
 import { CommunityPostComposer } from "@/components/community/CommunityPostComposer";
-import { pickPostImageFile } from "@/lib/uploads/picker";
 import { uploadPostMedia } from "@/lib/queries/uploads";
+import { pickPostImageFile } from "@/lib/uploads/picker";
 import type { ReactTestInstance } from "react-test-renderer";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
@@ -43,6 +43,12 @@ function expandComposer(getByTestId: (testID: string) => ReactTestInstance) {
 }
 
 describe("CommunityPostComposer", () => {
+  const buildWorkshopDateTime = (dateValue: Date, timeValue: Date) => {
+    const combined = new Date(dateValue);
+    combined.setHours(timeValue.getHours(), timeValue.getMinutes(), 0, 0);
+    return combined.toISOString();
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     (pickPostImageFile as jest.Mock).mockResolvedValue({
@@ -74,7 +80,7 @@ describe("CommunityPostComposer", () => {
       "valueChange",
       true,
     );
-    
+
     await act(async () => {
       fireEvent.press(getByTestId("community-composer-submit"));
     });
@@ -100,7 +106,7 @@ describe("CommunityPostComposer", () => {
     await act(async () => {
       fireEvent.press(getByTestId("community-composer-image-button"));
     });
-    
+
     await waitFor(() => {
       expect(getByTestId("community-composer-media-preview")).toBeTruthy();
     });
@@ -109,7 +115,7 @@ describe("CommunityPostComposer", () => {
       getByPlaceholderText("What is happening in this community?"),
       "  Photo update  ",
     );
-    
+
     await act(async () => {
       fireEvent.press(getByTestId("community-composer-submit"));
     });
@@ -148,9 +154,7 @@ describe("CommunityPostComposer", () => {
       getByPlaceholderText("What is happening in this community?"),
       "  Pairing notes @ays",
     );
-    fireEvent.press(
-      getByTestId("community-composer-mention-suggestion-ayse"),
-    );
+    fireEvent.press(getByTestId("community-composer-mention-suggestion-ayse"));
 
     await act(async () => {
       fireEvent.press(getByTestId("community-composer-submit"));
@@ -167,9 +171,8 @@ describe("CommunityPostComposer", () => {
   });
 
   it("starts collapsed until the arrow is pressed", () => {
-    const { getByPlaceholderText, getByTestId, queryByPlaceholderText } = render(
-      <CommunityPostComposer onSubmit={jest.fn()} />,
-    );
+    const { getByPlaceholderText, getByTestId, queryByPlaceholderText } =
+      render(<CommunityPostComposer onSubmit={jest.fn()} />);
 
     expect(
       queryByPlaceholderText("What is happening in this community?"),
@@ -224,7 +227,9 @@ describe("CommunityPostComposer", () => {
       new Date(2026, 4, 20, 14, 0),
     );
     fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
-    fireEvent.press(getByTestId("community-composer-workshop-end-time-trigger"));
+    fireEvent.press(
+      getByTestId("community-composer-workshop-end-time-trigger"),
+    );
     fireEvent(
       getByTestId("community-composer-workshop-picker"),
       "onChange",
@@ -237,12 +242,16 @@ describe("CommunityPostComposer", () => {
       fireEvent.press(getByTestId("community-composer-submit"));
     });
 
+    const expectedDate = new Date(2026, 4, 20, 0, 0);
+    const expectedStart = new Date(2026, 4, 20, 14, 0);
+    const expectedEnd = new Date(2026, 4, 20, 16, 0);
+
     await waitFor(() => {
       expect(onSubmitWorkshop).toHaveBeenCalledWith({
         title: "Mobile Testing Clinic",
         description: "Walkthrough for flaky tests",
-        scheduled_at: "2026-05-20T11:00:00.000Z",
-        end_at: "2026-05-20T13:00:00.000Z",
+        scheduled_at: buildWorkshopDateTime(expectedDate, expectedStart),
+        end_at: buildWorkshopDateTime(expectedDate, expectedEnd),
         max_participants: 18,
       });
     });
@@ -282,7 +291,9 @@ describe("CommunityPostComposer", () => {
       new Date(2026, 4, 20, 16, 0),
     );
     fireEvent.press(getByTestId("community-composer-workshop-picker-confirm"));
-    fireEvent.press(getByTestId("community-composer-workshop-end-time-trigger"));
+    fireEvent.press(
+      getByTestId("community-composer-workshop-end-time-trigger"),
+    );
     fireEvent(
       getByTestId("community-composer-workshop-picker"),
       "onChange",
