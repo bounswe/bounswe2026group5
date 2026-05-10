@@ -108,18 +108,13 @@ export function DashboardHome() {
   const { mutate: markAllRead } = useMarkAllNotificationsRead()
   const queryClient = useQueryClient()
 
-  // Show unread notifications + the 4 most recent notifications overall
+  // Show only unread notifications.
+  // The useEffect below auto-marks them as read once displayed, and the polling
+  // refetch will update is_read on the next cycle, removing them from this list.
   const displayNotifications = useMemo(() => {
-    const unread = notifications.filter(n => !n.is_read)
-    const recentlyRead = notifications.filter(n => n.is_read).slice(0, 4)
-    const combined = [...unread]
-    
-    // Add recently read that aren't already in unread (shouldn't happen but for safety)
-    recentlyRead.forEach(rn => {
-        if (!combined.some(c => c.id === rn.id)) combined.push(rn)
-    })
-    
-    return combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    return notifications
+      .filter(n => !n.is_read)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }, [notifications])
 
   const seenIds = useRef<Set<string>>(new Set())
