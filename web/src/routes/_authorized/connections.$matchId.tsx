@@ -233,7 +233,7 @@ function AGTEItem({ event }: { event: JourneyEvent }) {
     const cancelReason = payload['cancel_reason'] as string | undefined
 
     return (
-        <div className="rounded-lg border border-line bg-mist/50 px-4 py-3 flex items-start gap-3">
+        <div className="rounded-lg border border-line bg-card px-4 py-3 flex items-start gap-3">
             <div className={cn('mt-0.5 w-8 h-8 rounded-full bg-surface border border-line flex items-center justify-center shrink-0', color)}>
                 <Icon className="w-4 h-4" aria-hidden="true" />
             </div>
