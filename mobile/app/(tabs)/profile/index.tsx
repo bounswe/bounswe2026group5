@@ -24,6 +24,7 @@ import { ProfilePostComposer } from "@/components/profile/ProfilePostComposer";
 import { ProfilePostEditSheet } from "@/components/profile/ProfilePostEditSheet";
 import { ProfilePostsPreview } from "@/components/profile/ProfilePostsPreview";
 import { ProfileReviews } from "@/components/profile/ProfileReviews";
+import { ProfileWorkshopCard } from "@/components/profile/ProfileWorkshopCard";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -58,6 +59,10 @@ import {
   useUpdateProfilePostMutation,
   useUpdateOwnProfileMutation,
 } from "@/lib/queries/profile";
+import {
+  mapWorkshopAttendanceToDashboard,
+  useMyWorkshopAttendanceQuery,
+} from "@/lib/queries/workshops";
 import {
   useDeleteProfilePictureMutation,
   useUploadProfilePictureMutation,
@@ -223,6 +228,47 @@ function renderPostsSection({
   );
 }
 
+function renderMyWorkshopsSection({
+  workshops,
+  onOpenWorkshop,
+}: {
+  workshops: ReturnType<typeof mapWorkshopAttendanceToDashboard>;
+  onOpenWorkshop: (
+    workshop: ReturnType<typeof mapWorkshopAttendanceToDashboard>[number],
+  ) => void;
+}) {
+  if (workshops.length === 0) {
+    return null;
+  }
+
+  return (
+    <View className="mb-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4">
+      <View className="mb-3 flex-row items-center justify-between">
+        <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
+          My Workshops
+        </Text>
+        <Text className="text-xs font-semibold text-on-surface-soft dark:text-on-surface-soft-dark">
+          Hosted workshops
+        </Text>
+      </View>
+      <ScrollView
+        horizontal
+        testID="profile-workshops-rail"
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingRight: 16 }}
+      >
+        {workshops.map((workshop) => (
+          <ProfileWorkshopCard
+            key={workshop.workshopId}
+            workshop={workshop}
+            onPress={onOpenWorkshop}
+          />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
 function renderAvailabilitySection({
   isMentorMode,
   showAvailability,
@@ -331,6 +377,10 @@ export default function ProfileScreen() {
     useDeleteCommunityPostMutation(currentUsername);
   const profileRatingQuery = useProfileRatingQuery(currentUsername);
   const myCommunitiesQuery = useMyCommunityTagsQuery(currentUsername);
+  const myWorkshopAttendanceQuery = useMyWorkshopAttendanceQuery(
+    currentUsername,
+    { status: "all", limit: 50 },
+  );
 
   const showExpertise = useProfileVisibilityStore(
     (state) => state.showExpertise,
@@ -525,6 +575,14 @@ export default function ProfileScreen() {
         (myCommunitiesQuery.data ?? []).map((tag) => [tag.id, tag.name]),
       ) as Record<string, string>,
     [myCommunitiesQuery.data],
+  );
+  const myWorkshops = useMemo(
+    () =>
+      mapWorkshopAttendanceToDashboard(
+        myWorkshopAttendanceQuery.data?.results ?? [],
+        currentUsername,
+      ).filter((workshop) => workshop.myRole === "Mentor"),
+    [currentUsername, myWorkshopAttendanceQuery.data?.results],
   );
 
   useEffect(() => {
@@ -735,12 +793,14 @@ export default function ProfileScreen() {
       mentorshipRequestsQuery.refetch(),
       profileRatingQuery.refetch(),
       myCommunitiesQuery.refetch(),
+      myWorkshopAttendanceQuery.refetch(),
       reviewsQuery.refetch(),
     ]);
   }, [
     availabilityQuery,
     mentorshipMatchesQuery,
     mentorshipRequestsQuery,
+    myWorkshopAttendanceQuery,
     myCommunitiesQuery,
     profileRatingQuery,
     reviewsQuery,
@@ -810,10 +870,27 @@ export default function ProfileScreen() {
             handleSaveSkills,
           })}
 
+          {renderAvailabilitySection({
+            isMentorMode,
+            showAvailability,
+            availabilityData,
+            onEdit: () => setAvailabilityModalOpen(true),
+          })}
+
           {renderCommunitiesSection({
             communities: myCommunitiesQuery.data,
             openCommunity,
           })}
+
+          {isMentorMode
+            ? renderMyWorkshopsSection({
+                workshops: myWorkshops,
+                onOpenWorkshop: (workshop) =>
+                  router.push(
+                    `/(tabs)/community/${encodeURIComponent(workshop.communityId)}/workshops/${encodeURIComponent(workshop.workshopId)}?from=profile`,
+                  ),
+              })
+            : null}
 
           {renderPostsSection({
             currentUsername,
@@ -825,13 +902,6 @@ export default function ProfileScreen() {
               router.push(
                 `/(tabs)/community/${encodeURIComponent(communityId)}?from=profile`,
               ),
-          })}
-
-          {renderAvailabilitySection({
-            isMentorMode,
-            showAvailability,
-            availabilityData,
-            onEdit: () => setAvailabilityModalOpen(true),
           })}
 
           {renderReviewsSection({
