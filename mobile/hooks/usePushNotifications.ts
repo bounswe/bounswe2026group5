@@ -7,6 +7,7 @@ import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 
 import { useAuthStore } from "@/lib/auth/store";
+import { isFirebaseAvailable } from "@/lib/firebase-client";
 import { useQueryClient } from "@tanstack/react-query";
 
 type DeviceModule = typeof import("expo-device");
@@ -57,6 +58,13 @@ export function usePushNotifications(isAuthenticated: boolean) {
   useEffect(() => {
     if (!isAuthenticated) return;
     let isMounted = true;
+
+    // Skip push notification setup when Firebase is not configured.
+    // Notifications will still work via HTTP polling (refetchInterval on the query).
+    if (!isFirebaseAvailable()) {
+      console.debug("[Push] Firebase not configured — using polling fallback for notifications");
+      return;
+    }
 
     loadNotificationModules()
       .then(async ({ Device, Notifications }) => {

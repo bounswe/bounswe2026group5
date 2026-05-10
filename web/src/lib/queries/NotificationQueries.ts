@@ -64,6 +64,7 @@ async function registerFCMToken(token: string, device_type: 'web' | 'android' | 
 export const notificationsQueryOptions = queryOptions({
     queryKey: ['notifications'],
     queryFn: fetchNotifications,
+    refetchInterval: 10_000,
 })
 
 export function useNotifications() {

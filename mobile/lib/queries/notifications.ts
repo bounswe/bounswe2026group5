@@ -222,7 +222,7 @@ export function useNotificationsQuery(username?: string) {
     enabled: Boolean(username),
     staleTime: 10_000,
     refetchOnMount: "always",
-    refetchInterval: false,
+    refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
 }
