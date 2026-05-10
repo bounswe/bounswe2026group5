@@ -16,6 +16,7 @@ interface ProfileHeaderProps {
   showRating?: boolean;
   showMenteesHelped?: boolean;
   imageUrl?: string;
+  showInitialsOnly?: boolean;
   coverUrl?: string;
   onEdit?: () => void;
 }
@@ -31,6 +32,7 @@ export function ProfileHeader({
   showRating = true,
   showMenteesHelped = true,
   imageUrl,
+  showInitialsOnly = false,
   coverUrl,
   onEdit,
 }: Readonly<ProfileHeaderProps>) {
@@ -66,13 +68,13 @@ export function ProfileHeader({
       <View className="flex-row justify-between px-4 -mt-12">
         {/* Left: Overlapping Avatar */}
         <Pressable
-          testID={imageUrl ? "profile-avatar-button" : undefined}
-          disabled={!imageUrl}
+          testID={imageUrl && !showInitialsOnly ? "profile-avatar-button" : undefined}
+          disabled={!imageUrl || showInitialsOnly}
           onPress={() => setAvatarPreviewOpen(true)}
           className="w-24 h-24 bg-surface-card dark:bg-surface-card-dark rounded-full p-1 shadow-sm border border-divider dark:border-divider-dark"
         >
           <View className="w-full h-full bg-surface dark:bg-surface-dark rounded-full items-center justify-center overflow-hidden">
-            {imageUrl ? (
+            {imageUrl && !showInitialsOnly ? (
               <Image
                 testID="profile-avatar-image"
                 source={{ uri: getAbsoluteUrl(imageUrl) }}

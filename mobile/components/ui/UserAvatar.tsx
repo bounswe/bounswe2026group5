@@ -8,6 +8,7 @@ interface UserAvatarProps {
   name: string;
   shape?: AvatarShape;
   size?: AvatarSize;
+  showInitialsOnly?: boolean;
   testIDPrefix?: string;
 }
 
@@ -42,12 +43,13 @@ export function UserAvatar({
   name,
   shape = "circle",
   size = "sm",
+  showInitialsOnly = false,
   testIDPrefix = "user-avatar",
 }: Readonly<UserAvatarProps>) {
   const shapeClass = shape === "circle" ? "rounded-full" : "rounded-lg";
   const sizeClass = SIZE_CLASSES[size];
 
-  if (imageUrl?.trim()) {
+  if (imageUrl?.trim() && !showInitialsOnly) {
     return (
       <Image
         testID={`${testIDPrefix}-image`}
