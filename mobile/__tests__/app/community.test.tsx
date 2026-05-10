@@ -291,6 +291,60 @@ describe("CommunityScreen", () => {
     );
   });
 
+  it("opens the dedicated community page from the workshop subtitle", () => {
+    mockMyCommunitiesQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [
+        {
+          id: "tag-1",
+          name: "AI Lab",
+          slug: "ai-lab",
+          description: "Machine learning",
+          member_count: 6,
+          created_at: "2026-04-21T00:00:00Z",
+        },
+      ],
+    });
+    mockWorkshopsFeedQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+      data: [
+        {
+          id: "workshop-1",
+          community_id: "tag-1",
+          community_name: "AI Lab",
+          author: {
+            id: "mentor-1",
+            username: "mentor_ai",
+            display_name: "Mentor AI",
+            picture_url: "",
+            title: "Mentor",
+          },
+          title: "Prompt Engineering 101",
+          description: "Hands-on prompting clinic",
+          scheduled_at: "2026-06-10T13:30:00.000Z",
+          end_at: "2026-06-10T15:00:00.000Z",
+          max_participants: 10,
+          participant_count: 4,
+          is_full: false,
+          status: "SCHEDULED",
+          current_user_enrolled: false,
+          created_at: "2026-05-20T00:00:00.000Z",
+          updated_at: "2026-05-20T00:00:00.000Z",
+        },
+      ],
+    });
+
+    const { getByTestId } = render(<CommunityScreen />);
+
+    fireEvent.press(getByTestId("community-workshop-community-link-workshop-1"));
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1?from=community",
+    );
+  });
+
   it("still renders the empty state when the user is not restored yet", () => {
     mockUsername = undefined;
 

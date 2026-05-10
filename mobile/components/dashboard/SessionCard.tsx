@@ -5,6 +5,9 @@ interface SessionCardProps {
   date: string;
   time: string;
   status: "Upcoming" | "Pending" | "Completed" | "Cancelled";
+  title?: string;
+  subtitle?: string;
+  kindLabel?: string;
   onPress?: () => void;
 }
 
@@ -13,6 +16,9 @@ export function SessionCard({
   date,
   time,
   status,
+  title,
+  subtitle,
+  kindLabel,
   onPress,
 }: Readonly<SessionCardProps>) {
   // 1. Logic: Determine badge colors
@@ -35,6 +41,7 @@ export function SessionCard({
 
   // 2. Logic: Safely split the date string into month and day
   const [month = "TBD", day = "00"] = date.split(" ");
+  const primaryLabel = title ?? user;
 
   // 3. UI: Render the interactive card
   return (
@@ -59,18 +66,38 @@ export function SessionCard({
       {/* User Info Middle Column */}
       <View className="flex-1 justify-center">
         <Text className="text-lg font-semibold text-on-surface dark:text-on-surface-dark">
-          {user}
+          {primaryLabel}
         </Text>
+        {subtitle ? (
+          <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark mt-0.5">
+            {subtitle}
+          </Text>
+        ) : null}
         <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark mt-0.5">
           {time}
         </Text>
       </View>
 
       {/* Status Badge Right Column */}
-      <View testID="status-badge" className={`px-2 py-1 rounded-md ${statusStyles.bg}`}>
-        <Text className={`text-xs font-semibold ${statusStyles.text}`}>
-          {status}
-        </Text>
+      <View className="items-end gap-2">
+        {kindLabel ? (
+          <View
+            testID="session-kind-badge"
+            className="rounded-md bg-primary/10 px-2 py-1 dark:bg-primary-dim/15"
+          >
+            <Text className="text-[11px] font-bold uppercase tracking-wide text-primary dark:text-primary-dim">
+              {kindLabel}
+            </Text>
+          </View>
+        ) : null}
+        <View
+          testID="status-badge"
+          className={`px-2 py-1 rounded-md ${statusStyles.bg}`}
+        >
+          <Text className={`text-xs font-semibold ${statusStyles.text}`}>
+            {status}
+          </Text>
+        </View>
       </View>
     </TouchableOpacity>
   );

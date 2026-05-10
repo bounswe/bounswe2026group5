@@ -16,8 +16,10 @@ const mockLeaveMutation = jest.fn();
 const mockCommunityPostsQuery = jest.fn();
 const mockCreateCommunityPostMutation = jest.fn();
 const mockCreateCommunityWorkshopMutation = jest.fn();
+const mockCommunityWorkshopsQuery = jest.fn();
 const mockUpdateCommunityPostMutation = jest.fn();
 const mockDeleteCommunityPostMutation = jest.fn();
+const mockToastSuccess = jest.fn();
 const mockToastError = jest.fn();
 let focusCleanup: (() => void) | undefined;
 let mockAuthUser = {
@@ -83,13 +85,22 @@ jest.mock("@/lib/queries/communityPosts", () => ({
     mockDeleteCommunityPostMutation(username),
 }));
 
-jest.mock("@/lib/queries/workshops", () => ({
-  useCreateCommunityWorkshopMutation: (username?: string) =>
-    mockCreateCommunityWorkshopMutation(username),
-}));
+jest.mock("@/lib/queries/workshops", () => {
+  const actual = jest.requireActual<Record<string, unknown>>(
+    "@/lib/queries/workshops",
+  );
+  return {
+    ...actual,
+    useCommunityWorkshopsQuery: (...args: unknown[]) =>
+      mockCommunityWorkshopsQuery(...args),
+    useCreateCommunityWorkshopMutation: (username?: string) =>
+      mockCreateCommunityWorkshopMutation(username),
+  };
+});
 
 jest.mock("@/components/ui/ToastProvider", () => ({
   useToast: () => ({
+    success: (...args: unknown[]) => mockToastSuccess(...args),
     error: (...args: unknown[]) => mockToastError(...args),
   }),
 }));
@@ -158,6 +169,11 @@ describe("CommunityDetailScreen", () => {
     createWorkshopMutateAsync.mockResolvedValue({
       id: "workshop-1",
       title: "Mentor Clinic",
+    });
+    mockCommunityWorkshopsQuery.mockReturnValue({
+      data: { results: [] },
+      isLoading: false,
+      refetch: jest.fn(),
     });
     mockCreateCommunityWorkshopMutation.mockReturnValue({
       mutateAsync: createWorkshopMutateAsync,
@@ -326,7 +342,7 @@ describe("CommunityDetailScreen", () => {
       },
     });
 
-    const { getByPlaceholderText, getByTestId, findByText, queryByText } = render(
+    const { getByPlaceholderText, getByTestId } = render(
       <CommunityDetailScreen />,
     );
 
@@ -382,7 +398,9 @@ describe("CommunityDetailScreen", () => {
         max_participants: 20,
       });
     });
-    expect(await findByText("Workshop created in Backend Guild.")).toBeTruthy();
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      "Workshop created in Backend Guild.",
+    );
   });
 
   it("shows a clearer message when workshop creation hits a server 500", async () => {
@@ -463,5 +481,159 @@ describe("CommunityDetailScreen", () => {
     expect(mockToastError).toHaveBeenCalledWith(expectedMessage, {
       title: "Workshop creation failed",
     });
+  });
+
+  it("renders community workshops and opens workshop detail from the dedicated page", async () => {
+    mockAuthUser = {
+      username: "mentor_user",
+      app_usage_mode: "MENTOR",
+    };
+    mockDetailQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      refetch: mockDetailRefetch,
+      data: {
+        id: "tag-1",
+        name: "AI & ML Enthusiasts",
+        slug: "ai-ml-enthusiasts",
+        description: "Discuss practical machine learning.",
+        member_count: 6,
+        created_by_username: "ada",
+        is_member: true,
+        created_at: "2026-04-20T00:00:00Z",
+      },
+    });
+    mockCommunityWorkshopsQuery.mockReturnValue({
+      data: {
+        results: [
+          {
+            id: "workshop-1",
+            community_id: "tag-1",
+            community_name: "AI & ML Enthusiasts",
+            author: {
+              id: "mentor-1",
+              username: "mentor_user",
+              display_name: "Mentor User",
+              picture_url: "",
+              title: "Mentor",
+            },
+            title: "Applied GenAI Lab",
+            description: "Workshop notes",
+            scheduled_at: "2099-06-10T13:30:00.000Z",
+            end_at: "2099-06-10T15:00:00.000Z",
+            max_participants: 10,
+            participant_count: 3,
+            is_full: false,
+            status: "SCHEDULED",
+            current_user_enrolled: false,
+            created_at: "2099-05-01T00:00:00.000Z",
+            updated_at: "2099-05-01T00:00:00.000Z",
+          },
+        ],
+      },
+      isLoading: false,
+      refetch: jest.fn(),
+    });
+
+    const { getByTestId, getByText } = render(<CommunityDetailScreen />);
+
+    expect(getByTestId("community-detail-workshops-rail")).toBeTruthy();
+    expect(getByText("Applied GenAI Lab")).toBeTruthy();
+
+    fireEvent.press(getByTestId("community-workshop-card-workshop-1"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1/workshops/workshop-1?from=community-detail",
+    );
+  });
+
+  it("enables the community workshops query once membership is available", () => {
+    mockDetailQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      refetch: mockDetailRefetch,
+      data: {
+        id: "tag-1",
+        name: "AI & ML Enthusiasts",
+        slug: "ai-ml-enthusiasts",
+        description: "Discuss practical machine learning.",
+        member_count: 6,
+        created_by_username: "ada",
+        is_member: true,
+        created_at: "2026-04-20T00:00:00Z",
+      },
+    });
+
+    render(<CommunityDetailScreen />);
+
+    expect(mockCommunityWorkshopsQuery).toHaveBeenCalledWith(
+      {
+        tagId: "tag-1",
+        limit: 12,
+        offset: 0,
+      },
+      true,
+    );
+  });
+
+  it("opens the dedicated community page from a workshop subtitle", () => {
+    mockAuthUser = {
+      username: "mentor_user",
+      app_usage_mode: "MENTOR",
+    };
+    mockDetailQuery.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      refetch: mockDetailRefetch,
+      data: {
+        id: "tag-1",
+        name: "AI & ML Enthusiasts",
+        slug: "ai-ml-enthusiasts",
+        description: "Discuss practical machine learning.",
+        member_count: 6,
+        created_by_username: "ada",
+        is_member: true,
+        created_at: "2026-04-20T00:00:00Z",
+      },
+    });
+    mockCommunityWorkshopsQuery.mockReturnValue({
+      data: {
+        results: [
+          {
+            id: "workshop-1",
+            community_id: "tag-1",
+            community_name: "AI & ML Enthusiasts",
+            author: {
+              id: "mentor-1",
+              username: "mentor_user",
+              display_name: "Mentor User",
+              picture_url: "",
+              title: "Mentor",
+            },
+            title: "Applied GenAI Lab",
+            description: "Workshop notes",
+            scheduled_at: "2099-06-10T13:30:00.000Z",
+            end_at: "2099-06-10T15:00:00.000Z",
+            max_participants: 10,
+            participant_count: 3,
+            is_full: false,
+            status: "SCHEDULED",
+            current_user_enrolled: false,
+            created_at: "2099-05-01T00:00:00.000Z",
+            updated_at: "2099-05-01T00:00:00.000Z",
+          },
+        ],
+      },
+      isLoading: false,
+      refetch: jest.fn(),
+    });
+
+    const { getByTestId } = render(<CommunityDetailScreen />);
+
+    fireEvent.press(getByTestId("community-workshop-community-link-workshop-1"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1?from=community",
+    );
   });
 });

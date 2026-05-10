@@ -83,8 +83,13 @@ export default function CommunityScreen() {
   );
   const communityFeedPosts = communityFeedQuery.data ?? [];
   const workshops = workshopsFeedQuery.data ?? [];
+  const openCommunityById = (communityId: string) => {
+    router.push(
+      `/(tabs)/community/${encodeURIComponent(communityId)}?from=community`,
+    );
+  };
   const openCommunity = (tag: CommunityTag) => {
-    router.push(`/(tabs)/community/${encodeURIComponent(tag.id)}?from=community`);
+    openCommunityById(tag.id);
   };
   const openWorkshop = (communityId: string, workshopId: string) => {
     router.push(
@@ -231,6 +236,9 @@ export default function CommunityScreen() {
                 <WorkshopCard
                   key={`${workshop.community_id}-${workshop.id}`}
                   workshop={workshop}
+                  onCommunityPress={(selectedWorkshop) =>
+                    openCommunityById(selectedWorkshop.community_id)
+                  }
                   onPress={(selectedWorkshop) =>
                     openWorkshop(
                       selectedWorkshop.community_id,

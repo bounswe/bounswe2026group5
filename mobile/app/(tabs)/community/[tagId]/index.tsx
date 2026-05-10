@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  ScrollView,
   Text,
   TouchableOpacity,
   View,
@@ -12,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CommunityPostComposer } from "@/components/community/CommunityPostComposer";
+import { WorkshopCard } from "@/components/community/WorkshopCard";
 import { ProfilePostCard } from "@/components/profile/ProfilePostCard";
 import { ProfilePostEditSheet } from "@/components/profile/ProfilePostEditSheet";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
@@ -35,7 +37,10 @@ import {
   useLeaveCommunityTagMutation,
 } from "@/lib/queries/communityTags";
 import type { ProfilePost } from "@/lib/queries/profile";
-import { useCreateCommunityWorkshopMutation } from "@/lib/queries/workshops";
+import {
+  useCommunityWorkshopsQuery,
+  useCreateCommunityWorkshopMutation,
+} from "@/lib/queries/workshops";
 
 const PAGE_SIZE = 12;
 
@@ -94,6 +99,15 @@ export default function CommunityDetailScreen() {
   const createPostMutation = useCreateCommunityPostMutation(currentUsername);
   const createWorkshopMutation =
     useCreateCommunityWorkshopMutation(currentUsername);
+  const tag = detailQuery.data;
+  const workshopsQuery = useCommunityWorkshopsQuery(
+    {
+      tagId: tagId ?? "",
+      limit: 12,
+      offset: 0,
+    },
+    Boolean(tagId && tag?.is_member),
+  );
   const updatePostMutation = useUpdateCommunityPostMutation(currentUsername);
   const deletePostMutation = useDeleteCommunityPostMutation(currentUsername);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -104,7 +118,6 @@ export default function CommunityDetailScreen() {
   useAutoClearMessage(successMessage, setSuccessMessage);
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
 
-  const tag = detailQuery.data;
   const isMutating = joinMutation.isPending || leaveMutation.isPending;
   const postsQuery = useCommunityPostsQuery(
     {
@@ -114,6 +127,7 @@ export default function CommunityDetailScreen() {
     },
     Boolean(tagId && tag?.is_member),
   );
+  const workshops = workshopsQuery.data?.results ?? [];
 
   useEffect(() => {
     if (!postsQuery.data) {
@@ -156,6 +170,12 @@ export default function CommunityDetailScreen() {
     const nextSource = source === "discover" ? "discover" : "community";
     router.push(
       `/(tabs)/community/${encodeURIComponent(tagId)}/members?from=${nextSource}`,
+    );
+  };
+
+  const openCommunityById = (communityId: string) => {
+    router.push(
+      `/(tabs)/community/${encodeURIComponent(communityId)}?from=community`,
     );
   };
 
@@ -283,9 +303,8 @@ export default function CommunityDetailScreen() {
         end_at,
         max_participants,
       });
-      setSuccessMessage(
-        tag ? `Workshop created in ${tag.name}.` : "Workshop created.",
-      );
+      await workshopsQuery.refetch();
+      toast.success(tag ? `Workshop created in ${tag.name}.` : "Workshop created.");
       return true;
     } catch (error) {
       const message = getWorkshopCreateErrorMessage(error);
@@ -400,6 +419,56 @@ export default function CommunityDetailScreen() {
           </Text>
         </View>
       )}
+
+      {tag?.is_member ? (
+        <View className="mb-6">
+          <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
+            Workshops
+          </Text>
+          {workshopsQuery.isLoading ? (
+            <View
+              testID="community-detail-workshops-loading"
+              className="rounded-xl border border-divider bg-surface-card p-6 items-center dark:border-divider-dark dark:bg-surface-card-dark"
+            >
+              <ActivityIndicator />
+              <Text className="mt-3 text-sm font-medium text-on-surface-soft dark:text-on-surface-soft-dark">
+                Loading workshops...
+              </Text>
+            </View>
+          ) : workshops.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: 16 }}
+              testID="community-detail-workshops-rail"
+            >
+              {workshops.map((workshop) => (
+                <WorkshopCard
+                  key={workshop.id}
+                  workshop={workshop}
+                  onCommunityPress={(selectedWorkshop) =>
+                    openCommunityById(selectedWorkshop.community_id)
+                  }
+                  onPress={(selectedWorkshop) =>
+                    router.push(
+                      `/(tabs)/community/${encodeURIComponent(selectedWorkshop.community_id)}/workshops/${encodeURIComponent(selectedWorkshop.id)}?from=community-detail`,
+                    )
+                  }
+                />
+              ))}
+            </ScrollView>
+          ) : (
+            <View
+              testID="community-detail-workshops-empty"
+              className="rounded-xl border border-dashed border-divider bg-surface-card/60 px-4 py-4 dark:border-divider-dark dark:bg-surface-card-dark/60"
+            >
+              <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
+                No workshops in this community yet.
+              </Text>
+            </View>
+          )}
+        </View>
+      ) : null}
 
       <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
         Community Posts
