@@ -75,10 +75,12 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
 
     if (!workshop) return null
 
-    const isAuthor = currentUsername && workshop.author.username === currentUsername
-    const isActive = workshop.status === 'SCHEDULED'
-    const canJoin = !isAuthor && isActive && !workshop.is_full && !workshop.current_user_enrolled && Boolean(currentUsername)
-    const canLeave = !isAuthor && workshop.current_user_enrolled && Boolean(currentUsername)
+    // Prefer detail (server truth) over prop once loaded; prop is used as initial/fallback
+    const resolved = detail ?? workshop
+    const isAuthor = currentUsername && resolved.author.username === currentUsername
+    const isActive = resolved.status === 'SCHEDULED'
+    const canJoin = !isAuthor && isActive && !resolved.is_full && !resolved.current_user_enrolled && Boolean(currentUsername)
+    const canLeave = !isAuthor && resolved.current_user_enrolled && Boolean(currentUsername)
 
     async function handleJoin() {
         try {
@@ -121,7 +123,7 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
                                 <DialogTitle className="text-lg leading-snug">{workshop.title}</DialogTitle>
                                 <Muted className="text-sm mt-0.5">{workshop.community_name}</Muted>
                             </div>
-                            <WorkshopStatusBadge status={workshop.status} isFull={workshop.is_full} />
+                            <WorkshopStatusBadge status={resolved.status} isFull={resolved.is_full} />
                         </div>
                     </DialogHeader>
 
@@ -130,16 +132,18 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
                         <div className="flex flex-col gap-1.5 bg-surface-alt rounded-lg px-4 py-3">
                             <div className="flex items-center gap-2 text-sm text-ink">
                                 <Calendar className="w-4 h-4 shrink-0 text-accent" />
-                                {formatDate(workshop.scheduled_at)}
+                                {formatDate(resolved.scheduled_at)}
                             </div>
                             <div className="flex items-center gap-2 text-sm text-ink-soft">
                                 <Clock className="w-4 h-4 shrink-0" />
-                                {formatTime(workshop.scheduled_at)} – {formatTime(workshop.end_at)}
+                                {formatTime(resolved.scheduled_at)} – {formatTime(resolved.end_at)}
                             </div>
-                            <div className={cn('flex items-center gap-2 text-sm font-medium', workshop.is_full ? 'text-amber-600' : 'text-ink-soft')}>
-                                <Users className="w-4 h-4 shrink-0" />
-                                {workshop.participant_count}/{workshop.max_participants} Enrolled
-                            </div>
+                            {resolved.max_participants > 0 && (
+                                <div className={cn('flex items-center gap-2 text-sm font-medium', resolved.is_full ? 'text-amber-600' : 'text-ink-soft')}>
+                                    <Users className="w-4 h-4 shrink-0" />
+                                    {resolved.participant_count}/{resolved.max_participants} Enrolled
+                                </div>
+                            )}
                         </div>
 
                         {/* Host */}
@@ -166,7 +170,7 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
                         )}
 
                         {/* Participants */}
-                        {(workshop.current_user_enrolled || isAuthor) && (
+                        {(resolved.current_user_enrolled || isAuthor) && (
                             <div className="flex flex-col gap-2">
                                 <p className="text-sm font-semibold text-ink">Participants</p>
                                 {detailLoading ? (
@@ -218,7 +222,7 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
                     </div>
 
                     <DialogFooter className="mt-4 flex flex-wrap gap-2">
-                        {isAuthor && isActive && !confirmCancel && (
+                        {Boolean(isAuthor) && isActive && !confirmCancel && (
                             <>
                                 <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Edit Workshop</Button>
                                 <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setConfirmCancel(true)}>
@@ -236,7 +240,7 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
                                 {joinMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Join Workshop'}
                             </Button>
                         )}
-                        {!currentUsername && isActive && !workshop.is_full && (
+                        {!currentUsername && isActive && !resolved.is_full && (
                             <p className="text-xs text-ink-soft italic">Sign in to join this workshop.</p>
                         )}
                         <Button variant="ghost" size="sm" onClick={onClose} className="ml-auto">Close</Button>

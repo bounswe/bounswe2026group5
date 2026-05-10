@@ -11,9 +11,11 @@ import { useAvailabilitySlots } from "#/lib/queries/ProfileTimeSlotQueries.ts";
 import { useMentorReviews } from '#/lib/queries/ProfileQueries.ts'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
-import { Link } from '@tanstack/react-router'
 import { useProfileWorkshopAttendance } from '#/lib/queries/WorkshopQueries.ts'
-import type { WorkshopAttendanceItem } from '#/lib/queries/WorkshopQueries.ts'
+import type { WorkshopAttendanceItem, CommunityWorkshop } from '#/lib/queries/WorkshopQueries.ts'
+import { WorkshopDetailModal } from '#/components/community/WorkshopDetailModal.tsx'
+import { useQuery } from '@tanstack/react-query'
+import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 interface BaseMappedProfile {
   username: string
   full_name: string
@@ -124,10 +126,34 @@ import { ReportUserDialog } from '#/components/ReportUserDialog.tsx'
 // Profile Workshops Section
 // ---------------------------------------------------------------------------
 
-function WorkshopAttendanceCard({ item }: { item: WorkshopAttendanceItem }) {
+function attendanceToWorkshop(item: WorkshopAttendanceItem): CommunityWorkshop {
+    return {
+        id: item.workshop_id,
+        community_id: item.community_id,
+        community_name: item.community_name,
+        author: item.author,
+        title: item.workshop_title,
+        description: item.workshop_description,
+        scheduled_at: item.workshop_scheduled_at,
+        end_at: item.workshop_end_at,
+        max_participants: 0,
+        participant_count: 0,
+        is_full: false,
+        status: item.workshop_status as CommunityWorkshop['status'],
+        current_user_enrolled: true,
+        created_at: item.joined_at,
+        updated_at: item.joined_at,
+    }
+}
+
+function WorkshopAttendanceCard({ item, onClick }: { item: WorkshopAttendanceItem; onClick: () => void }) {
     const isUpcoming = item.attendance_status === 'attending'
     return (
-        <div className="rounded-lg border border-line bg-white/70 px-4 py-3 flex flex-col gap-2 hover:border-accent/40 transition-colors">
+        <button
+            type="button"
+            onClick={onClick}
+            className="w-full text-left rounded-lg border border-line bg-white/70 px-4 py-3 flex flex-col gap-2 hover:border-accent/40 hover:shadow-sm transition-all cursor-pointer"
+        >
             <div className="flex items-start justify-between gap-2">
                 <p className="text-sm font-semibold text-ink leading-snug line-clamp-2">{item.workshop_title}</p>
                 <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
@@ -154,20 +180,18 @@ function WorkshopAttendanceCard({ item }: { item: WorkshopAttendanceItem }) {
                     <Users className="w-3 h-3 shrink-0" />
                     {item.community_name}
                 </Muted>
-                <Link
-                    to="/profiles/$username"
-                    params={{ username: item.author.username }}
-                    className="text-xs text-accent hover:underline shrink-0"
-                >
+                <span className="text-xs text-accent shrink-0">
                     by {item.author.display_name}
-                </Link>
+                </span>
             </div>
-        </div>
+        </button>
     )
 }
 
 function ProfileWorkshopsSection({ username }: { username: string }) {
     const { data, isLoading } = useProfileWorkshopAttendance(username)
+    const { data: me } = useQuery(meQueryOptions)
+    const [selectedWorkshop, setSelectedWorkshop] = useState<CommunityWorkshop | null>(null)
     const workshops = data?.results ?? []
 
     if (isLoading) return (
@@ -180,28 +204,49 @@ function ProfileWorkshopsSection({ username }: { username: string }) {
     const past = workshops.filter(w => w.attendance_status === 'attended')
 
     return (
-        <section className="island-shell rounded-3xl p-6 sm:p-8 space-y-5">
-            <h2 className="text-xl font-semibold text-ink flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-accent" />
-                Workshops
-            </h2>
-            {upcoming.length > 0 && (
-                <div className="flex flex-col gap-3">
-                    <p className="text-sm font-medium text-ink-soft uppercase tracking-wide">Upcoming</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {upcoming.slice(0, 4).map(w => <WorkshopAttendanceCard key={w.id} item={w} />)}
+        <>
+            <section className="island-shell rounded-3xl p-6 sm:p-8 space-y-5">
+                <h2 className="text-xl font-semibold text-ink flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-accent" />
+                    Workshops
+                </h2>
+                {upcoming.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                        <p className="text-sm font-medium text-ink-soft uppercase tracking-wide">Upcoming</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {upcoming.slice(0, 4).map(w => (
+                                <WorkshopAttendanceCard
+                                    key={w.id}
+                                    item={w}
+                                    onClick={() => setSelectedWorkshop(attendanceToWorkshop(w))}
+                                />
+                            ))}
+                        </div>
                     </div>
-                </div>
-            )}
-            {past.length > 0 && (
-                <div className="flex flex-col gap-3">
-                    <p className="text-sm font-medium text-ink-soft uppercase tracking-wide">Past</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {past.slice(0, 4).map(w => <WorkshopAttendanceCard key={w.id} item={w} />)}
+                )}
+                {past.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                        <p className="text-sm font-medium text-ink-soft uppercase tracking-wide">Past</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {past.slice(0, 4).map(w => (
+                                <WorkshopAttendanceCard
+                                    key={w.id}
+                                    item={w}
+                                    onClick={() => setSelectedWorkshop(attendanceToWorkshop(w))}
+                                />
+                            ))}
+                        </div>
                     </div>
-                </div>
-            )}
-        </section>
+                )}
+            </section>
+            <WorkshopDetailModal
+                workshop={selectedWorkshop}
+                tagId={selectedWorkshop?.community_id ?? ''}
+                open={Boolean(selectedWorkshop)}
+                onClose={() => setSelectedWorkshop(null)}
+                currentUsername={me?.username}
+            />
+        </>
     )
 }
 
