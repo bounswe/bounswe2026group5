@@ -6,7 +6,6 @@ from .views import (
     ConversationDetailAPIView,
     ConversationListAPIView,
     MessageMarkReadAPIView,
-    MessageReportAPIView,
 )
 
 urlpatterns = [
@@ -15,11 +14,6 @@ urlpatterns = [
         "conversations/<uuid:conversation_id>/",
         ConversationDetailAPIView.as_view(),
         name="message-conversation-detail",
-    ),
-    path(
-        "<uuid:message_id>/report/",
-        MessageReportAPIView.as_view(),
-        name="message-report",
     ),
     path(
         "conversations/<uuid:conversation_id>/mark-read/",
