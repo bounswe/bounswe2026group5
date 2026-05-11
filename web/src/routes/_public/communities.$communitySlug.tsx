@@ -328,35 +328,37 @@ function CreatePostDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader><DialogTitle>New Post</DialogTitle></DialogHeader>
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
-                    <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="cop_create_type">Type</Label>
-                        <Select value={form.event_type} onValueChange={(v) => setForm((f) => ({ ...f, event_type: v as CommunityPostCreatePayload['event_type'] }))}>
-                            <SelectTrigger id="cop_create_type"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="achievement">Achievement</SelectItem>
-                                <SelectItem value="social">Social</SelectItem>
-                                <SelectItem value="progress">Progress</SelectItem>
-                            </SelectContent>
-                        </Select>
+                <form onSubmit={handleSubmit} className="contents">
+                    <div className="flex flex-col gap-4 overflow-y-auto flex-1 min-h-0 mt-2 pb-1">
+                        <div className="flex flex-col gap-1.5">
+                            <Label htmlFor="cop_create_type">Type</Label>
+                            <Select value={form.event_type} onValueChange={(v) => setForm((f) => ({ ...f, event_type: v as CommunityPostCreatePayload['event_type'] }))}>
+                                <SelectTrigger id="cop_create_type"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="achievement">Achievement</SelectItem>
+                                    <SelectItem value="social">Social</SelectItem>
+                                    <SelectItem value="progress">Progress</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                            <Label htmlFor="cop_create_content">Content <span className="text-red-500">*</span></Label>
+                            <Textarea id="cop_create_content" value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} placeholder="Share something with this community…" maxLength={2000} rows={4} required />
+                            <p className="text-xs text-ink-soft text-right">{form.content.length}/2000</p>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                            <Label>Tag people <span className="text-ink-soft text-xs">(max 5)</span></Label>
+                            <TaggableUsersList communityId={communityId} selected={form.tagged_users ?? []} onChange={(usernames) => setForm((f) => ({ ...f, tagged_users: usernames }))} />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                            <Label>Media (optional)</Label>
+                            <MediaUploadField onUrl={url => setForm(f => ({ ...f, media_url: url ?? undefined }))} />
+                        </div>
+                        <label className="flex items-center gap-2.5 cursor-pointer text-sm">
+                            <Checkbox checked={form.show_on_profile} onCheckedChange={(v) => setForm((f) => ({ ...f, show_on_profile: Boolean(v) }))} />
+                            Share to my profile
+                        </label>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="cop_create_content">Content <span className="text-red-500">*</span></Label>
-                        <Textarea id="cop_create_content" value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} placeholder="Share something with this community…" maxLength={2000} rows={4} required />
-                        <p className="text-xs text-ink-soft text-right">{form.content.length}/2000</p>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <Label>Tag people <span className="text-ink-soft text-xs">(max 5)</span></Label>
-                        <TaggableUsersList communityId={communityId} selected={form.tagged_users ?? []} onChange={(usernames) => setForm((f) => ({ ...f, tagged_users: usernames }))} />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <Label>Media (optional)</Label>
-                        <MediaUploadField onUrl={url => setForm(f => ({ ...f, media_url: url ?? undefined }))} />
-                    </div>
-                    <label className="flex items-center gap-2.5 cursor-pointer text-sm">
-                        <Checkbox checked={form.show_on_profile} onCheckedChange={(v) => setForm((f) => ({ ...f, show_on_profile: Boolean(v) }))} />
-                        Share to my profile
-                    </label>
                     <DialogFooter className="mt-2 border-line border-t">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                         <Button type="submit" disabled={!form.content.trim() || createMutation.isPending} className="bg-accent hover:bg-accent/90 text-white">
@@ -412,35 +414,37 @@ function EditPostDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader><DialogTitle>Edit Post</DialogTitle></DialogHeader>
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
-                    <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="cop_edit_type">Type</Label>
-                        <Select value={form.event_type} onValueChange={(v) => setForm((f) => ({ ...f, event_type: v as CommunityPostUpdatePayload['event_type'] }))}>
-                            <SelectTrigger id="cop_edit_type"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="achievement">Achievement</SelectItem>
-                                <SelectItem value="social">Social</SelectItem>
-                                <SelectItem value="progress">Progress</SelectItem>
-                            </SelectContent>
-                        </Select>
+                <form onSubmit={handleSubmit} className="contents">
+                    <div className="flex flex-col gap-4 overflow-y-auto flex-1 min-h-0 mt-2 pb-1">
+                        <div className="flex flex-col gap-1.5">
+                            <Label htmlFor="cop_edit_type">Type</Label>
+                            <Select value={form.event_type} onValueChange={(v) => setForm((f) => ({ ...f, event_type: v as CommunityPostUpdatePayload['event_type'] }))}>
+                                <SelectTrigger id="cop_edit_type"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="achievement">Achievement</SelectItem>
+                                    <SelectItem value="social">Social</SelectItem>
+                                    <SelectItem value="progress">Progress</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                            <Label htmlFor="cop_edit_content">Content <span className="text-red-500">*</span></Label>
+                            <Textarea id="cop_edit_content" value={form.content ?? ''} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} placeholder="Share something with this community…" maxLength={2000} rows={4} required />
+                            <p className="text-xs text-ink-soft text-right">{(form.content ?? '').length}/2000</p>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                            <Label>Tag people <span className="text-ink-soft text-xs">(max 5)</span></Label>
+                            <TaggableUsersList communityId={communityId} selected={form.tagged_users ?? []} onChange={(usernames) => setForm((f) => ({ ...f, tagged_users: usernames }))} />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                            <Label>Media (optional)</Label>
+                            <MediaUploadField currentUrl={post.media_url} onUrl={url => setForm(f => ({ ...f, media_url: url ?? undefined }))} />
+                        </div>
+                        <label className="flex items-center gap-2.5 cursor-pointer text-sm">
+                            <Checkbox checked={form.show_on_profile} onCheckedChange={(v) => setForm((f) => ({ ...f, show_on_profile: Boolean(v) }))} />
+                            Share to my profile
+                        </label>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="cop_edit_content">Content <span className="text-red-500">*</span></Label>
-                        <Textarea id="cop_edit_content" value={form.content ?? ''} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} placeholder="Share something with this community…" maxLength={2000} rows={4} required />
-                        <p className="text-xs text-ink-soft text-right">{(form.content ?? '').length}/2000</p>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <Label>Tag people <span className="text-ink-soft text-xs">(max 5)</span></Label>
-                        <TaggableUsersList communityId={communityId} selected={form.tagged_users ?? []} onChange={(usernames) => setForm((f) => ({ ...f, tagged_users: usernames }))} />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <Label>Media (optional)</Label>
-                        <MediaUploadField currentUrl={post.media_url} onUrl={url => setForm(f => ({ ...f, media_url: url ?? undefined }))} />
-                    </div>
-                    <label className="flex items-center gap-2.5 cursor-pointer text-sm">
-                        <Checkbox checked={form.show_on_profile} onCheckedChange={(v) => setForm((f) => ({ ...f, show_on_profile: Boolean(v) }))} />
-                        Share to my profile
-                    </label>
                     <DialogFooter className="mt-2">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                         <Button type="submit" disabled={!form.content?.trim() || editMutation.isPending} className="bg-accent hover:bg-accent/90 text-white">

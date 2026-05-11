@@ -51,11 +51,11 @@ export function MediaUploadField({ onUrl, currentUrl }: MediaUploadFieldProps) {
                 }}
             />
             {preview ? (
-                <div className="flex items-center gap-2 rounded-lg border border-line bg-background px-3 py-2 text-sm">
+                <div className="flex items-center gap-2 w-full min-w-0 rounded-lg border border-line bg-background px-3 py-2 text-sm overflow-hidden">
                     {preview.objectUrl && (
                         <img src={preview.objectUrl} alt="" className="h-10 w-10 rounded object-cover shrink-0" />
                     )}
-                    <span className="flex-1 truncate text-ink-soft">{preview.name}</span>
+                    <span className="flex-1 min-w-0 truncate text-ink-soft">{preview.name}</span>
                     {upload.isPending && <Loader2 className="h-4 w-4 animate-spin shrink-0 text-accent" />}
                     <button type="button" onClick={handleClear} className="shrink-0 text-ink-soft hover:text-ink">
                         <X className="h-4 w-4" />
