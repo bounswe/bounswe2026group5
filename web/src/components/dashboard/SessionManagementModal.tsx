@@ -12,9 +12,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Calendar, CalendarDays, ChevronLeft, ChevronRight, Clock, Link2, Loader2, XCircle } from 'lucide-react'
+import { ArrowLeft, Calendar, CalendarDays, ChevronLeft, ChevronRight, Clock, Loader2, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -175,7 +174,7 @@ function RescheduleView({ sessionId, mentorUsername, onBack, onSuccess }: Resche
         })}
       </div>
 
-      <DialogFooter>
+      <DialogFooter className="border-t border-line">
         <Button variant="outline" onClick={onBack} className="border-line text-ink-soft" disabled={reschedule.isPending}>
           Back
         </Button>
@@ -196,23 +195,12 @@ function RescheduleView({ sessionId, mentorUsername, onBack, onSuccess }: Resche
 export function SessionManagementModal({ session }: Readonly<SessionManagementModalProps>) {
   const [isOpen, setIsOpen] = useState(false)
   const [view, setView] = useState<'manage' | 'reschedule'>('manage')
-  const [meetingLink, setMeetingLink] = useState('')
-  const [isSaved, setIsSaved] = useState(false)
   const queryClient = useQueryClient()
   const cancelSession = useCancelSession()
 
   const handleClose = () => {
     setIsOpen(false)
     setView('manage')
-    setIsSaved(false)
-  }
-
-  const handleSaveLink = (e: React.SyntheticEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (!meetingLink.trim()) return
-    // FUTURE: Trigger TanStack Query mutation to update the session's meeting link on the backend
-    console.log('Saving meeting link for session', session.id, ':', meetingLink)
-    setIsSaved(true)
   }
 
   const handleCancelSession = () => {
@@ -286,41 +274,6 @@ export function SessionManagementModal({ session }: Readonly<SessionManagementMo
                   <Body className="text-sm">{sessionTime}</Body>
                 </div>
               </div>
-
-              {/* Meeting Link Input */}
-              <div className="flex flex-col gap-2">
-                <Body className="text-sm font-medium flex items-center gap-1.5">
-                  <Link2 className="w-4 h-4 text-accent" />
-                  Meeting Link
-                </Body>
-                <Muted className="text-xs text-ink-soft">
-                  Paste a Zoom or Google Meet link to share with your mentee.
-                </Muted>
-                <form onSubmit={handleSaveLink} className="flex gap-2 mt-1">
-                  <Input
-                    placeholder="https://zoom.us/j/... or meet.google.com/..."
-                    value={meetingLink}
-                    onChange={(e) => { setMeetingLink(e.target.value); setIsSaved(false) }}
-                    className="border-line"
-                  />
-                  <Button
-                    type="submit"
-                    variant="secondary"
-                    className="shrink-0 border border-line bg-white hover:bg-black/[0.02]"
-                    disabled={!meetingLink.trim()}
-                  >
-                    Save
-                  </Button>
-                </form>
-                {isSaved && (
-                  <Muted className="text-xs text-green-600 font-medium">
-                    Meeting link saved successfully.
-                  </Muted>
-                )}
-              </div>
-
-              {/* Divider */}
-              <div className="border-t border-line" />
 
               {/* Session Actions */}
               <div className="flex flex-col gap-2">
