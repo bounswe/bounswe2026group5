@@ -141,6 +141,67 @@ export type CommunityListResponse = {
   results: CommunityTag[];
 };
 
+export type CommunityPost = {
+  id: string;
+  source_id: string;
+  category: 'CoP';
+  event_type: 'achievement' | 'social' | 'progress';
+  content: string;
+  media_url: string | null;
+  timestamp: string;
+  created_at: string;
+  last_edited: string | null;
+  show_on_profile: boolean;
+  community_id: string;
+  community_slug: string;
+  author: {
+    id: string;
+    username: string;
+    display_name: string;
+    picture_url: string | null;
+    title: string;
+  };
+  tagged_users: { user_id: string; username: string }[];
+};
+
+export type CommunityPostFeed = {
+  count: number;
+  offset: number;
+  limit: number;
+  results: CommunityPost[];
+};
+
+export type ProfilePost = {
+  id: string;
+  category: 'PrP' | 'MCTE' | 'CoP';
+  event_type: 'achievement' | 'social' | 'progress';
+  content: string;
+  media_url: string | null;
+  timestamp: string;
+  created_at: string;
+  last_edited: string | null;
+  show_on_profile: boolean;
+  mentorship_partner: string | null;
+  community_id: string | null;
+  community_name: string | null;
+  community_slug: string | null;
+  tagged_users: { user_id: string; username: string }[] | null;
+  author: {
+    id: string;
+    username: string;
+    display_name: string;
+    picture_url: string | null;
+    title: string;
+  };
+};
+
+export type ProfilePostFeed = {
+  count: number;
+  offset: number;
+  limit: number;
+  results: ProfilePost[];
+};
+
 export class TestDataApi {
   readonly request: APIRequestContext;
 
@@ -436,6 +497,28 @@ export class TestDataApi {
     return this.request.delete(`${API_BASE_URL}/profiles/tags/${communityIdOrSlug}/leave/`, {
       headers: this.authHeaders(auth),
     });
+  }
+
+  async fetchCommunityPosts(auth: AuthResponse, communityIdOrSlug: string, offset = 0, limit = 20) {
+    const response = await this.request.get(
+      `${API_BASE_URL}/profiles/tags/${communityIdOrSlug}/posts/?offset=${offset}&limit=${limit}`,
+      {
+        headers: this.authHeaders(auth),
+      },
+    );
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<CommunityPostFeed>;
+  }
+
+  async fetchProfilePosts(auth: AuthResponse, username: string, offset = 0, limit = 20) {
+    const response = await this.request.get(
+      `${API_BASE_URL}/profiles/${username}/posts/?offset=${offset}&limit=${limit}`,
+      {
+        headers: this.authHeaders(auth),
+      },
+    );
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<ProfilePostFeed>;
   }
 
   private async registerOrLogin(email: string): Promise<AuthResponse> {

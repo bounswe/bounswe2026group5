@@ -65,6 +65,25 @@ export class ProfilePage {
     await expect(this.page.getByText(reviewText)).toBeVisible();
   }
 
+  async expectBasicLoaded(username: string, displayName: string) {
+    await expect(this.page).toHaveURL(new RegExp(`/profiles/${username}`));
+    await expect(this.page.locator('h1').filter({ hasText: displayName })).toBeVisible();
+  }
+
+  async expectPostVisible(content: string) {
+    await expect(this.postCard(content)).toBeVisible();
+  }
+
+  async expectPostHidden(content: string) {
+    await expect(this.postCard(content)).toHaveCount(0);
+  }
+
+  async expectCommunityOrigin(content: string, communityName: string) {
+    const card = this.postCard(content);
+    await expect(card.getByText(/^Community$/)).toBeVisible();
+    await expect(card.getByRole('link', { name: communityName })).toBeVisible();
+  }
+
   async nextWeek() {
     await this.page.getByRole('button', { name: 'Next week' }).click();
   }
@@ -103,6 +122,12 @@ export class ProfilePage {
     const cellIndex = 8 + hourIndex * 8 + 1 + dayIndexFromMonday;
     const grid = this.page.locator('div[style*="grid-template-columns"], div[style*="gridTemplateColumns"]').first();
     await grid.locator(':scope > div').nth(cellIndex).click();
+  }
+
+  private postCard(content: string) {
+    return this.page.locator('[class*="border-line"]', {
+      has: this.page.getByText(content),
+    }).first();
   }
 }
 

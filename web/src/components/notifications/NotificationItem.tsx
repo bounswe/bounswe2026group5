@@ -3,8 +3,10 @@ import {
     CalendarCheck,
     CheckCircle2,
     Clock,
+    Info,
     MessageSquare,
     Star,
+    Tag,
     UserPlus,
     UserX,
     XCircle,
@@ -64,10 +66,36 @@ const VARIANT_MAP: Record<NotificationType, VariantConfig> = {
         iconClass: 'text-yellow-500',
         borderClass: 'border-l-yellow-400',
     },
+    tag_new_member: {
+        icon: UserPlus,
+        iconClass: 'text-emerald-600',
+        borderClass: 'border-l-emerald-400',
+    },
+    tag_description_updated: {
+        icon: Tag,
+        iconClass: 'text-blue-600',
+        borderClass: 'border-l-blue-400',
+    },
+    tag_deleted: {
+        icon: XCircle,
+        iconClass: 'text-red-500',
+        borderClass: 'border-l-red-400',
+    },
+    tag_matches_interest: {
+        icon: Tag,
+        iconClass: 'text-accent',
+        borderClass: 'border-l-accent',
+    },
+}
+
+const FALLBACK_VARIANT: VariantConfig = {
+    icon: Info,
+    iconClass: 'text-ink-soft',
+    borderClass: 'border-l-line',
 }
 
 export function NotificationItem({ notification }: { notification: Notification }) {
-    const variant = VARIANT_MAP[notification.type]
+    const variant = VARIANT_MAP[notification.type] ?? FALLBACK_VARIANT
     const Icon = variant.icon
     const conversationId =
         notification.type === 'new_message' ? (notification.resource_id ?? undefined) : undefined
