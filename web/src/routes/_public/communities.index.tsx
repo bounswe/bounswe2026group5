@@ -264,6 +264,7 @@ export function CommunitiesPage() {
                         <DiscoverSearchBar
                             value={query}
                             onChange={setQuery}
+                            placeholder="Search communities..."
                             className="flex-1 min-w-0"
                         />
                         {query && (
