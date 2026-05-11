@@ -113,6 +113,34 @@ export type PublicReviewsResponse = {
   results: PublicReview[];
 };
 
+export type CommunityTag = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  member_count: number;
+  created_at: string;
+};
+
+export type CommunityTagDetail = CommunityTag & {
+  created_by_username: string | null;
+  is_member: boolean;
+};
+
+export type CommunityMembershipResponse = {
+  tag_id: string;
+  tag_name: string;
+  tag_slug: string;
+  joined: boolean;
+};
+
+export type CommunityListResponse = {
+  count: number;
+  page: number;
+  pageSize: number;
+  results: CommunityTag[];
+};
+
 export class TestDataApi {
   readonly request: APIRequestContext;
 
@@ -340,6 +368,74 @@ export class TestDataApi {
     );
     expect(response.ok()).toBeTruthy();
     return response.json() as Promise<PublicReviewsResponse>;
+  }
+
+  async fetchCommunities(query = '', page = 1, pageSize = 50) {
+    const searchParams = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    if (query) {
+      searchParams.set('q', query);
+    }
+
+    const response = await this.request.get(`${API_BASE_URL}/profiles/tags/?${searchParams.toString()}`);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<CommunityListResponse>;
+  }
+
+  async fetchCommunityDetail(communityIdOrSlug: string, auth?: AuthResponse) {
+    const response = await this.request.get(`${API_BASE_URL}/profiles/tags/${communityIdOrSlug}/`, {
+      headers: auth ? this.authHeaders(auth) : undefined,
+    });
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<CommunityTagDetail>;
+  }
+
+  async createCommunity(
+    auth: AuthResponse,
+    payload: { name: string; description?: string },
+  ) {
+    const response = await this.tryCreateCommunity(auth, payload);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<CommunityTagDetail>;
+  }
+
+  async tryCreateCommunity(
+    auth: AuthResponse,
+    payload: { name: string; description?: string },
+  ) {
+    return this.request.post(`${API_BASE_URL}/profiles/tags/`, {
+      headers: {
+        ...this.authHeaders(auth),
+        'Content-Type': 'application/json',
+      },
+      data: payload,
+    });
+  }
+
+  async joinCommunity(auth: AuthResponse, communityIdOrSlug: string) {
+    const response = await this.tryJoinCommunity(auth, communityIdOrSlug);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<CommunityMembershipResponse>;
+  }
+
+  async tryJoinCommunity(auth: AuthResponse, communityIdOrSlug: string) {
+    return this.request.post(`${API_BASE_URL}/profiles/tags/${communityIdOrSlug}/join/`, {
+      headers: this.authHeaders(auth),
+    });
+  }
+
+  async leaveCommunity(auth: AuthResponse, communityIdOrSlug: string) {
+    const response = await this.tryLeaveCommunity(auth, communityIdOrSlug);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<CommunityMembershipResponse>;
+  }
+
+  async tryLeaveCommunity(auth: AuthResponse, communityIdOrSlug: string) {
+    return this.request.delete(`${API_BASE_URL}/profiles/tags/${communityIdOrSlug}/leave/`, {
+      headers: this.authHeaders(auth),
+    });
   }
 
   private async registerOrLogin(email: string): Promise<AuthResponse> {
