@@ -81,6 +81,45 @@ export type Notification = {
   is_read?: boolean;
 };
 
+export type ConversationSummary = {
+  id: string;
+  match_id: string;
+  mentor: {
+    id: string;
+    username: string;
+    display_name: string;
+    picture_url: string | null;
+    title: string | null;
+  };
+  mentee: {
+    id: string;
+    username: string;
+    display_name: string;
+    picture_url: string | null;
+    title: string | null;
+  };
+  unread_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MessageItem = {
+  id: string;
+  conversation_id: string;
+  sender: {
+    id: string;
+    username: string;
+    display_name: string;
+    picture_url: string | null;
+    title: string | null;
+  };
+  body: string;
+  attachment_url: string | null;
+  created_at: string;
+  read_receipts?: Record<string, string>;
+  status_for_me?: 'sent' | 'delivered' | 'read';
+};
+
 export type Feedback = {
   id: string;
   match: string;
@@ -230,6 +269,50 @@ export type JourneyFeed = {
   offset: number;
   limit: number;
   results: JourneyEvent[];
+};
+
+export type WorkshopAuthor = {
+  id: string;
+  username: string;
+  display_name: string;
+  picture_url: string | null;
+  title: string | null;
+};
+
+export type WorkshopParticipant = {
+  id: string;
+  participant: WorkshopAuthor;
+  joined_at: string;
+  show_on_profile: boolean;
+};
+
+export type CommunityWorkshop = {
+  id: string;
+  community_id: string;
+  community_name: string;
+  author: WorkshopAuthor;
+  title: string;
+  description: string;
+  scheduled_at: string;
+  end_at: string;
+  max_participants: number;
+  participant_count: number;
+  is_full: boolean;
+  status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
+  current_user_enrolled: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CommunityWorkshopDetail = CommunityWorkshop & {
+  participants: WorkshopParticipant[];
+};
+
+export type WorkshopListResponse = {
+  count: number;
+  offset: number;
+  limit: number;
+  results: CommunityWorkshop[];
 };
 
 export class TestDataApi {
@@ -384,7 +467,7 @@ export class TestDataApi {
       headers: this.authHeaders(auth),
     });
     expect(response.ok()).toBeTruthy();
-    return response.json() as Promise<any[]>;
+    return response.json() as Promise<ConversationSummary[]>;
   }
 
   async sendMessage(auth: AuthResponse, conversationId: string, body: string) {
@@ -401,7 +484,13 @@ export class TestDataApi {
       headers: this.authHeaders(auth),
     });
     expect(response.ok()).toBeTruthy();
-    return response.json() as Promise<any[]>;
+    return response.json() as Promise<MessageItem[]>;
+  }
+
+  async tryFetchMessages(auth: AuthResponse, conversationId: string) {
+    return this.request.get(`${API_BASE_URL}/messages/conversations/${conversationId}/`, {
+      headers: this.authHeaders(auth),
+    });
   }
 
   async reportMessage(auth: AuthResponse, messageId: string, data: { reason: string; description?: string }) {
@@ -581,6 +670,58 @@ export class TestDataApi {
       'docker',
       ['compose', 'exec', '-T', 'backend', 'python', 'manage.py', 'shell', '-c', python],
       { cwd: REPO_ROOT, stdio: 'pipe' },
+    );
+  }
+
+  async fetchCommunityWorkshops(auth: AuthResponse, communityIdOrSlug: string) {
+    const response = await this.request.get(
+      `${API_BASE_URL}/profiles/tags/${communityIdOrSlug}/workshops/`,
+      {
+        headers: this.authHeaders(auth),
+      },
+    );
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<WorkshopListResponse>;
+  }
+
+  async fetchWorkshopDetail(auth: AuthResponse, communityIdOrSlug: string, workshopId: string) {
+    const response = await this.request.get(
+      `${API_BASE_URL}/profiles/tags/${communityIdOrSlug}/workshops/${workshopId}/`,
+      {
+        headers: this.authHeaders(auth),
+      },
+    );
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<CommunityWorkshopDetail>;
+  }
+
+  async joinWorkshop(auth: AuthResponse, communityIdOrSlug: string, workshopId: string) {
+    const response = await this.tryJoinWorkshop(auth, communityIdOrSlug, workshopId);
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<WorkshopParticipant>;
+  }
+
+  async tryJoinWorkshop(auth: AuthResponse, communityIdOrSlug: string, workshopId: string) {
+    return this.request.post(
+      `${API_BASE_URL}/profiles/tags/${communityIdOrSlug}/workshops/${workshopId}/join/`,
+      {
+        headers: this.authHeaders(auth),
+      },
+    );
+  }
+
+  async leaveWorkshop(auth: AuthResponse, communityIdOrSlug: string, workshopId: string) {
+    const response = await this.tryLeaveWorkshop(auth, communityIdOrSlug, workshopId);
+    expect(response.ok()).toBeTruthy();
+    return response;
+  }
+
+  async tryLeaveWorkshop(auth: AuthResponse, communityIdOrSlug: string, workshopId: string) {
+    return this.request.post(
+      `${API_BASE_URL}/profiles/tags/${communityIdOrSlug}/workshops/${workshopId}/leave/`,
+      {
+        headers: this.authHeaders(auth),
+      },
     );
   }
 

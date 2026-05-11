@@ -44,6 +44,22 @@ export class DashboardPage {
     await expect(notification).toBeVisible({ timeout: 10_000 });
   }
 
+  async openConversationFromNotification(messagePart: string) {
+    const notification = this.page.locator('.border-l-4').filter({ hasText: messagePart }).first();
+    await expect(notification).toBeVisible({ timeout: 10_000 });
+    await notification.getByRole('link', { name: 'View conversation →' }).click();
+    await expect(this.page).toHaveURL(/\/messages\?conversationId=/);
+  }
+
+  async openLatestConversationNotification() {
+    const notification = this.page.locator('.border-l-4', {
+      has: this.page.getByRole('link', { name: 'View conversation →' }),
+    }).first();
+    await expect(notification).toBeVisible({ timeout: 10_000 });
+    await notification.getByRole('link', { name: 'View conversation →' }).click();
+    await expect(this.page).toHaveURL(/\/messages\?conversationId=/);
+  }
+
   async acceptIncomingRequest(menteeName: string, coverLetter?: string) {
     const requestCard = await this.findIncomingRequest(menteeName, coverLetter);
     await requestCard.getByRole('button', { name: /Accept/i }).click();
