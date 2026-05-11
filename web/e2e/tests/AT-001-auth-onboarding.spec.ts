@@ -169,8 +169,10 @@ test.describe('AT-001: Authentication & Onboarding', () => {
       await loginPage.expectInlineError(/Incorrect email or password. Please try again./i);
 
       // Step 28: Valid login
+      await loginPage.fillEmail(TEST_EMAIL);
       await loginPage.fillPassword(TEST_PASSWORD);
       await loginPage.submit();
+      await page.waitForURL(/.*dashboard/);
       await dashboardPage.expectLoaded();
 
       // Step 29: API Check

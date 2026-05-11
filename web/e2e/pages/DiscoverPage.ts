@@ -35,7 +35,7 @@ export class DiscoverPage {
   }
 
   async openSkillFilter() {
-    await this.page.getByRole('button', { name: /Filter by skill/i }).click();
+    await this.page.getByRole('button', { name: /Filter mentors/i }).click();
   }
 
   async selectSkill(skill: string) {

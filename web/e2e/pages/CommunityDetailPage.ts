@@ -352,7 +352,7 @@ export class CommunityDetailPage {
   async expectWorkshopParticipantsVisible(...names: string[]) {
     await expect(this.workshopDetailDialog.getByText('Participants')).toBeVisible();
     for (const name of names) {
-      await expect(this.workshopDetailDialog.getByText(name, { exact: true })).toBeVisible();
+      await expect(this.workshopDetailDialog.getByText(name, { exact: true }).first()).toBeVisible();
     }
   }
 

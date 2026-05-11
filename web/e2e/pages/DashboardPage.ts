@@ -129,8 +129,8 @@ export class DashboardPage {
   }
 
   async rescheduleSession(newSlot: { dayLabel: string; timeLabel: string }) {
-    await this.page.getByRole('button', { name: 'Reschedule' }).click();
     const dialog = this.page.getByRole('dialog');
+    await dialog.getByRole('button', { name: 'Reschedule' }).click();
     await expect(this.page.getByRole('heading', { name: 'Pick a New Time Slot' })).toBeVisible();
     await expect(dialog.locator('svg.animate-spin')).toHaveCount(0);
     const slotByDayAndTime = this.page
@@ -162,7 +162,7 @@ export class DashboardPage {
   }
 
   async cancelSession() {
-    await this.page.getByRole('button', { name: 'Cancel Session' }).click();
+    await this.page.getByRole('dialog').getByRole('button', { name: 'Cancel Session' }).click();
     await expect(this.page.getByText('Session cancelled').first()).toBeVisible();
   }
 

@@ -110,21 +110,42 @@ export function DashboardHome() {
   const { mutate: markAllRead } = useMarkAllNotificationsRead()
   const queryClient = useQueryClient()
 
-  const sessionUnreadIds = useRef<Set<string>>(new Set())
+  const [sessionUnreadIds, setSessionUnreadIds] = useState<Set<string>>(() => {
+    // Check if this is a page refresh (reload)
+    const navEntries = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[]
+    const isReload = navEntries.length > 0 && navEntries[0].type === 'reload'
 
-  // Track notifications that were unread at any point during this component's lifecycle.
-  // This allows them to stay visible even after they are marked as read in the backend.
-  notifications.forEach(n => {
-    if (!n.is_read) {
-      sessionUnreadIds.current.add(n.id)
+    if (!isReload) {
+      sessionStorage.removeItem('session_unread_ids')
     }
+
+    const saved = sessionStorage.getItem('session_unread_ids')
+    return saved ? new Set(JSON.parse(saved)) : new Set()
   })
+
+  // Track notifications that were unread at any point during this session.
+  // This allows them to stay visible even after they are marked as read in the backend,
+  // and even after a page reload (crucial for E2E tests).
+  useEffect(() => {
+    let changed = false
+    const next = new Set(sessionUnreadIds)
+    notifications.forEach(n => {
+      if (!n.is_read && !next.has(n.id)) {
+        next.add(n.id)
+        changed = true
+      }
+    })
+    if (changed) {
+      setSessionUnreadIds(next)
+      sessionStorage.setItem('session_unread_ids', JSON.stringify(Array.from(next)))
+    }
+  }, [notifications, sessionUnreadIds])
 
   const displayNotifications = useMemo(() => {
     return notifications
-      .filter(n => !n.is_read || sessionUnreadIds.current.has(n.id))
+      .filter(n => !n.is_read || sessionUnreadIds.has(n.id))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  }, [notifications])
+  }, [notifications, sessionUnreadIds])
 
   const seenIds = useRef<Set<string>>(new Set())
   const isFirstRun = useRef(true)
