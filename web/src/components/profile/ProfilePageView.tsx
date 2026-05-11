@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Body, Heading, Muted } from '@/components/Typography'
-import { Star, Sparkles, Pencil, ChevronLeft, ChevronRight, Calendar, Clock, Users, BookOpen } from 'lucide-react'
+import { Star, Sparkles, Pencil, ChevronLeft, ChevronRight, Calendar, Clock, Users, BookOpen, Linkedin, FileAudio, FileVideo } from 'lucide-react'
 import { EditProfileModal } from '#/components/profile/EditProfileModal.tsx'
 import { ProfilePostsSection } from '#/components/profile/ProfilePostsSection.tsx'
 import { useState } from 'react'
@@ -22,8 +22,12 @@ interface BaseMappedProfile {
   bio: string
   show_initials_only: boolean
   picture_url: string
+  audio_url?: string
+  video_url?: string
+  linkedin_url?: string
   skills: string[]
   app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
+  share_precise_location: boolean
 }
 
 interface MentorMappedProfile extends BaseMappedProfile {
@@ -289,6 +293,17 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                   <Pencil className="h-4 w-4" />
                 </button>
             )}
+            {profile.linkedin_url && (
+                <a
+                    href={profile.linkedin_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-lg p-1.5 text-[#0A66C2] hover:bg-[#0A66C2]/10 transition-colors"
+                    aria-label="LinkedIn Profile"
+                >
+                    <Linkedin className="h-4 w-4" />
+                </a>
+            )}
             {!isOwner && isAuthenticatedViewer && (
                 <div className="ml-auto">
                   <ReportUserDialog reportedUsername={profile.username} />
@@ -312,6 +327,44 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
       </Card>
   )
 
+  const mediaCard = (profile.audio_url || profile.video_url) ? (
+      <Card className="border-line bg-card shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg">Media Introduction</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+            {profile.video_url && (
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium text-ink-soft">
+                        <FileVideo className="h-4 w-4" /> Video Intro
+                    </div>
+                    <video 
+                        controls 
+                        className="w-full max-w-sm rounded-xl overflow-hidden shadow-sm"
+                        src={getAbsoluteMediaUrl(profile.video_url)}
+                    >
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            )}
+            {profile.audio_url && (
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium text-ink-soft">
+                        <FileAudio className="h-4 w-4" /> Audio Intro
+                    </div>
+                    <audio 
+                        controls 
+                        className="w-full max-w-sm"
+                        src={getAbsoluteMediaUrl(profile.audio_url)}
+                    >
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+            )}
+        </CardContent>
+      </Card>
+  ) : null
+
   const editModal = editOpen && (
       <EditProfileModal
           mode={profile.isMentor ? 'MENTOR' : 'MENTEE'}
@@ -319,7 +372,9 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
             bio: profile.bio ?? '',
             title: profile.isMentor ? profile.title : undefined,
             show_initials_only: profile.show_initials_only,
+            share_precise_location: profile.share_precise_location,
             skills: profile.skills,
+            linkedin_url: profile.linkedin_url,
           }}
           onClose={() => setEditOpen(false)}
       />
@@ -333,6 +388,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
               <div className="space-y-6">
                 {avatarBlock}
                 {bioCard}
+                {mediaCard}
                 <Card className="border-line bg-card shadow-sm">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
@@ -380,6 +436,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                     <div className="space-y-6">
                         {avatarBlock}
                         {bioCard}
+                        {mediaCard}
                         <Card className="border-line bg-card shadow-sm">
                             <CardHeader>
                                 <CardTitle className="text-lg">Expertise</CardTitle>

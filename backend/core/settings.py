@@ -158,6 +158,13 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "ENUM_NAME_OVERRIDES": {
         "AppUsageModeEnum": "accounts.models.AppUsageMode",
+        "AvailabilitySlotStatusEnum": "profiles.models.AvailabilitySlot.Status",
+        "MentorshipRequestStatusEnum": "mentorship.models.MentorshipRequest.Status",
+        "MeetingSessionStatusEnum": "mentorship.models.MeetingSession.Status",
+        "WorkshopStatusEnum": "mentorship.models.Workshop.Status",
+        "ReportStatusEnum": "accounts.models.ReportStatus",
+        "ReadReceiptStatusEnum": "messaging.models.ReadReceipt.Status",
+        "WorkshopAttendanceStatusEnum": "mentorship.models.WorkshopAttendanceStatus",
     },
 }
 
@@ -174,7 +181,7 @@ USE_TZ = True
 # ==============================================================================
 STATIC_URL = "static/"
 
-GS_BUCKET_NAME = "neighborship-bucket"
+GS_BUCKET_NAME = os.getenv("GS_BUCKET_NAME")
 
 if GS_BUCKET_NAME and not DEBUG:
     STORAGES = {
@@ -216,6 +223,10 @@ MAX_MESSAGE_ATTACHMENT_SIZE_MB = 20
 MAX_MESSAGE_ATTACHMENT_SIZE_BYTES = MAX_MESSAGE_ATTACHMENT_SIZE_MB * 1024 * 1024
 MAX_PROFILE_PICTURE_SIZE_MB = 5
 MAX_PROFILE_PICTURE_SIZE_BYTES = MAX_PROFILE_PICTURE_SIZE_MB * 1024 * 1024
+MAX_PROFILE_VIDEO_SIZE_MB = 150
+MAX_PROFILE_VIDEO_SIZE_BYTES = MAX_PROFILE_VIDEO_SIZE_MB * 1024 * 1024
+MAX_PROFILE_AUDIO_SIZE_MB = 20
+MAX_PROFILE_AUDIO_SIZE_BYTES = MAX_PROFILE_AUDIO_SIZE_MB * 1024 * 1024
 PROFILE_PICTURE_MAX_DIMENSION = 512
 MAX_POST_MEDIA_SIZE_MB = 10
 MAX_POST_MEDIA_SIZE_BYTES = MAX_POST_MEDIA_SIZE_MB * 1024 * 1024

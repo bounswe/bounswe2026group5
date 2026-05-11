@@ -1,13 +1,14 @@
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useMarkRead } from '@/lib/queries/MessagingQueries';
 import { useQueryClient } from '@tanstack/react-query';
-import { apiGet } from '@/lib/api/client';
+import { apiPost } from '@/lib/api/client';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Mock dependencies
 jest.mock('@/lib/api/client', () => ({
   apiGet: jest.fn(),
+  apiPost: jest.fn(),
   apiPostMultipart: jest.fn(),
 }));
 
@@ -40,7 +41,7 @@ describe('useMarkRead hook', () => {
 
     queryClient.setQueryData(['messaging', 'conversations'], initialData);
 
-    (apiGet as jest.Mock).mockResolvedValueOnce({ success: true });
+    (apiPost as jest.Mock).mockResolvedValueOnce({ success: true });
 
     const { result } = renderHook(() => useMarkRead(conversationId), { wrapper });
 
@@ -58,7 +59,7 @@ describe('useMarkRead hook', () => {
     const initialData = [{ id: 'conv-1', unread_count: 10 }];
     queryClient.setQueryData(['messaging', 'conversations'], initialData);
 
-    (apiGet as jest.Mock).mockRejectedValueOnce(new Error('API Error'));
+    (apiPost as jest.Mock).mockRejectedValueOnce(new Error('API Error'));
 
     const { result } = renderHook(() => useMarkRead(conversationId), { wrapper });
 

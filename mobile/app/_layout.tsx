@@ -55,6 +55,7 @@ export default function RootLayout() {
 function RootLayoutContent() {
   const colorScheme = useColorScheme();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
   const isLoading = useAuthStore((state) => state.isLoading);
   const initializeAuth = useAuthStore((state) => state.initializeAuth);
 
@@ -79,11 +80,13 @@ function RootLayoutContent() {
   }
 
 
+  const hasIncompleteProfile = isAuthenticated && (!user || !user.app_usage_mode);
+
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <ToastProvider>
         <PushNotificationManager isAuthenticated={isAuthenticated}>
-          {isAuthenticated ? (
+          {isAuthenticated && !hasIncompleteProfile ? (
             <Stack>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen

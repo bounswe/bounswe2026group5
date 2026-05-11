@@ -26,7 +26,7 @@ export function Heading<T extends ElementType = "h2">({
                                                       }: TypographyProps<T>) {
     const Tag = as ?? "h2";
     return (
-        <Tag className={cn("text-2xl font-semibold tracking-tight", className)} {...props}>
+        <Tag className={cn("text-2xl font-semibold tracking-tight text-ink", className)} {...props}>
             {children}
         </Tag>
     );
@@ -59,7 +59,7 @@ export function Muted<T extends ElementType = "p">({
                                                    }: TypographyProps<T>) {
     const Tag = as ?? "p";
     return (
-        <Tag className={cn("text-sm text-muted-foreground", className)} {...props}>
+        <Tag className={cn("text-sm text-ink-soft", className)} {...props}>
             {children}
         </Tag>
     );

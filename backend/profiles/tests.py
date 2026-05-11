@@ -5788,6 +5788,97 @@ class ProfileWorkshopAttendanceAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertGreaterEqual(response.data["count"], 1)
 
+from django.core.files.uploadedfile import SimpleUploadedFile
+
+class ProfileMediaUploadTests(TestCase):
+    """Unit tests for profile audio and video uploads."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            email="media-test@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.profile = Profile.objects.create(
+            user=self.user,
+            display_name="Media Tester",
+        )
+        self.client = APIClient()
+        self.token = str(RefreshToken.for_user(self.user).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token}")
+
+        # Create valid mock audio file
+        self.valid_audio_content = b"fake-audio-content"
+        self.audio_file = SimpleUploadedFile(
+            "test_audio.mp3",
+            self.valid_audio_content,
+            content_type="audio/mpeg"
+        )
+        
+        # Create valid mock video file
+        self.valid_video_content = b"fake-video-content"
+        self.video_file = SimpleUploadedFile(
+            "test_video.mp4",
+            self.valid_video_content,
+            content_type="video/mp4"
+        )
+
+        self.audio_url = "/api/profiles/me/audio/"
+        self.video_url = "/api/profiles/me/video/"
+
+    def test_upload_valid_audio(self) -> None:
+        """Uploading valid audio returns 201 Created and updates profile."""
+        response = self.client.post(self.audio_url, {"audio": self.audio_file}, format="multipart")
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("audio_url", response.data)
+        self.profile.refresh_from_db()
+        self.assertTrue(bool(self.profile.audio))
+
+    def test_delete_audio(self) -> None:
+        """Deleting audio returns 200 OK and clears the field."""
+        self.profile.audio.save("test_audio.mp3", self.audio_file)
+        self.assertTrue(bool(self.profile.audio))
+        response = self.client.delete(self.audio_url)
+        self.assertEqual(response.status_code, 200)
+        self.profile.refresh_from_db()
+        self.assertFalse(bool(self.profile.audio))
+
+    def test_upload_invalid_audio_type(self) -> None:
+        """Uploading invalid file type to audio endpoint returns 400 Bad Request."""
+        invalid_file = SimpleUploadedFile(
+            "test_image.png",
+            b"fake-image",
+            content_type="image/png"
+        )
+        response = self.client.post(self.audio_url, {"audio": invalid_file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
+    def test_upload_valid_video(self) -> None:
+        """Uploading valid video returns 201 Created and updates profile."""
+        response = self.client.post(self.video_url, {"video": self.video_file}, format="multipart")
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("video_url", response.data)
+        self.profile.refresh_from_db()
+        self.assertTrue(bool(self.profile.video))
+
+    def test_delete_video(self) -> None:
+        """Deleting video returns 200 OK and clears the field."""
+        self.profile.video.save("test_video.mp4", self.video_file)
+        self.assertTrue(bool(self.profile.video))
+        response = self.client.delete(self.video_url)
+        self.assertEqual(response.status_code, 200)
+        self.profile.refresh_from_db()
+        self.assertFalse(bool(self.profile.video))
+
+    def test_upload_invalid_video_type(self) -> None:
+        """Uploading invalid file type to video endpoint returns 400 Bad Request."""
+        invalid_file = SimpleUploadedFile(
+            "test_audio.mp3",
+            b"fake-audio",
+            content_type="audio/mpeg"
+        )
+        response = self.client.post(self.video_url, {"video": invalid_file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
 
 class MentorQualitySignalsTests(APITestCase):
     """Tests for mentor discovery quality signals and sorting."""

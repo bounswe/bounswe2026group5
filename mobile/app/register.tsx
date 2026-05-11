@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { RegistrationProfileSetupSheet } from "@/components/profile/RegistrationProfileSetupSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { LegalModal } from "@/components/ui/LegalModal";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { ApiValidationError } from "@/lib/api/client";
@@ -136,6 +137,7 @@ export default function RegisterScreen() {
   const [submitError, setSubmitError] = useState("");
   const [usernameError, setUsernameError] = useState("");
   const [profileSetupVisible, setProfileSetupVisible] = useState(false);
+  const [legalType, setLegalType] = useState<"tos" | "privacy" | null>(null);
 
   const {
     data: skillsData,
@@ -586,11 +588,17 @@ export default function RegisterScreen() {
                 </View>
                 <Text className="flex-1 text-sm font-medium text-on-surface dark:text-on-surface-dark leading-snug">
                   I agree to the{" "}
-                  <Text className="text-primary dark:text-primary-dim">
+                  <Text
+                    onPress={() => setLegalType("tos")}
+                    className="text-primary dark:text-primary-dim"
+                  >
                     Terms of Service
                   </Text>{" "}
                   and{" "}
-                  <Text className="text-primary dark:text-primary-dim">
+                  <Text
+                    onPress={() => setLegalType("privacy")}
+                    className="text-primary dark:text-primary-dim"
+                  >
                     Privacy Policy
                   </Text>
                   .
@@ -711,6 +719,12 @@ export default function RegisterScreen() {
           setUsernameError("");
           completeRegistration.mutate(values);
         }}
+      />
+
+      <LegalModal
+        type={legalType}
+        visible={legalType !== null}
+        onClose={() => setLegalType(null)}
       />
     </SafeAreaView>
   );

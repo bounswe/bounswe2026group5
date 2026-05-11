@@ -1,5 +1,13 @@
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
-import { useOwnProfile, useUpdateProfile, useUploadProfilePicture } from '#/lib/queries/ProfileQueries.ts'
+import { 
+    useOwnProfile, 
+    useUpdateProfile, 
+    useUploadProfilePicture,
+    useUploadProfileAudio,
+    useDeleteProfileAudio,
+    useUploadProfileVideo,
+    useDeleteProfileVideo,
+} from '#/lib/queries/ProfileQueries.ts'
 import { SkillPicker } from '@/components/SkillPicker'
 import { Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
@@ -9,7 +17,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { getAbsoluteMediaUrl } from '@/lib/utils'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Camera, Loader2, X } from 'lucide-react'
+import { Camera, Loader2, X, FileAudio, FileVideo, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
@@ -20,6 +28,7 @@ import { toast } from 'sonner'
 export interface EditProfileValues {
     bio: string
     skills: string[]
+    linkedin_url?: string
 }
 
 interface EditProfileModalProps {
@@ -27,6 +36,7 @@ interface EditProfileModalProps {
     initialValues: EditProfileValues & {
         title?: string
         show_initials_only?: boolean
+        share_precise_location?: boolean
     }
     onClose: () => void
 }
@@ -41,11 +51,21 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
     const queryClient = useQueryClient()
     const pictureInputRef = useRef<HTMLInputElement>(null)
 
+    const uploadAudio = useUploadProfileAudio()
+    const deleteAudio = useDeleteProfileAudio()
+    const uploadVideo = useUploadProfileVideo()
+    const deleteVideo = useDeleteProfileVideo()
+
+    const audioInputRef = useRef<HTMLInputElement>(null)
+    const videoInputRef = useRef<HTMLInputElement>(null)
+
     const [bio, setBio] = useState(initialValues.bio)
     const [skills, setSkills] = useState<string[]>(initialValues.skills)
     const [title, setTitle] = useState(initialValues.title ?? '')
+    const [linkedinUrl, setLinkedinUrl] = useState(initialValues.linkedin_url ?? '')
     const [showInitialsOnly, setShowInitialsOnly] = useState(initialValues.show_initials_only ?? false)
-    const [errors, setErrors] = useState<{ title?: string; bio?: string }>({})
+    const [errors, setErrors] = useState<{ title?: string; bio?: string; linkedin_url?: string }>({})
+    const [sharePreciseLocation, setSharePreciseLocation] = useState(initialValues.share_precise_location ?? true)
 
     function handlePictureChange(file: File) {
         if (file.size > 5 * 1024 * 1024) {
@@ -61,6 +81,34 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
         })
     }
 
+    function handleAudioChange(file: File) {
+        if (file.size > 20 * 1024 * 1024) {
+            toast.error('Audio must be under 20 MB')
+            return
+        }
+        uploadAudio.mutate(file, {
+            onSuccess: () => {
+                queryClient.invalidateQueries({ queryKey: ['profiles', 'me'] })
+                queryClient.invalidateQueries({ queryKey: ['profiles', me?.username] })
+            },
+            onError: () => toast.error('Failed to upload audio. Please try again.'),
+        })
+    }
+
+    function handleVideoChange(file: File) {
+        if (file.size > 150 * 1024 * 1024) {
+            toast.error('Video must be under 150 MB')
+            return
+        }
+        uploadVideo.mutate(file, {
+            onSuccess: () => {
+                queryClient.invalidateQueries({ queryKey: ['profiles', 'me'] })
+                queryClient.invalidateQueries({ queryKey: ['profiles', me?.username] })
+            },
+            onError: () => toast.error('Failed to upload video. Please try again.'),
+        })
+    }
+
     const isMentor = mode === 'MENTOR'
 
     const modalTitle = isMentor ? 'Edit Mentor Profile' : 'Edit Your Profile'
@@ -73,13 +121,15 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
         : 'Pick the topics you want to explore.'
 
     const validate = () => {
-        const next: { title?: string; bio?: string } = {}
+        const next: { title?: string; bio?: string; linkedin_url?: string } = {}
         if (isMentor && title.trim().length > 100)
             next.title = "Title must be 100 characters or fewer."
         else if (isMentor && title.trim().length > 0 && !/^[a-zA-ZÀ-ÿ\s',-]+$/.test(title.trim()))
             next.title = "Title can only contain letters."
         if (bio.trim().length < 10)
             next.bio = "Bio must be at least 10 characters."
+        if (linkedinUrl.trim().length > 0 && !linkedinUrl.startsWith('https://'))
+            next.linkedin_url = "LinkedIn URL must start with https://"
         setErrors(next)
         return Object.keys(next).length === 0
     }
@@ -91,7 +141,9 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                 bio,
                 title: isMentor ? title : undefined,
                 show_initials_only: showInitialsOnly,
+                share_precise_location: sharePreciseLocation,
                 skills: skills,
+                linkedin_url: linkedinUrl,
             },
             {
                 onSuccess: () => {
@@ -212,6 +264,126 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                         </div>
                     </div>
 
+                    {/* LinkedIn URL */}
+                    <div className="space-y-2">
+                        <Label htmlFor="linkedin_url" className="text-sm font-medium text-ink">
+                            LinkedIn Profile (Optional)
+                        </Label>
+                        <Input
+                            id="linkedin_url"
+                            value={linkedinUrl}
+                            onChange={(e) => { setLinkedinUrl(e.target.value); setErrors(p => ({ ...p, linkedin_url: undefined })) }}
+                            placeholder="https://linkedin.com/in/username"
+                            className="bg-background"
+                            aria-invalid={!!errors.linkedin_url}
+                        />
+                        {errors.linkedin_url && <p className="text-xs text-destructive" role="alert">{errors.linkedin_url}</p>}
+                    </div>
+
+                    {/* Extended Media */}
+                    <div className="space-y-4 rounded-xl border border-line p-4 bg-black/[0.02]">
+                        <div>
+                            <Label className="text-sm font-medium text-ink">Extended Profile Media</Label>
+                            <Muted className="text-xs block">Add an audio intro or a short video clip (up to 90s).</Muted>
+                        </div>
+
+                        {/* Audio Picker */}
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 shrink-0 rounded-full bg-background flex items-center justify-center shadow-sm">
+                                    <FileAudio className="h-5 w-5 text-accent" />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium text-ink truncate">
+                                        {profileData?.audio_url ? 'Audio uploaded' : 'No audio intro'}
+                                    </p>
+                                    <p className="text-xs text-ink-soft truncate">Max 20MB</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <input
+                                    ref={audioInputRef}
+                                    type="file"
+                                    accept="audio/*"
+                                    className="hidden"
+                                    onChange={e => { const f = e.target.files?.[0]; if (f) handleAudioChange(f) }}
+                                />
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => audioInputRef.current?.click()}
+                                    disabled={uploadAudio.isPending}
+                                >
+                                    {uploadAudio.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Upload'}
+                                </Button>
+                                {profileData?.audio_url && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-destructive hover:bg-destructive hover:text-white"
+                                        onClick={() => deleteAudio.mutate(undefined, {
+                                            onSuccess: () => {
+                                                queryClient.invalidateQueries({ queryKey: ['profiles', 'me'] })
+                                                queryClient.invalidateQueries({ queryKey: ['profiles', me?.username] })
+                                            }
+                                        })}
+                                        disabled={deleteAudio.isPending}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Video Picker */}
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 shrink-0 rounded-full bg-background flex items-center justify-center shadow-sm">
+                                    <FileVideo className="h-5 w-5 text-accent" />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium text-ink truncate">
+                                        {profileData?.video_url ? 'Video uploaded' : 'No video intro'}
+                                    </p>
+                                    <p className="text-xs text-ink-soft truncate">Max 150MB</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <input
+                                    ref={videoInputRef}
+                                    type="file"
+                                    accept="video/*"
+                                    className="hidden"
+                                    onChange={e => { const f = e.target.files?.[0]; if (f) handleVideoChange(f) }}
+                                />
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => videoInputRef.current?.click()}
+                                    disabled={uploadVideo.isPending}
+                                >
+                                    {uploadVideo.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Upload'}
+                                </Button>
+                                {profileData?.video_url && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-destructive hover:bg-destructive hover:text-white"
+                                        onClick={() => deleteVideo.mutate(undefined, {
+                                            onSuccess: () => {
+                                                queryClient.invalidateQueries({ queryKey: ['profiles', 'me'] })
+                                                queryClient.invalidateQueries({ queryKey: ['profiles', me?.username] })
+                                            }
+                                        })}
+                                        disabled={deleteVideo.isPending}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Skills */}
                     <div className="space-y-2">
                         <Label className="text-sm font-medium text-ink">{skillsLabel}</Label>
@@ -234,6 +406,19 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                         <div>
                             <label htmlFor="show-initials-toggle" className="text-sm font-medium text-ink cursor-pointer">Show initials only</label>
                             <Muted className="text-xs">Your full name and picture will be hidden from others.</Muted>
+                        </div>
+                    </div>
+
+                    {/* Share precise location toggle */}
+                    <div className="flex items-center gap-4 rounded-xl border border-line p-4 bg-black/[0.02]">
+                        <Switch
+                            id="share-location-toggle"
+                            checked={sharePreciseLocation}
+                            onCheckedChange={setSharePreciseLocation}
+                        />
+                        <div>
+                            <label htmlFor="share-location-toggle" className="text-sm font-medium text-ink cursor-pointer">Share precise location</label>
+                            <Muted className="text-xs">Allow others to see your exact location. If disabled, a generalized location will be shown.</Muted>
                         </div>
                     </div>
 

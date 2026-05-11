@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 import { useLoginMutation } from "@/lib/queries/auth";
 import { useGoogleLoginMutation } from "@/lib/queries/googleAuth";
+import { useAuthStore } from "@/lib/auth/store";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -32,6 +33,19 @@ export default function LoginScreen() {
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme];
+
+  const authUser = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  /**
+   * If the user is already authenticated but hasn't finished onboarding,
+   * redirect them to the registration screen.
+   */
+  useEffect(() => {
+    if (isAuthenticated && !authUser?.app_usage_mode) {
+      router.replace("/register");
+    }
+  }, [isAuthenticated, authUser, router]);
 
   /**
    * Handle login button press.

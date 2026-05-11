@@ -19,9 +19,19 @@ jobs:
   frontend:
     name: Frontend Build and Tests
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
+ 
+      - name: Set up environment variables
+        env:
+          ROOT_ENV: ${{ secrets.ROOT_ENV }}
+        run: |
+          if [ -n "$ROOT_ENV" ]; then
+            echo "$ROOT_ENV" > .env
+          else
+            cp .env.example .env
+          fi
+        working-directory: .
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

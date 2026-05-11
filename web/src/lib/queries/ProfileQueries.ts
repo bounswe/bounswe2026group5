@@ -15,8 +15,12 @@ export interface MenteeProfile {
     bio: string
     show_initials_only: boolean
     picture_url: string
+    audio_url?: string
+    video_url?: string
+    linkedin_url?: string
     skills: string[] | null
     app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
+    share_precise_location: boolean
 }
 
 export interface MentorProfile {
@@ -25,12 +29,16 @@ export interface MentorProfile {
     bio: string
     show_initials_only: boolean
     picture_url: string
+    audio_url?: string
+    video_url?: string
+    linkedin_url?: string
     title: string
     skills: string[] | null
     average_rating: number
     review_count: number
     total_mentee_count: number
     app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
+    share_precise_location: boolean
     is_overloaded: boolean
     active_matches_count: number
     overload_threshold: number
@@ -49,7 +57,9 @@ export interface UpdateProfileBody {
     title?: string
     location?: string
     show_initials_only?: boolean
+    share_precise_location?: boolean
     skills?: string[]
+    linkedin_url?: string
 }
 
 // ---- Fetchers ----
@@ -155,6 +165,74 @@ async function uploadProfilePicture(file: File): Promise<{ picture_url: string }
 export function useUploadProfilePicture() {
     return useMutation({
         mutationFn: (file: File) => uploadProfilePicture(file),
+    })
+}
+
+async function uploadProfileAudio(file: File): Promise<{ audio_url: string }> {
+    const token = localStorage.getItem('access_token')
+    const form = new FormData()
+    form.append('audio', file)
+    const res = await fetch(`${API_BASE_URL}/profiles/me/audio/`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+    })
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
+export function useUploadProfileAudio() {
+    return useMutation({
+        mutationFn: (file: File) => uploadProfileAudio(file),
+    })
+}
+
+async function deleteProfileAudio(): Promise<void> {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`${API_BASE_URL}/profiles/me/audio/`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) await throwApiError(res)
+}
+
+export function useDeleteProfileAudio() {
+    return useMutation({
+        mutationFn: () => deleteProfileAudio(),
+    })
+}
+
+async function uploadProfileVideo(file: File): Promise<{ video_url: string }> {
+    const token = localStorage.getItem('access_token')
+    const form = new FormData()
+    form.append('video', file)
+    const res = await fetch(`${API_BASE_URL}/profiles/me/video/`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+    })
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
+
+export function useUploadProfileVideo() {
+    return useMutation({
+        mutationFn: (file: File) => uploadProfileVideo(file),
+    })
+}
+
+async function deleteProfileVideo(): Promise<void> {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`${API_BASE_URL}/profiles/me/video/`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) await throwApiError(res)
+}
+
+export function useDeleteProfileVideo() {
+    return useMutation({
+        mutationFn: () => deleteProfileVideo(),
     })
 }
 

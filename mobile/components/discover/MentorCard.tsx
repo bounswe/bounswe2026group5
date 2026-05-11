@@ -39,6 +39,7 @@ export function MentorCard({ profile, onPress }: Readonly<MentorCardProps>) {
           <UserAvatar
             imageUrl={profile.picture_url}
             name={profile.full_name}
+            showInitialsOnly={profile.show_initials_only}
             size="sm"
             testIDPrefix={`discover-avatar-${profile.username}`}
           />

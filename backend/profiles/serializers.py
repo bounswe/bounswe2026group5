@@ -12,6 +12,13 @@ from rest_framework import serializers
 
 from core.utils.image import resize_image
 from core.utils.timezone import get_project_timezone, to_local_time
+from core.utils.validators import (
+    validate_audio_content_type,
+    validate_file_size,
+    validate_image_content_type,
+    validate_video_content_type,
+)
+from mentorship.models import MeetingSession
 from core.utils.validators import validate_file_size, validate_image_content_type
 from mentorship.models import Match, MeetingSession
 from timeline.models import TimelineEvent
@@ -36,6 +43,28 @@ def resolve_picture_url(profile: Profile) -> str:
         except ValueError:
             pass
     return profile.picture_url or ""
+
+
+@extend_schema_field(OpenApiTypes.URI)
+def resolve_audio_url(profile: Profile) -> str:
+    """Return the best available audio URL for a profile."""
+    if profile.audio and hasattr(profile.audio, "url"):
+        try:
+            return profile.audio.url
+        except ValueError:
+            pass
+    return ""
+
+
+@extend_schema_field(OpenApiTypes.URI)
+def resolve_video_url(profile: Profile) -> str:
+    """Return the best available video URL for a profile."""
+    if profile.video and hasattr(profile.video, "url"):
+        try:
+            return profile.video.url
+        except ValueError:
+            pass
+    return ""
 
 
 @extend_schema_field(
@@ -124,6 +153,68 @@ class ProfilePictureUploadSerializer(serializers.Serializer):
                 pass
 
         profile.picture.save(resized.name, resized, save=True)
+        return profile
+
+
+class ProfileAudioUploadSerializer(serializers.Serializer):
+    """Write serializer for uploading profile audio."""
+
+    audio = serializers.FileField(required=True)
+
+    def validate_audio(self, audio):
+        """Validate audio content-type and size limit."""
+        from django.conf import settings
+
+        validate_audio_content_type(audio)
+        validate_file_size(
+            audio,
+            settings.MAX_PROFILE_AUDIO_SIZE_BYTES,
+            label="Profile audio",
+        )
+        return audio
+
+    def save_audio(self, profile: Profile):
+        """Persist the audio file on the profile."""
+        audio = self.validated_data["audio"]
+
+        if profile.audio:
+            try:
+                profile.audio.delete(save=False)
+            except Exception:
+                pass
+
+        profile.audio.save(audio.name, audio, save=True)
+        return profile
+
+
+class ProfileVideoUploadSerializer(serializers.Serializer):
+    """Write serializer for uploading profile video."""
+
+    video = serializers.FileField(required=True)
+
+    def validate_video(self, video):
+        """Validate video content-type and size limit."""
+        from django.conf import settings
+
+        validate_video_content_type(video)
+        validate_file_size(
+            video,
+            settings.MAX_PROFILE_VIDEO_SIZE_BYTES,
+            label="Profile video",
+        )
+        return video
+
+    def save_video(self, profile: Profile):
+        """Persist the video file on the profile."""
+        video = self.validated_data["video"]
+
+        if profile.video:
+            try:
+                profile.video.delete(save=False)
+            except Exception:
+                pass
+
+        profile.video.save(video.name, video, save=True)
         return profile
 
 
@@ -247,8 +338,11 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
 
     full_name = serializers.SerializerMethodField()
     picture_url = serializers.SerializerMethodField()
+    audio_url = serializers.SerializerMethodField()
+    video_url = serializers.SerializerMethodField()
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     show_initials_only = serializers.BooleanField(read_only=True)
+    share_precise_location = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Profile
@@ -258,8 +352,12 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
             "full_name",
             "bio",
             "show_initials_only",
+            "share_precise_location",
             "picture_url",
             "skills",
+            "linkedin_url",
+            "audio_url",
+            "video_url",
         )
         read_only_fields = fields
 
@@ -281,6 +379,26 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
             return ""
         return resolve_picture_url(obj)
 
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_audio_url(self, obj: Profile) -> str:
+        """Return audio URL, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_audio_url(obj)
+            return ""
+        return resolve_audio_url(obj)
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_video_url(self, obj: Profile) -> str:
+        """Return video URL, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_video_url(obj)
+            return ""
+        return resolve_video_url(obj)
+
 
 class MentorProfileResponseSerializer(serializers.ModelSerializer):
     """Read serializer for mentor profile data."""
@@ -288,10 +406,13 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     title = serializers.CharField(read_only=True)
     picture_url = serializers.SerializerMethodField()
+    audio_url = serializers.SerializerMethodField()
+    video_url = serializers.SerializerMethodField()
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     average_rating = serializers.DecimalField(max_digits=3, decimal_places=2, read_only=True)
     total_mentee_count = serializers.IntegerField(read_only=True)
     show_initials_only = serializers.BooleanField(read_only=True)
+    share_precise_location = serializers.BooleanField(read_only=True)
 
     is_overloaded = serializers.SerializerMethodField()
     active_matches_count = serializers.SerializerMethodField()
@@ -306,11 +427,15 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
             "title",
             "bio",
             "show_initials_only",
+            "share_precise_location",
             "picture_url",
             "skills",
             "average_rating",
             "review_count",
             "total_mentee_count",
+            "linkedin_url",
+            "audio_url",
+            "video_url",
             "is_overloaded",
             "active_matches_count",
             "overload_threshold",
@@ -334,6 +459,25 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
             return ""
         return resolve_picture_url(obj)
 
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_audio_url(self, obj: Profile) -> str:
+        """Return audio URL, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_audio_url(obj)
+            return ""
+        return resolve_audio_url(obj)
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_video_url(self, obj: Profile) -> str:
+        """Return video URL, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_video_url(obj)
+            return ""
+        return resolve_video_url(obj)
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_overloaded(self, obj: Profile) -> bool:
         """Return True when active matches meet or exceed the threshold."""
@@ -367,6 +511,9 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
     location = LocationField(read_only=True)
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     picture_url = serializers.SerializerMethodField()
+    audio_url = serializers.SerializerMethodField()
+    video_url = serializers.SerializerMethodField()
+    share_precise_location = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Profile
@@ -379,9 +526,13 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
             "title",
             "location",
             "show_initials_only",
+            "share_precise_location",
             "skills",
             "created_at",
             "updated_at",
+            "linkedin_url",
+            "audio_url",
+            "video_url",
         )
         read_only_fields = fields
 
@@ -394,6 +545,26 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
                 return resolve_picture_url(obj)
             return ""
         return resolve_picture_url(obj)
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_audio_url(self, obj: Profile) -> str:
+        """Return audio URL, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_audio_url(obj)
+            return ""
+        return resolve_audio_url(obj)
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_video_url(self, obj: Profile) -> str:
+        """Return video URL, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_video_url(obj)
+            return ""
+        return resolve_video_url(obj)
 
 
 class UsernameUpdateMixin:
@@ -422,6 +593,7 @@ class ProfileUpdateSerializer(UsernameUpdateMixin, serializers.ModelSerializer):
 
     location = LocationField(required=False, allow_null=True)
     share_precise_location = serializers.BooleanField(required=False)
+    linkedin_url = serializers.URLField(required=False, allow_blank=True)
     skills = serializers.ListField(
         child=serializers.CharField(),
         required=False,
@@ -450,6 +622,7 @@ class ProfileUpdateSerializer(UsernameUpdateMixin, serializers.ModelSerializer):
             "share_precise_location",
             "show_initials_only",
             "skills",
+            "linkedin_url",
         )
 
     def validate_username(self, value: str) -> str:
@@ -464,7 +637,6 @@ class ProfileUpdateSerializer(UsernameUpdateMixin, serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance: Profile, validated_data: dict[str, Any]) -> Profile:
-        """Apply partial updates and sync username to User model if changed."""
         new_username = validated_data.get("username")
         if new_username:
             self._sync_user_username(instance.user, new_username)
@@ -589,6 +761,8 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     location = serializers.SerializerMethodField()
     picture_url = serializers.SerializerMethodField()
+    audio_url = serializers.SerializerMethodField()
+    video_url = serializers.SerializerMethodField()
     show_initials_only = serializers.BooleanField(read_only=True)
     distance_km = serializers.SerializerMethodField()
     is_overloaded = serializers.SerializerMethodField()
@@ -610,6 +784,9 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
             "total_mentee_count",
             "is_overloaded",
             "distance_km",
+            "linkedin_url",
+            "audio_url",
+            "video_url",
         )
         read_only_fields = fields
 
@@ -628,6 +805,26 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
                 return resolve_picture_url(obj)
             return ""
         return resolve_picture_url(obj)
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_audio_url(self, obj: Profile) -> str:
+        """Return audio URL, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_audio_url(obj)
+            return ""
+        return resolve_audio_url(obj)
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_video_url(self, obj: Profile) -> str:
+        """Return video URL, respecting privacy."""
+        if obj.show_initials_only:
+            request = self.context.get("request")
+            if request and request.user.is_authenticated and request.user == obj.user:
+                return resolve_video_url(obj)
+            return ""
+        return resolve_video_url(obj)
 
     @extend_schema_field(LocationField)
     def get_location(self, obj: Profile) -> dict[str, float] | None:

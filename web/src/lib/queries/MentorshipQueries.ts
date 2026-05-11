@@ -167,6 +167,14 @@ export async function rescheduleSession(sessionId: string, newSlotId: string): P
     return res.json()
 }
 
+async function deactivateMatch(matchId: string): Promise<Match> {
+    const res = await fetch(`${API_BASE_URL}/mentorship/matches/${matchId}/deactivate/`, {
+        method: 'POST',
+        headers: withAuthHeaders(),
+    })
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
 
 // ---- Query Options ----
 
@@ -233,6 +241,12 @@ export function useRescheduleSession() {
     return useMutation({
         mutationFn: ({ sessionId, newSlotId }: { sessionId: string; newSlotId: string }) =>
             rescheduleSession(sessionId, newSlotId),
+    })
+}
+
+export function useDeactivateMatch() {
+    return useMutation({
+        mutationFn: deactivateMatch,
     })
 }
 

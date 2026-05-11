@@ -123,6 +123,22 @@ jest.mock("@/lib/queries/uploads", () => ({
     mutateAsync: (...args: unknown[]) => mockDeleteProfilePicture(...args),
     isPending: false,
   }),
+  useUploadProfileAudioMutation: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useDeleteProfileAudioMutation: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useUploadProfileVideoMutation: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useDeleteProfileVideoMutation: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
 }));
 
 jest.mock("@/lib/queries/communityTags", () => ({

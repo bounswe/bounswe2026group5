@@ -41,6 +41,8 @@ function iconNameForType(type: string): keyof typeof Ionicons.glyphMap {
     case "new_feedback_available":
     case "feedback_received":
       return "star-outline";
+    case "report_resolved":
+      return "checkmark-done-circle-outline";
     default:
       return "notifications-outline";
   }

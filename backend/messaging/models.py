@@ -79,11 +79,10 @@ class Message(models.Model):
 class ReadReceipt(models.Model):
     """Tracks message delivery and read status for recipients."""
 
-    STATUS_CHOICES = [
-        ("sent", "Sent"),
-        ("delivered", "Delivered"),
-        ("read", "Read"),
-    ]
+    class Status(models.TextChoices):
+        SENT = "sent", "Sent"
+        DELIVERED = "delivered", "Delivered"
+        READ = "read", "Read"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     message = models.ForeignKey(
@@ -98,8 +97,8 @@ class ReadReceipt(models.Model):
     )
     status = models.CharField(
         max_length=10,
-        choices=STATUS_CHOICES,
-        default="sent",
+        choices=Status.choices,
+        default=Status.SENT,
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -642,6 +642,13 @@ def deactivate_match(*, match: Match, actor_profile: Profile) -> Match:
             },
         )
 
+    # Cancel all upcoming sessions related to this match
+    active_sessions = match.meeting_sessions.filter(
+        status__in=[MeetingSession.Status.SCHEDULED, MeetingSession.Status.RESCHEDULED]
+    )
+    for session in active_sessions:
+        cancel_match_session(session=session, actor=actor_profile.user, actor_profile=actor_profile)
+
     return match
 
 

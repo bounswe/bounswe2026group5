@@ -86,6 +86,11 @@ const VARIANT_MAP: Record<NotificationType, VariantConfig> = {
         iconClass: 'text-accent',
         borderClass: 'border-l-accent',
     },
+    report_resolved: {
+        icon: CheckCircle2,
+        iconClass: 'text-blue-500',
+        borderClass: 'border-l-blue-400',
+    },
 }
 
 const FALLBACK_VARIANT: VariantConfig = {

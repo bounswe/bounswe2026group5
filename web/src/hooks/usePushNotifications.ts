@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { requestForToken, onMessageListener } from '#/lib/firebase-client'
+import { isFirebaseAvailable, requestForToken, onMessageListener } from '#/lib/firebase-client'
 import { useRegisterFCMToken } from '#/lib/queries/NotificationQueries'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
@@ -11,6 +11,13 @@ export const usePushNotifications = (isAuthenticated: boolean, currentUsername?:
 
     useEffect(() => {
         if (!isAuthenticated) return
+
+        // Skip Firebase push setup when Firebase is not configured.
+        // Notifications will still work via HTTP polling (refetchInterval on the query).
+        if (!isFirebaseAvailable()) {
+            console.debug('[Push] Firebase not configured — using polling fallback for notifications')
+            return
+        }
 
         // We store the registered token per user to support multi-account login on the same browser
         const userId = localStorage.getItem('id')

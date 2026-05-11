@@ -22,6 +22,7 @@ export type NotificationType =
     | 'tag_description_updated'
     | 'tag_deleted'
     | 'tag_matches_interest'
+    | 'report_resolved'
 
 export interface Notification {
     id: string
@@ -68,6 +69,7 @@ async function registerFCMToken(token: string, device_type: 'web' | 'android' | 
 export const notificationsQueryOptions = queryOptions({
     queryKey: ['notifications'],
     queryFn: fetchNotifications,
+    refetchInterval: 10_000,
 })
 
 export function useNotifications() {
@@ -106,4 +108,5 @@ export const NOTIFICATION_INVALIDATION_MAP: Record<NotificationType, string[][]>
     tag_description_updated:     [['communities'], ['notifications']],
     tag_deleted:                 [['communities'], ['notifications']],
     tag_matches_interest:        [['communities'], ['notifications']],
+    report_resolved:             [['reports']],
 }

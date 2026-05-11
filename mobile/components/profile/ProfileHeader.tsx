@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Image, Modal, Pressable, Text, View } from "react-native";
+import { Image, Modal, Pressable, Text, View, Linking, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { getAbsoluteImageUrl, getAbsoluteUrl } from "@/lib/api/config";
 
@@ -16,8 +16,12 @@ interface ProfileHeaderProps {
   showRating?: boolean;
   showMenteesHelped?: boolean;
   imageUrl?: string;
+  showInitialsOnly?: boolean;
   imageCacheKey?: string | number;
   coverUrl?: string;
+  linkedinUrl?: string;
+  audioUrl?: string;
+  videoUrl?: string;
   onEdit?: () => void;
 }
 
@@ -32,8 +36,12 @@ export function ProfileHeader({
   showRating = true,
   showMenteesHelped = true,
   imageUrl,
+  showInitialsOnly = false,
   imageCacheKey,
   coverUrl,
+  linkedinUrl,
+  audioUrl,
+  videoUrl,
   onEdit,
 }: Readonly<ProfileHeaderProps>) {
   const [isBioExpanded, setIsBioExpanded] = useState(false);
@@ -68,13 +76,13 @@ export function ProfileHeader({
       <View className="flex-row justify-between px-4 -mt-12">
         {/* Left: Overlapping Avatar */}
         <Pressable
-          testID={imageUrl ? "profile-avatar-button" : undefined}
-          disabled={!imageUrl}
+          testID={imageUrl && !showInitialsOnly ? "profile-avatar-button" : undefined}
+          disabled={!imageUrl || showInitialsOnly}
           onPress={() => setAvatarPreviewOpen(true)}
           className="w-24 h-24 bg-surface-card dark:bg-surface-card-dark rounded-full p-1 shadow-sm border border-divider dark:border-divider-dark"
         >
           <View className="w-full h-full bg-surface dark:bg-surface-dark rounded-full items-center justify-center overflow-hidden">
-            {imageUrl ? (
+            {imageUrl && !showInitialsOnly ? (
               <Image
                 testID="profile-avatar-image"
                 source={{ uri: getAbsoluteImageUrl(imageUrl, imageCacheKey) }}
@@ -106,6 +114,16 @@ export function ProfileHeader({
                 {rating.toFixed(1)}
               </Text>
             </View>
+          ) : null}
+
+          {linkedinUrl ? (
+            <Pressable
+              testID="profile-linkedin-button"
+              className="h-8 w-8 items-center justify-center bg-blue-50 dark:bg-blue-900/40 rounded-lg border border-blue-200 dark:border-blue-800"
+              onPress={() => Linking.openURL(linkedinUrl).catch(() => {})}
+            >
+              <Ionicons name="logo-linkedin" size={16} color="#2563eb" />
+            </Pressable>
           ) : null}
 
           {onEdit ? (
@@ -144,6 +162,35 @@ export function ProfileHeader({
           </Pressable>
         )}
       </View>
+
+      {/* Media Introductions */}
+      {(audioUrl || videoUrl) ? (
+        <View className="px-4 mt-4 flex-row gap-2">
+          {audioUrl ? (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(getAbsoluteUrl(audioUrl)).catch(() => {})}
+              className="flex-row items-center px-3 py-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg border border-indigo-100 dark:border-indigo-800/50"
+            >
+              <Ionicons name="play-circle" size={16} color="#4338ca" />
+              <Text className="text-xs font-bold text-indigo-700 dark:text-indigo-400 ml-1">
+                Listen Intro
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {videoUrl ? (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(getAbsoluteUrl(videoUrl)).catch(() => {})}
+              className="flex-row items-center px-3 py-2 bg-rose-50 dark:bg-rose-900/30 rounded-lg border border-rose-100 dark:border-rose-800/50"
+            >
+              <Ionicons name="videocam" size={16} color="#e11d48" />
+              <Text className="text-xs font-bold text-rose-700 dark:text-rose-400 ml-1">
+                Watch Intro
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
 
       {showStats ? (
         <View className="px-4 mt-6">

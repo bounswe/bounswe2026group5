@@ -19,14 +19,25 @@ function RootComponent() {
   const { data: user } = useQuery(meQueryOptions)
   usePushNotifications(!!user, user?.username)
 
-  return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+  const content = (
+    <>
       <Outlet />
       <Toaster 
         position="bottom-center" 
         toastOptions={{ classNames: { toast: 'cn-toast' } }} 
         style={{ zIndex: 9999 }} 
       />
+    </>
+  )
+
+  // GoogleOAuthProvider crashes with an empty clientId.
+  // When the env var is not set, render without the provider — Google login
+  // buttons will still appear but clicking them will show a graceful error.
+  if (!GOOGLE_CLIENT_ID) return content
+
+  return (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      {content}
     </GoogleOAuthProvider>
   )
 }

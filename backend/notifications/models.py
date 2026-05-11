@@ -21,6 +21,7 @@ class NotificationType(models.TextChoices):
     TAG_DESCRIPTION_UPDATED = "tag_description_updated", "Tag Description Updated"
     TAG_DELETED = "tag_deleted", "Tag Deleted"
     TAG_MATCHES_INTEREST = "tag_matches_interest", "Tag Matches Interest"
+    REPORT_RESOLVED = "report_resolved", "Report Resolved"
 
 
 class Notification(models.Model):

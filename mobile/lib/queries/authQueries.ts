@@ -164,6 +164,7 @@ export async function updateProfileFn(params: {
   display_name: string;
   bio?: string;
   skills?: string[];
+  linkedin_url?: string;
 }): Promise<unknown> {
   const { accessToken, ...payload } = params;
 

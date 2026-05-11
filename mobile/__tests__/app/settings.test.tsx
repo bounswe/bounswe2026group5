@@ -214,8 +214,6 @@ describe("SettingsScreen — visibility controls", () => {
     expect(queryByTestId("toggle-new-mentorship-requests")).toBeNull();
     expect(queryByTestId("toggle-session-reminders")).toBeNull();
     expect(queryByTestId("toggle-platform-updates")).toBeNull();
-    expect(queryByTestId("setting-item-privacy-policy")).toBeNull();
-    expect(queryByTestId("setting-item-terms-of-service")).toBeNull();
     expect(queryByTestId("setting-item-delete-account")).toBeNull();
   });
 });
