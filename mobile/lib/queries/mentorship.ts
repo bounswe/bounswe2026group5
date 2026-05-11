@@ -15,6 +15,7 @@ export interface DashboardRequestItem {
   message?: string;
   proposedDate?: string;
   isReschedule?: boolean;
+  isMentorOverloaded?: boolean;
 }
 
 type BackendRequestStatus = "PENDING" | "ACCEPTED" | "REJECTED";
@@ -88,6 +89,7 @@ interface BackendMentorshipRequest {
   slot_end_time: string | null;
   status: BackendRequestStatus;
   cover_letter: string;
+  is_mentor_overloaded: boolean;
   created_at: string;
   responded_at: string | null;
 }
@@ -931,6 +933,7 @@ export function mapRequestsToDashboard(
         status: item.status,
         message: item.cover_letter || undefined,
         proposedDate: toProposedDate(item) || fallbackDate,
+        isMentorOverloaded: item.is_mentor_overloaded,
       };
     });
 }

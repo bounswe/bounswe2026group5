@@ -25,7 +25,9 @@ export const DEMO_DISCOVER_PROFILES: DiscoverMentorProfile[] = [
     show_initials_only: false,
     skills: ["React Native", "TypeScript", "System Design"],
     average_rating: "5.00",
+    review_count: 16,
     total_mentee_count: 18,
+    is_overloaded: false,
   },
   {
     id: "demo-mentor-2",
@@ -38,7 +40,9 @@ export const DEMO_DISCOVER_PROFILES: DiscoverMentorProfile[] = [
     show_initials_only: false,
     skills: ["Django", "PostgreSQL", "SQL"],
     average_rating: "4.00",
+    review_count: 9,
     total_mentee_count: 11,
+    is_overloaded: false,
   },
   {
     id: "demo-mentor-3",
@@ -51,6 +55,8 @@ export const DEMO_DISCOVER_PROFILES: DiscoverMentorProfile[] = [
     show_initials_only: false,
     skills: ["Docker", "GraphQL", "System Design"],
     average_rating: "5.00",
+    review_count: 21,
     total_mentee_count: 24,
+    is_overloaded: true,
   },
 ];

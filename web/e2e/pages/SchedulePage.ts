@@ -41,7 +41,35 @@ export class SchedulePage {
     await this.page.getByRole('button').filter({ has: this.page.locator('svg.lucide-chevron-right') }).click();
   }
 
-  async filterBySessionDate(dayNumber: string, peerName: string) {
-    await this.page.getByRole('button', { name: new RegExp(`${dayNumber}.*${peerName}`) }).click();
+  async goToMonth(targetDate: Date) {
+    const targetLabel = targetDate.toLocaleDateString('en-GB', {
+      month: 'long',
+      year: 'numeric',
+    });
+
+    for (let i = 0; i < 12; i += 1) {
+      const currentLabel = (await this.page.getByRole('heading', { level: 3 }).textContent())?.trim();
+      if (currentLabel === targetLabel) {
+        return;
+      }
+
+      await this.page.getByRole('button', { name: 'Next month' }).click();
+    }
+  }
+
+  async filterBySessionDate(dayNumber: string | Date, peerName: string) {
+    void peerName;
+    const matcher =
+      dayNumber instanceof Date
+        ? new RegExp(
+            `^${dayNumber.toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            })}`,
+          )
+        : new RegExp(`^${dayNumber}\\s`);
+
+    await this.page.getByRole('button', { name: matcher }).click();
   }
 }

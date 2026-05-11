@@ -1,7 +1,12 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const API_BASE_URL = 'http://localhost:8000/api';
 const PASSWORD = 'E2ePass123!';
+const __filename = fileURLToPath(import.meta.url);
+const REPO_ROOT = path.resolve(path.dirname(__filename), '../../..');
 
 export type AuthResponse = {
   access_token: string;
@@ -117,6 +122,7 @@ export class TestDataApi {
 
   async seedUser(seed: UserSeed, appUsageMode: 'MENTEE' | 'MENTOR') {
     const auth = await this.registerOrLogin(seed.email);
+    this.markEmailVerified(seed.email);
     await this.setUsageMode(auth.access_token, appUsageMode);
     await this.updateProfile(auth.access_token, seed);
     return auth;
@@ -387,5 +393,23 @@ export class TestDataApi {
 
   private authHeaders(auth: AuthResponse) {
     return { Authorization: `Bearer ${auth.access_token}` };
+  }
+
+  private markEmailVerified(email: string) {
+    const python = [
+      'from django.contrib.auth import get_user_model',
+      'from django.utils import timezone',
+      'User = get_user_model()',
+      `user = User.objects.get(email=${JSON.stringify(email.toLowerCase())})`,
+      'user.is_email_verified = True',
+      'user.email_verified_at = timezone.now()',
+      "user.save(update_fields=['is_email_verified', 'email_verified_at', 'updated_at'])",
+    ].join('; ');
+
+    execFileSync(
+      'docker',
+      ['compose', 'exec', '-T', 'backend', 'python', 'manage.py', 'shell', '-c', python],
+      { cwd: REPO_ROOT, stdio: 'pipe' },
+    );
   }
 }

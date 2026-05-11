@@ -24,7 +24,8 @@ export class OnboardingPage {
   }
 
   async selectRole(role: 'mentee' | 'mentor') {
-    await this.page.getByRole('button', { name: role, exact: true }).click();
+    const label = role === 'mentee' ? 'I want to learn' : 'I want to teach';
+    await this.page.getByRole('button', { name: new RegExp(label, 'i') }).click();
   }
 
   async selectSkill(skill: string) {
