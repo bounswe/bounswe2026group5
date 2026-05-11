@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MessagesPage } from '../messages'
 
 globalThis.HTMLElement.prototype.scrollIntoView = vi.fn()
+globalThis.HTMLElement.prototype.scrollTo = vi.fn()
 
 const { mockUseConversations, mockUseMessages, mockUseSendMessage, mockUseMarkRead } = vi.hoisted(() => ({
   mockUseConversations: vi.fn(),
