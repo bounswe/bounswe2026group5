@@ -17,6 +17,16 @@ export interface ProfilePictureUploadResponse {
   picture_url: string;
 }
 
+export interface ProfileAudioUploadResponse {
+  detail: string;
+  audio_url: string;
+}
+
+export interface ProfileVideoUploadResponse {
+  detail: string;
+  video_url: string;
+}
+
 export async function appendUploadFile(
   formData: FormData,
   fieldName: string,
@@ -65,6 +75,38 @@ export function deleteProfilePicture(): Promise<ProfilePictureUploadResponse> {
   return apiDelete<ProfilePictureUploadResponse>("/api/profiles/me/picture/");
 }
 
+export async function uploadProfileAudio(
+  file: LocalUploadFile,
+): Promise<ProfileAudioUploadResponse> {
+  const formData = new FormData();
+  await appendUploadFile(formData, "audio", file);
+
+  return apiPostMultipart<ProfileAudioUploadResponse>(
+    "/api/profiles/me/audio/",
+    formData,
+  );
+}
+
+export function deleteProfileAudio(): Promise<ProfileAudioUploadResponse> {
+  return apiDelete<ProfileAudioUploadResponse>("/api/profiles/me/audio/");
+}
+
+export async function uploadProfileVideo(
+  file: LocalUploadFile,
+): Promise<ProfileVideoUploadResponse> {
+  const formData = new FormData();
+  await appendUploadFile(formData, "video", file);
+
+  return apiPostMultipart<ProfileVideoUploadResponse>(
+    "/api/profiles/me/video/",
+    formData,
+  );
+}
+
+export function deleteProfileVideo(): Promise<ProfileVideoUploadResponse> {
+  return apiDelete<ProfileVideoUploadResponse>("/api/profiles/me/video/");
+}
+
 export function useUploadProfilePictureMutation(currentUsername?: string) {
   const queryClient = useQueryClient();
 
@@ -96,6 +138,90 @@ export function useDeleteProfilePictureMutation(currentUsername?: string) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["profiles"] }),
         queryClient.invalidateQueries({ queryKey: ["community-posts"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles", "me", "settings"],
+        }),
+        currentUsername
+          ? queryClient.invalidateQueries({
+              queryKey: ["profiles", currentUsername, "posts"],
+            })
+          : Promise.resolve(),
+      ]);
+    },
+  });
+}
+
+export function useUploadProfileAudioMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: uploadProfileAudio,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["profiles"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles", "me", "settings"],
+        }),
+        currentUsername
+          ? queryClient.invalidateQueries({
+              queryKey: ["profiles", currentUsername, "posts"],
+            })
+          : Promise.resolve(),
+      ]);
+    },
+  });
+}
+
+export function useDeleteProfileAudioMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteProfileAudio,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["profiles"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles", "me", "settings"],
+        }),
+        currentUsername
+          ? queryClient.invalidateQueries({
+              queryKey: ["profiles", currentUsername, "posts"],
+            })
+          : Promise.resolve(),
+      ]);
+    },
+  });
+}
+
+export function useUploadProfileVideoMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: uploadProfileVideo,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["profiles"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles", "me", "settings"],
+        }),
+        currentUsername
+          ? queryClient.invalidateQueries({
+              queryKey: ["profiles", currentUsername, "posts"],
+            })
+          : Promise.resolve(),
+      ]);
+    },
+  });
+}
+
+export function useDeleteProfileVideoMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteProfileVideo,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["profiles"] }),
         queryClient.invalidateQueries({
           queryKey: ["profiles", "me", "settings"],
         }),

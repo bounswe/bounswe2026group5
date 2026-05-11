@@ -60,6 +60,9 @@ interface PublicProfileResponse {
   skills?: string[];
   average_rating: string;
   total_mentee_count: number;
+  linkedin_url?: string;
+  audio_url?: string;
+  video_url?: string;
 }
 
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", {
@@ -289,6 +292,9 @@ function renderBodyContent({
         showRating={isViewedMentor}
         showMenteesHelped={isViewedMentor}
         imageUrl={profile.picture_url || undefined}
+        linkedinUrl={profile.linkedin_url || undefined}
+        audioUrl={profile.audio_url || undefined}
+        videoUrl={profile.video_url || undefined}
       />
 
       <View className="px-4 mt-4">

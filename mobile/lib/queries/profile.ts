@@ -80,6 +80,7 @@ interface UpdateProfilePayload {
   skills?: string[];
   picture_url?: string;
   share_precise_location?: boolean;
+  linkedin_url?: string;
 }
 
 interface ProfilePatchResponse {
@@ -92,6 +93,9 @@ interface ProfilePatchResponse {
   is_visible: boolean;
   show_initials_only: boolean;
   share_precise_location: boolean;
+  audio_url?: string;
+  video_url?: string;
+  linkedin_url?: string;
   created_at: string;
   updated_at: string;
 }

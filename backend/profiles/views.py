@@ -57,7 +57,9 @@ from .serializers import (
     MenteeProfileResponseSerializer,
     MentorProfileResponseSerializer,
     PostMediaUploadSerializer,
+    ProfileAudioUploadSerializer,
     ProfilePictureUploadSerializer,
+    ProfileVideoUploadSerializer,
     ProfilePostFeedSerializer,
     ProfilePostListQueryParamsSerializer,
     ProfilePostSerializer,
@@ -70,7 +72,9 @@ from .serializers import (
     PublicMentorProfileSearchResultSerializer,
     SkillSerializer,
     TaggableUsersResponseSerializer,
+    resolve_audio_url,
     resolve_picture_url,
+    resolve_video_url,
 )
 from .services import (
     InvalidCoPEventTypeError,
@@ -235,7 +239,7 @@ class ProfileMeAPIView(ProfileLookupMixin, APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
+        return Response(self._serialize_profile_by_mode(profile), status=status.HTTP_200_OK)
 
 
 class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
@@ -2107,6 +2111,160 @@ class ProfilePictureUploadAPIView(ProfileLookupMixin, APIView):
             {
                 "detail": "Profile picture removed.",
                 "picture_url": resolve_picture_url(profile),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ProfileAudioUploadAPIView(ProfileLookupMixin, APIView):
+    """Upload or remove a profile audio file."""
+
+    permission_classes = [IsUser]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "audio": {"type": "string", "format": "binary"},
+                },
+                "required": ["audio"],
+            }
+        },
+        responses={
+            200: OpenApiResponse(description="Profile audio uploaded."),
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Upload a profile audio for the authenticated user.",
+        tags=["Profiles"],
+    )
+    def post(self, request: Request) -> Response:
+        """Upload a new profile audio."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ProfileAudioUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save_audio(profile)
+
+        profile.refresh_from_db()
+        return Response(
+            {
+                "detail": "Profile audio uploaded.",
+                "audio_url": resolve_audio_url(profile),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: OpenApiResponse(description="Profile audio removed."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Remove the uploaded profile audio.",
+        tags=["Profiles"],
+    )
+    def delete(self, request: Request) -> Response:
+        """Remove uploaded profile audio."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        if profile.audio:
+            try:
+                profile.audio.delete(save=False)
+            except Exception:
+                pass
+            profile.audio = None
+            profile.save(update_fields=["audio", "updated_at"])
+
+        return Response(
+            {
+                "detail": "Profile audio removed.",
+                "audio_url": resolve_audio_url(profile),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ProfileVideoUploadAPIView(ProfileLookupMixin, APIView):
+    """Upload or remove a profile video file."""
+
+    permission_classes = [IsUser]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "video": {"type": "string", "format": "binary"},
+                },
+                "required": ["video"],
+            }
+        },
+        responses={
+            200: OpenApiResponse(description="Profile video uploaded."),
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Upload a profile video for the authenticated user.",
+        tags=["Profiles"],
+    )
+    def post(self, request: Request) -> Response:
+        """Upload a new profile video."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ProfileVideoUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save_video(profile)
+
+        profile.refresh_from_db()
+        return Response(
+            {
+                "detail": "Profile video uploaded.",
+                "video_url": resolve_video_url(profile),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: OpenApiResponse(description="Profile video removed."),
+            401: OpenApiResponse(description="Authentication required."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Remove the uploaded profile video.",
+        tags=["Profiles"],
+    )
+    def delete(self, request: Request) -> Response:
+        """Remove uploaded profile video."""
+        profile = self._get_request_profile_or_404(request)
+        if profile is None:
+            return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
+
+        if profile.video:
+            try:
+                profile.video.delete(save=False)
+            except Exception:
+                pass
+            profile.video = None
+            profile.save(update_fields=["video", "updated_at"])
+
+        return Response(
+            {
+                "detail": "Profile video removed.",
+                "video_url": resolve_video_url(profile),
             },
             status=status.HTTP_200_OK,
         )

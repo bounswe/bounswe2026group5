@@ -6,6 +6,8 @@ import type { LocalUploadFile } from "@/lib/queries/uploads";
 const MB = 1024 * 1024;
 const LIMITS = {
   PROFILE: 5 * MB,
+  PROFILE_AUDIO: 20 * MB,
+  PROFILE_VIDEO: 150 * MB,
   POST: 10 * MB,
   CHAT: 20 * MB,
 };
@@ -49,6 +51,46 @@ export async function pickProfilePictureFile(): Promise<LocalUploadFile | null> 
     uri: asset.uri,
     name: asset.fileName ?? `profile-picture.${extension}`,
     type,
+  };
+}
+
+export async function pickProfileAudioFile(): Promise<LocalUploadFile | null> {
+  const DocumentPicker = await import("expo-document-picker");
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ["audio/*"],
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.size, LIMITS.PROFILE_AUDIO)) return null;
+
+  return {
+    uri: asset.uri,
+    name: asset.name || "profile-audio.mp3",
+    type: asset.mimeType || "audio/mpeg",
+  };
+}
+
+export async function pickProfileVideoFile(): Promise<LocalUploadFile | null> {
+  const DocumentPicker = await import("expo-document-picker");
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ["video/*"],
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.size, LIMITS.PROFILE_VIDEO)) return null;
+
+  return {
+    uri: asset.uri,
+    name: asset.name || "profile-video.mp4",
+    type: asset.mimeType || "video/mp4",
   };
 }
 

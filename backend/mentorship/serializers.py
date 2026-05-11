@@ -4,6 +4,8 @@ from datetime import timedelta
 from typing import Any
 
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers
 
 from accounts.models import AppUsageMode
@@ -18,6 +20,7 @@ from .models import (
     MentorshipRequest,
     Workshop,
     WorkshopParticipant,
+    WorkshopAttendanceStatus,
 )
 
 
@@ -724,7 +727,7 @@ class WorkshopUpdateSerializer(serializers.Serializer):
     end_at = serializers.DateTimeField(required=False)
     max_participants = serializers.IntegerField(min_value=1, required=False)
     status = serializers.ChoiceField(
-        choices=[Workshop.Status.SCHEDULED, Workshop.Status.COMPLETED, Workshop.Status.CANCELLED],
+        choices=Workshop.Status.choices,
         required=False,
     )
 
@@ -804,7 +807,7 @@ class WorkshopAttendanceUpdateSerializer(serializers.Serializer):
     end_at = serializers.DateTimeField(required=False)
     max_participants = serializers.IntegerField(min_value=1, required=False)
     status = serializers.ChoiceField(
-        choices=[Workshop.Status.SCHEDULED, Workshop.Status.COMPLETED, Workshop.Status.CANCELLED],
+        choices=Workshop.Status.choices,
         required=False,
     )
 
@@ -821,9 +824,10 @@ class WorkshopAttendanceQueryParamsSerializer(serializers.Serializer):
     """Query params for profile-scoped workshop attendance endpoints."""
 
     status = serializers.ChoiceField(
-        choices=["all", "attending", "attended"],
+        choices=WorkshopAttendanceStatus.choices,
         required=False,
-        default="all",
+        default=WorkshopAttendanceStatus.ALL,
+        help_text="Filter workshops by attendance status relative to current time."
     )
     offset = serializers.IntegerField(required=False, default=0, min_value=0)
     limit = serializers.IntegerField(required=False, default=50, min_value=1, max_value=200)

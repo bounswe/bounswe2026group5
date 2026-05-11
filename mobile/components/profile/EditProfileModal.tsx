@@ -15,18 +15,25 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { getAbsoluteUrl } from "@/lib/api/config";
 
-import { pickImageFile } from "@/lib/uploads/picker";
+import { pickImageFile, pickProfileAudioFile, pickProfileVideoFile } from "@/lib/uploads/picker";
 import type { LocalUploadFile } from "@/lib/queries/uploads";
 
 export interface UserProfileData {
   name: string;
   bio: string;
   pictureUrl?: string;
+  linkedinUrl?: string;
+  audioUrl?: string;
+  videoUrl?: string;
 }
 
 export interface SaveProfileData extends UserProfileData {
   pictureFile?: LocalUploadFile | null;
   removePicture?: boolean;
+  audioFile?: LocalUploadFile | null;
+  removeAudio?: boolean;
+  videoFile?: LocalUploadFile | null;
+  removeVideo?: boolean;
 }
 
 interface EditProfileModalProps {
@@ -60,8 +67,13 @@ export function EditProfileModal({
 
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
   const [pictureFile, setPictureFile] = useState<LocalUploadFile | null>(null);
   const [removePicture, setRemovePicture] = useState(false);
+  const [audioFile, setAudioFile] = useState<LocalUploadFile | null>(null);
+  const [removeAudio, setRemoveAudio] = useState(false);
+  const [videoFile, setVideoFile] = useState<LocalUploadFile | null>(null);
+  const [removeVideo, setRemoveVideo] = useState(false);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [isSaving, setSaving] = useState(false);
 
@@ -69,8 +81,13 @@ export function EditProfileModal({
     if (visible) {
       setName(initialData.name);
       setBio(initialData.bio);
+      setLinkedinUrl(initialData.linkedinUrl || "");
       setPictureFile(null);
       setRemovePicture(false);
+      setAudioFile(null);
+      setRemoveAudio(false);
+      setVideoFile(null);
+      setRemoveVideo(false);
       setPickerError(null);
     }
   }, [visible, initialData]);
@@ -92,6 +109,40 @@ export function EditProfileModal({
     }
   };
 
+  const handlePickAudio = async () => {
+    try {
+      setPickerError(null);
+      const nextFile = await pickProfileAudioFile();
+      if (nextFile) {
+        setAudioFile(nextFile);
+        setRemoveAudio(false);
+      }
+    } catch (error) {
+      setPickerError(
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Could not open document picker.",
+      );
+    }
+  };
+
+  const handlePickVideo = async () => {
+    try {
+      setPickerError(null);
+      const nextFile = await pickProfileVideoFile();
+      if (nextFile) {
+        setVideoFile(nextFile);
+        setRemoveVideo(false);
+      }
+    } catch (error) {
+      setPickerError(
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Could not open document picker.",
+      );
+    }
+  };
+
   const handleSave = async () => {
     const displayNameError = validateDisplayName(name);
     if (displayNameError) {
@@ -103,9 +154,14 @@ export function EditProfileModal({
     const didSave = await onSave({
       name: name.trim(),
       bio: bio.trim(),
+      linkedinUrl: linkedinUrl.trim(),
       pictureUrl: initialData.pictureUrl,
       pictureFile,
       removePicture,
+      audioFile,
+      removeAudio,
+      videoFile,
+      removeVideo,
     });
     setSaving(false);
 
@@ -280,6 +336,105 @@ export function EditProfileModal({
                   className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-4 text-base text-gray-900 h-32"
                 />
               </View>
+
+              {/* LinkedIn URL Input */}
+              <View>
+                <Text className="text-sm font-bold text-gray-700 mb-2 ml-1">
+                  LinkedIn Profile (Optional)
+                </Text>
+                <TextInput
+                  value={linkedinUrl}
+                  onChangeText={setLinkedinUrl}
+                  placeholder="https://linkedin.com/in/username"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-4 h-14 text-base text-gray-900 font-medium"
+                  autoCapitalize="none"
+                  keyboardType="url"
+                  style={
+                    Platform.OS === "android"
+                      ? { textAlignVertical: "center", paddingVertical: 0 }
+                      : undefined
+                  }
+                />
+              </View>
+
+              {/* Media Introductions */}
+              <View className="mt-4 border border-gray-200 rounded-xl p-4 bg-gray-50">
+                <Text className="text-base font-bold text-gray-900 mb-1">
+                  Extended Media
+                </Text>
+                <Text className="text-xs text-gray-500 mb-4">
+                  Add an audio intro (max 20MB) or a short video (max 150MB).
+                </Text>
+
+                {/* Audio */}
+                <View className="flex-row items-center justify-between mb-4 pb-4 border-b border-gray-200">
+                  <View className="flex-row items-center flex-1 pr-4">
+                    <View className="w-10 h-10 bg-indigo-100 rounded-full items-center justify-center mr-3">
+                      <Ionicons name="mic" size={20} color="#4338ca" />
+                    </View>
+                    <View>
+                      <Text className="text-sm font-bold text-gray-900">Audio Intro</Text>
+                      <Text className="text-xs text-gray-500 mt-0.5">
+                        {audioFile ? audioFile.name : (!removeAudio && initialData.audioUrl ? "Audio uploaded" : "No audio selected")}
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="flex-row gap-2">
+                    {(!removeAudio && initialData.audioUrl) || audioFile ? (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setAudioFile(null);
+                          setRemoveAudio(true);
+                        }}
+                        className="p-2 border border-red-200 bg-red-50 rounded-lg"
+                      >
+                        <Ionicons name="trash" size={16} color="#dc2626" />
+                      </TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity
+                      onPress={handlePickAudio}
+                      className="px-3 py-2 bg-gray-900 rounded-lg"
+                    >
+                      <Text className="text-white text-xs font-bold">Upload</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Video */}
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center flex-1 pr-4">
+                    <View className="w-10 h-10 bg-indigo-100 rounded-full items-center justify-center mr-3">
+                      <Ionicons name="videocam" size={20} color="#4338ca" />
+                    </View>
+                    <View>
+                      <Text className="text-sm font-bold text-gray-900">Video Intro</Text>
+                      <Text className="text-xs text-gray-500 mt-0.5">
+                        {videoFile ? videoFile.name : (!removeVideo && initialData.videoUrl ? "Video uploaded" : "No video selected")}
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="flex-row gap-2">
+                    {(!removeVideo && initialData.videoUrl) || videoFile ? (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setVideoFile(null);
+                          setRemoveVideo(true);
+                        }}
+                        className="p-2 border border-red-200 bg-red-50 rounded-lg"
+                      >
+                        <Ionicons name="trash" size={16} color="#dc2626" />
+                      </TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity
+                      onPress={handlePickVideo}
+                      className="px-3 py-2 bg-gray-900 rounded-lg"
+                    >
+                      <Text className="text-white text-xs font-bold">Upload</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
             </View>
           </ScrollView>
         </KeyboardAvoidingView>

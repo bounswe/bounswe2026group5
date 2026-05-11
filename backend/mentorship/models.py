@@ -10,6 +10,12 @@ from django.utils import timezone
 from profiles.models import AvailabilitySlot, Profile
 
 
+class WorkshopAttendanceStatus(models.TextChoices):
+    ALL = "all", "All"
+    ATTENDING = "attending", "Attending"
+    ATTENDED = "attended", "Attended"
+
+
 class MentorshipRequest(models.Model):
     """Request from a mentee profile to a mentor profile."""
 

@@ -12,6 +12,9 @@ export interface AuthUser {
   username: string;
   display_name?: string;
   picture_url?: string;
+  audio_url?: string;
+  video_url?: string;
+  linkedin_url?: string;
   role: string;
   app_usage_mode?: "MENTOR" | "MENTEE" | "";
   auth_provider: string;

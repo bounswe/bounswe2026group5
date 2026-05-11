@@ -50,6 +50,19 @@ class Profile(models.Model):
         help_text="User-uploaded profile picture. Takes priority over picture_url.",
     )
     title = models.CharField(max_length=120, blank=True, default="")
+    linkedin_url = models.URLField(blank=True, default="")
+    audio = models.FileField(
+        upload_to="profile_audio/%Y/%m/",
+        null=True,
+        blank=True,
+        help_text="User-uploaded profile audio (e.g. pronunciation).",
+    )
+    video = models.FileField(
+        upload_to="profile_video/%Y/%m/",
+        null=True,
+        blank=True,
+        help_text="User-uploaded profile video intro.",
+    )
     location = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
     share_precise_location = models.BooleanField(default=True)
     show_initials_only = models.BooleanField(default=False)
