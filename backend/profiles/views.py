@@ -1,5 +1,6 @@
 """Views for profile self-service API endpoints."""
 
+import logging
 from datetime import timedelta
 
 from django.conf import settings
@@ -38,6 +39,7 @@ from mentorship.serializers import (
     WorkshopUpdateSerializer,
 )
 from mentorship.services import book_match_session
+from notifications.models import Notification, NotificationType
 
 from .models import AvailabilitySlot, CommunityTag, CommunityTagMembership, Profile, Skill
 from .serializers import (
@@ -59,13 +61,13 @@ from .serializers import (
     PostMediaUploadSerializer,
     ProfileAudioUploadSerializer,
     ProfilePictureUploadSerializer,
-    ProfileVideoUploadSerializer,
     ProfilePostFeedSerializer,
     ProfilePostListQueryParamsSerializer,
     ProfilePostSerializer,
     ProfileResponseSerializer,
     ProfileUpdateSerializer,
     ProfileUsernameUpdateSerializer,
+    ProfileVideoUploadSerializer,
     PrPCreateSerializer,
     PrPUpdateSerializer,
     PublicMentorProfileSearchListResponseSerializer,
@@ -92,6 +94,8 @@ from .services import (
     soft_delete_cop_event,
     soft_delete_prp_event,
 )
+
+logger = logging.getLogger(__name__)
 
 NOT_FOUND_DETAIL = {"detail": "Not found."}
 OVERLAP_DETAIL = {"detail": "Availability slot overlaps with an existing slot."}
@@ -868,7 +872,9 @@ class RecentlyAddedMentorsListAPIView(APIView):
             .order_by("-created_at")[:limit]
         )
 
-        serializer = PublicMentorProfileSearchResultSerializer(qs, many=True, context={"request": request})
+        serializer = PublicMentorProfileSearchResultSerializer(
+            qs, many=True, context={"request": request}
+        )
         return Response({"results": serializer.data}, status=status.HTTP_200_OK)
 
 
@@ -1157,7 +1163,9 @@ class PublicMentorProfilesSearchListAPIView(ProfileLookupMixin, APIView):
         offset = (page - 1) * page_size
         items = qs[offset : offset + page_size]
 
-        serializer = PublicMentorProfileSearchResultSerializer(items, many=True, context={"request": request})
+        serializer = PublicMentorProfileSearchResultSerializer(
+            items, many=True, context={"request": request}
+        )
         return Response(
             {
                 "count": total,
@@ -2058,7 +2066,9 @@ class CommunityTagMembersListAPIView(APIView):
         page_items = memberships[offset : offset + page_size]
         profiles = [m.profile for m in page_items]
 
-        serializer = PublicMentorProfileSearchResultSerializer(profiles, many=True, context={"request": request})
+        serializer = PublicMentorProfileSearchResultSerializer(
+            profiles, many=True, context={"request": request}
+        )
         return Response(
             {
                 "count": total,
@@ -2544,7 +2554,42 @@ class CommunityTagWorkshopDetailAPIView(ProfileLookupMixin, APIView):
             context={"request": request, "workshop": workshop},
         )
         serializer.is_valid(raise_exception=True)
+        is_rescheduling = (
+            "scheduled_at" in serializer.validated_data or "end_at" in serializer.validated_data
+        )
+        old_scheduled_at = workshop.scheduled_at
+        old_end_at = workshop.end_at
         workshop = serializer.update(workshop, serializer.validated_data)
+
+        if is_rescheduling:
+            participants_to_notify = workshop.participants.exclude(
+                participant=author_profile
+            ).select_related("participant__user")
+            for wp in participants_to_notify:
+                try:
+                    Notification.objects.create(
+                        user=wp.participant.user,
+                        type=NotificationType.WORKSHOP_RESCHEDULED,
+                        title="Workshop Rescheduled",
+                        message=f'The workshop "{workshop.title}" has been rescheduled.',
+                        actor=author_profile,
+                        resource_type="workshop",
+                        resource_id=workshop.id,
+                        extra_metadata={
+                            "workshop_title": workshop.title,
+                            "old_scheduled_at": old_scheduled_at.isoformat(),
+                            "new_scheduled_at": workshop.scheduled_at.isoformat(),
+                            "old_end_at": old_end_at.isoformat(),
+                            "new_end_at": workshop.end_at.isoformat(),
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "Notification persistence failed for workshop reschedule "
+                        "(workshop_id=%s, user_id=%s).",
+                        workshop.id,
+                        wp.participant.user_id,
+                    )
 
         return Response(
             WorkshopDetailSerializer(workshop, context={"request": request}).data,
@@ -2584,6 +2629,29 @@ class CommunityTagWorkshopDetailAPIView(ProfileLookupMixin, APIView):
 
         workshop.status = Workshop.Status.CANCELLED
         workshop.save()
+
+        participants_to_notify = workshop.participants.exclude(
+            participant=author_profile
+        ).select_related("participant__user")
+        for wp in participants_to_notify:
+            try:
+                Notification.objects.create(
+                    user=wp.participant.user,
+                    type=NotificationType.WORKSHOP_CANCELLED,
+                    title="Workshop Cancelled",
+                    message=f'The workshop "{workshop.title}" has been cancelled.',
+                    actor=author_profile,
+                    resource_type="workshop",
+                    resource_id=workshop.id,
+                    extra_metadata={"workshop_title": workshop.title},
+                )
+            except Exception:
+                logger.exception(
+                    "Notification persistence failed for workshop cancellation "
+                    "(workshop_id=%s, user_id=%s).",
+                    workshop.id,
+                    wp.participant.user_id,
+                )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
