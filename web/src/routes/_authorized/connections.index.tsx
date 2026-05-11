@@ -89,7 +89,7 @@ export function ConnectionsPage() {
                     <p className="text-sm text-ink-soft mt-1">
                         Are you sure you want to end this match? This will end the active mentorship connection.
                     </p>
-                    <DialogFooter className="mt-4">
+                    <DialogFooter className="mt-4 border-t border-line">
                         <Button type="button" variant="outline" onClick={() => setDeactivateTarget(null)}>
                             Keep Connection
                         </Button>
@@ -190,7 +190,7 @@ function ConnectionCard({ matchId, username, displayName, pictureUrl, title, onD
                         variant="outline"
                         size="sm"
                         onClick={onDeactivate}
-                        className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors gap-2"
+                        className="w-full border-line text-ink-soft hover:border-red-200 hover:text-red-600 hover:bg-red-50 transition-colors gap-2"
                     >
                         <UserMinus className="w-4 h-4" />
                         End Match

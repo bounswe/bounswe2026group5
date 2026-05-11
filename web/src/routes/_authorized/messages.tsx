@@ -33,6 +33,11 @@ export function MessagesPage() {
     const navigate = Route.useNavigate()
     const [selectedId, setSelectedId] = useState<string | null>(conversationId || null)
 
+    useEffect(() => {
+        document.documentElement.style.overflow = 'hidden'
+        return () => { document.documentElement.style.overflow = '' }
+    }, [])
+
     const handleSelect = (id: string) => {
         setSelectedId(id)
         navigate({ search: { conversationId: id } })
@@ -57,7 +62,7 @@ export function MessagesPage() {
     }, [markAllRead])
 
     return (
-        <div className="p-4 md:p-6 h-[calc(100vh-3.5rem)]">
+        <div className="p-4 md:p-6 h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden">
             <div className="flex h-full rounded-xl border border-line overflow-hidden shadow-sm bg-background max-w-5xl mx-auto">
                 <ConversationList selectedId={selectedId} onSelect={handleSelect} />
                 <MessageThread conversationId={selectedId} />
@@ -203,15 +208,32 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
     }, [conversationId, markRead])
     
     const scrollContainerRef = useRef<HTMLDivElement>(null)
-    const bottomRef = useRef<HTMLDivElement>(null)
     const [isAtBottom, setIsAtBottom] = useState(true)
+    const isAtBottomRef = useRef(true)
+    const initialScrollDone = useRef(false)
 
-    // Handle auto-scroll to bottom
+    useEffect(() => {
+        isAtBottomRef.current = isAtBottom
+    }, [isAtBottom])
+
+    const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+        const el = scrollContainerRef.current
+        if (el) el.scrollTo({ top: el.scrollHeight, behavior })
+    }, [])
+
+    // Auto-scroll on new messages; use instant on first load to avoid page scroll
     useEffect(() => {
         if (isAtBottom) {
-            bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+            const behavior = initialScrollDone.current ? 'smooth' : 'instant'
+            scrollToBottom(behavior)
+            initialScrollDone.current = true
         }
-    }, [messages, isAtBottom])
+    }, [messages, isAtBottom, scrollToBottom])
+
+    // Re-scroll after an image/attachment loads if user was at bottom
+    const handleMediaLoad = useCallback(() => {
+        if (isAtBottomRef.current) scrollToBottom('instant')
+    }, [scrollToBottom])
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         const target = e.currentTarget
@@ -260,7 +282,7 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
     )
 
     return (
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 min-h-0 flex flex-col min-w-0">
             {/* Thread header */}
             {other && (
                 <div className="shrink-0 flex items-center gap-3 px-5 py-3 border-b border-line">
@@ -282,39 +304,41 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
             <div
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
-                className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3"
+                className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
             >
-                {hasMore && (
-                    <div className="flex justify-center py-2">
-                        {isLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-ink-soft" />
-                        ) : (
-                            <p className="text-[10px] text-ink-soft italic">Scroll up to load more</p>
-                        )}
-                    </div>
-                )}
-                
-                {isLoading && messages.length === 0 ? (
-                    <div className="flex justify-center py-10">
-                        <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
-                    </div>
-                ) : messages.length === 0 ? (
-                    <p className="text-sm text-ink-soft text-center mt-10">
-                        No messages yet. Say hello!
-                    </p>
-                ) : (
-                    messages.map(msg => {
-                        const isMe = msg.sender.username === me?.username
-                        return (
-                            <MessageBubble
-                                key={msg.id}
-                                message={msg}
-                                isMe={isMe}
-                            />
-                        )
-                    })
-                )}
-                <div ref={bottomRef} />
+                <div className="flex flex-col gap-3 px-6 py-4">
+                    {hasMore && (
+                        <div className="flex justify-center py-2">
+                            {isLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-ink-soft" />
+                            ) : (
+                                <p className="text-[10px] text-ink-soft italic">Scroll up to load more</p>
+                            )}
+                        </div>
+                    )}
+
+                    {isLoading && messages.length === 0 ? (
+                        <div className="flex justify-center py-10">
+                            <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
+                        </div>
+                    ) : messages.length === 0 ? (
+                        <p className="text-sm text-ink-soft text-center mt-10">
+                            No messages yet. Say hello!
+                        </p>
+                    ) : (
+                        messages.map(msg => {
+                            const isMe = msg.sender.username === me?.username
+                            return (
+                                <MessageBubble
+                                    key={msg.id}
+                                    message={msg}
+                                    isMe={isMe}
+                                    onMediaLoad={handleMediaLoad}
+                                />
+                            )
+                        })
+                    )}
+                </div>
             </div>
 
             {/* Input */}
@@ -394,9 +418,11 @@ import { ReportMessageDialog } from '@/components/ReportMessageDialog'
 function MessageBubble({
     message,
     isMe,
+    onMediaLoad,
 }: {
     readonly message: Message
     readonly isMe: boolean
+    readonly onMediaLoad?: () => void
 }) {
     const getStatusIcon = () => {
         const status = message.status_for_me
@@ -436,8 +462,9 @@ function MessageBubble({
                 {message.attachment_url && (
                     <MediaAttachment
                         url={message.attachment_url}
-                        imgClassName="mt-1 max-h-48 w-full rounded-lg border-0 object-contain"
+                        imgClassName="mt-1 max-h-48 max-w-full rounded-lg border-0 object-contain"
                         linkClassName="mt-1 block underline text-xs opacity-80 text-inherit"
+                        onLoad={onMediaLoad}
                     />
                 )}
                 <div className={cn('flex items-center gap-1 text-[10px] mt-1', isMe ? 'justify-end' : 'justify-start')}>
