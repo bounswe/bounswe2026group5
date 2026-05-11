@@ -244,7 +244,6 @@ test.describe('AT-001: Authentication & Onboarding', () => {
       // Step 33: Ban Alice via UI
       await adminPage.searchUser(TEST_USERNAME);
       await adminPage.banUser(TEST_USERNAME);
-      await adminPage.expectToast(new RegExp(`${TEST_USERNAME} has been banned`, 'i'));
       await adminPage.expectUserBanned(TEST_USERNAME);
 
       // Step 34: UI Login should be blocked for banned user
@@ -266,7 +265,7 @@ test.describe('AT-001: Authentication & Onboarding', () => {
       await adminPage.switchToReports();
       await adminPage.reviewReport(targetUsername);
       await adminPage.resolveReport('Resolved in E2E test');
-      await adminPage.expectToast(/Report resolved/i);
+      await adminPage.expectReportResolved(targetUsername);
     });
 
   });

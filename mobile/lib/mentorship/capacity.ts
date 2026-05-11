@@ -20,4 +20,5 @@ export const MENTOR_OVERLOAD_WARNING = {
 export const MENTOR_AT_CAPACITY_NOTICE = {
   title: "Mentor at Capacity",
   message: "This mentor already has many active mentorship sessions.",
+  confirmLabel: "Continue",
 } as const;

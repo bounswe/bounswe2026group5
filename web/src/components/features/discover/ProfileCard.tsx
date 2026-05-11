@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Body } from '@/components/Typography'
 import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
 import type { PublicMentorProfile } from '@/lib/queries/DiscoverQueries.ts'
+import { Star } from 'lucide-react'
 
 interface ProfileCardProps {
   profile: PublicMentorProfile

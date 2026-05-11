@@ -346,6 +346,11 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     def get_active_matches_count(self, obj: Profile) -> int:
         """Return number of currently active mentorship matches for this mentor."""
         from mentorship.models import Match
+
+        active_matches_count = getattr(obj, "active_matches_count", None)
+        if active_matches_count is not None:
+            return active_matches_count
+
         return Match.objects.filter(mentor=obj, is_active=True).count()
 
     @extend_schema_field(OpenApiTypes.INT)
@@ -651,12 +656,15 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
     def get_is_overloaded(self, obj: Profile) -> bool:
         """Return True when active matches meet or exceed the threshold."""
         from django.conf import settings
-        from mentorship.models import Match
 
         threshold = getattr(settings, "MENTOR_OVERLOAD_THRESHOLD", 5)
-        active_count = Match.objects.filter(mentor=obj, is_active=True).count()
+        active_count = getattr(obj, "active_matches_count", None)
+        if active_count is None:
+            from mentorship.models import Match
+
+            active_count = Match.objects.filter(mentor=obj, is_active=True).count()
+
         return active_count >= threshold
-        return None
 
 
 class PublicMentorProfileSearchListResponseSerializer(serializers.Serializer):

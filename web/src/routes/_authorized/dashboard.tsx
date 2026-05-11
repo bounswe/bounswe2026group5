@@ -632,6 +632,7 @@ function MentorDashboardView() {
                 </Body>
               </div>
             </div>
+          )}
           <UpcomingWorkshopsSection />
           <section className="space-y-5">
             <Heading as="h3" className="text-xl flex items-center gap-2">

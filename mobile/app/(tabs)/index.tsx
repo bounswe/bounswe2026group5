@@ -475,8 +475,8 @@ export default function DashboardScreen() {
         acceptanceWarning={
           selectedRequest?.requestType !== "outgoing" &&
           appUsageMode === "MENTOR"
-            ? selectedRequest?.isMenteeOverloaded
-              ? MENTEE_AT_CAPACITY_NOTICE
+            ? selectedRequest?.isMentorOverloaded
+              ? MENTOR_AT_CAPACITY_NOTICE
               : shouldShowCapacityWarning
                 ? MENTOR_MENTEE_CAPACITY_WARNING
                 : undefined
