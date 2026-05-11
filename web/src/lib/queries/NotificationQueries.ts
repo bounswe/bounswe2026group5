@@ -23,6 +23,10 @@ export type NotificationType =
     | 'tag_deleted'
     | 'tag_matches_interest'
     | 'report_resolved'
+    | 'tag_new_member'
+    | 'tag_description_updated'
+    | 'tag_deleted'
+    | 'tag_matches_interest'
 
 export interface Notification {
     id: string
@@ -109,4 +113,8 @@ export const NOTIFICATION_INVALIDATION_MAP: Record<NotificationType, string[][]>
     tag_deleted:                 [['communities'], ['notifications']],
     tag_matches_interest:        [['communities'], ['notifications']],
     report_resolved:             [['reports']],
+    tag_new_member:              [['communities']],
+    tag_description_updated:     [['communities']],
+    tag_deleted:                 [['communities']],
+    tag_matches_interest:        [['communities']],
 }
