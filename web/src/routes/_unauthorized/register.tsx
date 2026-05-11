@@ -14,6 +14,7 @@ import { useGoogleLogin } from '@react-oauth/google'
 import { useMutation } from "@tanstack/react-query"
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { Mail } from 'lucide-react'
+import { LegalModal } from "@/components/common/LegalModal"
 import { useState } from 'react'
 import { z } from 'zod'
 
@@ -49,6 +50,7 @@ export function RegisterPage() {
         terms: false,
     });
     const [errors, setErrors] = useState<Partial<Record<keyof RegisterFormData, string>>>({});
+    const [legalType, setLegalType] = useState<'tos' | 'privacy' | null>(null);
 
     const validateField = (field: keyof RegisterFormData, value: unknown) => {
         const result = registerSchema.safeParse({ ...formData, [field]: value });
@@ -161,7 +163,7 @@ export function RegisterPage() {
             </aside>
 
             {/* Right Column: Registration Form */}
-            <main className="flex flex-col justify-start items-center px-6 py-16 sm:px-12">
+            <main id="main-content" className="flex flex-col justify-start items-center px-6 py-16 sm:px-12">
                 <div className="w-full max-w-md rise-in">
 
                     <div className="text-center md:text-left mb-10">
@@ -242,19 +244,21 @@ export function RegisterPage() {
                                     <div className="text-sm leading-tight">
                                         <Label htmlFor="terms" className="font-normal cursor-pointer">
                                             I agree to the{" "}
-                                            <a
-                                                href="#"
+                                            <button
+                                                type="button"
+                                                onClick={() => setLegalType('tos')}
                                                 className="text-primary hover:underline underline-offset-4"
                                             >
                                                 Terms of Service
-                                            </a>{" "}
+                                            </button>{" "}
                                             and{" "}
-                                            <a
-                                                href="#"
+                                            <button
+                                                type="button"
+                                                onClick={() => setLegalType('privacy')}
                                                 className="text-primary hover:underline underline-offset-4"
                                             >
                                                 Privacy Policy
-                                            </a>.
+                                            </button>.
                                         </Label>
                                         {errors.terms && (
                                             <p className="text-xs text-destructive mt-1">{errors.terms}</p>
@@ -273,6 +277,12 @@ export function RegisterPage() {
                             >
                                 {register.isPending ? "Creating account..." : "Create Account"}
                             </Button>
+
+                            <LegalModal 
+                                type={legalType} 
+                                isOpen={legalType !== null} 
+                                onClose={() => setLegalType(null)} 
+                            />
 
                             {register.isError && (
                                 <p className="text-xs text-destructive text-center">{register.error.message}</p>
