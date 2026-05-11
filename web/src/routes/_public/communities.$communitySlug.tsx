@@ -654,7 +654,7 @@ export function CommunityDetailPage() {
         <div className="py-4 sm:py-6 rise-in flex flex-col gap-5">
 
             {/* ── Back link ───────────────────────────────────────────────── */}
-            <div className="px-4 sm:px-6">
+            <div className="page-wrap">
                 <Link to="/communities" className="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink transition-colors">
                     <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                     Communities
@@ -662,7 +662,7 @@ export function CommunityDetailPage() {
             </div>
 
             {/* ── Two-column layout: LEFT = members sidebar, RIGHT = header + feed ── */}
-            <div className="flex items-start gap-6 px-4 sm:px-6 w-full">
+            <div className="flex flex-col gap-5 px-4 sm:px-6 lg:grid lg:grid-cols-[256px_1fr_256px] lg:gap-6 lg:items-start w-full">
 
                 {/* ── LEFT: Members sidebar ────── */}
                 <aside className="hidden lg:flex flex-col w-64 shrink-0 sticky top-20 self-start">
@@ -709,7 +709,7 @@ export function CommunityDetailPage() {
                 </aside>
 
                 {/* ── RIGHT: Community header + feed ──────────────────────── */}
-                <div className="flex-1 min-w-0 flex flex-col gap-5 max-w-6xl mx-auto">
+                <div className="min-w-0 flex flex-col gap-5">
 
                     {/* Community header island */}
                     <div className="island-shell rounded-2xl shadow-md flex flex-col">
@@ -876,6 +876,8 @@ export function CommunityDetailPage() {
                     </div>
 
                 </div>{/* end RIGHT column */}
+
+                <div className="hidden lg:block" />{/* balancing column */}
 
             </div>{/* end two-column */}
 
