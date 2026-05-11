@@ -24,4 +24,12 @@ export class ConnectionsPage {
   async expectNoConnection(name: string) {
     await expect(this.page.getByText(name)).toHaveCount(0);
   }
+
+  async openJourneyFor(displayName: string) {
+    const card = this.page.locator('[class*="island-shell"]', {
+      has: this.page.getByText(displayName),
+    }).first();
+    await expect(card).toBeVisible();
+    await card.getByRole('button', { name: 'View Journey' }).click();
+  }
 }

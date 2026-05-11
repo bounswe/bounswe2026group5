@@ -44,6 +44,27 @@ export class DashboardPage {
     await expect(notification).toBeVisible({ timeout: 10_000 });
   }
 
+  async expectUnreadMessagesBadge() {
+    const messagesLink = this.page.getByRole('link', { name: /Messages/i });
+    await expect(messagesLink.locator('span.sr-only').filter({ hasText: 'unread messages' })).toBeVisible();
+  }
+
+  async openConversationFromNotification(messagePart: string) {
+    const notification = this.page.locator('.border-l-4').filter({ hasText: messagePart }).first();
+    await expect(notification).toBeVisible({ timeout: 10_000 });
+    await notification.getByRole('link', { name: 'View conversation →' }).click();
+    await expect(this.page).toHaveURL(/\/messages\?conversationId=/);
+  }
+
+  async openLatestConversationNotification() {
+    const notification = this.page.locator('.border-l-4', {
+      has: this.page.getByRole('link', { name: 'View conversation →' }),
+    }).first();
+    await expect(notification).toBeVisible({ timeout: 10_000 });
+    await notification.getByRole('link', { name: 'View conversation →' }).click();
+    await expect(this.page).toHaveURL(/\/messages\?conversationId=/);
+  }
+
   async acceptIncomingRequest(menteeName: string, coverLetter?: string) {
     const requestCard = await this.findIncomingRequest(menteeName, coverLetter);
     await requestCard.getByRole('button', { name: /Accept/i }).click();
@@ -108,8 +129,8 @@ export class DashboardPage {
   }
 
   async rescheduleSession(newSlot: { dayLabel: string; timeLabel: string }) {
-    await this.page.getByRole('button', { name: 'Reschedule' }).click();
     const dialog = this.page.getByRole('dialog');
+    await dialog.getByRole('button', { name: 'Reschedule' }).click();
     await expect(this.page.getByRole('heading', { name: 'Pick a New Time Slot' })).toBeVisible();
     await expect(dialog.locator('svg.animate-spin')).toHaveCount(0);
     const slotByDayAndTime = this.page
@@ -141,7 +162,7 @@ export class DashboardPage {
   }
 
   async cancelSession() {
-    await this.page.getByRole('button', { name: 'Cancel Session' }).click();
+    await this.page.getByRole('dialog').getByRole('button', { name: 'Cancel Session' }).click();
     await expect(this.page.getByText('Session cancelled').first()).toBeVisible();
   }
 

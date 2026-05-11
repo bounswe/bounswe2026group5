@@ -80,7 +80,8 @@ describe("CommunityMembersScreen", () => {
     expect(getByText("Backend Guild")).toBeTruthy();
     expect(getByText("25 members")).toBeTruthy();
     expect(getByText("Ada Lovelace")).toBeTruthy();
-    expect(getByText("Django • API")).toBeTruthy();
+    expect(getByText("Django")).toBeTruthy();
+    expect(getByText("API")).toBeTruthy();
 
     fireEvent.press(getByTestId("community-member-ada"));
     expect(mockPush).toHaveBeenCalledWith("/user/ada");

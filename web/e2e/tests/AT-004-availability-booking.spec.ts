@@ -8,6 +8,13 @@ function toDateString(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+function nextMonday(from = new Date()) {
+  const next = new Date(from);
+  const daysUntilNextMonday = ((8 - next.getDay()) % 7) || 7;
+  next.setDate(next.getDate() + daysUntilNextMonday);
+  return next;
+}
+
 test.describe('AT-AVAIL-004: Availability & Booking', () => {
   test('mentor publishes availability and mentee books through request acceptance', async ({
     browser,
@@ -59,9 +66,7 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
     let firstSlotId = '';
     let secondSlotId = '';
 
-    const nextMonday = new Date();
-    nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7 || 7);
-    const nextMondayStr = toDateString(nextMonday);
+    const nextMondayStr = toDateString(nextMonday());
 
     await test.step('Mentor creates first availability slot and overlapping slot is rejected', async () => {
       const profilePage = new ProfilePage(page);
