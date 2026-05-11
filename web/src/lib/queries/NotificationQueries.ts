@@ -18,6 +18,7 @@ export type NotificationType =
     | 'match_deactivated'
     | 'new_message'
     | 'new_feedback_available'
+    | 'report_resolved'
 
 export interface Notification {
     id: string
@@ -64,6 +65,7 @@ async function registerFCMToken(token: string, device_type: 'web' | 'android' | 
 export const notificationsQueryOptions = queryOptions({
     queryKey: ['notifications'],
     queryFn: fetchNotifications,
+    refetchInterval: 10_000,
 })
 
 export function useNotifications() {
@@ -98,4 +100,5 @@ export const NOTIFICATION_INVALIDATION_MAP: Record<NotificationType, string[][]>
     match_deactivated:           [['mentorship', 'matches'], ['mentorship', 'requests']],
     new_message:                 [['messaging', 'conversations']],
     new_feedback_available:      [['profiles', 'me']],
+    report_resolved:             [['reports']],
 }

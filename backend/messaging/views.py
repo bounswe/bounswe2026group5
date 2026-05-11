@@ -14,6 +14,7 @@ from accounts.serializers import ReportCreateSerializer
 from notifications.models import Notification, NotificationType
 from profiles.models import Profile
 
+from .firebase import update_message_read_status_in_firestore
 from .models import Conversation, Message, ReadReceipt
 from .serializers import (
     ConversationSerializer,
@@ -317,5 +318,14 @@ class MessageMarkReadAPIView(APIView):
         
         if new_receipts:
             ReadReceipt.objects.bulk_create(new_receipts)
+
+        # 3. Manually sync the updated read status to Firestore since bulk operations bypass post_save signals.
+        for msg_id in unread_messages.values_list("id", flat=True):
+            update_message_read_status_in_firestore(
+                message_id=msg_id,
+                conversation_id=conversation.id,
+                user_id=profile.id,
+                status="read"
+            )
 
         return Response({"detail": "All messages marked as read."}, status=status.HTTP_200_OK)

@@ -60,6 +60,7 @@ describe("EditProfileModal", () => {
         pictureFile: null,
         pictureUrl: undefined,
         removePicture: false,
+        showInitialsOnly: false,
       });
       expect(onClose).toHaveBeenCalled();
     });

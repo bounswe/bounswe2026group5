@@ -17,6 +17,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from firebase_admin import auth
 
+from notifications.models import Notification, NotificationType
+
 from .models import AuthProvider, EmailVerificationToken, PasswordResetToken, Report, User
 from .oauth import OAuthVerificationError, verify_google_id_token
 from .permissions import IsAdmin, IsNotBanned, IsUser
@@ -883,6 +885,16 @@ class AdminReportUpdateAPIView(APIView):
         if new_status in ("RESOLVED", "DISMISSED"):
             report.resolved_by = cast(User, request.user)
             report.resolved_at = timezone.now()
+            
+            if new_status == "RESOLVED":
+                Notification.objects.create(
+                    user=report.submitted_by,
+                    type=NotificationType.REPORT_RESOLVED,
+                    title="Report Resolved",
+                    message="An admin has reviewed and resolved your report.",
+                    resource_type="report",
+                    resource_id=report.id,
+                )
         else:
             # Clear resolution fields if moving back to OPEN or IN_REVIEW
             report.resolved_by = None

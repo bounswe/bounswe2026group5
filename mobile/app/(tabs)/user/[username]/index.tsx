@@ -289,6 +289,7 @@ function renderBodyContent({
         showRating={isViewedMentor}
         showMenteesHelped={isViewedMentor}
         imageUrl={profile.picture_url || undefined}
+        showInitialsOnly={profile.show_initials_only}
       />
 
       <View className="px-4 mt-4">

@@ -77,6 +77,7 @@ interface OwnProfileResponse {
   bio: string;
   picture_url: string;
   hidden?: boolean;
+  show_initials_only?: boolean;
   skills?: string[];
 }
 
@@ -396,6 +397,7 @@ export default function ProfileScreen() {
   const [skillsData, setSkillsData] = useState<string[]>(
     PROFILE_DEFAULTS.skills,
   );
+  const [showInitialsOnly, setShowInitialsOnly] = useState(false);
 
   const [userData, setUserData] = useState<UserProfileData>({
     name: authUser?.username ?? "User",
@@ -478,6 +480,7 @@ export default function ProfileScreen() {
         }));
 
         setIsProfileHidden(Boolean(payload.hidden));
+        setShowInitialsOnly(Boolean(payload.show_initials_only));
         setSkillsData(payload.skills ?? []);
       })
       .catch((error) => {
@@ -645,6 +648,7 @@ export default function ProfileScreen() {
         username: currentUsername,
         display_name: updatedData.name,
         bio: updatedData.bio,
+        show_initials_only: updatedData.showInitialsOnly,
         ...(updatedData.removePicture ? { picture_url: "" } : {}),
       });
 
@@ -671,6 +675,7 @@ export default function ProfileScreen() {
         bio: response.bio || updatedData.bio,
         pictureUrl,
       });
+      setShowInitialsOnly(response.show_initials_only ?? updatedData.showInitialsOnly ?? false);
       return true;
     } catch (error) {
       setPageError(
@@ -956,7 +961,7 @@ export default function ProfileScreen() {
       <EditProfileModal
         visible={isEditProfileModalOpen}
         onClose={() => setEditProfileModalOpen(false)}
-        initialData={userData}
+        initialData={{ ...userData, showInitialsOnly }}
         onSave={handleSaveProfileHeader}
       />
       <ProfilePostComposer

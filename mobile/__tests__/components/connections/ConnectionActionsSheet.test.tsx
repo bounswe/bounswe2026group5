@@ -22,7 +22,7 @@ describe("ConnectionActionsSheet", () => {
 
     expect(getByText("Remove Jane Doe?")).toBeTruthy();
     expect(
-      getByText("This will end the active mentorship connection."),
+      getByText("Are you sure you want to end this match?"),
     ).toBeTruthy();
 
     fireEvent.press(getByText("Remove"));

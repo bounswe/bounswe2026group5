@@ -5788,7 +5788,6 @@ class ProfileWorkshopAttendanceAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertGreaterEqual(response.data["count"], 1)
 
-
 class MentorQualitySignalsTests(APITestCase):
     """Tests for mentor discovery quality signals and sorting."""
 

@@ -7,7 +7,9 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useGoogleLogin } from '@react-oauth/google'
+import { toast } from 'sonner'
+import { useGoogleLoginSafe } from '#/hooks/useGoogleLoginSafe'
+
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { CalendarDays, Eye, EyeOff, Search, TrendingUp } from 'lucide-react'
 
@@ -56,15 +58,8 @@ export function LoginPage() {
         }
     })
 
-    /**
-     * Note: useGoogleLogin typically returns an access_token.
-     * To get an id_token with a custom button, we use the standard popup logic.
-     */
-    const triggerGoogleLogin = useGoogleLogin({
+    const triggerGoogleLogin = useGoogleLoginSafe({
         onSuccess: (tokenResponse) => {
-            // If backend is strictly expecting an ID Token (JWT),
-            // we should ideally use the <GoogleLogin> component or handle the implicit flow.
-            // For now, we pass the access_token or credential if available.
             if (tokenResponse.access_token) {
                 googleLogin.mutate(tokenResponse.access_token)
             }

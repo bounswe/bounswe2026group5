@@ -96,7 +96,8 @@ async function sendMessage(
 export const conversationsQueryOptions = queryOptions({
     queryKey: ['messaging', 'conversations'],
     queryFn: fetchConversations,
-    staleTime: 30 * 1000,
+    staleTime: 10 * 1000,
+    refetchInterval: 10_000,
     enabled: !!localStorage.getItem('access_token'),
 })
 
