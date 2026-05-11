@@ -12,10 +12,11 @@ from django.contrib.gis.geos import Point
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import serializers
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import AppUsageMode, UserRole
@@ -5878,3 +5879,175 @@ class ProfileMediaUploadTests(TestCase):
         )
         response = self.client.post(self.video_url, {"video": invalid_file}, format="multipart")
         self.assertEqual(response.status_code, 400)
+
+class MentorQualitySignalsTests(APITestCase):
+    """Tests for mentor discovery quality signals and sorting."""
+
+    def setUp(self) -> None:
+        self.mentors = []
+        for i in range(5):
+            user = User.objects.create_user(
+                email=f"mentor{i}@example.com",
+                password="password123",
+                app_usage_mode=AppUsageMode.MENTOR,
+            )
+            profile = Profile.objects.create(
+                user=user,
+                display_name=f"Mentor {i}",
+            )
+            self.mentors.append(profile)
+
+        self.mentors[0].average_rating = 5.0
+        self.mentors[0].review_count = 10
+        self.mentors[0].save()
+
+        self.mentors[1].average_rating = 4.5
+        self.mentors[1].review_count = 20
+        self.mentors[1].save()
+
+        self.mentors[2].average_rating = 5.0
+        self.mentors[2].review_count = 5
+        self.mentors[2].save()
+
+        self.mentors[3].average_rating = 0.0
+        self.mentors[3].review_count = 2
+        self.mentors[3].save()
+
+        self.mentors[4].average_rating = 0.0
+        self.mentors[4].review_count = 0
+        self.mentors[4].save()
+
+    def test_discovery_default_sorting_quality(self) -> None:
+        """Default sorting should favor quality (rating then review count)."""
+        url = reverse("mentor-profiles-search")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        results = response.data["results"]
+        self.assertEqual(results[0]["username"], self.mentors[0].username)
+        self.assertEqual(results[1]["username"], self.mentors[2].username)
+        self.assertEqual(results[2]["username"], self.mentors[1].username)
+        self.assertEqual(results[3]["username"], self.mentors[3].username)
+        self.assertEqual(results[4]["username"], self.mentors[4].username)
+
+    def test_discovery_recent_sorting(self) -> None:
+        """Recent sorting should favor newest profiles."""
+        url = reverse("mentor-profiles-search")
+        response = self.client.get(f"{url}?sort=recent")
+        self.assertEqual(response.status_code, 200)
+
+        results = response.data["results"]
+        self.assertEqual(results[0]["username"], self.mentors[4].username)
+        self.assertEqual(results[1]["username"], self.mentors[3].username)
+        self.assertEqual(results[2]["username"], self.mentors[2].username)
+
+    def test_review_count_exposed_in_results(self) -> None:
+        """Review count should be present in search results."""
+        url = reverse("mentor-profiles-search")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        results = response.data["results"]
+        self.assertIn("review_count", results[0])
+        self.assertEqual(results[0]["review_count"], 10)
+
+
+class MentorOverloadTests(APITestCase):
+    """Tests for mentor overload warnings and fields."""
+
+    def setUp(self) -> None:
+        self.mentee_user = User.objects.create_user(
+            email="mentee@example.com",
+            password="password123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user,
+            display_name="Mentee",
+        )
+
+        self.mentor_user = User.objects.create_user(
+            email="mentor@example.com",
+            password="password123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            display_name="Mentor",
+        )
+
+        self.mentee_token = str(RefreshToken.for_user(self.mentee_user).access_token)
+        self.mentor_token = str(RefreshToken.for_user(self.mentor_user).access_token)
+
+    @override_settings(MENTOR_OVERLOAD_THRESHOLD=3)
+    def test_mentor_profile_overload_fields(self) -> None:
+        """Mentor profile should show overload status and count."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_token}")
+
+        response = self.client.get(reverse("profile-me"))
+        self.assertEqual(response.data["is_overloaded"], False)
+        self.assertEqual(response.data["active_matches_count"], 0)
+        self.assertEqual(response.data["overload_threshold"], 3)
+
+        for i in range(3):
+            other_mentee = User.objects.create_user(
+                email=f"other{i}@example.com",
+                password="password123",
+                app_usage_mode=AppUsageMode.MENTEE,
+            )
+            other_profile = Profile.objects.create(
+                user=other_mentee,
+                display_name=f"Other {i}",
+            )
+            request = MentorshipRequest.objects.create(
+                mentor=self.mentor_profile,
+                mentee=other_profile,
+                status=MentorshipRequest.Status.ACCEPTED,
+            )
+            Match.objects.create(
+                mentor=self.mentor_profile,
+                mentee=other_profile,
+                is_active=True,
+                request=request,
+            )
+
+        response = self.client.get(reverse("profile-me"))
+        self.assertEqual(response.data["is_overloaded"], True)
+        self.assertEqual(response.data["active_matches_count"], 3)
+
+    @override_settings(MENTOR_OVERLOAD_THRESHOLD=3)
+    def test_mentorship_request_overload_flag(self) -> None:
+        """Mentorship request should flag if mentor is overloaded."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_token}")
+
+        for i in range(3):
+            other_mentee = User.objects.create_user(
+                email=f"other_m{i}@example.com",
+                password="password123",
+                app_usage_mode=AppUsageMode.MENTEE,
+            )
+            other_profile = Profile.objects.create(
+                user=other_mentee,
+                display_name=f"Other M {i}",
+            )
+            request = MentorshipRequest.objects.create(
+                mentor=self.mentor_profile,
+                mentee=other_profile,
+                status=MentorshipRequest.Status.ACCEPTED,
+            )
+            Match.objects.create(
+                mentor=self.mentor_profile,
+                mentee=other_profile,
+                is_active=True,
+                request=request,
+            )
+
+        MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.PENDING,
+        )
+
+        response = self.client.get(reverse("mentorship-request-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["is_mentor_overloaded"], True)

@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 
@@ -48,6 +49,24 @@ export function MentorCard({ profile, onPress }: Readonly<MentorCardProps>) {
           >
             {profile.title || "Mentor"}
           </Text>
+          {profile.is_overloaded && (
+            <View className="bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 rounded self-start mt-0.5 border border-amber-200 dark:border-amber-800/50">
+              <Text className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-tighter">
+                Busy
+              </Text>
+            </View>
+          )}
+          {Number(profile.average_rating) > 0 && (
+            <View className="flex-row items-center gap-1 mt-0.5">
+              <Ionicons name="star" size={12} color="#fbbf24" />
+              <Text className="text-xs font-bold text-on-surface dark:text-on-surface-dark">
+                {Number(profile.average_rating).toFixed(1)}
+              </Text>
+              <Text className="text-[10px] text-on-surface-muted dark:text-on-surface-muted-dark">
+                ({profile.review_count})
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 

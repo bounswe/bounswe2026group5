@@ -52,6 +52,11 @@ export class AdminModerationPage {
     await this.page.getByRole('button', { name: /Resolve/i }).click();
   }
 
+  async expectReportResolved(reportedUsername: string) {
+    const row = this.page.locator('tr').filter({ hasText: reportedUsername }).first();
+    await expect(row.getByText(/Resolved/i)).toBeVisible();
+  }
+
   async expectToast(message: string | RegExp) {
     await expect(this.page.getByText(message).first()).toBeVisible();
   }

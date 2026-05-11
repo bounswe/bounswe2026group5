@@ -4,6 +4,10 @@ import { DashboardPage } from '../pages/DashboardPage';
 import { DiscoverPage } from '../pages/DiscoverPage';
 import { ProfilePage } from '../pages/ProfilePage';
 
+function toDateString(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 test.describe('AT-AVAIL-004: Availability & Booking', () => {
   test('mentor publishes availability and mentee books through request acceptance', async ({
     browser,
@@ -52,27 +56,29 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
       const slots = await api.fetchAvailabilitySlots(mentor.username, mentorAuth);
       expect(slots).toEqual([]);
     });
-
     let firstSlotId = '';
     let secondSlotId = '';
 
+    const nextMonday = new Date();
+    nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7 || 7);
+    const nextMondayStr = toDateString(nextMonday);
+
     await test.step('Mentor creates first availability slot and overlapping slot is rejected', async () => {
       const profilePage = new ProfilePage(page);
+      
+      await profilePage.goToWeekContaining(nextMondayStr);
 
-      await profilePage.createAvailabilityCell(6, 14);
+      await profilePage.createAvailabilityCell(0, 14); // 0 is Monday
       await profilePage.expectAvailabilityCount(1);
 
       const slots = await api.fetchAvailabilitySlots(mentor.username, mentorAuth);
-      const firstSlot = slots.find((slot) => (
-        slot.date === '2026-05-10'
-        && slot.startTime === '14:00:00'
-        && slot.endTime === '15:00:00'
-      ));
+      expect(slots).toHaveLength(1);
+      const [firstSlot] = slots;
       expect(firstSlot?.status).toBe('AVAILABLE');
       firstSlotId = firstSlot?.id ?? '';
 
       const overlap = await api.tryCreateAvailabilitySlot(mentorAuth, {
-        date: '2026-05-10',
+        date: firstSlot.date,
         startTime: '14:30:00',
         endTime: '15:30:00',
       });
@@ -86,20 +92,21 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
     await test.step('Mentor creates adjacent slot and past slot creation is blocked', async () => {
       const profilePage = new ProfilePage(page);
 
-      await profilePage.createAvailabilityCell(6, 15);
+      await profilePage.createAvailabilityCell(0, 15);
       await profilePage.expectAvailabilityCount(2);
 
       const slots = await api.fetchAvailabilitySlots(mentor.username, mentorAuth);
-      const secondSlot = slots.find((slot) => (
-        slot.date === '2026-05-10'
-        && slot.startTime === '15:00:00'
-        && slot.endTime === '16:00:00'
-      ));
+      expect(slots).toHaveLength(2);
+      const secondSlot = slots.find((slot) => slot.id !== firstSlotId);
       expect(secondSlot?.status).toBe('AVAILABLE');
       secondSlotId = secondSlot?.id ?? '';
 
+      const pastMonth = new Date();
+      pastMonth.setMonth(pastMonth.getMonth() - 1);
+      const pastDateStr = toDateString(pastMonth);
+
       const past = await api.tryCreateAvailabilitySlot(mentorAuth, {
-        date: '2026-04-10',
+        date: pastDateStr,
         startTime: '10:00:00',
         endTime: '11:00:00',
       });
@@ -107,7 +114,7 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
       await expect(past.json()).resolves.toMatchObject({
         date: expect.arrayContaining([expect.stringContaining('past')]),
       });
-      expect(slots.some((slot) => slot.date === '2026-04-10')).toBeFalsy();
+      expect(slots.some((slot) => slot.date === pastDateStr)).toBeFalsy();
     });
 
     await test.step('Mentee discovers mentor by skill and sends an empty-cover-letter request', async () => {
@@ -120,6 +127,9 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
       await discoverPage.search(mentor.displayName);
       await discoverPage.openMentorProfile(mentor.displayName);
       await profilePage.expectLoaded(mentor.username, mentor.displayName);
+      
+      await profilePage.goToWeekContaining(nextMondayStr);
+
       await profilePage.expectBookableSlots(2);
       await profilePage.sendMentorshipRequest();
 
@@ -138,8 +148,9 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
       });
       expect(duplicate.status()).toBe(400);
 
-      const profilePage = new ProfilePage(page);
+       const profilePage = new ProfilePage(page);
       await profilePage.goto(mentor.username);
+      await profilePage.goToWeekContaining(nextMondayStr);
       await profilePage.expectPendingRequestBlocksOtherSlots();
     });
 

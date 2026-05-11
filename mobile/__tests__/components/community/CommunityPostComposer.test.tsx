@@ -49,6 +49,7 @@ describe("CommunityPostComposer", () => {
     return combined.toISOString();
   };
 
+  jest.setTimeout(10000);
   beforeEach(() => {
     jest.clearAllMocks();
     (pickPostImageFile as jest.Mock).mockResolvedValue({

@@ -51,7 +51,9 @@ test.describe('AT-006: Mentorship Requests & Matching', () => {
     const acceptedMenteeAuth = await api.seedUser(acceptedMentee, 'MENTEE');
     const otherMenteeAuth = await api.seedUser(otherMentee, 'MENTEE');
 
-    const slotDate = toDateString(new Date(Date.now() + 24 * 60 * 60 * 1000));
+    const nextMonday = new Date();
+    nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7 || 7);
+    const slotDate = toDateString(nextMonday);
     const firstSlot = await api.createAvailabilitySlot(mentorAuth, {
       date: slotDate,
       startTime: '14:00:00',
@@ -77,6 +79,9 @@ test.describe('AT-006: Mentorship Requests & Matching', () => {
       await discoverPage.expectMentorCard(mentor.displayName, discoverySkill);
       await discoverPage.openMentorProfile(mentor.displayName);
       await profilePage.expectLoaded(mentor.username, mentor.displayName);
+
+      await profilePage.goToWeekContaining(firstSlot.date);
+
       await profilePage.sendMentorshipRequest(acceptedCoverLetter);
 
       const requests = await api.fetchMyRequests(acceptedMenteeAuth);
@@ -149,6 +154,8 @@ test.describe('AT-006: Mentorship Requests & Matching', () => {
       await api.loginInBrowser(otherPage, otherMenteeAuth);
       await otherPage.goto(`/profiles/${mentor.username}`);
       await profilePage.expectLoaded(mentor.username, mentor.displayName);
+
+      await profilePage.goToWeekContaining(firstSlot.date);
 
       const slotsAfterAcceptance = await api.fetchAvailabilitySlots(mentor.username, otherMenteeAuth);
       expect(slotsAfterAcceptance.find((slot) => slot.id === firstSlot.id)?.status).toBe('BOOKED');

@@ -14,7 +14,9 @@ const profile: DiscoverMentorProfile = {
   show_initials_only: false,
   skills: ["Math"],
   average_rating: "5.0",
+  review_count: 12,
   total_mentee_count: 4,
+  is_overloaded: false,
 };
 
 describe("Discover MentorCard", () => {

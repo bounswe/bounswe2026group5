@@ -4,6 +4,39 @@ import { DashboardPage } from '../pages/DashboardPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { SchedulePage } from '../pages/SchedulePage';
 
+function toDateString(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function nextWeekday(base: Date, weekday: number) {
+  const next = new Date(base);
+  const delta = (weekday + 7 - next.getDay()) % 7 || 7;
+  next.setDate(next.getDate() + delta);
+  return next;
+}
+
+function formatScheduleDate(date: Date) {
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatRescheduleLabel(date: Date) {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 test.describe('AT-003: Meeting Session Management', () => {
   test('mentee and mentor manage a rescheduled and canceled session from web surfaces', async ({
     browser,
@@ -43,18 +76,21 @@ test.describe('AT-003: Meeting Session Management', () => {
     const menteeAuth = await api.seedUser(mentee, 'MENTEE');
     const unrelatedAuth = await api.seedUser(unrelated, 'MENTEE');
 
+    const originalDate = nextWeekday(new Date(), 3);
+    const newDate = addDays(originalDate, 2);
+
     const originalSlot = await api.createAvailabilitySlot(mentorAuth, {
-      date: '2026-06-03',
+      date: toDateString(originalDate),
       startTime: '14:00:00',
       endTime: '15:00:00',
     });
     const newSlot = await api.createAvailabilitySlot(mentorAuth, {
-      date: '2026-06-05',
+      date: toDateString(newDate),
       startTime: '10:00:00',
       endTime: '11:00:00',
     });
     const alreadyBookedSlot = await api.createAvailabilitySlot(mentorAuth, {
-      date: '2026-06-05',
+      date: toDateString(newDate),
       startTime: '11:00:00',
       endTime: '12:00:00',
     });
@@ -83,7 +119,7 @@ test.describe('AT-003: Meeting Session Management', () => {
       await schedulePage.expectMenteeSchedule();
       await schedulePage.expectSession({
         peerName: mentor.displayName,
-        date: '3 Jun 2026',
+        date: formatScheduleDate(originalDate),
         time: '14:00 – 15:00',
         status: 'Upcoming',
       });
@@ -104,13 +140,13 @@ test.describe('AT-003: Meeting Session Management', () => {
       await profilePage.expectLoaded(mentor.username, mentor.displayName);
     });
 
-    await test.step('Mentee reschedules to June 5, 2026, 10:00-11:00', async () => {
+    await test.step('Mentee reschedules to the alternate future slot', async () => {
       const dashboardPage = new DashboardPage(page);
 
       await dashboardPage.goto();
       await dashboardPage.openSessionManager(mentor.displayName);
       await dashboardPage.rescheduleSession({
-        dayLabel: 'Fri, Jun 5',
+        dayLabel: formatRescheduleLabel(newDate),
         timeLabel: '10:00 – 11:00',
       });
 
@@ -131,15 +167,15 @@ test.describe('AT-003: Meeting Session Management', () => {
       await schedulePage.goto();
       await schedulePage.expectSession({
         peerName: mentor.displayName,
-        date: '5 Jun 2026',
+        date: formatScheduleDate(newDate),
         time: '10:00 – 11:00',
         status: 'Upcoming',
       });
-      await schedulePage.goToNextMonth();
-      await schedulePage.filterBySessionDate('5', mentor.displayName);
+      await schedulePage.goToMonth(newDate);
+      await schedulePage.filterBySessionDate(newDate, mentor.displayName);
       await schedulePage.expectSession({
         peerName: mentor.displayName,
-        date: '5 Jun 2026',
+        date: formatScheduleDate(newDate),
         time: '10:00 – 11:00',
         status: 'Upcoming',
       });
@@ -158,7 +194,7 @@ test.describe('AT-003: Meeting Session Management', () => {
       await mentorSchedule.expectMentorSchedule();
       await mentorSchedule.expectSession({
         peerName: mentee.displayName,
-        date: '5 Jun 2026',
+        date: formatScheduleDate(newDate),
         time: '10:00 – 11:00',
         status: 'Upcoming',
       });

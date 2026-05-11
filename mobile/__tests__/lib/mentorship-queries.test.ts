@@ -124,6 +124,7 @@ describe("mentorship query mappers", () => {
         slot_date: null,
         slot_start_time: null,
         slot_end_time: null,
+        is_mentor_overloaded: false,
         responded_at: null,
       },
       {
@@ -149,6 +150,7 @@ describe("mentorship query mappers", () => {
         slot_date: null,
         slot_start_time: null,
         slot_end_time: null,
+        is_mentor_overloaded: false,
         responded_at: null,
       },
       {
@@ -174,6 +176,7 @@ describe("mentorship query mappers", () => {
         slot_date: null,
         slot_start_time: null,
         slot_end_time: null,
+        is_mentor_overloaded: false,
         responded_at: null,
       },
     ];

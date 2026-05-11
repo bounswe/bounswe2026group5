@@ -105,6 +105,8 @@ interface OwnProfileSettingsResponse {
   username: string;
   display_name: string;
   share_precise_location: boolean;
+  is_overloaded: boolean;
+  active_matches_count: number;
 }
 
 interface PublicProfileRatingResponse {

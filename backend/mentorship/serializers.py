@@ -48,6 +48,7 @@ class MentorshipRequestSerializer(serializers.ModelSerializer):
     slot_end_time = serializers.SerializerMethodField()
     mentor = ProfileSummarySerializer(read_only=True)
     mentee = ProfileSummarySerializer(read_only=True)
+    is_mentor_overloaded = serializers.SerializerMethodField()
 
     class Meta:
         model = MentorshipRequest
@@ -61,10 +62,19 @@ class MentorshipRequestSerializer(serializers.ModelSerializer):
             "slot_end_time",
             "status",
             "cover_letter",
+            "is_mentor_overloaded",
             "created_at",
             "responded_at",
         )
         read_only_fields = fields
+
+    def get_is_mentor_overloaded(self, obj: MentorshipRequest) -> bool:
+        """Return True when the mentor has reached the active session limit."""
+        from django.conf import settings
+
+        threshold = getattr(settings, "MENTOR_OVERLOAD_THRESHOLD", 5)
+        active_count = Match.objects.filter(mentor=obj.mentor, is_active=True).count()
+        return active_count >= threshold
 
     def get_slot_date(self, obj: MentorshipRequest) -> str | None:
         """Return selected slot date in project local timezone."""
