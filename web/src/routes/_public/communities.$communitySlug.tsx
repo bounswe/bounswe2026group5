@@ -694,7 +694,7 @@ export function CommunityDetailPage() {
                 )}
 
                 {/* ── RIGHT: Community header + feed ──────────────────────── */}
-                <div className="flex-1 min-w-0 flex flex-col gap-5">
+                <div className="flex-1 min-w-0 flex flex-col gap-5 max-w-4xl mx-auto">
 
                     {/* Community header island */}
                     <div className="island-shell rounded-2xl shadow-md flex flex-col">
