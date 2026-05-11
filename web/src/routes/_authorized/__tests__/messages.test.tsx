@@ -28,6 +28,9 @@ vi.mock('@tanstack/react-router', () => ({
     useSearch: () => ({ conversationId: '' }),
     useNavigate: () => vi.fn(),
   }),
+  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
+    <a href={to}>{children}</a>
+  ),
 }))
 
 vi.mock('#/lib/queries/NotificationQueries.ts', () => ({

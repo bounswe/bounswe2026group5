@@ -118,10 +118,10 @@ export function useConversations() {
 
 export function useMessages(conversationId: string) {
     const [pageSize, setPageSize] = useState(50)
-    
-    const { 
-        messages: firebaseMessages, 
-        isLoading: fbLoading, 
+
+    const {
+        messages: firebaseMessages,
+        isLoading: fbLoading,
         isFirebaseAvailable: fbAvailable,
         loadMore: fbLoadMore,
         hasMore: fbHasMore
@@ -130,10 +130,19 @@ export function useMessages(conversationId: string) {
     const { data: httpMessages = [], isLoading: httpLoading } = useQuery(
         messagesQueryOptions(conversationId, pageSize, !fbAvailable),
     )
-    
+
     const { queue: queuedMessages } = useMessageQueue(conversationId)
+    const { data: conversations = [] } = useQuery(conversationsQueryOptions)
 
     const mergedMessages = useMemo(() => {
+        // Build username → picture_url map from the conversation participants
+        const conv = conversations.find(c => c.id === conversationId)
+        const pictureMap: Record<string, string | null> = {}
+        if (conv) {
+            pictureMap[conv.mentor.username] = conv.mentor.picture_url
+            pictureMap[conv.mentee.username] = conv.mentee.picture_url
+        }
+
         const remoteMessages = fbAvailable ? firebaseMessages : httpMessages
         const remoteMsgIds = new Set(remoteMessages.map(m => m.id))
 
@@ -147,7 +156,7 @@ export function useMessages(conversationId: string) {
                         id: msg.sender_id,
                         username: msg.sender_username,
                         display_name: msg.sender_display_name,
-                        picture_url: msg.sender_picture_url,
+                        picture_url: pictureMap[msg.sender_username] ?? msg.sender_picture_url,
                         title: null,
                     },
                     body: msg.body,
@@ -176,7 +185,7 @@ export function useMessages(conversationId: string) {
         return [...allMessages, ...queuedOnlyMessages].sort(
             (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
         )
-    }, [fbAvailable, firebaseMessages, httpMessages, queuedMessages, conversationId])
+    }, [fbAvailable, firebaseMessages, httpMessages, queuedMessages, conversationId, conversations])
 
     const loadMore = useCallback(() => {
         if (fbAvailable) {

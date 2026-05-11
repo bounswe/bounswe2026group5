@@ -13,7 +13,7 @@ export class LoginPage {
 
   async expectLoaded() {
     await expect(this.page.getByRole('heading', { name: /Welcome back/i })).toBeVisible();
-    await expect(this.page.getByText('Login to your account', { exact: true })).toBeVisible();
+    await expect(this.page.getByText(/Enter your email below to sign in to your account\./i)).toBeVisible();
   }
 
   async fillEmail(email: string) {
@@ -21,7 +21,7 @@ export class LoginPage {
   }
 
   async fillPassword(password: string) {
-    await this.page.getByLabel(/password/i).fill(password);
+    await this.page.getByLabel(/^password$/i).fill(password);
   }
 
   async submit() {

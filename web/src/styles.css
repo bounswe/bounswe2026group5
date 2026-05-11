@@ -57,6 +57,7 @@
   --accent:          #4a7c6f;
   --accent-light:    #5e9488;
   --accent-muted:    #e8f2f0;
+  --accent-aa:       #3d6b5f;
   --iris:            #8bb8b0;
 
   --bg-base:         #faf8f4;
@@ -66,7 +67,7 @@
   --surface-strong:  rgba(255, 254, 251, 0.96);
   --line:            rgba(28, 28, 24, 0.09);
   --inset-glint:     rgba(255, 255, 255, 0.88);
-  --kicker:          #4a7c6f;
+  --kicker:          #3d6b5f;
 
   --hero-a:          rgba(74, 124, 111, 0.09);
   --hero-b:          rgba(210, 195, 168, 0.18);
@@ -107,6 +108,7 @@
     --accent:         #6db0a2;
     --accent-light:   #88c4b8;
     --accent-muted:   #0f201e;
+    --accent-aa:      #6db0a2;
     --iris:           #a8cec8;
 
     --bg-base:        #14120e;
@@ -162,6 +164,7 @@
   --color-accent:         var(--accent);
   --color-accent-light:   var(--accent-light);
   --color-accent-muted:   var(--accent-muted);
+  --color-accent-aa:      var(--accent-aa);
   --color-iris:           var(--iris);
   --color-petal:          var(--petal);
   --color-mist:           var(--mist);

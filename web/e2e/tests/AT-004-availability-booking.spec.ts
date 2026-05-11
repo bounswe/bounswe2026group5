@@ -66,23 +66,19 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
     await test.step('Mentor creates first availability slot and overlapping slot is rejected', async () => {
       const profilePage = new ProfilePage(page);
       
-      // Always go to next week to guarantee slots are in the future
-      await profilePage.nextWeek();
+      await profilePage.goToWeekContaining(nextMondayStr);
 
       await profilePage.createAvailabilityCell(0, 14); // 0 is Monday
       await profilePage.expectAvailabilityCount(1);
 
       const slots = await api.fetchAvailabilitySlots(mentor.username, mentorAuth);
-      const firstSlot = slots.find((slot) => (
-        slot.date === nextMondayStr
-        && slot.startTime === '14:00:00'
-        && slot.endTime === '15:00:00'
-      ));
+      expect(slots).toHaveLength(1);
+      const [firstSlot] = slots;
       expect(firstSlot?.status).toBe('AVAILABLE');
       firstSlotId = firstSlot?.id ?? '';
 
       const overlap = await api.tryCreateAvailabilitySlot(mentorAuth, {
-        date: nextMondayStr,
+        date: firstSlot.date,
         startTime: '14:30:00',
         endTime: '15:30:00',
       });
@@ -100,11 +96,8 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
       await profilePage.expectAvailabilityCount(2);
 
       const slots = await api.fetchAvailabilitySlots(mentor.username, mentorAuth);
-      const secondSlot = slots.find((slot) => (
-        slot.date === nextMondayStr
-        && slot.startTime === '15:00:00'
-        && slot.endTime === '16:00:00'
-      ));
+      expect(slots).toHaveLength(2);
+      const secondSlot = slots.find((slot) => slot.id !== firstSlotId);
       expect(secondSlot?.status).toBe('AVAILABLE');
       secondSlotId = secondSlot?.id ?? '';
 
@@ -135,8 +128,7 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
       await discoverPage.openMentorProfile(mentor.displayName);
       await profilePage.expectLoaded(mentor.username, mentor.displayName);
       
-      // Always go to next week to find the created slots
-      await profilePage.nextWeek();
+      await profilePage.goToWeekContaining(nextMondayStr);
 
       await profilePage.expectBookableSlots(2);
       await profilePage.sendMentorshipRequest();
@@ -158,7 +150,7 @@ test.describe('AT-AVAIL-004: Availability & Booking', () => {
 
        const profilePage = new ProfilePage(page);
       await profilePage.goto(mentor.username);
-      await profilePage.nextWeek(); // Slots are on next week
+      await profilePage.goToWeekContaining(nextMondayStr);
       await profilePage.expectPendingRequestBlocksOtherSlots();
     });
 

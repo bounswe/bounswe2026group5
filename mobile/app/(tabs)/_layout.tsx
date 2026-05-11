@@ -113,6 +113,14 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="community/[tagId]/workshops/[workshopId]"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
         name="discover"
         options={{
           headerShown: false,

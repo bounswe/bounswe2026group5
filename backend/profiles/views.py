@@ -112,10 +112,23 @@ def _resolve_community_tag(tag_id: str, qs=None) -> "CommunityTag | None":
 class ProfileLookupMixin:
     """Shared profile lookup and mentor checks for profile API views."""
 
+    @staticmethod
+    def _with_active_match_counts(queryset):
+        """Annotate mentor active match counts for overload-related serializers."""
+        return queryset.annotate(
+            active_matches_count=Count(
+                "mentor_matches",
+                filter=Q(mentor_matches__is_active=True),
+                distinct=True,
+            )
+        )
+
     def _get_profile_or_404(self, username: str) -> Profile | None:
         """Return profile by username when it exists."""
         try:
-            return Profile.objects.select_related("user").get(username=username)
+            return self._with_active_match_counts(Profile.objects.select_related("user")).get(
+                username=username
+            )
         except Profile.DoesNotExist:
             return None
 
@@ -126,7 +139,9 @@ class ProfileLookupMixin:
     def _get_request_profile_or_404(self, request: Request) -> Profile | None:
         """Return profile bound to authenticated request user when it exists."""
         try:
-            return Profile.objects.select_related("user").get(user=request.user)
+            return self._with_active_match_counts(Profile.objects.select_related("user")).get(
+                user=request.user
+            )
         except Profile.DoesNotExist:
             return None
 
@@ -893,7 +908,7 @@ class PopularMentorsListAPIView(APIView):
         return Response({"results": serializer.data}, status=status.HTTP_200_OK)
 
 
-class PublicMentorProfilesSearchListAPIView(APIView):
+class PublicMentorProfilesSearchListAPIView(ProfileLookupMixin, APIView):
     """Public listing of visible mentor profiles with search and filtering."""
 
     permission_classes = [AllowAny]
@@ -1064,7 +1079,9 @@ class PublicMentorProfilesSearchListAPIView(APIView):
 
         sort = request.query_params.get("sort", "quality").strip().lower()
 
-        qs = Profile.objects.select_related("user").filter(user__app_usage_mode=AppUsageMode.MENTOR)
+        qs = self._with_active_match_counts(Profile.objects.select_related("user")).filter(
+            user__app_usage_mode=AppUsageMode.MENTOR
+        )
 
         if q:
             base_qs = qs

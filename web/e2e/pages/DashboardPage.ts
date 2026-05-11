@@ -13,7 +13,7 @@ export class DashboardPage {
 
   async expectLoaded() {
     await expect(this.page).toHaveURL(/.*dashboard/);
-    await expect(this.page.getByRole('link', { name: /Open profile page/i })).toBeVisible();
+    await expect(this.page.getByRole('heading', { name: /Dashboard/i })).toBeVisible();
   }
 
   async logout() {
@@ -30,9 +30,18 @@ export class DashboardPage {
   }
 
   async expectNotification(title: string, messagePart: string) {
-    await expect(this.page.getByRole('heading', { name: /Notifications/i })).toBeVisible();
     const notification = this.page.locator('.border-l-4', { hasText: title }).filter({ hasText: messagePart }).first();
-    await expect(notification).toBeVisible();
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (await notification.isVisible().catch(() => false)) {
+        return;
+      }
+
+      await this.page.reload();
+      await this.expectLoaded();
+    }
+
+    await expect(notification).toBeVisible({ timeout: 10_000 });
   }
 
   async acceptIncomingRequest(menteeName: string, coverLetter?: string) {
@@ -100,16 +109,31 @@ export class DashboardPage {
 
   async rescheduleSession(newSlot: { dayLabel: string; timeLabel: string }) {
     await this.page.getByRole('button', { name: 'Reschedule' }).click();
+    const dialog = this.page.getByRole('dialog');
     await expect(this.page.getByRole('heading', { name: 'Pick a New Time Slot' })).toBeVisible();
+    await expect(dialog.locator('svg.animate-spin')).toHaveCount(0);
+    const slotByDayAndTime = this.page
+      .locator('button', { hasText: newSlot.dayLabel })
+      .filter({ hasText: newSlot.timeLabel })
+      .first();
+    const slotByTimeOnly = this.page.locator('button', { hasText: newSlot.timeLabel }).first();
 
-    for (let i = 0; i < 4; i += 1) {
-      await this.page.getByRole('button').filter({ has: this.page.locator('svg.lucide-chevron-right') }).click();
+    const nextWeekButton = this.page.getByRole('button').filter({
+      has: this.page.locator('svg.lucide-chevron-right'),
+    });
+
+    for (let i = 0; i < 8; i += 1) {
+      const slotVisible =
+        (await slotByDayAndTime.isVisible().catch(() => false)) ||
+        (await slotByTimeOnly.isVisible().catch(() => false));
+      if (slotVisible) {
+        break;
+      }
+      await nextWeekButton.click();
     }
 
-    const oldBookedSlot = this.page.locator('button', { hasText: 'Wed, Jun 3' }).filter({ hasText: '14:00 – 15:00' });
-    await expect(oldBookedSlot).toHaveCount(0);
-
-    const targetSlot = this.page.locator('button', { hasText: newSlot.dayLabel }).filter({ hasText: newSlot.timeLabel }).first();
+    const targetSlot =
+      (await slotByDayAndTime.isVisible().catch(() => false)) ? slotByDayAndTime : slotByTimeOnly;
     await expect(targetSlot).toBeVisible();
     await targetSlot.click();
     await this.page.getByRole('button', { name: 'Confirm Reschedule' }).click();

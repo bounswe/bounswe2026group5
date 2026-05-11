@@ -3,10 +3,7 @@ import { Button } from "@/components/ui/button"
 import {
     Card,
     CardContent,
-    CardDescription,
     CardFooter,
-    CardHeader,
-    CardTitle,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,7 +11,7 @@ import { toast } from 'sonner'
 import { useGoogleLoginSafe } from '#/hooks/useGoogleLoginSafe'
 
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
-import { CalendarDays, Search, TrendingUp } from 'lucide-react'
+import { CalendarDays, Eye, EyeOff, Search, TrendingUp } from 'lucide-react'
 
 import { requestForToken } from "#/lib/firebase-client"
 import { googleLoginFn, handleAuthSuccess, loginFn } from "#/lib/queries/AuthQueries.ts"
@@ -35,6 +32,7 @@ export function LoginPage() {
     const router = useRouter()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [showPassword, setShowPassword] = useState(false)
 
     const login = useMutation({
         mutationFn: loginFn,
@@ -77,14 +75,14 @@ export function LoginPage() {
     return (
         <div className="grid min-h-screen lg:grid-cols-[5fr_4fr]">
 
-            <aside className="lg:flex flex-col px-14 py-12 bg-petal border-r border-line">
+            <aside aria-hidden="true" className="hidden lg:flex flex-col px-14 py-12 bg-petal border-r border-line">
                 <Display className="mb-10">Neighborship</Display>
                 <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4 rise-in">
                     <Body className="island-kicker">Peer tutoring platform</Body>
                     <Display as="h2" className="leading-[1.2] max-w-xs">
                         Study better,<br />together.
                     </Display>
-                    <Body className="text-(--color-brand-ink-soft) max-w-90">
+                    <Body className="text-ink-soft max-w-90">
                         Find mentors from your own campus, book sessions around your
                         schedule, and actually understand the material.
                     </Body>
@@ -104,22 +102,16 @@ export function LoginPage() {
                 </div>
             </aside>
 
-            <main className="flex flex-col justify-start items-center px-6 py-16 sm:px-12">
+            <main id="main-content" className="flex flex-col justify-start items-center px-6 py-16 sm:px-12">
                 <div className="w-full max-w-lg rise-in">
 
-                    <div className="mb-6 px-1">
-                        <Heading as="h2" className="mb-10">Welcome back</Heading>
+                    <div className="mb-8 px-1">
+                        <Heading as="h1">Welcome back</Heading>
+                        <Muted className="mt-2 text-ink-soft">Enter your email below to sign in to your account.</Muted>
                     </div>
 
                     <Card className="w-full island-shell border-line">
-                        <CardHeader>
-                            <CardTitle>Login to your account</CardTitle>
-                            <CardDescription>
-                                Enter your email below to login to your account
-                            </CardDescription>
-                        </CardHeader>
-
-                        <CardContent>
+                        <CardContent className="pt-6">
                             <form
                                 id="login-form"
                                 className="flex flex-col gap-5"
@@ -134,58 +126,77 @@ export function LoginPage() {
                                         onChange={(e) => setEmail(e.target.value)}
                                         placeholder="you@university.edu"
                                         required
+                                        autoComplete="email"
+                                        className="py-3 rounded-xl"
                                     />
                                 </div>
 
                                 <div className="grid gap-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="password">Password</Label>
+                                    <Label htmlFor="password">Password</Label>
+                                    <div className="relative">
+                                        <Input
+                                            id="password"
+                                            type={showPassword ? 'text' : 'password'}
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            required
+                                            autoComplete="current-password"
+                                            className="py-3 rounded-xl pr-10"
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-ink-soft hover:text-ink"
+                                            onClick={() => setShowPassword((v) => !v)}
+                                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                        >
+                                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </Button>
+                                    </div>
+                                    <div className="flex justify-end">
                                         <Link
                                             to="/forgot-password"
-                                            className="text-xs text-accent-light underline-offset-4 hover:underline hover:text-accent transition-colors"
+                                            className="text-xs text-accent-aa underline-offset-4 hover:underline hover:text-accent transition-colors"
                                         >
                                             Forgot your password?
                                         </Link>
                                     </div>
-                                    <Input
-                                        id="password"
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        placeholder="••••••••"
-                                        required
-                                    />
                                 </div>
                             </form>
                         </CardContent>
 
                         <CardFooter className="flex-col gap-3">
-                            {/* THE REAL FORM SUBMIT BUTTON */}
                             <Button type="submit" form="login-form" className="w-full" disabled={login.isPending}>
                                 {login.isPending ? 'Signing in...' : 'Sign in'}
                             </Button>
 
                             {login.isError && (
-                                <p className="text-xs text-destructive">{login.error.message}</p>
+                                <div role="alert" className="w-full flex items-start gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                                    <p className="text-sm text-destructive">{login.error.message}</p>
+                                </div>
                             )}
 
                             {googleLogin.isError && (
-                                <p className="text-xs text-destructive">{googleLogin.error.message}</p>
+                                <div role="alert" className="w-full flex items-start gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                                    <p className="text-sm text-destructive">{googleLogin.error.message}</p>
+                                </div>
                             )}
 
                             <div className="flex items-center gap-3 w-full mt-2">
-                                <div className="flex-1 h-px bg-(--color-brand-line)" />
+                                <div className="flex-1 h-px bg-line" />
                                 <Muted as="span" className="text-xs uppercase tracking-widest">or</Muted>
-                                <div className="flex-1 h-px bg-(--color-brand-line)" />
+                                <div className="flex-1 h-px bg-line" />
                             </div>
 
                             <Button
                                 variant="outline"
-                                className="w-full gap-2 border-line"
+                                className="w-full gap-2 border-line rounded-xl"
                                 onClick={() => triggerGoogleLogin()}
                                 disabled={googleLogin.isPending}
                             >
-                                <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden>
+                                <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
                                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
                                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
@@ -198,7 +209,7 @@ export function LoginPage() {
                                 No account yet?{' '}
                                 <Link
                                     to="/register"
-                                    className="font-medium text-accent-light underline-offset-4 hover:underline hover:text-accent transition-colors"
+                                    className="font-medium text-accent-aa underline-offset-4 hover:underline hover:text-accent transition-colors"
                                 >
                                     Sign up free
                                 </Link>

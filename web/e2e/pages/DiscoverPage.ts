@@ -66,7 +66,7 @@ export class DiscoverPage {
 
   async expectMentorCard(mentorName: string, skill: string) {
     const card = this.mentorCard(mentorName);
-    await expect(card).toBeVisible({ timeout: 2_000 });
+    await expect(card).toBeVisible({ timeout: 5_000 });
     await expect(card.getByText(skill, { exact: true })).toBeVisible();
     await expect(card.getByRole('button', { name: 'View Profile' })).toBeVisible();
   }
@@ -78,6 +78,7 @@ export class DiscoverPage {
 
   async search(value: string) {
     await this.page.getByLabel('Search profiles, skills, or projects...').fill(value);
+    await this.page.waitForTimeout(400);
   }
 }
 

@@ -80,8 +80,7 @@ test.describe('AT-006: Mentorship Requests & Matching', () => {
       await discoverPage.openMentorProfile(mentor.displayName);
       await profilePage.expectLoaded(mentor.username, mentor.displayName);
 
-      // Always go to next week to find the created slots
-      await profilePage.nextWeek();
+      await profilePage.goToWeekContaining(firstSlot.date);
 
       await profilePage.sendMentorshipRequest(acceptedCoverLetter);
 
@@ -155,8 +154,7 @@ test.describe('AT-006: Mentorship Requests & Matching', () => {
       await otherPage.goto(`/profiles/${mentor.username}`);
       await profilePage.expectLoaded(mentor.username, mentor.displayName);
 
-      // Always go to next week
-      await profilePage.nextWeek();
+      await profilePage.goToWeekContaining(firstSlot.date);
 
       const slotsAfterAcceptance = await api.fetchAvailabilitySlots(mentor.username, otherMenteeAuth);
       expect(slotsAfterAcceptance.find((slot) => slot.id === firstSlot.id)?.status).toBe('BOOKED');

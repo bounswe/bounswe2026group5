@@ -17,11 +17,12 @@ import {
   AvailabilityPreview,
   type AvailabilitySlot,
 } from "@/components/profile/AvailabilityPreview";
-import { ReportSheet } from "@/components/report/ReportSheet";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfilePostsPreview } from "@/components/profile/ProfilePostsPreview";
 import { ProfileReviews } from "@/components/profile/ProfileReviews";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
+import { ReportSheet } from "@/components/report/ReportSheet";
+
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -45,6 +46,7 @@ import {
   useProfileReviewsQuery,
 } from "@/lib/queries/profile";
 import { useSubmitReportMutation } from "@/lib/queries/reporting";
+import { useJoinCommunityWorkshopMutation } from "@/lib/queries/workshops";
 
 interface PublicProfileResponse {
   username: string;
@@ -77,7 +79,10 @@ function getUsernameParam(
 }
 
 function normalizeUsernameIdentifier(value?: string): string {
-  return (value ?? "").trim().toLowerCase().replace(/[-_.\s]+/g, "");
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[-_.\s]+/g, "");
 }
 
 function isFutureOpenSlot(slot: {
@@ -158,6 +163,16 @@ type BodyContentProps = {
     skills: string[],
     variant: "mentor" | "mentee",
   ) => void;
+  userWorkshops?: {
+    id: string;
+    title: string;
+    community_id: string;
+    scheduled_at: string;
+  }[];
+  onJoinWorkshop?: (payload: {
+    tagId: string;
+    workshopId: string;
+  }) => Promise<void>;
   onSelectSlot: (payload: {
     day: string;
     time: string;
@@ -198,6 +213,8 @@ function renderBodyContent({
   coverLetter,
   setCoverLetter,
   onOpenSkillsModal,
+  userWorkshops,
+  onJoinWorkshop,
   onSelectSlot,
   onResendVerification,
   onSubmit,
@@ -252,9 +269,9 @@ function renderBodyContent({
   }
 
   const userSkills = profile.skills ?? [];
-  const roleVariant = profile?.app_usage_mode === "MENTEE" ? "mentee" : "mentor";
-  const skillsTitle =
-    roleVariant === "mentor" ? "Expertise" : "Eager to Learn";
+  const roleVariant =
+    profile?.app_usage_mode === "MENTEE" ? "mentee" : "mentor";
+  const skillsTitle = roleVariant === "mentor" ? "Expertise" : "Eager to Learn";
 
   return (
     <ScrollView
@@ -277,14 +294,26 @@ function renderBodyContent({
 
       <View className="px-4 mt-4">
         {userSkills.length > 0 && (
-          <SkillsCloud
-            title={skillsTitle}
-            skills={userSkills}
-            variant={roleVariant}
-            onViewAll={() =>
-              onOpenSkillsModal(skillsTitle, userSkills, roleVariant)
-            }
-          />
+          <View className="mb-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 pt-4">
+            <SkillsCloud
+              title={skillsTitle}
+              skills={userSkills}
+              variant={roleVariant}
+              onViewAll={() =>
+                onOpenSkillsModal(skillsTitle, userSkills, roleVariant)
+              }
+            />
+          </View>
+        )}
+
+        {isViewedMentor && (
+          <View className="mb-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark px-4 pt-4">
+            <AvailabilityPreview
+              schedule={availability}
+              selectedSlot={selectedSlotPreview}
+              onSelectSlot={onSelectSlot}
+            />
+          </View>
         )}
 
         {/* Profile posts preview (PrP + public MCTE) — hidden when empty */}
@@ -292,6 +321,47 @@ function renderBodyContent({
           username={postsUsername}
           onViewAll={onViewAllPosts}
         />
+
+        {userWorkshops && userWorkshops.length > 0 && (
+          <View className="mb-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4">
+            <View className="mb-3 flex-row items-center justify-between">
+              <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
+                Workshops
+              </Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: 16 }}
+            >
+              {userWorkshops.map((w) => (
+                <View
+                  key={w.id}
+                  className="mr-4 w-56 rounded-xl border border-divider p-3 bg-white dark:bg-surface-card-dark"
+                >
+                  <Text className="font-semibold text-gray-900 mb-1">
+                    {w.title}
+                  </Text>
+                  <Text className="text-sm text-gray-600 mb-3">
+                    {new Date(w.scheduled_at).toLocaleString()}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() =>
+                      onJoinWorkshop &&
+                      onJoinWorkshop({
+                        tagId: w.community_id,
+                        workshopId: w.id,
+                      })
+                    }
+                    className="bg-indigo-600 rounded-lg py-2 items-center"
+                  >
+                    <Text className="text-white font-semibold">Join</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {!!requestFeedback && (
           <View className="mb-4">
@@ -315,14 +385,6 @@ function renderBodyContent({
               </TouchableOpacity>
             ) : null}
           </View>
-        )}
-
-        {isViewedMentor && (
-          <AvailabilityPreview
-            schedule={availability}
-            selectedSlot={selectedSlotPreview}
-            onSelectSlot={onSelectSlot}
-          />
         )}
 
         {isViewedMentor && selectedSlot && canRequestMentorship && (
@@ -375,7 +437,9 @@ function renderBodyContent({
 
         {isViewedMentor && (
           <View className="mt-6">
-            <Text className="mb-3 text-lg font-bold text-gray-900">Reviews</Text>
+            <Text className="mb-3 text-lg font-bold text-gray-900">
+              Reviews
+            </Text>
             <ProfileReviews
               reviews={reviews}
               totalCount={reviewsTotalCount}
@@ -412,7 +476,8 @@ export default function MentorProfileScreen() {
   const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const selfScopedQueryUsername = currentUsername ?? profile?.username ?? username;
+  const selfScopedQueryUsername =
+    currentUsername ?? profile?.username ?? username;
 
   const createRequestMutation = useCreateMentorshipRequestMutation();
   const mentorshipMatchesQuery = useMentorshipMatchesQuery(
@@ -444,10 +509,8 @@ export default function MentorProfileScreen() {
   const [requestFeedbackVariant, setRequestFeedbackVariant] = useState<
     "error" | "warning" | "info" | "success"
   >("info");
-  const [
-    showResendVerificationAction,
-    setShowResendVerificationAction,
-  ] = useState(false);
+  const [showResendVerificationAction, setShowResendVerificationAction] =
+    useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
   const [showBookingConfirmation, setShowBookingConfirmation] = useState(false);
@@ -465,32 +528,73 @@ export default function MentorProfileScreen() {
     variant: "mentor",
   });
 
+  const [userWorkshops, setUserWorkshops] = useState<
+    { id: string; title: string; community_id: string; scheduled_at: string }[]
+  >([]);
+  const joinWorkshopMutation =
+    useJoinCommunityWorkshopMutation(currentUsername);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!username) return;
+
+    fetch(
+      `${API_BASE_URL}/api/profiles/${encodeURIComponent(username)}/workshops/?limit=50`,
+      {
+        headers: { Accept: "application/json" },
+      },
+    )
+      .then(async (res) => {
+        if (!res.ok) return [];
+        const payload = await res.json();
+        // expect either list or paginated { results }
+        const rows = Array.isArray(payload) ? payload : (payload.results ?? []);
+        return rows;
+      })
+      .then((rows) => {
+        if (!mounted) return;
+        const normalized = (rows ?? []).map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          community_id: r.community_id ?? r.communityId ?? r.community_id,
+          scheduled_at: r.scheduled_at ?? r.scheduledAt ?? r.scheduled_at,
+        }));
+        setUserWorkshops(normalized);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setUserWorkshops([]);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [username]);
+
   useEffect(() => {
     if (!reviewsQuery.data) {
       return;
     }
 
-    setReviews((prev) =>
-      {
-        const nextReviews =
-          reviewsPage === 1
-            ? reviewsQuery.data.results
-            : [...prev, ...reviewsQuery.data.results];
+    setReviews((prev) => {
+      const nextReviews =
+        reviewsPage === 1
+          ? reviewsQuery.data.results
+          : [...prev, ...reviewsQuery.data.results];
 
-        const isSameCollection =
-          prev.length === nextReviews.length &&
-          prev.every((review, index) => {
-            const nextReview = nextReviews[index];
-            return (
-              review?.rating === nextReview?.rating &&
-              review?.text === nextReview?.text &&
-              review?.created_at === nextReview?.created_at
-            );
-          });
+      const isSameCollection =
+        prev.length === nextReviews.length &&
+        prev.every((review, index) => {
+          const nextReview = nextReviews[index];
+          return (
+            review?.rating === nextReview?.rating &&
+            review?.text === nextReview?.text &&
+            review?.created_at === nextReview?.created_at
+          );
+        });
 
-        return isSameCollection ? prev : nextReviews;
-      },
-    );
+      return isSameCollection ? prev : nextReviews;
+    });
   }, [reviewsPage, reviewsQuery.data]);
 
   useEffect(() => {
@@ -621,7 +725,11 @@ export default function MentorProfileScreen() {
           return isFutureOpenSlot({
             date: entry.date,
             startTime,
-            status: entry.isBooked ? "BOOKED" : (entry.isPending ? "PENDING" : "AVAILABLE"),
+            status: entry.isBooked
+              ? "BOOKED"
+              : entry.isPending
+                ? "PENDING"
+                : "AVAILABLE",
           });
         }).length,
     [availability],
@@ -636,7 +744,8 @@ export default function MentorProfileScreen() {
       return 0;
     }
 
-    const normalizedCurrentUsername = normalizeUsernameIdentifier(currentUsername);
+    const normalizedCurrentUsername =
+      normalizeUsernameIdentifier(currentUsername);
     const viewedIdentifiers = [
       username,
       profile?.username,
@@ -665,7 +774,7 @@ export default function MentorProfileScreen() {
         .filter(
           (match) =>
             normalizeUsernameIdentifier(match.mentor.username) ===
-              normalizedViewedUsername,
+            normalizedViewedUsername,
         )
         .map((match) => match.mentee.username),
     );
@@ -697,8 +806,7 @@ export default function MentorProfileScreen() {
     );
   }, [mentorshipMatchesQuery.data, username]);
 
-  const canRequestMentorship =
-    appUsageMode === "MENTEE";
+  const canRequestMentorship = appUsageMode === "MENTEE";
 
   const handleSelectSlot = (payload: {
     day: string;
@@ -918,7 +1026,20 @@ export default function MentorProfileScreen() {
     postsUsername: username ?? "",
     onViewAllPosts: () => {
       if (username) {
-        router.push(`/(tabs)/user/${encodeURIComponent(username)}/posts` as any);
+        router.push(
+          `/(tabs)/user/${encodeURIComponent(username)}/posts` as any,
+        );
+      }
+    },
+    userWorkshops: userWorkshops,
+    onJoinWorkshop: async ({ tagId, workshopId }) => {
+      try {
+        await joinWorkshopMutation.mutateAsync({ tagId, workshopId });
+        toast.success("Joined workshop — check the workshop page for details.");
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Failed to join workshop.",
+        );
       }
     },
   });
