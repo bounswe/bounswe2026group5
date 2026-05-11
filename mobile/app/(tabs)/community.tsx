@@ -1,3 +1,4 @@
+import { WorkshopCard } from "@/components/community/WorkshopCard";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ProfilePostCard } from "@/components/profile/ProfilePostCard";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -7,6 +8,7 @@ import {
   type CommunityTag,
   useMyCommunityTagsQuery,
 } from "@/lib/queries/communityTags";
+import { useMyCommunityWorkshopsFeedQuery } from "@/lib/queries/workshops";
 import { useRouter } from "expo-router";
 import { useCallback } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -74,16 +76,33 @@ export default function CommunityScreen() {
     5,
     hasCommunities,
   );
+  const workshopsFeedQuery = useMyCommunityWorkshopsFeedQuery(
+    communities.map((tag) => tag.id),
+    4,
+    hasCommunities,
+  );
   const communityFeedPosts = communityFeedQuery.data ?? [];
+  const workshops = workshopsFeedQuery.data ?? [];
+  const openCommunityById = (communityId: string) => {
+    router.push(
+      `/(tabs)/community/${encodeURIComponent(communityId)}?from=community`,
+    );
+  };
   const openCommunity = (tag: CommunityTag) => {
-    router.push(`/(tabs)/community/${encodeURIComponent(tag.id)}?from=community`);
+    openCommunityById(tag.id);
+  };
+  const openWorkshop = (communityId: string, workshopId: string) => {
+    router.push(
+      `/(tabs)/community/${encodeURIComponent(communityId)}/workshops/${encodeURIComponent(workshopId)}?from=community`,
+    );
   };
   const refreshCommunity = useCallback(async () => {
     await Promise.all([
       myCommunitiesQuery.refetch(),
       communityFeedQuery.refetch(),
+      workshopsFeedQuery.refetch(),
     ]);
-  }, [communityFeedQuery, myCommunitiesQuery]);
+  }, [communityFeedQuery, myCommunitiesQuery, workshopsFeedQuery]);
   const { refreshing, onRefresh } = useRefreshControl(refreshCommunity);
 
   return (
@@ -178,6 +197,67 @@ export default function CommunityScreen() {
               </View>
             </View>
           </TouchableOpacity>
+        </View>
+
+        <View className="mb-6">
+          <View className="mb-3 flex-row items-center justify-between">
+            <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
+              Workshops
+            </Text>
+            {workshops.length > 0 ? (
+              <Text className="text-xs font-semibold text-on-surface-soft dark:text-on-surface-soft-dark">
+                Across your communities
+              </Text>
+            ) : null}
+          </View>
+          {workshopsFeedQuery.isLoading ? (
+            <View
+              testID="community-workshops-loading"
+              className="rounded-xl border border-divider bg-surface-card p-6 items-center dark:border-divider-dark dark:bg-surface-card-dark"
+            >
+              <ActivityIndicator />
+              <Text className="mt-3 text-sm font-medium text-on-surface-soft dark:text-on-surface-soft-dark">
+                Loading workshops...
+              </Text>
+            </View>
+          ) : workshopsFeedQuery.isError ? (
+            <ErrorBanner
+              title="Could not load workshops"
+              message="Workshops from your communities are temporarily unavailable."
+            />
+          ) : workshops.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: 16 }}
+              testID="community-workshops-rail"
+            >
+              {workshops.map((workshop) => (
+                <WorkshopCard
+                  key={`${workshop.community_id}-${workshop.id}`}
+                  workshop={workshop}
+                  onCommunityPress={(selectedWorkshop) =>
+                    openCommunityById(selectedWorkshop.community_id)
+                  }
+                  onPress={(selectedWorkshop) =>
+                    openWorkshop(
+                      selectedWorkshop.community_id,
+                      selectedWorkshop.id,
+                    )
+                  }
+                />
+              ))}
+            </ScrollView>
+          ) : (
+            <View
+              testID="community-workshops-empty"
+              className="rounded-xl border border-dashed border-divider bg-surface-card/60 px-4 py-4 dark:border-divider-dark dark:bg-surface-card-dark/60"
+            >
+              <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
+                No workshops are available in your communities yet.
+              </Text>
+            </View>
+          )}
         </View>
 
         <View>

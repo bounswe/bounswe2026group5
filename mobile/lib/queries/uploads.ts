@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiDelete, apiPostMultipart } from "@/lib/api/client";
 
 export interface LocalUploadFile {
@@ -62,4 +63,48 @@ export async function uploadProfilePicture(
 
 export function deleteProfilePicture(): Promise<ProfilePictureUploadResponse> {
   return apiDelete<ProfilePictureUploadResponse>("/api/profiles/me/picture/");
+}
+
+export function useUploadProfilePictureMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: uploadProfilePicture,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["profiles"] }),
+        queryClient.invalidateQueries({ queryKey: ["community-posts"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles", "me", "settings"],
+        }),
+        currentUsername
+          ? queryClient.invalidateQueries({
+              queryKey: ["profiles", currentUsername, "posts"],
+            })
+          : Promise.resolve(),
+      ]);
+    },
+  });
+}
+
+export function useDeleteProfilePictureMutation(currentUsername?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteProfilePicture,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["profiles"] }),
+        queryClient.invalidateQueries({ queryKey: ["community-posts"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles", "me", "settings"],
+        }),
+        currentUsername
+          ? queryClient.invalidateQueries({
+              queryKey: ["profiles", currentUsername, "posts"],
+            })
+          : Promise.resolve(),
+      ]);
+    },
+  });
 }

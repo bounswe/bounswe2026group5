@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  ScrollView,
   Text,
   TouchableOpacity,
   View,
@@ -12,12 +13,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CommunityPostComposer } from "@/components/community/CommunityPostComposer";
+import { WorkshopCard } from "@/components/community/WorkshopCard";
 import { ProfilePostCard } from "@/components/profile/ProfilePostCard";
 import { ProfilePostEditSheet } from "@/components/profile/ProfilePostEditSheet";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { SuccessCard } from "@/components/ui/SuccessCard";
-import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
+import { useToast } from "@/components/ui/ToastProvider";
+import { ApiError } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   useCommunityPostsQuery,
@@ -33,6 +35,10 @@ import {
   useLeaveCommunityTagMutation,
 } from "@/lib/queries/communityTags";
 import type { ProfilePost } from "@/lib/queries/profile";
+import {
+  useCommunityWorkshopsQuery,
+  useCreateCommunityWorkshopMutation,
+} from "@/lib/queries/workshops";
 
 const PAGE_SIZE = 12;
 
@@ -50,6 +56,14 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function getWorkshopCreateErrorMessage(error: unknown) {
+  if (error instanceof ApiError && error.status >= 500) {
+    return "Workshop creation failed on the server. The backend may still be missing the workshop migration or deployment update.";
+  }
+
+  return getErrorMessage(error, "Could not create this workshop.");
+}
+
 function getCommunityMembershipLabel(
   isMember: boolean | undefined,
   isMutating: boolean,
@@ -64,6 +78,7 @@ function getCommunityMembershipLabel(
 export default function CommunityDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const toast = useToast();
   const params = useLocalSearchParams<{
     tagId?: string | string[];
     from?: string | string[];
@@ -71,6 +86,7 @@ export default function CommunityDetailScreen() {
   const tagId = Array.isArray(params.tagId) ? params.tagId[0] : params.tagId;
   const source = Array.isArray(params.from) ? params.from[0] : params.from;
   const currentUsername = useAuthStore((state) => state.user?.username);
+  const currentUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const detailQuery = useCommunityTagDetailQuery(tagId);
   const taggableUsersQuery = useCommunityTaggableUsersQuery(
     tagId,
@@ -79,17 +95,25 @@ export default function CommunityDetailScreen() {
   const joinMutation = useJoinCommunityTagMutation(currentUsername);
   const leaveMutation = useLeaveCommunityTagMutation(currentUsername);
   const createPostMutation = useCreateCommunityPostMutation(currentUsername);
+  const createWorkshopMutation =
+    useCreateCommunityWorkshopMutation(currentUsername);
+  const tag = detailQuery.data;
+  const workshopsQuery = useCommunityWorkshopsQuery(
+    {
+      tagId: tagId ?? "",
+      limit: 12,
+      offset: 0,
+    },
+    Boolean(tagId && tag?.is_member),
+  );
   const updatePostMutation = useUpdateCommunityPostMutation(currentUsername);
   const deletePostMutation = useDeleteCommunityPostMutation(currentUsername);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null);
-  useAutoClearMessage(successMessage, setSuccessMessage);
   const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
 
-  const tag = detailQuery.data;
   const isMutating = joinMutation.isPending || leaveMutation.isPending;
   const postsQuery = useCommunityPostsQuery(
     {
@@ -99,6 +123,7 @@ export default function CommunityDetailScreen() {
     },
     Boolean(tagId && tag?.is_member),
   );
+  const workshops = workshopsQuery.data?.results ?? [];
 
   useEffect(() => {
     if (!postsQuery.data) {
@@ -120,7 +145,6 @@ export default function CommunityDetailScreen() {
     useCallback(
       () => () => {
         setActionError(null);
-        setSuccessMessage(null);
         setShowLeaveConfirmation(false);
         setSelectedPost(null);
       },
@@ -144,6 +168,12 @@ export default function CommunityDetailScreen() {
     );
   };
 
+  const openCommunityById = (communityId: string) => {
+    router.push(
+      `/(tabs)/community/${encodeURIComponent(communityId)}?from=community`,
+    );
+  };
+
   const updateMembership = async (action: "join" | "leave") => {
     if (!tagId || !tag) {
       return;
@@ -151,13 +181,12 @@ export default function CommunityDetailScreen() {
 
     try {
       setActionError(null);
-      setSuccessMessage(null);
       if (action === "leave") {
         await leaveMutation.mutateAsync(tagId);
-        setSuccessMessage(`You left ${tag.name}.`);
+        toast.success(`You left ${tag.name}.`);
       } else {
         await joinMutation.mutateAsync(tagId);
-        setSuccessMessage(`You joined ${tag.name}.`);
+        toast.success(`You joined ${tag.name}.`);
       }
       detailQuery.refetch();
     } catch (error) {
@@ -196,7 +225,7 @@ export default function CommunityDetailScreen() {
         tagId,
         ...payload,
       });
-      setSuccessMessage(
+      toast.success(
         tag ? `Posted to ${tag.name}.` : "Posted to this community.",
       );
       setOffset(0);
@@ -233,11 +262,48 @@ export default function CommunityDetailScreen() {
         ),
       );
       setSelectedPost(null);
-      setSuccessMessage("Community post updated.");
+      toast.success("Community post updated.");
     } catch (error) {
       setActionError(
         getErrorMessage(error, "Could not update this community post."),
       );
+    }
+  };
+
+  const handleCreateWorkshop = async ({
+    title,
+    description,
+    scheduled_at,
+    end_at,
+    max_participants,
+  }: {
+    title: string;
+    description?: string;
+    scheduled_at: string;
+    end_at: string;
+    max_participants: number;
+  }) => {
+    if (!tagId) {
+      return false;
+    }
+
+    try {
+      setActionError(null);
+      await createWorkshopMutation.mutateAsync({
+        tagId,
+        title,
+        description,
+        scheduled_at,
+        end_at,
+        max_participants,
+      });
+      await workshopsQuery.refetch();
+      toast.success(tag ? `Workshop created in ${tag.name}.` : "Workshop created.");
+      return true;
+    } catch (error) {
+      const message = getWorkshopCreateErrorMessage(error);
+      toast.error(message, { title: "Workshop creation failed" });
+      return false;
     }
   };
 
@@ -257,7 +323,7 @@ export default function CommunityDetailScreen() {
         previousPosts.filter((item) => item.id !== post.id),
       );
       setSelectedPost(null);
-      setSuccessMessage("Community post deleted.");
+      toast.success("Community post deleted.");
     } catch (error) {
       setActionError(
         getErrorMessage(error, "Could not delete this community post."),
@@ -273,12 +339,6 @@ export default function CommunityDetailScreen() {
 
   const headerContent = (
     <View>
-      {successMessage ? (
-        <View className="mb-4">
-          <SuccessCard message={successMessage} />
-        </View>
-      ) : null}
-
       {actionError ? (
         <View className="mb-4">
           <ErrorBanner message={actionError} />
@@ -331,9 +391,13 @@ export default function CommunityDetailScreen() {
 
       {tag?.is_member ? (
         <CommunityPostComposer
-          isSubmitting={createPostMutation.isPending}
+          isSubmitting={
+            createPostMutation.isPending || createWorkshopMutation.isPending
+          }
           isLoadingTaggableUsers={taggableUsersQuery.isLoading}
           onSubmit={handleCreatePost}
+          onSubmitWorkshop={handleCreateWorkshop}
+          allowWorkshopCreation={currentUsageMode === "MENTOR"}
           taggableUsers={taggableUsersQuery.data?.results ?? []}
         />
       ) : (
@@ -343,6 +407,56 @@ export default function CommunityDetailScreen() {
           </Text>
         </View>
       )}
+
+      {tag?.is_member ? (
+        <View className="mb-6">
+          <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
+            Workshops
+          </Text>
+          {workshopsQuery.isLoading ? (
+            <View
+              testID="community-detail-workshops-loading"
+              className="rounded-xl border border-divider bg-surface-card p-6 items-center dark:border-divider-dark dark:bg-surface-card-dark"
+            >
+              <ActivityIndicator />
+              <Text className="mt-3 text-sm font-medium text-on-surface-soft dark:text-on-surface-soft-dark">
+                Loading workshops...
+              </Text>
+            </View>
+          ) : workshops.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: 16 }}
+              testID="community-detail-workshops-rail"
+            >
+              {workshops.map((workshop) => (
+                <WorkshopCard
+                  key={workshop.id}
+                  workshop={workshop}
+                  onCommunityPress={(selectedWorkshop) =>
+                    openCommunityById(selectedWorkshop.community_id)
+                  }
+                  onPress={(selectedWorkshop) =>
+                    router.push(
+                      `/(tabs)/community/${encodeURIComponent(selectedWorkshop.community_id)}/workshops/${encodeURIComponent(selectedWorkshop.id)}?from=community-detail`,
+                    )
+                  }
+                />
+              ))}
+            </ScrollView>
+          ) : (
+            <View
+              testID="community-detail-workshops-empty"
+              className="rounded-xl border border-dashed border-divider bg-surface-card/60 px-4 py-4 dark:border-divider-dark dark:bg-surface-card-dark/60"
+            >
+              <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark">
+                No workshops in this community yet.
+              </Text>
+            </View>
+          )}
+        </View>
+      ) : null}
 
       <Text className="mb-3 text-lg font-bold text-on-surface dark:text-on-surface-dark">
         Community Posts

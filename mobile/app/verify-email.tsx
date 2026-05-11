@@ -10,7 +10,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { SuccessCard } from "@/components/ui/SuccessCard";
+import { useToast } from "@/components/ui/ToastProvider";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   useCurrentUserMutation,
@@ -28,6 +28,7 @@ function getTokenParam(value: string | string[] | undefined): string | null {
 export default function VerifyEmailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const toast = useToast();
   const params = useLocalSearchParams<{ token?: string | string[] }>();
   const token = useMemo(() => getTokenParam(params.token), [params.token]);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -41,7 +42,7 @@ export default function VerifyEmailScreen() {
 
   const [state, setState] = useState<VerificationState>("verifying");
   const [message, setMessage] = useState("Verifying your email address...");
-  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const lastSuccessToastRef = useRef<string | null>(null);
 
   useEffect(() => {
     verifyEmailMutationRef.current = verifyEmailMutation;
@@ -63,7 +64,6 @@ export default function VerifyEmailScreen() {
 
       setState("verifying");
       setMessage("Verifying your email address...");
-      setResendMessage(null);
 
       try {
         const response =
@@ -102,16 +102,30 @@ export default function VerifyEmailScreen() {
     };
   }, [isAuthenticated, token, updateUser]);
 
+  useEffect(() => {
+    if (state !== "success") {
+      return;
+    }
+
+    const nextToastKey = `success:${message}`;
+    if (lastSuccessToastRef.current === nextToastKey) {
+      return;
+    }
+
+    lastSuccessToastRef.current = nextToastKey;
+    toast.success(message, { title: "Email verified" });
+  }, [message, state, toast]);
+
   const handleResend = async () => {
     try {
-      setResendMessage(null);
       const response = await resendVerificationMutation.mutateAsync();
-      setResendMessage(response.detail);
+      toast.info(response.detail, { title: "Verification email sent" });
     } catch (error) {
-      setResendMessage(
+      toast.error(
         error instanceof Error
           ? error.message
           : "Could not send a new verification email.",
+        { title: "Resend failed" },
       );
     }
   };
@@ -147,7 +161,17 @@ export default function VerifyEmailScreen() {
           ) : null}
 
           {state === "success" ? (
-            <SuccessCard title="Email verified" message={message} />
+            <View
+              className="rounded-2xl border border-divider bg-surface-card p-6 dark:border-divider-dark dark:bg-surface-card-dark"
+              testID="email-verification-success"
+            >
+              <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
+                Email verified
+              </Text>
+              <Text className="mt-2 text-sm leading-5 text-on-surface-variant dark:text-on-surface-variant-dark">
+                {message}
+              </Text>
+            </View>
           ) : null}
 
           {state === "error" ? (
@@ -158,12 +182,6 @@ export default function VerifyEmailScreen() {
             />
           ) : null}
         </View>
-
-        {resendMessage ? (
-          <View className="mt-4">
-            <ErrorBanner message={resendMessage} variant="info" />
-          </View>
-        ) : null}
 
         {state !== "verifying" ? (
           <View className="mt-6 gap-3">

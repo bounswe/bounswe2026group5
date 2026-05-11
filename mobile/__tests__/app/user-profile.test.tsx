@@ -10,6 +10,7 @@ const mockSubmitReportMutateAsync = jest.fn();
 const mockAvailabilityRefetch = jest.fn();
 const mockBookSlotMutateAsync = jest.fn();
 const mockToastSuccess = jest.fn();
+const mockJoinWorkshopMutateAsync = jest.fn();
 let mockUsernameParam: string | undefined = "mentor_ada";
 let mockSourceParam: string | undefined;
 let mockTagIdParam: string | undefined;
@@ -71,7 +72,8 @@ jest.mock("@/lib/queries/auth", () => ({
     error instanceof Error &&
     "status" in error &&
     error.status === 403 &&
-    error.message === "Please verify your email address to perform this action.",
+    error.message ===
+      "Please verify your email address to perform this action.",
   useResendEmailVerificationMutation: () => ({
     mutateAsync: mockResendMutateAsync,
     isPending: false,
@@ -125,6 +127,13 @@ jest.mock("@/lib/queries/profile", () => ({
 jest.mock("@/lib/queries/reporting", () => ({
   useSubmitReportMutation: () => ({
     mutateAsync: mockSubmitReportMutateAsync,
+    isPending: false,
+  }),
+}));
+
+jest.mock("@/lib/queries/workshops", () => ({
+  useJoinCommunityWorkshopMutation: () => ({
+    mutateAsync: mockJoinWorkshopMutateAsync,
     isPending: false,
   }),
 }));
@@ -299,10 +308,12 @@ describe("MentorProfileScreen email verification gate", () => {
     verificationError.status = 403;
     mockCreateRequestMutateAsync.mockRejectedValue(verificationError);
     mockResendMutateAsync.mockResolvedValue({
-      detail: "If your email is unverified, a new verification link has been sent.",
+      detail:
+        "If your email is unverified, a new verification link has been sent.",
     });
     mockBookSlotMutateAsync.mockResolvedValue({});
     mockSubmitReportMutateAsync.mockResolvedValue({});
+    mockJoinWorkshopMutateAsync.mockResolvedValue({});
   });
 
   it("shows an error when the username route param is missing", async () => {
@@ -457,7 +468,9 @@ describe("MentorProfileScreen email verification gate", () => {
   });
 
   it("shows generic request and resend failures", async () => {
-    mockCreateRequestMutateAsync.mockRejectedValueOnce(new Error("Request failed."));
+    mockCreateRequestMutateAsync.mockRejectedValueOnce(
+      new Error("Request failed."),
+    );
     mockResendMutateAsync.mockRejectedValueOnce(new Error("Resend failed."));
 
     const { findByText, getByTestId, getByPlaceholderText } = render(

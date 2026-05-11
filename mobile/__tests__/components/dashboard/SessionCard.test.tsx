@@ -75,4 +75,23 @@ describe('SessionCard Component', () => {
     // Should render without crashing even without onPress
     expect(getByTestId('session-card-Upcoming')).toBeTruthy();
   });
+
+  it('renders the workshop badge and custom title metadata', () => {
+    const { getByTestId, getByText } = render(
+      <SessionCard
+        user="Mentor User"
+        title="Prompt Engineering 101"
+        subtitle="AI Lab"
+        kindLabel="Workshop"
+        date="MAY 10"
+        time="09:00 - 10:00"
+        status="Upcoming"
+      />
+    );
+
+    expect(getByTestId('session-kind-badge')).toBeTruthy();
+    expect(getByText('Prompt Engineering 101')).toBeTruthy();
+    expect(getByText('AI Lab')).toBeTruthy();
+    expect(getByText('Workshop')).toBeTruthy();
+  });
 });

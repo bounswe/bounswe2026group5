@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Image, Modal, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { getAbsoluteUrl } from "@/lib/api/config";
+import { getAbsoluteImageUrl, getAbsoluteUrl } from "@/lib/api/config";
 
 const BIO_PREVIEW_LENGTH = 240;
 
@@ -16,6 +16,7 @@ interface ProfileHeaderProps {
   showRating?: boolean;
   showMenteesHelped?: boolean;
   imageUrl?: string;
+  imageCacheKey?: string | number;
   coverUrl?: string;
   onEdit?: () => void;
 }
@@ -31,6 +32,7 @@ export function ProfileHeader({
   showRating = true,
   showMenteesHelped = true,
   imageUrl,
+  imageCacheKey,
   coverUrl,
   onEdit,
 }: Readonly<ProfileHeaderProps>) {
@@ -75,7 +77,7 @@ export function ProfileHeader({
             {imageUrl ? (
               <Image
                 testID="profile-avatar-image"
-                source={{ uri: getAbsoluteUrl(imageUrl) }}
+                source={{ uri: getAbsoluteImageUrl(imageUrl, imageCacheKey) }}
                 className="w-full h-full"
               />
             ) : (
@@ -186,7 +188,7 @@ export function ProfileHeader({
           {imageUrl ? (
             <Image
               testID="profile-avatar-preview-image"
-              source={{ uri: imageUrl }}
+              source={{ uri: getAbsoluteImageUrl(imageUrl, imageCacheKey) }}
               className="h-80 w-80 max-w-full rounded-3xl bg-surface-card"
               resizeMode="cover"
             />
