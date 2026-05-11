@@ -22,6 +22,8 @@ class NotificationType(models.TextChoices):
     TAG_DELETED = "tag_deleted", "Tag Deleted"
     TAG_MATCHES_INTEREST = "tag_matches_interest", "Tag Matches Interest"
     REPORT_RESOLVED = "report_resolved", "Report Resolved"
+    WORKSHOP_CANCELLED = "workshop_cancelled", "Workshop Cancelled"
+    WORKSHOP_RESCHEDULED = "workshop_rescheduled", "Workshop Rescheduled"
 
 
 class Notification(models.Model):
