@@ -151,6 +151,9 @@ export function useMyCommunityPostsFeedQuery(
     isFetching: queries.some((query) => query.isFetching),
     isError: queries.some((query) => query.isError),
     error: queries.find((query) => query.error)?.error,
+    refetch: async () => {
+      await Promise.all(queries.map((query) => query.refetch()));
+    },
   };
 }
 
