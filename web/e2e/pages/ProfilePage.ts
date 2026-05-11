@@ -37,11 +37,11 @@ export class ProfilePage {
   }
 
   async expectBookableSlots(count: number) {
-    await expect(this.page.locator('.cursor-pointer', { hasText: /^Book$/ })).toHaveCount(count);
+    await expect(this.page.getByText(/^Book$/)).toHaveCount(count);
   }
 
   async sendMentorshipRequest(coverLetter?: string) {
-    await this.page.locator('.cursor-pointer', { hasText: /^Book$/ }).first().click();
+    await this.page.getByText(/^Book$/).first().click();
     await expect(this.page.getByRole('heading', { name: 'Send Mentorship Request' })).toBeVisible();
     if (coverLetter) {
       await this.page.getByLabel(/Cover Letter/i).fill(coverLetter);
@@ -51,7 +51,7 @@ export class ProfilePage {
   }
 
   async expectPendingRequestBlocksOtherSlots() {
-    await expect(this.page.locator('.cursor-pointer', { hasText: /^Book$/ })).toHaveCount(0);
+    await expect(this.page.getByText(/^Book$/)).toHaveCount(0);
     await expect(this.page.getByText('Requested')).toBeVisible();
   }
 
@@ -61,8 +61,41 @@ export class ProfilePage {
   }
 
   async expectPublicReview(reviewText: string) {
-    await expect(this.page.getByText('Reviews')).toBeVisible();
+    await expect(this.page.getByText('Reviews', { exact: true })).toBeVisible();
     await expect(this.page.getByText(reviewText)).toBeVisible();
+  }
+
+  async nextWeek() {
+    await this.page.getByRole('button', { name: 'Next week' }).click();
+  }
+
+  async prevWeek() {
+    await this.page.getByRole('button', { name: 'Previous week' }).click();
+  }
+
+  async goToWeekContaining(target: string | Date) {
+    const targetDate = typeof target === 'string' ? new Date(`${target}T00:00:00`) : new Date(target);
+    targetDate.setHours(0, 0, 0, 0);
+
+    for (let i = 0; i < 10; i += 1) {
+      const label = await this.page.getByText(/\d{1,2} \w+ – \d{1,2} \w+ \d{4}/).first().textContent();
+      const range = parseWeekRangeLabel(label ?? '');
+      if (!range) {
+        break;
+      }
+
+      if (targetDate >= range.start && targetDate <= range.end) {
+        return;
+      }
+
+      if (targetDate > range.end) {
+        await this.nextWeek();
+      } else {
+        await this.prevWeek();
+      }
+    }
+
+    throw new Error(`Could not navigate to week containing ${targetDate.toISOString().slice(0, 10)}`);
   }
 
   private async clickAvailabilityCell(dayIndexFromMonday: number, hour: number) {
@@ -71,4 +104,27 @@ export class ProfilePage {
     const grid = this.page.locator('div[style*="grid-template-columns"], div[style*="gridTemplateColumns"]').first();
     await grid.locator(':scope > div').nth(cellIndex).click();
   }
+}
+
+function parseWeekRangeLabel(label: string) {
+  const match = label.match(/^(\d{1,2}) (\w+) – (\d{1,2}) (\w+) (\d{4})$/);
+  if (!match) {
+    return null;
+  }
+
+  const [, startDay, startMonthName, endDay, endMonthName, endYear] = match;
+  const startMonth = monthIndex(startMonthName);
+  const endMonth = monthIndex(endMonthName);
+  const endYearNumber = Number(endYear);
+  const startYearNumber = startMonth > endMonth ? endYearNumber - 1 : endYearNumber;
+
+  const start = new Date(startYearNumber, startMonth, Number(startDay));
+  const end = new Date(endYearNumber, endMonth, Number(endDay));
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function monthIndex(month: string) {
+  return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(month);
 }

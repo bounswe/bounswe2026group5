@@ -68,6 +68,7 @@ function PublicProfileRoute() {
             title: profile.title,
             skills: profile.skills ?? [],
             average_rating: Number(profile.average_rating),
+            review_count: profile.review_count,
             total_mentee_count: profile.total_mentee_count,
             username: username,
             app_usage_mode: profile.app_usage_mode,

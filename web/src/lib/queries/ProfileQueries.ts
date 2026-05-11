@@ -29,9 +29,13 @@ export interface MentorProfile {
     title: string
     skills: string[] | null
     average_rating: number
+    review_count: number
     total_mentee_count: number
     app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
     share_precise_location: boolean
+    is_overloaded: boolean
+    active_matches_count: number
+    overload_threshold: number
 }
 
 export type ProfileResponse = MenteeProfile | MentorProfile

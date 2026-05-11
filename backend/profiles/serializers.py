@@ -13,7 +13,7 @@ from rest_framework import serializers
 from core.utils.image import resize_image
 from core.utils.timezone import get_project_timezone, to_local_time
 from core.utils.validators import validate_file_size, validate_image_content_type
-from mentorship.models import MeetingSession
+from mentorship.models import Match, MeetingSession
 from timeline.models import TimelineEvent
 
 from .models import AvailabilitySlot, CommunityTag, Profile, Skill
@@ -265,6 +265,7 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+
     @extend_schema_field(OpenApiTypes.STR)
     def get_full_name(self, obj: Profile) -> str:
         """Return display name or initials based on 'show_initials_only' setting."""
@@ -295,6 +296,10 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     show_initials_only = serializers.BooleanField(read_only=True)
     share_precise_location = serializers.BooleanField(read_only=True)
 
+    is_overloaded = serializers.SerializerMethodField()
+    active_matches_count = serializers.SerializerMethodField()
+    overload_threshold = serializers.SerializerMethodField()
+
     class Meta:
         model = Profile
         fields = (
@@ -308,7 +313,11 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
             "picture_url",
             "skills",
             "average_rating",
+            "review_count",
             "total_mentee_count",
+            "is_overloaded",
+            "active_matches_count",
+            "overload_threshold",
         )
         read_only_fields = fields
 
@@ -328,6 +337,32 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
                 return resolve_picture_url(obj)
             return ""
         return resolve_picture_url(obj)
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_overloaded(self, obj: Profile) -> bool:
+        """Return True when active matches meet or exceed the threshold."""
+        from django.conf import settings
+
+        threshold = getattr(settings, "MENTOR_OVERLOAD_THRESHOLD", 5)
+        return self.get_active_matches_count(obj) >= threshold
+
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_active_matches_count(self, obj: Profile) -> int:
+        """Return number of currently active mentorship matches for this mentor."""
+        from mentorship.models import Match
+
+        active_matches_count = getattr(obj, "active_matches_count", None)
+        if active_matches_count is not None:
+            return active_matches_count
+
+        return Match.objects.filter(mentor=obj, is_active=True).count()
+
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_overload_threshold(self, obj: Profile) -> int:
+        """Return current overload threshold from settings."""
+        from django.conf import settings
+
+        return getattr(settings, "MENTOR_OVERLOAD_THRESHOLD", 5)
 
 
 class ProfileResponseSerializer(serializers.ModelSerializer):
@@ -562,6 +597,7 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
     picture_url = serializers.SerializerMethodField()
     show_initials_only = serializers.BooleanField(read_only=True)
     distance_km = serializers.SerializerMethodField()
+    is_overloaded = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -576,7 +612,9 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
             "show_initials_only",
             "skills",
             "average_rating",
+            "review_count",
             "total_mentee_count",
+            "is_overloaded",
             "distance_km",
         )
         read_only_fields = fields
@@ -619,6 +657,20 @@ class PublicMentorProfileSearchResultSerializer(serializers.ModelSerializer):
         if distance is not None:
             return round(distance.km, 2)
         return None
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_overloaded(self, obj: Profile) -> bool:
+        """Return True when active matches meet or exceed the threshold."""
+        from django.conf import settings
+
+        threshold = getattr(settings, "MENTOR_OVERLOAD_THRESHOLD", 5)
+        active_count = getattr(obj, "active_matches_count", None)
+        if active_count is None:
+            from mentorship.models import Match
+
+            active_count = Match.objects.filter(mentor=obj, is_active=True).count()
+
+        return active_count >= threshold
 
 
 class PublicMentorProfileSearchListResponseSerializer(serializers.Serializer):

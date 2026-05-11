@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Body } from '@/components/Typography'
 import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
 import type { PublicMentorProfile } from '@/lib/queries/DiscoverQueries.ts'
+import { Star } from 'lucide-react'
 
 interface ProfileCardProps {
   profile: PublicMentorProfile
@@ -78,7 +79,22 @@ export function ProfileCard({
             <h3 className="font-display text-2xl font-bold text-ink leading-tight truncate">
               {profile.full_name}
             </h3>
-            <p className="text-accent-aa font-medium text-sm mt-0.5">{profile.title}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-accent font-medium text-sm">{profile.title}</p>
+              {profile.is_overloaded && (
+                <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Busy</span>
+              )}
+              {profile.rating > 0 && (
+                <>
+                  <div className="w-1 h-1 rounded-full bg-line" />
+                  <div className="flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span className="text-sm font-bold text-ink">{profile.rating}</span>
+                    <span className="text-xs text-ink-soft">({profile.review_count})</span>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 

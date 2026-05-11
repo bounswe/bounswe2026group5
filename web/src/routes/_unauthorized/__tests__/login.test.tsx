@@ -82,7 +82,7 @@ describe('LoginPage', () => {
     renderLoginPage()
 
     await user.type(screen.getByLabelText(/Email/i), 'alex@example.com')
-    await user.type(screen.getByLabelText(/Password/i), 'pass123456')
+    await user.type(screen.getByLabelText(/^Password$/i), 'pass123456')
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
     await waitFor(() => {
@@ -104,7 +104,7 @@ describe('LoginPage', () => {
     renderLoginPage()
 
     await user.type(screen.getByLabelText(/Email/i), 'alex@example.com')
-    await user.type(screen.getByLabelText(/Password/i), 'wrong-password')
+    await user.type(screen.getByLabelText(/^Password$/i), 'wrong-password')
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
     expect(await screen.findByText('Invalid credentials')).toBeInTheDocument()
@@ -126,7 +126,7 @@ describe('LoginPage', () => {
     renderLoginPage()
 
     await user.type(screen.getByLabelText(/Email/i), 'alex@example.com')
-    await user.type(screen.getByLabelText(/Password/i), 'pass123456')
+    await user.type(screen.getByLabelText(/^Password$/i), 'pass123456')
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
     expect(screen.getByRole('button', { name: /Signing in/i })).toBeDisabled()

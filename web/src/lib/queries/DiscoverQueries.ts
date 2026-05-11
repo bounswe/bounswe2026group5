@@ -14,7 +14,9 @@ export interface PublicMentorProfile {
     show_initials_only: boolean
     skills: string[]
     rating: number
+    review_count: number
     total_mentee_count: number
+    is_overloaded: boolean
 }
 
 export interface MentorSearchResponse {

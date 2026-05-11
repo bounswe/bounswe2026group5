@@ -127,8 +127,9 @@ describe('RegisterPage Component', () => {
       render(<RegisterPage />)
 
       expect(screen.getByText(/Neighborship/i)).toBeInTheDocument()
-      expect(screen.getByText(/Academic Editorial Excellence/i)).toBeInTheDocument()
-      expect(screen.getByText(/Join our community of academic excellence/i)).toBeInTheDocument()
+      expect(screen.getByText(/Join the community/i)).toBeInTheDocument()
+      expect(screen.getByText(/Your next mentor is already here\./i)).toBeInTheDocument()
+      expect(screen.getByText(/No cold emails, no guesswork\./i)).toBeInTheDocument()
       expect(screen.getByText(/Join 2,000\+ scholars/i)).toBeInTheDocument()
     })
 

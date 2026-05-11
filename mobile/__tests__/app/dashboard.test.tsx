@@ -281,6 +281,13 @@ jest.mock("@/lib/queries/workshops", () => ({
   }),
 }));
 
+jest.mock("@/lib/queries/profile", () => ({
+  useOwnProfileSettingsQuery: () => ({
+    data: { is_overloaded: false },
+    isLoading: false,
+  }),
+}));
+
 describe("DashboardScreen session navigation", () => {
   beforeEach(() => {
     jest.clearAllMocks();

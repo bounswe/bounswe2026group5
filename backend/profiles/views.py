@@ -112,10 +112,23 @@ def _resolve_community_tag(tag_id: str, qs=None) -> "CommunityTag | None":
 class ProfileLookupMixin:
     """Shared profile lookup and mentor checks for profile API views."""
 
+    @staticmethod
+    def _with_active_match_counts(queryset):
+        """Annotate mentor active match counts for overload-related serializers."""
+        return queryset.annotate(
+            active_matches_count=Count(
+                "mentor_matches",
+                filter=Q(mentor_matches__is_active=True),
+                distinct=True,
+            )
+        )
+
     def _get_profile_or_404(self, username: str) -> Profile | None:
         """Return profile by username when it exists."""
         try:
-            return Profile.objects.select_related("user").get(username=username)
+            return self._with_active_match_counts(Profile.objects.select_related("user")).get(
+                username=username
+            )
         except Profile.DoesNotExist:
             return None
 
@@ -126,7 +139,9 @@ class ProfileLookupMixin:
     def _get_request_profile_or_404(self, request: Request) -> Profile | None:
         """Return profile bound to authenticated request user when it exists."""
         try:
-            return Profile.objects.select_related("user").get(user=request.user)
+            return self._with_active_match_counts(Profile.objects.select_related("user")).get(
+                user=request.user
+            )
         except Profile.DoesNotExist:
             return None
 
@@ -893,7 +908,7 @@ class PopularMentorsListAPIView(APIView):
         return Response({"results": serializer.data}, status=status.HTTP_200_OK)
 
 
-class PublicMentorProfilesSearchListAPIView(APIView):
+class PublicMentorProfilesSearchListAPIView(ProfileLookupMixin, APIView):
     """Public listing of visible mentor profiles with search and filtering."""
 
     permission_classes = [AllowAny]
@@ -1018,6 +1033,13 @@ class PublicMentorProfilesSearchListAPIView(APIView):
                 OpenApiParameter.QUERY,
                 description="Results per page (default 6, max 50).",
             ),
+            OpenApiParameter(
+                "sort",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                enum=["quality", "recent"],
+                description="Sort order (default: quality). 'quality' favors well-reviewed mentors; 'recent' shows newest profiles first.",
+            ),
         ],
         responses={200: PublicMentorProfileSearchListResponseSerializer},
         description=(
@@ -1055,7 +1077,11 @@ class PublicMentorProfilesSearchListAPIView(APIView):
         page_size = max(page_size, 1)
         page_size = min(page_size, 50)
 
-        qs = Profile.objects.select_related("user").filter(user__app_usage_mode=AppUsageMode.MENTOR)
+        sort = request.query_params.get("sort", "quality").strip().lower()
+
+        qs = self._with_active_match_counts(Profile.objects.select_related("user")).filter(
+            user__app_usage_mode=AppUsageMode.MENTOR
+        )
 
         if q:
             base_qs = qs
@@ -1102,7 +1128,6 @@ class PublicMentorProfilesSearchListAPIView(APIView):
             radius = distance_km if distance_km is not None else 15.0
             qs = qs.annotate(distance=Distance("location", point))
             qs = qs.filter(location__distance_lte=(point, D(km=radius)))
-            qs = qs.order_by("distance", "id")
 
         # Community tag filtering (matches profiles in ANY of the given tags)
         tag_terms = self._parse_terms(request, keys=["tag", "tags"])
@@ -1111,6 +1136,17 @@ class PublicMentorProfilesSearchListAPIView(APIView):
                 Q(tag__slug__in=tag_terms) | Q(tag__name__in=tag_terms)
             ).values_list("profile_id", flat=True)
             qs = qs.filter(id__in=tagged_profile_ids)
+
+        # Apply deterministic sorting
+        if sort == "recent":
+            qs = qs.order_by("-created_at", "id")
+        else:
+            # Default: Quality-based ordering (tiebreakers: ratings > reviews > mentees > distance > name > id)
+            order_fields = ["-average_rating", "-review_count", "-total_mentee_count"]
+            if coords is not None:
+                order_fields.append("distance")
+            order_fields.extend(["display_name", "id"])
+            qs = qs.order_by(*order_fields)
 
         total = qs.count()
         offset = (page - 1) * page_size
