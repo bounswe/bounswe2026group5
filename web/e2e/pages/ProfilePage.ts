@@ -28,8 +28,9 @@ export class ProfilePage {
   }
 
   async createAvailabilityCell(dayIndexFromMonday: number, hour: number) {
+    const beforeCount = await this.page.getByText('Available ✕').count();
     await this.clickAvailabilityCell(dayIndexFromMonday, hour);
-    await expect(this.page.getByText('Slot added').first()).toBeVisible();
+    await expect(this.page.getByText('Available ✕')).toHaveCount(beforeCount + 1);
   }
 
   async expectAvailabilityCount(count: number) {
@@ -41,6 +42,7 @@ export class ProfilePage {
   }
 
   async sendMentorshipRequest(coverLetter?: string) {
+    await expect.poll(async () => this.page.getByText(/^Book$/).count()).toBeGreaterThan(0);
     await this.page.getByText(/^Book$/).first().click();
     await expect(this.page.getByRole('heading', { name: 'Send Mentorship Request' })).toBeVisible();
     if (coverLetter) {
@@ -63,6 +65,31 @@ export class ProfilePage {
   async expectPublicReview(reviewText: string) {
     await expect(this.page.getByText('Reviews', { exact: true })).toBeVisible();
     await expect(this.page.getByText(reviewText)).toBeVisible();
+  }
+
+  async expectBasicLoaded(username: string, displayName: string) {
+    await expect(this.page).toHaveURL(new RegExp(`/profiles/${username}`));
+    await expect(this.page.locator('h1').filter({ hasText: displayName })).toBeVisible();
+  }
+
+  async expectPostVisible(content: string) {
+    await expect(this.postCard(content)).toBeVisible();
+  }
+
+  async expectPostHidden(content: string) {
+    await expect(this.postCard(content)).toHaveCount(0);
+  }
+
+  async expectCommunityOrigin(content: string, communityName: string) {
+    const card = this.postCard(content);
+    await expect(card.getByText(/^Community$/)).toBeVisible();
+    await expect(card.getByRole('link', { name: communityName })).toBeVisible();
+  }
+
+  async expectMentorshipJourneyOrigin(content: string, partnerUsername: string) {
+    const card = this.postCard(content);
+    await expect(card.getByText(/^Mentorship Journey$/)).toBeVisible();
+    await expect(card.getByRole('link', { name: `@${partnerUsername}` })).toBeVisible();
   }
 
   async nextWeek() {
@@ -89,9 +116,13 @@ export class ProfilePage {
       }
 
       if (targetDate > range.end) {
+        const previousLabel = label ?? '';
         await this.nextWeek();
+        await expect(this.page.getByText(previousLabel)).toHaveCount(0);
       } else {
+        const previousLabel = label ?? '';
         await this.prevWeek();
+        await expect(this.page.getByText(previousLabel)).toHaveCount(0);
       }
     }
 
@@ -103,6 +134,12 @@ export class ProfilePage {
     const cellIndex = 8 + hourIndex * 8 + 1 + dayIndexFromMonday;
     const grid = this.page.locator('div[style*="grid-template-columns"], div[style*="gridTemplateColumns"]').first();
     await grid.locator(':scope > div').nth(cellIndex).click();
+  }
+
+  private postCard(content: string) {
+    return this.page.locator('[class*="border-line"]', {
+      has: this.page.getByText(content),
+    }).first();
   }
 }
 

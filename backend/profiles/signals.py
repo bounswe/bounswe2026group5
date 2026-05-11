@@ -139,7 +139,7 @@ def notify_tag_creator_on_join(
         user_id=creator_user_id,
         type=NotificationType.TAG_NEW_MEMBER,
         title=f"New member in {tag.name}",
-        message=f"A new user just joined your tag '{tag.name}'.",
+        message=f"A new user just joined your community '{tag.name}'.",
         actor_id=instance.profile_id,
         resource_type="community_tag",
         resource_id=tag.id,

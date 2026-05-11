@@ -144,12 +144,11 @@ test.describe('AT-007: Mentor Discovery', () => {
     await test.step('Open a recently joined mentor profile and return to discovery', async () => {
       await discoverPage.expectRecentlyJoinedSectionVisible();
 
-      const recent = await testDataApi.fetchRecentlyAddedMentors(6);
-      expect(recent.results.length).toBeGreaterThan(0);
-
-      const topRecent = recent.results[0];
-      await discoverPage.openMentorProfile(topRecent.full_name);
-      await profilePage.expectLoaded(topRecent.username, topRecent.full_name);
+      const recentMentorName = await discoverPage.openFirstRecentlyJoinedMentorProfile();
+      const recentSearch = await testDataApi.fetchMentors(`?q=${encodeURIComponent(recentMentorName)}&pageSize=10`);
+      const openedMentor = recentSearch.results.find((mentor) => mentor.full_name === recentMentorName);
+      expect(openedMentor).toBeTruthy();
+      await profilePage.expectLoaded(openedMentor!.username, recentMentorName);
 
       await profilePage.goBackToDiscover();
       await discoverPage.expectRecentlyJoinedSectionVisible();

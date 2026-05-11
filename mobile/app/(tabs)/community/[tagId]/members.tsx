@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
   useCommunityTagDetailQuery,
   useCommunityTagMembersQuery,
@@ -105,7 +106,10 @@ export default function CommunityMembersScreen() {
             message="Missing community id."
           />
         ) : membersQuery.isLoading && page === 1 ? (
-          <View testID="community-members-loading" className="py-10 items-center">
+          <View
+            testID="community-members-loading"
+            className="py-10 items-center"
+          >
             <ActivityIndicator />
             <Text className="mt-3 text-on-surface-soft dark:text-on-surface-soft-dark">
               Loading members...
@@ -127,32 +131,65 @@ export default function CommunityMembersScreen() {
             <Text className="mb-3 text-sm font-semibold text-primary dark:text-primary-dim">
               {formatMemberCount(totalCount)}
             </Text>
-            {members.map((member) => (
-              <TouchableOpacity
-                key={member.id}
-                testID={`community-member-${member.username}`}
-                activeOpacity={0.78}
-                onPress={() => openMemberProfile(member.username)}
-                className="py-4 border-b border-divider dark:border-divider-dark"
-              >
-                <Text className="font-semibold text-on-surface dark:text-on-surface-dark">
-                  {member.full_name || member.username}
-                </Text>
-                {member.title ? (
-                  <Text className="text-sm text-on-surface-soft dark:text-on-surface-soft-dark mt-1">
-                    {member.title}
-                  </Text>
-                ) : null}
-                {member.skills?.length ? (
-                  <Text
-                    className="text-xs text-on-surface-muted dark:text-on-surface-muted-dark mt-2"
-                    numberOfLines={1}
-                  >
-                    {member.skills.slice(0, 4).join(" • ")}
-                  </Text>
-                ) : null}
-              </TouchableOpacity>
-            ))}
+            <View className="gap-3">
+              {members.map((member) => (
+                <TouchableOpacity
+                  key={member.id}
+                  testID={`community-member-${member.username}`}
+                  activeOpacity={0.78}
+                  onPress={() => openMemberProfile(member.username)}
+                  className="bg-surface-card dark:bg-surface-card-dark rounded-2xl border border-divider dark:border-divider-dark p-3"
+                >
+                  <View className="flex-row items-center gap-3">
+                    <UserAvatar
+                      imageUrl={member.picture_url}
+                      name={member.full_name || member.username}
+                      size="sm"
+                      testIDPrefix={`community-member-avatar-${member.username}`}
+                    />
+                    <View className="flex-1">
+                      <Text
+                        className="text-base font-semibold text-on-surface dark:text-on-surface-dark"
+                        numberOfLines={1}
+                      >
+                        {member.full_name || member.username}
+                      </Text>
+                      {member.title ? (
+                        <Text
+                          className="text-xs text-on-surface-soft dark:text-on-surface-soft-dark"
+                          numberOfLines={1}
+                        >
+                          {member.title}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {Number(member.average_rating) > 0 ? (
+                      <View className="flex-row items-center gap-1">
+                        <Ionicons name="star" size={12} color="#fbbf24" />
+                        <Text className="text-xs font-bold text-on-surface dark:text-on-surface-dark">
+                          {Number(member.average_rating).toFixed(1)}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {member.skills?.length ? (
+                    <View className="flex-row flex-wrap gap-2 mt-3">
+                      {member.skills.slice(0, 3).map((skill) => (
+                        <View
+                          key={skill}
+                          className="px-2 py-1 rounded-lg bg-surface-active dark:bg-surface-active-dark border border-divider dark:border-divider-dark"
+                        >
+                          <Text className="text-[11px] font-semibold text-primary dark:text-primary-dim">
+                            {skill}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+            </View>
 
             {hasMore ? (
               <TouchableOpacity

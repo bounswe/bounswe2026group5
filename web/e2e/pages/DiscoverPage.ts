@@ -35,7 +35,7 @@ export class DiscoverPage {
   }
 
   async openSkillFilter() {
-    await this.page.getByRole('button', { name: /Filter by skill/i }).click();
+    await this.page.getByRole('button', { name: /Filter mentors/i }).click();
   }
 
   async selectSkill(skill: string) {
@@ -74,6 +74,22 @@ export class DiscoverPage {
   async openMentorProfile(mentorName: string) {
     await expect(this.mentorCard(mentorName)).toBeVisible();
     await this.mentorCard(mentorName).getByRole('button', { name: /View Profile/i }).click();
+  }
+
+  async openFirstRecentlyJoinedMentorProfile() {
+    const recentSection = this.page.locator('div.flex.flex-col.gap-4', {
+      has: this.page.getByRole('heading', { name: 'Recently Joined' }),
+    }).first();
+    const recentCard = recentSection.locator('.island-shell').first();
+    await expect(recentCard).toBeVisible();
+
+    const mentorName = (await recentCard.getByRole('heading').first().textContent())?.trim();
+    if (!mentorName) {
+      throw new Error('Could not determine the first recently joined mentor name.');
+    }
+
+    await recentCard.getByRole('button', { name: /View Profile/i }).click();
+    return mentorName;
   }
 
   async search(value: string) {
