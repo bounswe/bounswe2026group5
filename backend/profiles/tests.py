@@ -9,6 +9,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.contrib.gis.geos import Point
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase, override_settings
@@ -3688,8 +3689,8 @@ class CommunityTagsAPITests(TestCase):
 
     def test_my_tags_returns_joined_tags_only(self) -> None:
         """My tags endpoint returns only tags the user has joined."""
-        resp1 = self._create_tag("My Tag 1")
-        resp2 = self._create_tag("My Tag 2")
+        self._create_tag("My Tag 1")
+        self._create_tag("My Tag 2")
         self._create_tag("Not Joined Tag", token=self.access_token2)
 
         self._auth()
@@ -5792,7 +5793,6 @@ class ProfileWorkshopAttendanceAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertGreaterEqual(response.data["count"], 1)
 
-from django.core.files.uploadedfile import SimpleUploadedFile
 
 class ProfileMediaUploadTests(TestCase):
     """Unit tests for profile audio and video uploads."""
@@ -5818,7 +5818,7 @@ class ProfileMediaUploadTests(TestCase):
             self.valid_audio_content,
             content_type="audio/mpeg"
         )
-        
+
         # Create valid mock video file
         self.valid_video_content = b"fake-video-content"
         self.video_file = SimpleUploadedFile(
@@ -5883,6 +5883,7 @@ class ProfileMediaUploadTests(TestCase):
         )
         response = self.client.post(self.video_url, {"video": invalid_file}, format="multipart")
         self.assertEqual(response.status_code, 400)
+
 
 class MentorQualitySignalsTests(APITestCase):
     """Tests for mentor discovery quality signals and sorting."""
@@ -6175,10 +6176,8 @@ class ProfileCoverageTests(TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_community_tag_detail_by_slug(self):
-        from profiles.models import CommunityTag
-
         tag = CommunityTag.objects.create(name="Unique Name Tag", slug="unique-slug")
-        response = self.client.get(f"/api/profiles/tags/unique-slug/")
+        response = self.client.get(f"/api/profiles/tags/{tag.slug}/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["name"], "Unique Name Tag")
 
@@ -6206,8 +6205,8 @@ class ProfileCoverageTests(TestCase):
         from profiles.models import Profile
 
         user1 = User.objects.create_user(email="coll@example.com", password="password")
-        p1 = Profile.objects.create(user=user1, username="coll")
-        
+        Profile.objects.create(user=user1, username="coll")
+
         user2 = User.objects.create_user(email="coll@other.com", password="password")
         # Should auto-generate a unique username since it's not provided and 'coll' is taken
         p2 = Profile.objects.create(user=user2)
@@ -6230,19 +6229,20 @@ class ProfileCoverageTests(TestCase):
     def test_availability_book_as_mentor_rejected(self):
         # Authenticate as another mentor, but who is NOT in MENTEE mode
         other_mentor = User.objects.create_user(
-            email="othermentor@example.com", 
+            email="othermentor@example.com",
             password="password",
             app_usage_mode=AppUsageMode.MENTOR
         )
         self.client.force_authenticate(user=other_mentor)
-        url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/{self.slot.id}/book/"
+        base_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/"
+        url = f"{base_url}{self.slot.id}/book/"
         response = self.client.post(url)
         # Should be rejected because they are not in MENTEE mode
         self.assertEqual(response.status_code, 403)
         self.assertIn("only mentees", response.data["detail"].lower())
 
     def test_book_availability_slot_own_rejection(self):
-        from profiles.services import book_availability_slot, OwnSlotBookingError
+        from profiles.services import OwnSlotBookingError, book_availability_slot
         with self.assertRaises(OwnSlotBookingError):
             book_availability_slot(
                 profile=self.mentor_profile,
@@ -6356,7 +6356,9 @@ class ProfileCoverageTests(TestCase):
     def test_availability_slot_serializer_session_id_none(self):
         from profiles.serializers import AvailabilitySlotSerializer
 
-        # Use a non-overlapping time (e.g. 5 days ahead) to avoid ExclusionViolation with setUp's slot
+        # Use a non-overlapping time (e.g. 5 days ahead) to avoid
+        # ExclusionViolation with setUp's slot
+        # with setUp's slot
         start_at = timezone.now() + timedelta(days=5)
         slot = AvailabilitySlot.objects.create(
             profile=self.mentor_profile,

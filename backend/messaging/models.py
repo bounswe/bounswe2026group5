@@ -71,7 +71,7 @@ class Message(models.Model):
             return receipt.status
         except ReadReceipt.DoesNotExist:
             # If sender, default to 'sent'; if recipient, default to 'delivered'
-            if str(self.sender_id) == str(user_id):
+            if str(self.sender_id) == user_id:
                 return "sent"
             return "delivered"
 

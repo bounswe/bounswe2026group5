@@ -8,7 +8,6 @@ from typing import Any
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
-from django.db import IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -53,17 +52,17 @@ class MessagingAPIBaseTestCase(TestCase):
         self.mentor_user = User.objects.create_user(
             email="mentor.msg@example.com",
             password="SecurePass123",
-            app_usage_mode=AppUsageMode.MENTOR,
+            app_usage_mode="MENTOR",
         )
         self.mentee_user = User.objects.create_user(
             email="mentee.msg@example.com",
             password="SecurePass123",
-            app_usage_mode=AppUsageMode.MENTEE,
+            app_usage_mode="MENTEE",
         )
         self.other_user = User.objects.create_user(
             email="other.msg@example.com",
             password="SecurePass123",
-            app_usage_mode=AppUsageMode.MENTEE,
+            app_usage_mode="MENTEE",
         )
         self.admin_user = User.objects.create_user(
             email="admin.msg@example.com",
@@ -144,7 +143,7 @@ class MessagingAPIBaseTestCase(TestCase):
         self,
         *,
         email: str,
-        app_usage_mode: str = AppUsageMode.MENTEE,
+        app_usage_mode: str = "MENTEE",
     ) -> APIClient:
         """Create an authenticated API client for a user that has no profile."""
         user = User.objects.create_user(
@@ -268,7 +267,7 @@ class ConversationDetailAPIViewTests(MessagingAPIBaseTestCase):
         response = self.mentee_client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 2)
-        
+
         # View uses order_by("-created_at") for pagination (most recent first)
         self.assertEqual(response.data[0]["id"], str(new_message.id))
         self.assertEqual(response.data[1]["id"], str(old_message.id))
@@ -328,7 +327,7 @@ class MessageCreateAPIViewTests(MessagingAPIBaseTestCase):
         url = self._conversation_detail_url(self.conversation.id)
         response = self.mentee_client.post(url, {"body": "Test notification"})
         self.assertEqual(response.status_code, 201)
-        
+
         from notifications.models import Notification, NotificationType
         notification = Notification.objects.filter(
             user=self.mentor_user, type=NotificationType.NEW_MESSAGE
@@ -502,12 +501,12 @@ class MessagingModelTests(TestCase):
         self.mentor_user = User.objects.create_user(
             email="mentor.model@example.com",
             password="SecurePass123",
-            app_usage_mode=AppUsageMode.MENTOR,
+            app_usage_mode="MENTOR",
         )
         self.mentee_user = User.objects.create_user(
             email="mentee.model@example.com",
             password="SecurePass123",
-            app_usage_mode=AppUsageMode.MENTEE,
+            app_usage_mode="MENTEE",
         )
         self.mentor_profile = Profile.objects.create(
             user=self.mentor_user,
@@ -567,12 +566,12 @@ class MessagingSignalsTests(TestCase):
         mentor_user = User.objects.create_user(
             email="mentor.signal@example.com",
             password="SecurePass123",
-            app_usage_mode=AppUsageMode.MENTOR,
+            app_usage_mode="MENTOR",
         )
         mentee_user = User.objects.create_user(
             email="mentee.signal@example.com",
             password="SecurePass123",
-            app_usage_mode=AppUsageMode.MENTEE,
+            app_usage_mode="MENTEE",
         )
         self.mentor_profile = Profile.objects.create(user=mentor_user, display_name="Signal Mentor")
         self.mentee_profile = Profile.objects.create(user=mentee_user, display_name="Signal Mentee")
@@ -622,12 +621,12 @@ class MessagingSignalsFirebaseTests(TestCase):
         self.mentor_user = User.objects.create_user(
             email="mentor.fire@example.com",
             password="password123",
-            app_usage_mode=AppUsageMode.MENTOR,
+            app_usage_mode="MENTOR",
         )
         self.mentee_user = User.objects.create_user(
             email="mentee.fire@example.com",
             password="password123",
-            app_usage_mode=AppUsageMode.MENTEE,
+            app_usage_mode="MENTEE",
         )
         self.mentor_profile = Profile.objects.create(user=self.mentor_user, display_name="Mentor")
         self.mentee_profile = Profile.objects.create(user=self.mentee_user, display_name="Mentee")

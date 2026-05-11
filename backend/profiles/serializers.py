@@ -247,7 +247,7 @@ class PostMediaUploadSerializer(serializers.Serializer):
 
         now = timezone.now()
         filename = f"{uuid.uuid4().hex}_{processed.name}"
-        path = f"post_media/{now.year}/{now.month:02d}" f"/{now.day:02d}/{filename}"
+        path = f"post_media/{now.year}/{now.month:02d}/{now.day:02d}/{filename}"
         saved_path = default_storage.save(path, processed)
         return default_storage.url(saved_path)
 
@@ -281,17 +281,20 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
     @extend_schema_field(OpenApiTypes.DATE)
     def get_date(self, obj: AvailabilitySlot) -> str:
         """Return slot date in project timezone."""
-        return to_local_time(obj.start_at).date().isoformat()
+        local_dt = to_local_time(obj.start_at)
+        return local_dt.date().isoformat() if local_dt else ""
 
     @extend_schema_field(OpenApiTypes.TIME)
     def get_startTime(self, obj: AvailabilitySlot) -> str:
         """Return slot start time in project timezone."""
-        return to_local_time(obj.start_at).time().replace(microsecond=0).isoformat()
+        local_dt = to_local_time(obj.start_at)
+        return local_dt.time().replace(microsecond=0).isoformat() if local_dt else ""
 
     @extend_schema_field(OpenApiTypes.TIME)
     def get_endTime(self, obj: AvailabilitySlot) -> str:
         """Return slot end time in project timezone."""
-        return to_local_time(obj.end_at).time().replace(microsecond=0).isoformat()
+        local_dt = to_local_time(obj.end_at)
+        return local_dt.time().replace(microsecond=0).isoformat() if local_dt else ""
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_bookedBy(self, obj: AvailabilitySlot) -> str | None:
@@ -345,7 +348,6 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
             "video_url",
         )
         read_only_fields = fields
-
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_full_name(self, obj: Profile) -> str:
@@ -463,6 +465,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
                 return resolve_video_url(obj)
             return ""
         return resolve_video_url(obj)
+
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_overloaded(self, obj: Profile) -> bool:
         """Return True when active matches meet or exceed the threshold."""
@@ -663,30 +666,17 @@ class AvailabilitySlotWriteSerializer(serializers.Serializer):
 
     def validate(self, attrs: dict) -> dict:
         """Validate date and time constraints for an availability slot."""
-        slot_date = attrs.get("date")
-        start_time = attrs.get("startTime")
-        end_time = attrs.get("endTime")
-
-        if self.instance is not None:
-            if slot_date is None:
-                slot_date = to_local_time(self.instance.start_at).date()
-            if start_time is None:
-                start_time = to_local_time(self.instance.start_at).time()
-            if end_time is None:
-                end_time = to_local_time(self.instance.end_at).time()
+        slot_date, start_time, end_time = self._resolve_slot_times(attrs)
 
         if slot_date is None:
             raise serializers.ValidationError({"date": "Date is required."})
-
         if start_time is None:
             raise serializers.ValidationError({"startTime": "startTime is required."})
-
         if end_time is None:
             raise serializers.ValidationError({"endTime": "endTime is required."})
 
         if slot_date < timezone.localdate():
             raise serializers.ValidationError({"date": "Date cannot be in the past."})
-
         if end_time <= start_time:
             raise serializers.ValidationError(
                 {"endTime": "endTime must be greater than startTime."}
@@ -694,14 +684,31 @@ class AvailabilitySlotWriteSerializer(serializers.Serializer):
 
         timezone_info = get_project_timezone()
         attrs["start_at"] = timezone.make_aware(
-            datetime.combine(slot_date, start_time),
-            timezone_info,
+            datetime.combine(slot_date, start_time), timezone_info
         )
         attrs["end_at"] = timezone.make_aware(
-            datetime.combine(slot_date, end_time),
-            timezone_info,
+            datetime.combine(slot_date, end_time), timezone_info
         )
         return attrs
+
+    def _resolve_slot_times(self, attrs: dict) -> tuple:
+        """Resolve slot date/times from input or existing instance fallback."""
+        slot_date = attrs.get("date")
+        start_time = attrs.get("startTime")
+        end_time = attrs.get("endTime")
+
+        if self.instance is not None:
+            if slot_date is None:
+                dt_local = to_local_time(self.instance.start_at)
+                slot_date = dt_local.date() if dt_local else None
+            if start_time is None:
+                dt_local = to_local_time(self.instance.start_at)
+                start_time = dt_local.time() if dt_local else None
+            if end_time is None:
+                dt_local = to_local_time(self.instance.end_at)
+                end_time = dt_local.time() if dt_local else None
+
+        return slot_date, start_time, end_time
 
     def create(self, validated_data: dict) -> AvailabilitySlot:
         """Create a slot for the profile passed in serializer context."""

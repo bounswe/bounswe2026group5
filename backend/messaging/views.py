@@ -16,14 +16,11 @@ from profiles.models import Profile
 
 from .firebase import update_message_read_status_in_firestore
 from .models import Conversation, Message, ReadReceipt
-from .serializers import (
-    ConversationSerializer,
-    MessageCreateSerializer,
-    MessageSerializer,
-)
+from .serializers import ConversationSerializer, MessageCreateSerializer, MessageSerializer
 
 PROFILE_NOT_FOUND_MSG = "Profile not found."
 ACCESS_DENIED_MSG = "Access denied."
+CONVERSATION_NOT_FOUND_MSG = "Conversation not found."
 
 
 class ConversationListAPIView(APIView):
@@ -70,7 +67,7 @@ class ConversationDetailAPIView(APIView):
             200: MessageSerializer(many=True),
             401: OpenApiResponse(description="Authentication required."),
             403: OpenApiResponse(description="Access denied."),
-            404: OpenApiResponse(description="Conversation not found."),
+            404: OpenApiResponse(description=CONVERSATION_NOT_FOUND_MSG),
         },
         description=(
             "List messages in a private conversation."
@@ -91,13 +88,19 @@ class ConversationDetailAPIView(APIView):
                 "match__mentor", "match__mentee"
             ).get(id=conversation_id)
         except Conversation.DoesNotExist:
-            return Response({"detail": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": CONVERSATION_NOT_FOUND_MSG}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Check if user is a participant
         if conversation.match.mentor != profile and conversation.match.mentee != profile:
             return Response({"detail": ACCESS_DENIED_MSG}, status=status.HTTP_403_FORBIDDEN)
 
-        messages_qs = Message.objects.filter(conversation=conversation).select_related("sender").order_by("-created_at")
+        messages_qs = (
+            Message.objects.filter(conversation=conversation)
+            .select_related("sender")
+            .order_by("-created_at")
+        )
 
         # Manual pagination
         page = max(int(request.query_params.get("page", 1)), 1)
@@ -123,7 +126,7 @@ class ConversationDetailAPIView(APIView):
             400: OpenApiResponse(description="Validation error."),
             401: OpenApiResponse(description="Authentication required."),
             403: OpenApiResponse(description="Access denied."),
-            404: OpenApiResponse(description="Conversation not found."),
+            404: OpenApiResponse(description=CONVERSATION_NOT_FOUND_MSG),
         },
         description=(
             "Send a new message in a private conversation. "
@@ -143,7 +146,9 @@ class ConversationDetailAPIView(APIView):
                 "match__mentor", "match__mentee"
             ).get(id=conversation_id)
         except Conversation.DoesNotExist:
-            return Response({"detail": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": CONVERSATION_NOT_FOUND_MSG}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Check if user is a participant
         if conversation.match.mentor != profile and conversation.match.mentee != profile:
@@ -241,7 +246,9 @@ class MessageReportAPIView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         # Check for existing report for this user by this reporter
-        if Report.objects.filter(reported_user=message.sender.user, submitted_by=request.user).exists():
+        if Report.objects.filter(
+            reported_user=message.sender.user, submitted_by=request.user
+        ).exists():
             return Response(
                 {"detail": "You have already reported this user."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -270,9 +277,9 @@ class MessageMarkReadAPIView(APIView):
             200: OpenApiResponse(description="All messages marked as read."),
             401: OpenApiResponse(description="Authentication required."),
             403: OpenApiResponse(description="Access denied."),
-            404: OpenApiResponse(description="Conversation not found."),
+            404: OpenApiResponse(description=CONVERSATION_NOT_FOUND_MSG),
         },
-        description="Mark all messages in a private conversation as read by the authenticated user.",
+        description="Mark all messages in a conversation as read by the authenticated user.",
         tags=["Messages"],
         operation_id="messages_mark_read",
     )
@@ -288,44 +295,43 @@ class MessageMarkReadAPIView(APIView):
                 "match__mentor", "match__mentee"
             ).get(id=conversation_id)
         except Conversation.DoesNotExist:
-            return Response({"detail": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": CONVERSATION_NOT_FOUND_MSG}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Check if user is a participant
         if conversation.match.mentor != profile and conversation.match.mentee != profile:
             return Response({"detail": ACCESS_DENIED_MSG}, status=status.HTTP_403_FORBIDDEN)
 
         # Update all messages from other sender to 'read'
-        unread_messages = Message.objects.filter(
-            conversation=conversation
-        ).exclude(sender=profile)
+        unread_messages = Message.objects.filter(conversation=conversation).exclude(sender=profile)
 
         # 1. Update existing receipts for this user to 'read'
-        ReadReceipt.objects.filter(
-            message__conversation=conversation, 
-            user=profile
-        ).update(status="read")
+        ReadReceipt.objects.filter(message__conversation=conversation, user=profile).update(
+            status="read"
+        )
 
         # 2. Find messages that don't have receipts yet and bulk create them
         existing_receipt_msg_ids = ReadReceipt.objects.filter(
-            message__conversation=conversation,
-            user=profile
+            message__conversation=conversation, user=profile
         ).values_list("message_id", flat=True)
 
         new_receipts = [
             ReadReceipt(message=message, user=profile, status="read")
             for message in unread_messages.exclude(id__in=existing_receipt_msg_ids)
         ]
-        
+
         if new_receipts:
             ReadReceipt.objects.bulk_create(new_receipts)
 
-        # 3. Manually sync the updated read status to Firestore since bulk operations bypass post_save signals.
+        # 3. Manually sync the updated read status to Firestore since bulk operations
+        # bypass post_save signals.
         for msg_id in unread_messages.values_list("id", flat=True):
             update_message_read_status_in_firestore(
                 message_id=msg_id,
                 conversation_id=conversation.id,
                 user_id=profile.id,
-                status="read"
+                status="read",
             )
 
         return Response({"detail": "All messages marked as read."}, status=status.HTTP_200_OK)

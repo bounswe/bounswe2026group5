@@ -418,15 +418,16 @@ def book_match_session(*, mentor_profile: Profile, slot_id: Any, actor: Any) -> 
                         "status": MeetingSession.Status.SCHEDULED,
                     },
                 )
+                local_start = to_local_time(slot.start_at)
+                local_end = to_local_time(slot.end_at)
+                start_str = local_start.strftime("%B %d, %Y at %H:%M") if local_start else "Unknown"
+                end_str = local_end.strftime("%H:%M") if local_end else "Unknown"
+
                 _create_notification(
                     user=mentor_profile.user,
                     notification_type=NotificationType.SLOT_BOOKED,
                     title="Slot Booked",
-                    message=(
-                        f"{mentee_profile.display_name} booked a slot on "
-                        f"{to_local_time(slot.start_at).strftime('%B %d, %Y at %H:%M')} - "
-                        f"{to_local_time(slot.end_at).strftime('%H:%M')}."
-                    ),
+                    message=f"{mentee_profile.display_name} booked a slot: {start_str} - {end_str}.",
                     actor=mentee_profile,
                     resource_type="availability_slot",
                     resource_id=slot.id,

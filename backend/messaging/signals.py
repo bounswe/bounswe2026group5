@@ -73,13 +73,13 @@ def sync_message_to_firestore_signal(
     mentor = conversation.match.mentor
     mentee = conversation.match.mentee
 
-    sender = instance.sender
-    recipient = mentor if sender.id == mentee.id else mentee
+    message_sender = instance.sender
+    recipient = mentor if message_sender.id == mentee.id else mentee
 
     # Create or update read receipt for sender
     ReadReceipt.objects.get_or_create(
         message=instance,
-        user=sender,
+        user=message_sender,
         defaults={"status": "sent"},
     )
 

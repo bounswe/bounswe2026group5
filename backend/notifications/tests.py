@@ -57,7 +57,6 @@ class NotificationAPITest(APITestCase):
         self.profile = Profile.objects.create(user=self.user, display_name="Test User")
         self.actor_user = User.objects.create_user(email="actor@example.com", password="password")
         self.actor_profile = Profile.objects.create(user=self.actor_user, display_name="Actor User")
-        from rest_framework.test import APIClient
 
         cast(APIClient, self.client).force_authenticate(user=self.user)
 
@@ -77,7 +76,7 @@ class NotificationAPITest(APITestCase):
         )
 
         url = reverse("notification-list")
-        response = cast("Response", self.client.get(url))
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = cast(list[Any], response.data)
         self.assertEqual(len(data), 2)
@@ -88,7 +87,6 @@ class NotificationAPITest(APITestCase):
 
     def test_list_notifications_requires_auth(self) -> None:
         """Test unauthenticated access is rejected for notification list."""
-        from rest_framework.test import APIClient
 
         cast(APIClient, self.client).force_authenticate(user=None)
 
@@ -99,7 +97,7 @@ class NotificationAPITest(APITestCase):
     def test_list_unread_notifications_empty(self) -> None:
         """Test unread list returns empty array when user has no unread notifications."""
         url = reverse("notification-list")
-        response = cast("Response", self.client.get(url))
+        response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = cast(list[Any], response.data)
@@ -122,7 +120,7 @@ class NotificationAPITest(APITestCase):
         )
 
         url = reverse("notification-list")
-        response = cast("Response", self.client.get(url))
+        response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = cast(list[Any], response.data)
@@ -145,7 +143,7 @@ class NotificationAPITest(APITestCase):
         )
 
         url = reverse("notification-list")
-        response = cast("Response", self.client.get(url))
+        response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = cast(list[Any], response.data)
@@ -201,7 +199,6 @@ class NotificationAPITest(APITestCase):
 
     def test_mark_notification_read_requires_auth(self) -> None:
         """Test unauthenticated access is rejected for mark-as-read endpoint."""
-        from rest_framework.test import APIClient
 
         cast(APIClient, self.client).force_authenticate(user=None)
         notification = Notification.objects.create(
@@ -231,7 +228,7 @@ class NotificationAPITest(APITestCase):
         )
 
         url = reverse("notification-list")
-        response = cast("Response", self.client.get(url))
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         data = cast(list[Any], response.data)
@@ -273,7 +270,7 @@ class NotificationAPITest(APITestCase):
         )
 
         url = reverse("notification-list")
-        response = cast("Response", self.client.get(url))
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         data = cast(list[Any], response.data)

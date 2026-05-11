@@ -13,17 +13,20 @@ from django.utils import timezone
 
 
 class UserRole(models.TextChoices):
+    """Enumeration of system roles."""
     GUEST = "GUEST", "Guest"
     USER = "USER", "User"
     ADMIN = "ADMIN", "Admin"
 
 
 class AuthProvider(models.TextChoices):
+    """Enumeration of supported authentication providers."""
     LOCAL = "LOCAL", "Local"
     GOOGLE = "GOOGLE", "Google"
 
 
 class AppUsageMode(models.TextChoices):
+    """Enumeration of application usage modes (mentorship roles)."""
     MENTEE = "MENTEE", "Mentee"
     MENTOR = "MENTOR", "Mentor"
     ADMIN = "ADMIN", "Admin"
@@ -122,7 +125,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
         return candidate
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.email
 
 

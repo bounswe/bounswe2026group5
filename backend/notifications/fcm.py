@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Dict, List, Optional
 
 import firebase_admin
 from django.conf import settings
@@ -12,43 +12,53 @@ _firebase_app = None
 
 
 def get_firebase_app():
+    """Initialize or retrieve the Firebase app singleton."""
     global _firebase_app
-    if _firebase_app is None:
-        try:
-            # Service account path relative to BASE_DIR or absolute
-            cred_path = settings.BASE_DIR / settings.FIREBASE_SERVICE_ACCOUNT_PATH
-            if not cred_path.exists():
-                logger.warning(f"Firebase service account file not found at {cred_path}")
-                return None
+    if _firebase_app is not None:
+        return _firebase_app
 
-            # Robust check for existing apps to avoid concurrent initialization errors
-            app_name = "messaging"
-            for app in firebase_admin._apps.values():
-                if app.name == app_name:
-                    _firebase_app = app
-                    logger.debug(f"Firebase app '{app_name}' already exists in _apps, reusing it")
-                    return _firebase_app
-
-            try:
-                # Double check with get_app in case it was just added
-                _firebase_app = firebase_admin.get_app(app_name)
-                logger.debug(f"Firebase app '{app_name}' already exists via get_app, reusing it")
-            except ValueError:
-                # App doesn't exist, create it
-                cred = credentials.Certificate(str(cred_path))
-                _firebase_app = firebase_admin.initialize_app(cred, name=app_name)
-                logger.debug(f"Firebase app '{app_name}' initialized")
-        except Exception as e:
-            # Last ditch effort: if it failed because it exists, just get it
-            if "already exists" in str(e):
-                try:
-                    _firebase_app = firebase_admin.get_app("messaging")
-                    return _firebase_app
-                except Exception:
-                    pass
-            logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
+    try:
+        cred_path = settings.BASE_DIR / settings.FIREBASE_SERVICE_ACCOUNT_PATH
+        if not cred_path.exists():
+            logger.warning("Firebase service account file not found at %s", cred_path)
             return None
+
+        app_name = "messaging"
+        # Check existing apps
+        for app in firebase_admin._apps.values():
+            if app.name == app_name:
+                _firebase_app = app
+                return _firebase_app
+
+        try:
+            _firebase_app = firebase_admin.get_app(app_name)
+        except ValueError:
+            cred = credentials.Certificate(str(cred_path))
+            _firebase_app = firebase_admin.initialize_app(cred, name=app_name)
+            logger.debug("Firebase app '%s' initialized", app_name)
+    except Exception:
+        logger.exception("Failed to initialize Firebase Admin SDK")
+        return None
+
     return _firebase_app
+
+
+def _cleanup_invalid_tokens(response: messaging.BatchResponse, tokens: List[str]) -> None:
+    """Identify and delete tokens that are no longer registered or invalid."""
+    invalid_tokens = []
+    for idx, resp in enumerate(response.responses):
+        if not resp.success and resp.exception:
+            if resp.exception.code in [
+                "registration-token-not-registered",
+                "invalid-registration-token",
+            ]:
+                invalid_tokens.append(tokens[idx])
+
+    if invalid_tokens:
+        from .models import FCMToken
+
+        FCMToken.objects.filter(token__in=invalid_tokens).delete()
+        logger.info("Deleted %d invalid FCM tokens.", len(invalid_tokens))
 
 
 def send_push_notification(
@@ -79,37 +89,23 @@ def send_push_notification(
                     title="Neighborship",
                     body=f"{title}: {body}",
                     channel_id="default",
-                    tag="neighborship_global_sync",  # Constant tag ensures they replace each other
+                    tag="neighborship_global_sync",
                 ),
             ),
         )
         for token in tokens
     ]
 
-    if not messages:
-        return
-
     try:
         response = messaging.send_each(messages, app=app)
         logger.info(
-            f"Successfully sent push notification: {response.success_count} success, {response.failure_count} failure"
+            "Successfully sent push notification: %d success, %d failure",
+            response.success_count,
+            response.failure_count,
         )
 
-        # Cleanup invalid tokens
         if response.failure_count > 0:
-            invalid_tokens = []
-            for idx, resp in enumerate(response.responses):
-                if not resp.success:
-                    # Check if error is related to invalid token
-                    if resp.exception and resp.exception.code in [
-                        "registration-token-not-registered",
-                        "invalid-registration-token",
-                    ]:
-                        invalid_tokens.append(tokens[idx])
+            _cleanup_invalid_tokens(response, tokens)
 
-            if invalid_tokens:
-                FCMToken.objects.filter(token__in=invalid_tokens).delete()
-                logger.info(f"Deleted {len(invalid_tokens)} invalid FCM tokens.")
-
-    except Exception as e:
-        logger.error(f"Error sending push notification: {e}")
+    except Exception:
+        logger.exception("Error sending push notification")
