@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Muted } from '@/components/Typography'
 import { MediaUploadField } from '@/components/MediaUploadField'
+import { MediaAttachment } from '@/components/MediaAttachment'
 import {
     useProfilePosts,
     useCreateProfilePost,
@@ -29,11 +30,6 @@ import {
 
 // ---- Helpers ----
 
-function mediaFileName(url: string): string {
-    const raw = url.split('/').pop()?.split('?')[0] ?? 'media'
-    // Backend prepends a 32-char hex UUID + underscore; strip it if present
-    return /^[a-f0-9]{32}_/.test(raw) ? raw.slice(33) : raw
-}
 
 // ---- Types ----
 
@@ -189,16 +185,7 @@ function ProfilePostCard({
                 {post.content && (
                     <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{post.content}</p>
                 )}
-                {post.media_url && (
-                    <a
-                        href={post.media_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-accent underline truncate"
-                    >
-                        {mediaFileName(post.media_url)}
-                    </a>
-                )}
+                {post.media_url && <MediaAttachment url={post.media_url} />}
                 {post.category === 'MCTE' && post.mentorship_partner && (
                     <Muted className="text-xs">
                         From the mentorship journey with{' '}
@@ -328,7 +315,7 @@ function CreatePostDialog({
                             onUrl={url => setForm(f => ({ ...f, media_url: url ?? undefined }))}
                         />
                     </div>
-                    <DialogFooter className="mt-2">
+                    <DialogFooter className="mt-2 border-t border-line">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancel
                         </Button>

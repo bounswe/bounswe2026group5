@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Body } from '@/components/Typography'
-import { cn } from '@/lib/utils'
+import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
 import type { PublicMentorProfile } from '@/lib/queries/DiscoverQueries.ts'
 
 interface ProfileCardProps {
@@ -35,7 +35,7 @@ function ProfileAvatar({
   if (pictureUrl && !showInitialsOnly) {
     return (
         <img
-            src={pictureUrl}
+            src={getAbsoluteMediaUrl(pictureUrl)}
             alt={displayName}
             className="h-20 w-20 rounded-full object-cover shrink-0 border border-line shadow-sm"
         />
@@ -63,7 +63,7 @@ export function ProfileCard({
   return (
       <div
           className={cn(
-              'island-shell rounded-xl p-8 flex flex-col gap-6 shadow-md hover:shadow-xl/30',
+              'island-shell rounded-xl p-8 flex flex-col gap-6 shadow-md hover:shadow-xl/30 transition-shadow duration-200',
               className,
           )}
       >
@@ -78,16 +78,16 @@ export function ProfileCard({
             <h3 className="font-display text-2xl font-bold text-ink leading-tight truncate">
               {profile.full_name}
             </h3>
-            <p className="text-accent font-medium text-sm mt-0.5">{profile.title}</p>
+            <p className="text-accent-aa font-medium text-sm mt-0.5">{profile.title}</p>
           </div>
         </div>
 
         {/* Expertises */}
-        <div className="px-6 pb-6 pt-2 flex flex-wrap gap-2 text-sm z-10 relative">
+        <div className="flex flex-wrap gap-2">
           {profile.skills?.slice(0, 3).map((skill) => (
             <span
               key={skill}
-              className="px-3 py-1 bg-accent-muted text-primary text-xs font-bold uppercase tracking-wider rounded-full border border-accent/10"
+              className="px-3 py-1 bg-accent-muted text-ink text-xs font-bold uppercase tracking-wider rounded-full border border-accent/10"
             >
               {skill}
             </span>

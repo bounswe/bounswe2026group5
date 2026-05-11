@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useQuery } from '@tanstack/react-query'
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 import { useMyMatches } from '#/lib/queries/MentorshipQueries.ts'
-import { getInitials } from '#/lib/utils.ts'
+import { getAbsoluteMediaUrl, getInitials } from '#/lib/utils.ts'
 import { Loader2, UserCircle, BookOpen } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 
@@ -45,8 +45,8 @@ export function ConnectionsPage() {
 
             {/* Content */}
             {isLoading ? (
-                <div className="flex justify-center py-16">
-                    <Loader2 className="h-6 w-6 animate-spin text-ink-soft" />
+                <div className="flex justify-center py-16" role="status" aria-label="Loading connections">
+                    <Loader2 className="h-6 w-6 animate-spin text-ink-soft" aria-hidden="true" />
                 </div>
             ) : connections.length === 0 ? (
                 <EmptyState isMentor={isMentor} />
@@ -86,11 +86,11 @@ interface ConnectionCardProps {
 
 function ConnectionCard({ matchId, username, displayName, pictureUrl, title }: ConnectionCardProps) {
     return (
-        <Card className="island-shell border-line shadow-sm hover:shadow-md transition-shadow bg-white">
+        <Card className="island-shell border-line shadow-sm hover:shadow-md transition-shadow bg-card">
             <CardContent className="pt-6 flex flex-col items-center text-center gap-4">
                 {pictureUrl ? (
                     <img
-                        src={pictureUrl}
+                        src={getAbsoluteMediaUrl(pictureUrl)}
                         alt={displayName}
                         className="h-20 w-20 rounded-2xl object-cover ring-1 ring-line"
                     />
@@ -115,7 +115,7 @@ function ConnectionCard({ matchId, username, displayName, pictureUrl, title }: C
                             size="sm"
                             className="w-full border-line text-ink-soft hover:text-ink hover:border-accent/30 transition-colors gap-2"
                         >
-                            <UserCircle className="w-4 h-4" />
+                            <UserCircle className="w-4 h-4" aria-hidden="true" />
                             View Profile
                         </Button>
                     </Link>
@@ -125,11 +125,11 @@ function ConnectionCard({ matchId, username, displayName, pictureUrl, title }: C
                         className="w-full"
                     >
                         <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
-                            className="w-full text-ink-soft hover:text-accent hover:bg-accent/5 transition-colors gap-2"
+                            className="w-full border-line text-ink-soft hover:text-ink hover:border-accent/30 transition-colors gap-2"
                         >
-                            <BookOpen className="w-4 h-4" />
+                            <BookOpen className="w-4 h-4" aria-hidden="true" />
                             View Journey
                         </Button>
                     </Link>

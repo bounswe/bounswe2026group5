@@ -1,12 +1,14 @@
 import { SkillPicker } from "#/components/SkillPicker.tsx"
-import { Heading, Muted, Subheading } from "#/components/Typography.tsx"
+import { Display, Heading, Muted, Subheading } from "#/components/Typography.tsx"
 import { Button } from "#/components/ui/button.tsx"
 import { Input } from "#/components/ui/input.tsx"
+import { Label as FormLabel } from "#/components/ui/label.tsx"
 import { Textarea } from "#/components/ui/textarea.tsx"
 import { logout, meQueryOptions, useUpdateAppUsageMode } from "#/lib/queries/AuthQueries.ts"
 import { useOwnProfile, useUpdateProfile, useUpdateUsername } from "#/lib/queries/ProfileQueries.ts"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useRouter } from '@tanstack/react-router'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 export const Route = createFileRoute('/_onBoarding/gettingToKnowYou')({
@@ -221,133 +223,178 @@ function RouteComponent() {
         setActiveIndex(i => i - 1)
     }
 
+    const inputId = `onboarding-input-${current.key}`
+
     return (
-        <div className="min-h-screen page-wrap flex flex-col items-center">
-            <div className="island-shell rounded-2xl px-10 py-10 rise-in w-full max-w-xl flex flex-col gap-6 mt-10">
+        <div className="min-h-screen flex flex-col">
 
-                {/* Progress bar */}
-                <div className="flex gap-2">
-                    {questions.map((_, i) => (
+            {/* Brand header */}
+            <header className="page-wrap py-6">
+                <Display as="span" className="text-lg tracking-tight">Neighborship</Display>
+            </header>
+
+            {/* Card */}
+            <div className="page-wrap flex flex-col items-center pt-8 pb-16">
+                <div className="island-shell rounded-2xl px-10 py-10 rise-in w-full max-w-xl flex flex-col gap-8">
+
+                    {/* Progress */}
+                    <div className="flex flex-col gap-2">
                         <div
-                            key={i}
-                            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-                                i <= activeIndex ? 'bg-primary' : 'bg-accent-muted'
-                            }`}
-                        />
-                    ))}
-                </div>
-
-                {/* Question */}
-                <div className="flex flex-col gap-1">
-                    <Heading as="h1" className="text-4xl font-extralight">
-                        {current.question}
-                    </Heading>
-                    <Subheading>{current.clarification}</Subheading>
-                    {current.mutedText && <Muted>{current.mutedText}</Muted>}
-                </div>
-
-                {/* Input area */}
-                <div className="flex flex-col gap-3">
-                    {current.type === 'text' && (
-                        <Input
-                            className="bg-background"
-                            placeholder="Type here..."
-                            value={answers[current.key] as string}
-                            onChange={e =>
-                                setAnswers(prev => ({ ...prev, [current.key]: e.target.value }))
-                            }
-                            onKeyDown={e => e.key === 'Enter' && handleNext()}
-                        />
-                    )}
-
-                    {current.type === 'textarea' && (
-                        <Textarea
-                            className="bg-background resize-none"
-                            placeholder="Write a short bio..."
-                            rows={4}
-                            value={answers.bio}
-                            onChange={e =>
-                                setAnswers(prev => ({ ...prev, bio: e.target.value }))
-                            }
-                        />
-                    )}
-
-                    {current.type === 'choice' && (
-                        <div className="flex gap-3">
-                            {(['mentee', 'mentor'] as const).map(option => (
-                                <button
-                                    key={option}
-                                    onClick={() =>
-                                        setAnswers(prev => ({ ...prev, primaryUsage: option }))
-                                    }
-                                    className={`flex-1 py-4 rounded-xl border-2 capitalize text-lg font-medium transition-all ${
-                                        answers.primaryUsage === option
-                                            ? 'border-primary bg-primary text-primary-foreground'
-                                            : 'border-border hover:border-primary/60'
+                            role="progressbar"
+                            aria-valuenow={activeIndex + 1}
+                            aria-valuemin={1}
+                            aria-valuemax={questions.length}
+                            aria-label={`Step ${activeIndex + 1} of ${questions.length}`}
+                            className="flex gap-1.5"
+                        >
+                            {questions.map((_, i) => (
+                                <div
+                                    key={i}
+                                    className={`h-2 flex-1 rounded-full transition-all duration-300 ${
+                                        i <= activeIndex ? 'bg-accent' : 'bg-accent-muted'
                                     }`}
-                                >
-                                    {option}
-                                </button>
+                                />
                             ))}
                         </div>
-                    )}
+                        <Muted className="text-xs tabular-nums">
+                            Step {activeIndex + 1} of {questions.length}
+                        </Muted>
+                    </div>
 
-                    {current.type === 'username' && (
-                        <div className="flex flex-col gap-2">
+                    {/* Question */}
+                    <div className="flex flex-col gap-1.5">
+                        <FormLabel htmlFor={inputId} className="sr-only">
+                            {current.question}
+                        </FormLabel>
+                        <Heading as="h1" className="text-3xl font-light leading-snug">
+                            {current.question}
+                        </Heading>
+                        <Subheading className="text-ink-soft font-normal">{current.clarification}</Subheading>
+                        {current.mutedText && <Muted>{current.mutedText}</Muted>}
+                    </div>
+
+                    {/* Input area */}
+                    <div className="flex flex-col gap-3">
+                        {current.type === 'text' && (
                             <Input
-                                className="bg-background"
-                                placeholder="username"
-                                value={answers.username}
+                                id={inputId}
+                                className="bg-background py-3 rounded-xl"
+                                placeholder="Type here…"
+                                value={answers[current.key] as string}
                                 onChange={e =>
-                                    setAnswers(prev => ({ ...prev, username: e.target.value }))
+                                    setAnswers(prev => ({ ...prev, [current.key]: e.target.value }))
                                 }
                                 onKeyDown={e => e.key === 'Enter' && handleNext()}
+                                autoFocus
                             />
-                            <div className="flex flex-col gap-0.5">
-                                <Muted className="text-xs">Your profile URL will be:</Muted>
-                                <Muted className="text-sm font-mono">
-                                    https://neighborship.app/profiles/{answers.username || '...'}
-                                </Muted>
+                        )}
+
+                        {current.type === 'textarea' && (
+                            <Textarea
+                                id={inputId}
+                                className="bg-background resize-none rounded-xl"
+                                placeholder="Write a short bio…"
+                                rows={4}
+                                value={answers.bio}
+                                onChange={e =>
+                                    setAnswers(prev => ({ ...prev, bio: e.target.value }))
+                                }
+                                autoFocus
+                            />
+                        )}
+
+                        {current.type === 'choice' && (
+                            <div id={inputId} role="group" aria-label={current.question} className="flex gap-3">
+                                {(['mentee', 'mentor'] as const).map(option => (
+                                    <button
+                                        key={option}
+                                        type="button"
+                                        aria-pressed={answers.primaryUsage === option}
+                                        onClick={() =>
+                                            setAnswers(prev => ({ ...prev, primaryUsage: option }))
+                                        }
+                                        className={`flex-1 py-6 rounded-xl border-2 capitalize text-lg font-semibold transition-all ${
+                                            answers.primaryUsage === option
+                                                ? 'border-accent bg-accent text-white shadow-md'
+                                                : 'border-line text-ink-soft hover:border-accent/50 hover:text-ink'
+                                        }`}
+                                    >
+                                        {option === 'mentee' ? 'I want to learn' : 'I want to teach'}
+                                        <span className="block text-sm font-normal mt-1 capitalize">
+                                            {option}
+                                        </span>
+                                    </button>
+                                ))}
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    {current.type === 'skills' && current.skillsKey && (
-                        <SkillPicker
-                            selected={answers[current.skillsKey]}
-                            available={profileData?.available_catalog_skills ?? []}
-                            onChange={skills => setAnswers(prev => ({ ...prev, [current.skillsKey!]: skills }))}
-                            mode={answers.primaryUsage === 'mentor' ? 'mentor' : 'mentee'}
-                        />
-                    )}
+                        {current.type === 'username' && (
+                            <div className="flex flex-col gap-2">
+                                <Input
+                                    id={inputId}
+                                    className="bg-background py-3 rounded-xl"
+                                    placeholder="username"
+                                    value={answers.username}
+                                    onChange={e =>
+                                        setAnswers(prev => ({ ...prev, username: e.target.value }))
+                                    }
+                                    onKeyDown={e => e.key === 'Enter' && handleNext()}
+                                    autoFocus
+                                    autoComplete="username"
+                                />
+                                <div className="flex flex-col gap-0.5 px-1">
+                                    <Muted className="text-xs">Your profile URL will be:</Muted>
+                                    <Muted className="text-sm font-mono text-accent-aa">
+                                        neighborship.app/profiles/{answers.username || '…'}
+                                    </Muted>
+                                </div>
+                            </div>
+                        )}
 
-                    {error && <p className="text-destructive text-sm">{error}</p>}
-                    {submitError && <p className="text-destructive text-sm">{submitError}</p>}
+                        {current.type === 'skills' && current.skillsKey && (
+                            <div id={inputId}>
+                                <SkillPicker
+                                    selected={answers[current.skillsKey]}
+                                    available={profileData?.available_catalog_skills ?? []}
+                                    onChange={skills => setAnswers(prev => ({ ...prev, [current.skillsKey!]: skills }))}
+                                    mode={answers.primaryUsage === 'mentor' ? 'mentor' : 'mentee'}
+                                />
+                            </div>
+                        )}
+
+                        {error && (
+                            <p role="alert" className="text-destructive text-sm px-1">{error}</p>
+                        )}
+                        {submitError && (
+                            <p role="alert" className="text-destructive text-sm px-1">{submitError}</p>
+                        )}
+                    </div>
+
+                    {/* Navigation */}
+                    <div className="flex items-center justify-between pt-2 border-t border-line">
+                        <Button
+                            variant="ghost"
+                            onClick={handleBack}
+                            disabled={isSubmitting}
+                            className="gap-2 text-ink-soft hover:text-ink"
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                            {activeIndex === 0 ? 'Sign out' : 'Back'}
+                        </Button>
+                        <Button
+                            className="gap-2 px-7"
+                            onClick={handleNext}
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting
+                                ? 'Saving…'
+                                : activeIndex < questions.length - 1
+                                    ? <>Continue <ArrowRight className="h-4 w-4" /></>
+                                    : 'Finish'}
+                        </Button>
+                    </div>
+
                 </div>
-
-                {/* Navigation */}
-                <div className="flex items-center justify-between pt-2">
-                    <Button
-                        variant="ghost"
-                        onClick={handleBack}
-                        disabled={isSubmitting}
-                        className="text-muted-foreground"
-                    >
-                        ← Back
-                    </Button>
-                    <Button
-                        className="px-8"
-                        onClick={handleNext}
-                        disabled={isSubmitting}
-                    >
-                        {isSubmitting
-                            ? 'Saving...'
-                            : activeIndex < questions.length - 1
-                                ? 'Continue →'
-                                : 'Finish'}
-                    </Button>
-                </div>
-
             </div>
         </div>
     )
