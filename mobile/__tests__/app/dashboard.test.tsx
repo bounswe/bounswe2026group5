@@ -15,9 +15,11 @@ const mockToastSuccess = jest.fn();
 let mockIsEmailVerified: boolean | undefined = true;
 let mockMappedRequests: any[] = [];
 let mockMappedSessions: any[] = [];
+let mockMappedWorkshops: any[] = [];
 let mockMatches: any[] = [];
 let mockRequestsIsError = false;
 let mockSessionsIsError = false;
+let mockWorkshopsIsError = false;
 
 const defaultSession = {
   id: "slot-1",
@@ -179,11 +181,25 @@ jest.mock("@/components/dashboard/SessionDetailsModal", () => ({
 }));
 
 jest.mock("@/components/dashboard/SessionCard", () => ({
-  SessionCard: ({ user, onPress }: { user: string; onPress?: () => void }) => {
+  SessionCard: ({
+    user,
+    title,
+    subtitle,
+    kindLabel,
+    onPress,
+  }: {
+    user: string;
+    title?: string;
+    subtitle?: string;
+    kindLabel?: string;
+    onPress?: () => void;
+  }) => {
     const { Text, TouchableOpacity } = jest.requireActual("react-native");
     return (
       <TouchableOpacity testID={`session-card-${user}`} onPress={onPress}>
-        <Text>{user}</Text>
+        <Text>{title ?? user}</Text>
+        {subtitle ? <Text>{subtitle}</Text> : null}
+        {kindLabel ? <Text>{kindLabel}</Text> : null}
       </TouchableOpacity>
     );
   },
@@ -256,15 +272,26 @@ jest.mock("@/lib/queries/mentorship", () => {
   };
 });
 
+jest.mock("@/lib/queries/workshops", () => ({
+  mapWorkshopAttendanceToDashboard: () => mockMappedWorkshops,
+  useMyWorkshopAttendanceQuery: () => ({
+    data: { results: mockMappedWorkshops },
+    isError: mockWorkshopsIsError,
+    refetch: jest.fn(),
+  }),
+}));
+
 describe("DashboardScreen session navigation", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockIsEmailVerified = true;
     mockMappedRequests = [];
     mockMappedSessions = [defaultSession];
+    mockMappedWorkshops = [];
     mockMatches = [];
     mockRequestsIsError = false;
     mockSessionsIsError = false;
+    mockWorkshopsIsError = false;
     mockResendMutateAsync.mockResolvedValue({
       detail: "If your email is unverified, a new verification link has been sent.",
     });
@@ -283,18 +310,23 @@ describe("DashboardScreen session navigation", () => {
 
   it("warns unverified users and resends verification email on request", async () => {
     mockIsEmailVerified = false;
-    const { findByText, getByTestId } = render(<DashboardScreen />);
+    const { findByText, getByTestId, queryByText } = render(<DashboardScreen />);
 
     expect(await findByText("Verify your email")).toBeTruthy();
 
     fireEvent.press(getByTestId("resend-verification-button"));
 
-    expect(mockResendMutateAsync).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockResendMutateAsync).toHaveBeenCalledTimes(1);
+      expect(mockToastSuccess).toHaveBeenCalledWith(
+        "If your email is unverified, a new verification link has been sent.",
+      );
+    });
     expect(
-      await findByText(
+      queryByText(
         "If your email is unverified, a new verification link has been sent.",
       ),
-    ).toBeTruthy();
+    ).toBeNull();
   });
 
   it("shows request query errors", () => {
@@ -310,7 +342,7 @@ describe("DashboardScreen session navigation", () => {
 
     const { getByText } = render(<DashboardScreen />);
 
-    expect(getByText("No upcoming sessions yet.")).toBeTruthy();
+    expect(getByText("No upcoming sessions or workshops yet.")).toBeTruthy();
   });
 
   it("navigates to connections from pending requests View All", () => {
@@ -336,10 +368,41 @@ describe("DashboardScreen session navigation", () => {
     expect(mockMatchesRefetch).toHaveBeenCalled();
   });
 
+  it("renders workshops inline with sessions and opens workshop detail", () => {
+    mockMappedWorkshops = [
+      {
+        id: "workshop-1",
+        workshopId: "workshop-1",
+        communityId: "tag-1",
+        communityName: "AI Lab",
+        user: "Mentor AI",
+        date: "Jun 10",
+        rawDate: "2099-06-10",
+        time: "13:30 - 15:00",
+        status: "Upcoming",
+        topic: "Prompt Engineering 101",
+        myRole: "Mentee",
+        isWorkshop: true,
+        workshopStatus: "SCHEDULED",
+      },
+    ];
+
+    const { getByTestId, getByText } = render(<DashboardScreen />);
+
+    expect(getByText("Prompt Engineering 101")).toBeTruthy();
+    expect(getByText("Workshop")).toBeTruthy();
+
+    fireEvent.press(getByTestId("session-card-Mentor AI"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1/workshops/workshop-1?from=dashboard",
+    );
+  });
+
   it("accepts and rejects pending requests from dashboard cards", async () => {
     mockMappedRequests = [defaultRequest];
 
-    const { getByTestId, findByText } = render(<DashboardScreen />);
+    const { getByTestId, queryByText } = render(<DashboardScreen />);
 
     fireEvent.press(getByTestId("request-accept-Grace Hopper"));
 
@@ -349,7 +412,10 @@ describe("DashboardScreen session navigation", () => {
         action: "accept",
       });
     });
-    expect(await findByText("Request accepted successfully.")).toBeTruthy();
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      "Request accepted successfully.",
+    );
+    expect(queryByText("Request accepted successfully.")).toBeNull();
 
     fireEvent.press(getByTestId("request-decline-Grace Hopper"));
 
@@ -359,7 +425,10 @@ describe("DashboardScreen session navigation", () => {
         action: "reject",
       });
     });
-    expect(await findByText("Request rejected successfully.")).toBeTruthy();
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      "Request rejected successfully.",
+    );
+    expect(queryByText("Request rejected successfully.")).toBeNull();
   });
 
   it("opens request details and navigates to requester profile", async () => {

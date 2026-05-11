@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { SuccessCard } from "@/components/ui/SuccessCard";
+import { useToast } from "@/components/ui/ToastProvider";
 import { useAuthStore } from "@/lib/auth/store";
 import { useCreateCommunityTagMutation } from "@/lib/queries/communityTags";
 
@@ -30,12 +30,12 @@ function getErrorMessage(error: unknown, fallback: string) {
 export default function CreateCommunityScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const toast = useToast();
   const currentUsername = useAuthStore((state) => state.user?.username);
   const createCommunityMutation = useCreateCommunityTagMutation(currentUsername);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const trimmedName = name.trim();
   const trimmedDescription = description.trim();
@@ -49,12 +49,11 @@ export default function CreateCommunityScreen() {
 
     try {
       setFormError(null);
-      setSuccessMessage(null);
       const tag = await createCommunityMutation.mutateAsync({
         name: trimmedName,
         description: trimmedDescription,
       });
-      setSuccessMessage(`${tag.name} is ready.`);
+      toast.success(`${tag.name} is ready.`);
       router.replace(
         `/(tabs)/community/${encodeURIComponent(tag.id)}?from=community`,
       );
@@ -103,12 +102,6 @@ export default function CreateCommunityScreen() {
           {formError ? (
             <View className="mb-4">
               <ErrorBanner message={formError} />
-            </View>
-          ) : null}
-
-          {successMessage ? (
-            <View className="mb-4">
-              <SuccessCard message={successMessage} />
             </View>
           ) : null}
 

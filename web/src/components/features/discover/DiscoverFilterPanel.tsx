@@ -68,7 +68,7 @@ export function DiscoverFilterPanel({
               <button
                 type="button"
                 onClick={onClear}
-                className="flex items-center gap-1 text-xs text-accent hover:text-accent-light font-semibold transition-colors"
+                className="flex items-center gap-1 text-xs text-accent-aa hover:text-accent font-semibold transition-colors"
               >
                 <X className="h-3 w-3" />
                 Clear all
@@ -90,7 +90,7 @@ export function DiscoverFilterPanel({
                     'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-150',
                     active
                       ? 'bg-accent text-white shadow-sm scale-105'
-                      : 'bg-accent-muted text-primary hover:bg-accent/20 border border-accent/10',
+                      : 'bg-accent-muted text-ink hover:bg-accent/20 border border-accent/10',
                   )}
                 >
                   {skill}

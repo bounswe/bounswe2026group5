@@ -1,6 +1,6 @@
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 import { useMeetingSessions } from '#/lib/queries/MentorshipQueries.ts'
-import { getInitials } from '#/lib/utils.ts'
+import { getAbsoluteMediaUrl, getInitials } from '#/lib/utils.ts'
 import { Body, Heading } from '@/components/Typography'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -80,13 +80,13 @@ function ScheduleTable({ sessions, peerLabel }: ScheduleTableProps) {
 
   return (
       <div className="overflow-x-auto border-t border-line">
-        <Table>
+        <Table aria-label="Sessions schedule">
           <TableHeader className="bg-black/2">
             <TableRow className="border-line hover:bg-transparent">
-              <TableHead className="w-37.5 font-semibold text-ink pl-6 py-4">Date</TableHead>
-              <TableHead className="w-37.5 font-semibold text-ink py-4">Time</TableHead>
-              <TableHead className="font-semibold text-ink py-4">{peerLabel}</TableHead>
-              <TableHead className="w-30 font-semibold text-ink pr-6 py-4">Status</TableHead>
+              <TableHead scope="col" className="w-37.5 font-semibold text-ink pl-6 py-4">Date</TableHead>
+              <TableHead scope="col" className="w-37.5 font-semibold text-ink py-4">Time</TableHead>
+              <TableHead scope="col" className="font-semibold text-ink py-4">{peerLabel}</TableHead>
+              <TableHead scope="col" className="w-30 font-semibold text-ink pr-6 py-4">Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -104,7 +104,7 @@ function ScheduleTable({ sessions, peerLabel }: ScheduleTableProps) {
                     <div className="flex items-center gap-2">
                       {session.peerPicture ? (
                           <img
-                              src={session.peerPicture}
+                              src={getAbsoluteMediaUrl(session.peerPicture)}
                               alt={session.peerName}
                               className="h-7 w-7 rounded-full object-cover border border-white/50 shadow-sm"
                           />
@@ -117,7 +117,7 @@ function ScheduleTable({ sessions, peerLabel }: ScheduleTableProps) {
                         <Link
                             to="/profiles/$username"
                             params={{ username: session.peerUsername }}
-                            className="text-sm font-medium hover:text-accent hover:underline underline-offset-4 transition-colors"
+                            className="text-sm font-medium hover:text-accent-aa hover:underline underline-offset-4 transition-colors"
                         >
                           {session.peerName}
                         </Link>
@@ -268,8 +268,8 @@ export function SchedulePage() {
         </div>
 
         {isLoading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-ink-soft" />
+            <div role="status" aria-label="Loading schedule" className="flex justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-ink-soft" aria-hidden="true" />
             </div>
         ) : (
             <Card className="island-shell overflow-hidden border-line flex flex-col">
@@ -281,11 +281,11 @@ export function SchedulePage() {
                     {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
                   </Heading>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="icon" onClick={prevMonth} className="h-8 w-8">
-                      <ChevronLeft className="w-4 h-4" />
+                    <Button variant="outline" size="icon" onClick={prevMonth} className="h-8 w-8" aria-label="Previous month">
+                      <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                     </Button>
-                    <Button variant="outline" size="icon" onClick={nextMonth} className="h-8 w-8">
-                      <ChevronRight className="w-4 h-4" />
+                    <Button variant="outline" size="icon" onClick={nextMonth} className="h-8 w-8" aria-label="Next month">
+                      <ChevronRight className="w-4 h-4" aria-hidden="true" />
                     </Button>
                   </div>
                 </div>
@@ -302,13 +302,13 @@ export function SchedulePage() {
                     </div>
                   </div>
                   <div className="text-xs text-ink-soft flex items-center gap-1.5 bg-black/3 px-2 py-1 rounded-md">
-                    <Globe className="w-3.5 h-3.5" /> All times in your local timezone
+                    <Globe className="w-3.5 h-3.5" aria-hidden="true" /> All times in your local timezone
                   </div>
                 </div>
 
                 <div className="grid grid-cols-7 gap-px bg-line/50 rounded-lg overflow-hidden border border-line">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                      <div key={day} className="bg-white py-2 text-center text-xs font-semibold text-ink-soft">
+                      <div key={day} className="bg-card py-2 text-center text-xs font-semibold text-ink-soft">
                         {day}
                       </div>
                   ))}
@@ -339,6 +339,8 @@ export function SchedulePage() {
                                 isCurrentMonth ? '' : 'opacity-40 bg-black/2'
                             } ${isSelected ? 'ring-2 ring-inset ring-accent bg-accent/5' : ''}`}
                             aria-pressed={isSelected}
+                            aria-label={`${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}${dayEvents.length > 0 ? `, ${dayEvents.length} session${dayEvents.length > 1 ? 's' : ''}` : ''}`}
+                            aria-current={isToday ? 'date' : undefined}
                         >
                           <div className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full mb-1 ${dayLabelClass}`}>
                             {date.getDate()}
@@ -364,7 +366,7 @@ export function SchedulePage() {
               </div>
 
               {/* List header */}
-              <div className="px-6 py-4 flex items-center justify-between bg-white border-t border-line">
+              <div className="px-6 py-4 flex items-center justify-between bg-card border-t border-line">
                 <Heading as="h4" className="text-lg">
                   {selectedDate ? `Sessions for ${formattedSelectedDate}` : 'All Sessions & Workshops'}
                 </Heading>
@@ -376,7 +378,7 @@ export function SchedulePage() {
               </div>
 
               {/* Table */}
-              <div className="bg-white">
+              <div className="bg-card">
                 <ScheduleTable
                     sessions={filteredSessions}
                     peerLabel={isMentor ? 'Student' : 'Mentor'}

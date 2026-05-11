@@ -18,6 +18,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { MediaUploadField } from '@/components/MediaUploadField'
+import { MediaAttachment } from '@/components/MediaAttachment'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
     communityDetailQueryOptions,
@@ -43,14 +44,10 @@ import { WorkshopDetailModal } from '@/components/community/WorkshopDetailModal.
 import { CreateWorkshopDialog } from '@/components/community/CreateWorkshopDialog.tsx'
 import { meQueryOptions } from '@/lib/queries/AuthQueries.ts'
 import { useMessaging } from '@/lib/queries/MessagingQueries.ts'
-import { cn } from '@/lib/utils'
+import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { PublicMentorProfile } from '@/lib/queries/DiscoverQueries.ts'
 
-function mediaFileName(url: string): string {
-    const raw = url.split('/').pop()?.split('?')[0] ?? 'media'
-    return /^[a-f0-9]{32}_/.test(raw) ? raw.slice(33) : raw
-}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -99,7 +96,7 @@ function UserAvatar({
     if (pictureUrl) {
         return (
             <img
-                src={pictureUrl}
+                src={getAbsoluteMediaUrl(pictureUrl)}
                 alt={displayName}
                 className={cn('rounded-full object-cover shrink-0 border border-line', dim)}
             />
@@ -133,21 +130,21 @@ function MemberCard({
                 <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0 text-ink-soft hover:text-accent"
+                    className="h-7 w-7 p-0 text-ink-soft hover:text-accent-aa"
                     onClick={() => onViewProfile(profile.username)}
-                    aria-label="View profile"
+                    aria-label={`View ${profile.full_name}'s profile`}
                 >
-                    <User className="h-3.5 w-3.5" />
+                    <User className="h-3.5 w-3.5" aria-hidden="true" />
                 </Button>
                 {onSendMessage && (
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 p-0 text-ink-soft hover:text-accent"
+                        className="h-7 w-7 p-0 text-ink-soft hover:text-accent-aa"
                         onClick={() => onSendMessage(profile.username)}
-                        aria-label="Send message"
+                        aria-label={`Send message to ${profile.full_name}`}
                     >
-                        <MessageSquare className="h-3.5 w-3.5" />
+                        <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
                 )}
             </div>
@@ -173,7 +170,7 @@ function CommunityPostCard({
     const { Icon, label, className } = EVENT_TYPE_META[post.event_type]
 
     return (
-        <div className="rounded-lg border border-line bg-white dark:bg-white/5 px-5 py-4 flex flex-col gap-3 hover:border-accent/40 transition-colors">
+        <div className="rounded-lg border border-line bg-card px-5 py-4 flex flex-col gap-3 hover:border-accent/40 transition-colors">
 
             {/* Header: avatar + author info + actions */}
             <div className="flex items-start justify-between gap-3">
@@ -197,10 +194,10 @@ function CommunityPostCard({
                 {isOwn && (
                     <div className="flex items-center gap-1 shrink-0">
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-ink-soft hover:text-ink" onClick={() => onEdit(post)} aria-label="Edit post">
-                            <Pencil className="w-3.5 h-3.5" />
+                            <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                         </Button>
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-ink-soft hover:text-red-500" onClick={() => onDelete(post)} aria-label="Delete post">
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                         </Button>
                     </div>
                 )}
@@ -208,7 +205,7 @@ function CommunityPostCard({
 
             {/* Event type badge */}
             <span className={`self-start inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${className}`}>
-                <Icon className="w-3 h-3" />
+                <Icon className="w-3 h-3" aria-hidden="true" />
                 {label}
             </span>
 
@@ -221,7 +218,7 @@ function CommunityPostCard({
                     with{' '}
                     {post.tagged_users.map((u, i) => (
                         <span key={u.user_id}>
-                            <Link to="/profiles/$username" params={{ username: u.username }} className="text-accent hover:underline">
+                            <Link to="/profiles/$username" params={{ username: u.username }} className="text-accent-aa hover:underline">
                                 @{u.username}
                             </Link>
                             {i < post.tagged_users.length - 1 && ', '}
@@ -230,11 +227,7 @@ function CommunityPostCard({
                 </Muted>
             )}
 
-            {post.media_url && (
-                <a href={post.media_url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent underline truncate">
-                    {mediaFileName(post.media_url)}
-                </a>
-            )}
+            {post.media_url && <MediaAttachment url={post.media_url} />}
         </div>
     )
 }
@@ -364,7 +357,7 @@ function CreatePostDialog({
                         <Checkbox checked={form.show_on_profile} onCheckedChange={(v) => setForm((f) => ({ ...f, show_on_profile: Boolean(v) }))} />
                         Share to my profile
                     </label>
-                    <DialogFooter className="mt-2">
+                    <DialogFooter className="mt-2 border-line border-t">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                         <Button type="submit" disabled={!form.content.trim() || createMutation.isPending} className="bg-accent hover:bg-accent/90 text-white">
                             {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Publish'}
@@ -595,7 +588,7 @@ export function CommunityDetailPage() {
         hasNextPage,
         isFetchingNextPage,
         fetchNextPage,
-    } = useInfiniteCommunityPosts(community?.is_member ? community.id : '')
+    } = useInfiniteCommunityPosts(community?.id ?? '')
 
     const joinMutation = useJoinCommunityMutation()
     const leaveMutation = useLeaveCommunityMutation()
@@ -645,7 +638,7 @@ export function CommunityDetailPage() {
         return (
             <div className="page-wrap py-24 text-center">
                 <p className="text-ink-soft text-lg">Community not found.</p>
-                <Link to="/communities" className="text-accent hover:underline text-sm mt-2 block">← Back to Communities</Link>
+                <Link to="/communities" className="text-accent-aa hover:underline text-sm mt-2 block">← Back to Communities</Link>
             </div>
         )
     }
@@ -659,7 +652,7 @@ export function CommunityDetailPage() {
             {/* ── Back link ───────────────────────────────────────────────── */}
             <div className="px-4 sm:px-6">
                 <Link to="/communities" className="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink transition-colors">
-                    <ChevronLeft className="h-4 w-4" />
+                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                     Communities
                 </Link>
             </div>
@@ -715,13 +708,13 @@ export function CommunityDetailPage() {
                                     {community.created_by_username && (
                                         <Muted className="text-sm">
                                             Created by{' '}
-                                            <Link to="/profiles/$username" params={{ username: community.created_by_username }} className="text-accent hover:underline">
+                                            <Link to="/profiles/$username" params={{ username: community.created_by_username }} className="text-accent-aa hover:underline">
                                                 @{community.created_by_username}
                                             </Link>
                                         </Muted>
                                     )}
                                     <p className="flex items-center gap-1.5 text-ink-soft text-sm">
-                                        <Users className="h-3.5 w-3.5" />
+                                        <Users className="h-3.5 w-3.5" aria-hidden="true" />
                                         {community.member_count.toLocaleString()} member{community.member_count !== 1 ? 's' : ''}
                                     </p>
                                 </div>
@@ -738,7 +731,7 @@ export function CommunityDetailPage() {
                                     <div>
                                         {isCreator && (
                                             <button onClick={() => setShowEditModal(true)} className="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink hover:bg-accent-muted/60 transition-colors px-2 py-1.5 rounded-md">
-                                                <Pencil className="h-3.5 w-3.5" />
+                                                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                                                 Edit Description
                                             </button>
                                         )}
@@ -759,61 +752,59 @@ export function CommunityDetailPage() {
 
                     {/* Feed */}
                     <div className="flex flex-col gap-4">
-                        {!isMember ? (
-                            <div className="island-shell rounded-xl p-12 text-center flex flex-col items-center gap-3 shadow-sm opacity-60">
-                                <Lock className="h-8 w-8 text-ink-soft" />
-                                <p className="text-ink font-semibold">Members only</p>
-                                <Muted className="text-sm">Join this community to access the feed.</Muted>
-                            </div>
-                        ) : (
-                            <>
+                        <>
+                            {isMember && (
                                 <div className="flex justify-end">
-                                    <Button onClick={() => setCreateOpen(true)} className="rounded-full bg-accent hover:bg-accent/90 text-white gap-2" size="sm">
-                                        <Plus className="w-4 h-4" />
+                                    <Button onClick={() => setCreateOpen(true)} className="rounded-full bg-accent hover:bg-accent-light text-white gap-2" size="sm">
+                                        <Plus className="w-4 h-4" aria-hidden="true" />
                                         New Post
                                     </Button>
                                 </div>
+                            )}
 
-                                {postsLoading ? (
-                                    <div className="flex justify-center py-12">
-                                        <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
+                            {postsLoading ? (
+                                <div className="flex justify-center py-12" role="status" aria-label="Loading posts">
+                                    <Loader2 className="h-5 w-5 animate-spin text-ink-soft" aria-hidden="true" />
+                                </div>
+                            ) : posts.length === 0 ? (
+                                <div className="island-shell rounded-xl p-12 text-center flex flex-col items-center gap-3 shadow-sm">
+                                    <p className="text-ink font-semibold">No posts yet.</p>
+                                    <Muted className="text-sm max-w-sm">
+                                        {isMember
+                                            ? 'Be the first to share something with this community.'
+                                            : 'Join this community to be the first to post.'}
+                                    </Muted>
+                                </div>
+                            ) : (
+                                <div className="island-shell rounded-xl overflow-hidden">
+                                    <div className="px-6 py-4 border-b border-line flex items-center justify-between">
+                                        <span className="text-sm font-semibold text-ink">Posts</span>
+                                        <span className="text-xs text-ink-soft">{totalPosts} total</span>
                                     </div>
-                                ) : posts.length === 0 ? (
-                                    <div className="island-shell rounded-xl p-12 text-center flex flex-col items-center gap-3 shadow-sm">
-                                        <p className="text-ink font-semibold">No posts yet.</p>
-                                        <Muted className="text-sm max-w-sm">Be the first to share something with this community.</Muted>
+                                    <div className="flex flex-col gap-3 p-4">
+                                        {posts.map((post) => (
+                                            <CommunityPostCard
+                                                key={post.id}
+                                                post={post}
+                                                isOwn={me?.username === post.author.username}
+                                                onEdit={setEditPost}
+                                                onDelete={setDeletePost}
+                                            />
+                                        ))}
                                     </div>
-                                ) : (
-                                    <div className="island-shell rounded-xl overflow-hidden">
-                                        <div className="px-6 py-4 border-b border-line flex items-center justify-between">
-                                            <span className="text-sm font-semibold text-ink">Posts</span>
-                                            <span className="text-xs text-ink-soft">{totalPosts} total</span>
-                                        </div>
-                                        <div className="flex flex-col gap-3 p-4">
-                                            {posts.map((post) => (
-                                                <CommunityPostCard
-                                                    key={post.id}
-                                                    post={post}
-                                                    isOwn={me?.username === post.author.username}
-                                                    onEdit={setEditPost}
-                                                    onDelete={setDeletePost}
-                                                />
-                                            ))}
-                                        </div>
-                                        <div className="px-4 pb-4 flex flex-col items-center gap-2">
-                                            <Muted className="text-xs">{posts.length} of {totalPosts} posts</Muted>
-                                            {hasNextPage && (
-                                                <Button variant="outline" size="sm" disabled={isFetchingNextPage} onClick={() => fetchNextPage()}>
-                                                    {isFetchingNextPage
-                                                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> Loading…</>
-                                                        : 'Load more'}
-                                                </Button>
-                                            )}
-                                        </div>
+                                    <div className="px-4 pb-4 flex flex-col items-center gap-2">
+                                        <Muted className="text-xs">{posts.length} of {totalPosts} posts</Muted>
+                                        {hasNextPage && (
+                                            <Button variant="outline" size="sm" disabled={isFetchingNextPage} onClick={() => fetchNextPage()}>
+                                                {isFetchingNextPage
+                                                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1" aria-hidden="true" /> Loading…</>
+                                                    : 'Load more'}
+                                            </Button>
+                                        )}
                                     </div>
-                                )}
-                            </>
-                        )}
+                                </div>
+                            )}
+                        </>
                     </div>
 
                     {/* Workshops section — visible to everyone */}

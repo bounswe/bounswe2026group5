@@ -9,10 +9,11 @@ import {
     type Message,
 } from '#/lib/queries/MessagingQueries.ts'
 import { useMarkAllNotificationsRead, useNotifications } from '#/lib/queries/NotificationQueries.ts'
-import { cn, getInitials } from '#/lib/utils.ts'
+import { cn, getAbsoluteMediaUrl, getInitials } from '#/lib/utils.ts'
+import { MediaAttachment } from '@/components/MediaAttachment'
 import { Button } from '@/components/ui/button'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { Check, CheckCheck, Loader2, MessageSquare, Paperclip, Send, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
 
@@ -126,21 +127,34 @@ function ConversationItem({
             ? conversation.mentee
             : conversation.mentor
 
+    const updatedAt = new Date(conversation.updated_at)
+    const now = new Date()
+    const isToday = updatedAt.toDateString() === now.toDateString()
+    const timeLabel = isToday
+        ? updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : updatedAt.toLocaleDateString([], { month: 'short', day: 'numeric' })
+
     return (
         <button
             onClick={onSelect}
             className={cn(
-                'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent-muted/60',
-                isSelected && 'bg-accent-muted',
+                'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent-muted/60 border-l-2',
+                isSelected ? 'bg-accent-muted border-l-accent' : 'border-l-transparent',
             )}
         >
             <Avatar name={other.display_name} pictureUrl={other.picture_url} size="md" />
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-ink truncate">{other.display_name}</p>
+                <div className="flex items-center justify-between gap-1">
+                    <p className={cn('text-sm truncate', isSelected ? 'font-semibold text-ink' : 'font-medium text-ink')}>{other.display_name}</p>
+                    <time className="text-[10px] text-ink-soft shrink-0">{timeLabel}</time>
+                </div>
                 <p className="text-xs text-ink-soft truncate">@{other.username}</p>
             </div>
             {conversation.unread_count > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white shadow-sm">
+                <span
+                    className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white shadow-sm"
+                    aria-label={`${conversation.unread_count} unread messages`}
+                >
                     {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
                 </span>
             )}
@@ -167,6 +181,11 @@ function MessageThread({ conversationId }: { readonly conversationId: string | n
 
 function Thread({ conversationId }: { readonly conversationId: string }) {
     const { data: me } = useQuery(meQueryOptions)
+    const { data: conversations = [] } = useConversations()
+    const conversation = conversations.find(c => c.id === conversationId)
+    const other = conversation
+        ? (conversation.mentor.username === me?.username ? conversation.mentee : conversation.mentor)
+        : null
     const { data: messages = [], isLoading, loadMore, hasMore } = useMessages(conversationId)
     const { mutate: markRead } = useMarkRead(conversationId)
     const sendMessage = useSendMessage(conversationId)
@@ -242,8 +261,25 @@ function Thread({ conversationId }: { readonly conversationId: string }) {
 
     return (
         <div className="flex-1 flex flex-col min-w-0">
+            {/* Thread header */}
+            {other && (
+                <div className="shrink-0 flex items-center gap-3 px-5 py-3 border-b border-line">
+                    <Avatar name={other.display_name} pictureUrl={other.picture_url} size="md" />
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-ink truncate">{other.display_name}</p>
+                        <p className="text-xs text-ink-soft truncate">@{other.username}</p>
+                    </div>
+                    <Link
+                        to="/profiles/$username"
+                        params={{ username: other.username }}
+                        className="text-xs text-accent-aa hover:underline shrink-0"
+                    >
+                        View profile
+                    </Link>
+                </div>
+            )}
             {/* Messages */}
-            <div 
+            <div
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
                 className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3"
@@ -365,18 +401,18 @@ function MessageBubble({
     const getStatusIcon = () => {
         const status = message.status_for_me
         if (status === 'read') {
-            return <CheckCheck className="h-3 w-3 text-white/80" />
+            return <CheckCheck className="h-3 w-3 text-white" aria-hidden="true" />
         }
         if (status === 'delivered') {
-            return <CheckCheck className="h-3 w-3 text-white/80" />
+            return <CheckCheck className="h-3 w-3 text-white/70" aria-hidden="true" />
         }
-        if (status === 'sent' || status === 'sending') {
-            return <Check className="h-3 w-3 text-white/60" />
+        if (status === 'sent' || (status as unknown as string) === 'sending') {
+            return <Check className="h-3 w-3 text-white/50" aria-hidden="true" />
         }
         return null
     }
 
-    const isSending = message.status_for_me === 'sending'
+    const isSending = (message.status_for_me as unknown as string) === 'sending'
 
     return (
         <div className={cn('flex items-end gap-2 group', isMe && 'flex-row-reverse')}>
@@ -398,17 +434,14 @@ function MessageBubble({
             >
                 <p className="whitespace-pre-wrap wrap-break-word">{message.body}</p>
                 {message.attachment_url && (
-                    <a
-                        href={message.attachment_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block mt-1 underline text-xs opacity-80"
-                    >
-                        Attachment
-                    </a>
+                    <MediaAttachment
+                        url={message.attachment_url}
+                        imgClassName="mt-1 max-h-48 w-full rounded-lg border-0 object-contain"
+                        linkClassName="mt-1 block underline text-xs opacity-80 text-inherit"
+                    />
                 )}
                 <div className={cn('flex items-center gap-1 text-[10px] mt-1', isMe ? 'justify-end' : 'justify-start')}>
-                    <time className="opacity-80">
+                    <time>
                         {new Date(message.created_at).toLocaleTimeString([], {
                             hour: '2-digit',
                             minute: '2-digit',
@@ -445,7 +478,7 @@ function Avatar({
     if (pictureUrl) {
         return (
             <img
-                src={pictureUrl}
+                src={getAbsoluteMediaUrl(pictureUrl)}
                 alt={name}
                 className={cn('rounded-full object-cover shrink-0', dim)}
             />

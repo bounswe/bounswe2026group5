@@ -1,5 +1,7 @@
 import { Image, Text, View } from "react-native";
 
+import { getAbsoluteImageUrl } from "@/lib/api/config";
+
 export type AvatarShape = "circle" | "rounded";
 export type AvatarSize = "sm" | "md" | "lg" | "xl";
 
@@ -51,7 +53,7 @@ export function UserAvatar({
     return (
       <Image
         testID={`${testIDPrefix}-image`}
-        source={{ uri: imageUrl }}
+        source={{ uri: getAbsoluteImageUrl(imageUrl) }}
         className={`${sizeClass} ${shapeClass} bg-surface-active dark:bg-surface-active-dark`}
         resizeMode="cover"
       />

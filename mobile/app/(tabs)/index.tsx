@@ -20,11 +20,9 @@ import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { SuccessCard } from "@/components/ui/SuccessCard";
 import { useToast } from "@/components/ui/ToastProvider";
 
 import { useAuthStore } from "@/lib/auth/store";
-import { useAutoClearMessage } from "@/hooks/use-auto-clear-message";
 import { useRefreshControl } from "@/hooks/use-refresh-control";
 import {
   MENTOR_MENTEE_CAPACITY_WARNING,
@@ -44,6 +42,11 @@ import {
   type DashboardRequestItem,
   type DashboardSessionItem,
 } from "@/lib/queries/mentorship";
+import {
+  mapWorkshopAttendanceToDashboard,
+  useMyWorkshopAttendanceQuery,
+  type WorkshopDashboardItem,
+} from "@/lib/queries/workshops";
 
 function mapDashboardRequestToCardProps(
   request: DashboardRequestItem,
@@ -80,6 +83,9 @@ export default function DashboardScreen() {
     currentUsername,
     { status: "upcoming" },
   );
+  const workshopAttendanceQuery = useMyWorkshopAttendanceQuery(currentUsername, {
+    status: "attending",
+  });
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const respondMutation = useRespondToMentorshipRequestMutation();
   const cancelSessionMutation = useCancelSessionMutation(currentUsername);
@@ -99,6 +105,35 @@ export default function DashboardScreen() {
     () => mapMeetingSessionsToDashboard(meetingSessionsQuery.data ?? []),
     [meetingSessionsQuery.data],
   );
+  const workshops = useMemo(
+    () =>
+      mapWorkshopAttendanceToDashboard(
+        workshopAttendanceQuery.data?.results ?? [],
+        currentUsername,
+      ).filter(
+        (workshop) =>
+          workshop.workshopStatus === "SCHEDULED" &&
+          workshop.status === "Upcoming",
+      ),
+    [currentUsername, workshopAttendanceQuery.data?.results],
+  );
+  const sessionItems = useMemo(
+    () =>
+      [
+        ...sessions.map((session) => ({
+          kind: "session" as const,
+          ...session,
+        })),
+        ...workshops.map((workshop) => ({
+          kind: "workshop" as const,
+          ...workshop,
+        })),
+      ].sort(
+        (left, right) =>
+          new Date(left.rawDate).getTime() - new Date(right.rawDate).getTime(),
+      ),
+    [sessions, workshops],
+  );
   const activeMenteeCount = useMemo(() => {
     if (appUsageMode !== "MENTOR") {
       return 0;
@@ -115,6 +150,8 @@ export default function DashboardScreen() {
   const queryError =
     (requestsQuery.isError && "Failed to load mentorship requests.") ||
     (meetingSessionsQuery.isError && "Failed to load upcoming sessions.") ||
+    (workshopAttendanceQuery.isError &&
+      "Failed to load your upcoming workshops.") ||
     null;
 
   // State for Modals
@@ -124,8 +161,6 @@ export default function DashboardScreen() {
     useState<DashboardSessionItem | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  useAutoClearMessage(successMessage, setSuccessMessage);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
@@ -150,7 +185,6 @@ export default function DashboardScreen() {
 
     try {
       setActionError(null);
-      setSuccessMessage(null);
       await respondMutation.mutateAsync({
         requestId,
         action,
@@ -158,7 +192,7 @@ export default function DashboardScreen() {
       setSelectedRequest(null);
       requestsQuery.refetch();
       meetingSessionsQuery.refetch();
-      setSuccessMessage(
+      toast.success(
         action === "accept"
           ? "Request accepted successfully."
           : "Request rejected successfully.",
@@ -180,6 +214,12 @@ export default function DashboardScreen() {
     router.push(`/user/${encodeURIComponent(targetUsername)}`);
   };
 
+  const openWorkshop = (workshop: WorkshopDashboardItem) => {
+    router.push(
+      `/(tabs)/community/${encodeURIComponent(workshop.communityId)}/workshops/${encodeURIComponent(workshop.workshopId)}?from=dashboard`,
+    );
+  };
+
   const handleRequestCardAccept = (cardProps: PendingRequestCardProps) => {
     if (
       cardProps.requestType !== "outgoing" &&
@@ -196,9 +236,8 @@ export default function DashboardScreen() {
   const handleResendVerification = async () => {
     try {
       setActionError(null);
-      setSuccessMessage(null);
       const response = await resendVerificationMutation.mutateAsync();
-      setSuccessMessage(response.detail);
+      toast.success(response.detail);
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -215,7 +254,6 @@ export default function DashboardScreen() {
 
     try {
       setActionError(null);
-      setSuccessMessage(null);
       await cancelSessionMutation.mutateAsync(selectedSession.sessionId);
       setSelectedSession(null);
       toast.success("The session was cancelled.");
@@ -244,7 +282,6 @@ export default function DashboardScreen() {
     setRescheduleSessionId(selectedSession.sessionId);
     setRescheduleSessionMentorUsername(selectedMentorUsername);
     setRescheduleCurrentSlotId(selectedSession.id);
-    setSuccessMessage(null);
     setShowRescheduleSheet(true);
   };
 
@@ -252,9 +289,10 @@ export default function DashboardScreen() {
     await Promise.all([
       requestsQuery.refetch(),
       meetingSessionsQuery.refetch(),
+      workshopAttendanceQuery.refetch(),
       matchesQuery.refetch(),
     ]);
-  }, [matchesQuery, meetingSessionsQuery, requestsQuery]);
+  }, [matchesQuery, meetingSessionsQuery, requestsQuery, workshopAttendanceQuery]);
 
   const { refreshing, onRefresh } = useRefreshControl(refreshDashboard);
 
@@ -310,12 +348,6 @@ export default function DashboardScreen() {
                   : "Resend Verification Email"}
               </Text>
             </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {successMessage ? (
-          <View className="mb-4">
-            <SuccessCard message={successMessage} />
           </View>
         ) : null}
 
@@ -376,26 +408,40 @@ export default function DashboardScreen() {
             </Text>
             <TouchableOpacity onPress={() => router.push("/(tabs)/schedule")}>
               <Text className="text-primary dark:text-primary-dim font-semibold text-sm">
-                View All {sessions.length > 0 ? `(${sessions.length})` : ""}
+                View All {sessionItems.length > 0 ? `(${sessionItems.length})` : ""}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {sessions.length === 0 ? (
+          {sessionItems.length === 0 ? (
             <View className="bg-surface-card dark:bg-surface-card-dark p-4 rounded-xl border border-divider dark:border-divider-dark">
               <Text className="text-on-surface-soft dark:text-on-surface-soft-dark font-medium">
-                No upcoming sessions yet.
+                No upcoming sessions or workshops yet.
               </Text>
             </View>
           ) : (
-            sessions.map((session) => (
+            sessionItems.map((session) => (
               <SessionCard
                 key={session.id}
                 user={session.user}
                 date={session.date}
                 time={session.time}
                 status={session.status}
-                onPress={() => setSelectedSession(session)}
+                title={
+                  session.kind === "workshop" ? session.topic : undefined
+                }
+                subtitle={
+                  session.kind === "workshop" ? session.communityName : undefined
+                }
+                kindLabel={session.kind === "workshop" ? "Workshop" : undefined}
+                onPress={() => {
+                  if (session.kind === "workshop") {
+                    openWorkshop(session);
+                    return;
+                  }
+
+                  setSelectedSession(session);
+                }}
               />
             ))
           )}

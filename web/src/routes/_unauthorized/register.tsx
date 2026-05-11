@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label"
 import { useGoogleLogin } from '@react-oauth/google'
 import { useMutation } from "@tanstack/react-query"
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
-import { Mail, User } from 'lucide-react'
+import { Mail } from 'lucide-react'
 import { useState } from 'react'
 import { z } from 'zod'
 
@@ -124,31 +124,32 @@ export function RegisterPage() {
     return (
         <div className="grid min-h-screen lg:grid-cols-[5fr_4fr]">
             {/* Left Column: Editorial Content */}
-            <aside className="lg:flex flex-col px-14 py-12 bg-petal border-r border-line relative overflow-hidden">
+            <aside aria-hidden="true" className="hidden lg:flex flex-col px-14 py-12 bg-petal border-r border-line relative overflow-hidden">
                 <Display className="mb-10 relative z-10">Neighborship</Display>
 
                 <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4 relative z-10 rise-in">
-                    <Body className="island-kicker">Academic Editorial Excellence</Body>
-                    <Display as="h2" className="leading-[1.2] max-w-md">
-                        Join our community of academic excellence
+                    <Body className="island-kicker">Join the community</Body>
+                    <Display as="h2" className="leading-[1.2] max-w-xs">
+                        Your next mentor is already here.
                     </Display>
-                    <Body className="text-(--color-brand-ink-soft) max-w-md">
-                        Connect with top-tier tutors and fellow scholars. Refine your research,
-                        master your curriculum, and achieve editorial-grade perfection in your academic work.
+                    <Body className="text-ink-soft max-w-sm">
+                        No cold emails, no guesswork. Create your profile, find someone further
+                        down the road, and start the conversation that changes your trajectory.
                     </Body>
 
                     {/* Avatar Group */}
                     <div className="flex items-center gap-4 pt-4">
                         <div className="flex -space-x-3">
-                            <div className="w-12 h-12 rounded-full border-2 border-background bg-primary/20 flex items-center justify-center overflow-hidden">
-                                <User className="w-6 h-6 text-primary" />
-                            </div>
-                            <div className="w-12 h-12 rounded-full border-2 border-background bg-primary/20 flex items-center justify-center overflow-hidden">
-                                <User className="w-6 h-6 text-primary" />
-                            </div>
-                            <div className="w-12 h-12 rounded-full border-2 border-background bg-accent/20 flex items-center justify-center overflow-hidden">
-                                <User className="w-6 h-6 text-accent" />
-                            </div>
+                            {[
+                                { initials: 'AK', bg: 'bg-accent/20',   text: 'text-accent'   },
+                                { initials: 'MJ', bg: 'bg-primary/15',  text: 'text-primary'  },
+                                { initials: 'SR', bg: 'bg-accent/30',   text: 'text-accent'   },
+                                { initials: 'TL', bg: 'bg-primary/20',  text: 'text-primary'  },
+                            ].map(({ initials, bg, text }) => (
+                                <div key={initials} className={`w-10 h-10 rounded-full border-2 border-petal ${bg} flex items-center justify-center overflow-hidden shrink-0`}>
+                                    <span className={`text-xs font-bold ${text}`}>{initials}</span>
+                                </div>
+                            ))}
                         </div>
                         <span className="text-sm text-ink-soft font-medium">Join 2,000+ scholars</span>
                     </div>
@@ -164,8 +165,8 @@ export function RegisterPage() {
                 <div className="w-full max-w-md rise-in">
 
                     <div className="text-center md:text-left mb-10">
-                        <Heading as="h2" className="mb-2">Create your account</Heading>
-                        <Body className="text-muted-foreground">Enter your details to begin your academic journey.</Body>
+                        <Heading as="h1" className="mb-2">Create your account</Heading>
+                        <Muted className="mt-1 text-ink-soft">Free to join. Free to discover. Takes under a minute.</Muted>
                     </div>
 
                     <Card className="w-full island-shell border-line">
@@ -186,9 +187,10 @@ export function RegisterPage() {
                                             value={formData.email}
                                             onChange={(e) => handleChange('email', e.target.value)}
                                             aria-invalid={!!errors.email}
-                                            className="w-full px-4 py-3 rounded-xl"
+                                            autoComplete="email"
+                                            className="w-full px-4 py-3 pr-10 rounded-xl"
                                         />
-                                        <Mail className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                        <Mail aria-hidden="true" className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                     </div>
                                     {errors.email && (
                                         <p className="text-xs text-destructive ml-1">{errors.email}</p>
@@ -205,6 +207,7 @@ export function RegisterPage() {
                                             value={formData.password}
                                             onChange={(e) => handleChange('password', e.target.value)}
                                             aria-invalid={!!errors.password}
+                                            autoComplete="new-password"
                                             className="w-full px-4 py-3 rounded-xl"
                                         />
                                         {errors.password && (
@@ -221,6 +224,7 @@ export function RegisterPage() {
                                             value={formData.confirmPassword}
                                             onChange={(e) => handleChange('confirmPassword', e.target.value)}
                                             aria-invalid={!!errors.confirmPassword}
+                                            autoComplete="new-password"
                                             className="w-full px-4 py-3 rounded-xl"
                                         />
                                         {errors.confirmPassword && (
@@ -299,17 +303,15 @@ export function RegisterPage() {
                                 {googleLogin.isPending ? 'Logging in...' : 'Sign up with Google'}
                             </Button>
 
-                            <div className="mt-2 pt-2 border-t border-border/10 text-center w-full">
-                                <p className="text-primary/70">
-                                    Already have an account?{" "}
-                                    <Link
-                                        to="/login"
-                                        className="font-bold text-primary hover:underline underline-offset-4 transition-all"
-                                    >
-                                        Log in
-                                    </Link>
-                                </p>
-                            </div>
+                            <Muted className="text-xs text-center w-full">
+                                Already have an account?{' '}
+                                <Link
+                                    to="/login"
+                                    className="font-medium text-accent-aa underline-offset-4 hover:underline hover:text-accent transition-colors"
+                                >
+                                    Log in
+                                </Link>
+                            </Muted>
                         </CardFooter>
                     </Card>
                 </div>

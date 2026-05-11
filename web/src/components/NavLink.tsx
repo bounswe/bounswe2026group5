@@ -10,13 +10,12 @@ export function NavLink({ className, ...props }: NavLinkProps) {
     return (
         <Link
             className={cn(
-                'text-sm text-brand-ink-soft hover:text-brand-ink transition-colors',
+                'text-sm text-ink-soft hover:text-ink transition-colors',
                 className
             )}
             activeProps={{
                 className: cn(
-                    'hover:text-ink) transition-colors',
-                    'text-kicker',
+                    'text-ink font-semibold',
                     className
                 )
             }}

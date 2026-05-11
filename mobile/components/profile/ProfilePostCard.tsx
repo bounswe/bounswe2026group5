@@ -2,10 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { type Href, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Image, Linking, Text, TouchableOpacity, View } from "react-native";
-import { getAbsoluteUrl } from "@/lib/api/config";
+import { getAbsoluteImageUrl, getAbsoluteUrl } from "@/lib/api/config";
 
 import { BasicFormattedText } from "@/components/ui/BasicFormattedText";
 import { FocusedImageModal } from "@/components/ui/FocusedImageModal";
+import { useAuthStore } from "@/lib/auth/store";
+import { useAvatarVersionStore } from "@/lib/profile/avatarVersion";
 import type { ProfilePost } from "@/lib/queries/profile";
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
@@ -113,6 +115,10 @@ export function ProfilePostCard({
   onEdit,
 }: Readonly<ProfilePostCardProps>) {
   const router = useRouter();
+  const currentUsername = useAuthStore((state) => state.user?.username);
+  const currentUserAvatarVersion = useAvatarVersionStore((state) =>
+    currentUsername ? state.versions[currentUsername] : undefined,
+  );
   const label = EVENT_TYPE_LABELS[post.event_type] ?? post.event_type;
   const dateLabel = formatPostTimestamp(post.timestamp);
   const effectiveCommunityLabel = communityLabel ?? post.community_name ?? null;
@@ -124,6 +130,10 @@ export function ProfilePostCard({
   const hasImageMedia = post.media_url ? isImageMediaUrl(post.media_url) : false;
   const unmentionedTaggedUsers = getUnmentionedTaggedUsers(post);
   const [focusedImageUrl, setFocusedImageUrl] = useState<string | null>(null);
+  const avatarCacheKey =
+    currentUsername && post.author?.username === currentUsername
+      ? currentUserAvatarVersion
+      : undefined;
   const openUserProfile = (username: string) => {
     const encodedUsername = encodeURIComponent(username);
     const route = mentionSourceCommunityId
@@ -143,7 +153,12 @@ export function ProfilePostCard({
           {post.author?.picture_url ? (
             <Image
               testID={`post-card-avatar-${post.id}`}
-              source={{ uri: getAbsoluteUrl(post.author.picture_url) }}
+              source={{
+                uri: getAbsoluteImageUrl(
+                  post.author.picture_url,
+                  avatarCacheKey,
+                ),
+              }}
               className="h-10 w-10 rounded-full bg-surface-active dark:bg-surface-active-dark"
               resizeMode="cover"
             />

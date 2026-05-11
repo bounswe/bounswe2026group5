@@ -8,6 +8,7 @@ const mockInvalidateQueries = jest.fn();
 const mockRespondMutateAsync = jest.fn();
 const mockDeactivateMutateAsync = jest.fn();
 const mockSubmitFeedbackMutateAsync = jest.fn();
+const mockToastSuccess = jest.fn();
 
 let mockUser = { username: "mentor_user", app_usage_mode: "MENTOR" };
 let mockRequests: any[] = [];
@@ -43,11 +44,10 @@ jest.mock("@/components/ui/ErrorBanner", () => ({
   },
 }));
 
-jest.mock("@/components/ui/SuccessCard", () => ({
-  SuccessCard: ({ message }: { message: string }) => {
-    const { Text } = jest.requireActual("react-native");
-    return <Text>{message}</Text>;
-  },
+jest.mock("@/components/ui/ToastProvider", () => ({
+  useToast: () => ({
+    success: mockToastSuccess,
+  }),
 }));
 
 jest.mock("@/components/connections/PendingRequestCard", () => ({
@@ -481,7 +481,7 @@ describe("ConnectionsScreen", () => {
       },
     ];
 
-    const { getByTestId, findByText, queryByTestId } = render(<ConnectionsScreen />);
+    const { getByTestId, queryByTestId, queryByText } = render(<ConnectionsScreen />);
 
     fireEvent.press(getByTestId("card-message-Ada Mentee"));
     expect(mockPush).toHaveBeenCalledWith("/messages/conv-1");
@@ -500,7 +500,8 @@ describe("ConnectionsScreen", () => {
       expect(mockDeactivateMutateAsync).toHaveBeenCalledWith("match-1");
       expect(mockDeactivateMutateAsync).toHaveBeenCalledWith("match-2");
     });
-    expect(await findByText("Ada Mentee has been removed.")).toBeTruthy();
+    expect(mockToastSuccess).toHaveBeenCalledWith("Ada Mentee has been removed.");
+    expect(queryByText("Ada Mentee has been removed.")).toBeNull();
   });
 
   it("opens a single mentor-side match journey directly", () => {
@@ -692,7 +693,7 @@ describe("ConnectionsScreen", () => {
       },
     ];
 
-    const { getByTestId, findByText } = render(<ConnectionsScreen />);
+    const { getByTestId, queryByText } = render(<ConnectionsScreen />);
 
     fireEvent.press(getByTestId("card-more-Mentor User"));
     fireEvent.press(getByTestId("action-remove"));
@@ -700,7 +701,8 @@ describe("ConnectionsScreen", () => {
     await waitFor(() => {
       expect(mockDeactivateMutateAsync).toHaveBeenCalledWith("match-1");
     });
-    expect(await findByText("Mentor User has been removed.")).toBeTruthy();
+    expect(mockToastSuccess).toHaveBeenCalledWith("Mentor User has been removed.");
+    expect(queryByText("Mentor User has been removed.")).toBeNull();
   });
 
   it("submits and reports mentee feedback failures", async () => {

@@ -24,6 +24,7 @@ import { ProfilePostComposer } from "@/components/profile/ProfilePostComposer";
 import { ProfilePostEditSheet } from "@/components/profile/ProfilePostEditSheet";
 import { ProfilePostsPreview } from "@/components/profile/ProfilePostsPreview";
 import { ProfileReviews } from "@/components/profile/ProfileReviews";
+import { ProfileWorkshopCard } from "@/components/profile/ProfileWorkshopCard";
 import { SkillsCloud } from "@/components/profile/SkillsCloud";
 import { ViewAllSkillsModal } from "@/components/profile/ViewAllSkillsModal";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -31,6 +32,7 @@ import { useRefreshControl } from "@/hooks/use-refresh-control";
 
 import { API_BASE_URL } from "@/constants/api";
 import { useAuthStore } from "@/lib/auth/store";
+import { useAvatarVersionStore } from "@/lib/profile/avatarVersion";
 import { useProfileVisibilityStore } from "@/lib/profile/preferences";
 import {
   useDeleteCommunityPostMutation,
@@ -58,8 +60,12 @@ import {
   useUpdateOwnProfileMutation,
 } from "@/lib/queries/profile";
 import {
-  deleteProfilePicture,
-  uploadProfilePicture,
+  mapWorkshopAttendanceToDashboard,
+  useMyWorkshopAttendanceQuery,
+} from "@/lib/queries/workshops";
+import {
+  useDeleteProfilePictureMutation,
+  useUploadProfilePictureMutation,
 } from "@/lib/queries/uploads";
 
 const PROFILE_DEFAULTS = {
@@ -222,6 +228,47 @@ function renderPostsSection({
   );
 }
 
+function renderMyWorkshopsSection({
+  workshops,
+  onOpenWorkshop,
+}: {
+  workshops: ReturnType<typeof mapWorkshopAttendanceToDashboard>;
+  onOpenWorkshop: (
+    workshop: ReturnType<typeof mapWorkshopAttendanceToDashboard>[number],
+  ) => void;
+}) {
+  if (workshops.length === 0) {
+    return null;
+  }
+
+  return (
+    <View className="mb-6 rounded-2xl border border-divider dark:border-divider-dark bg-surface-card dark:bg-surface-card-dark p-4">
+      <View className="mb-3 flex-row items-center justify-between">
+        <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
+          My Workshops
+        </Text>
+        <Text className="text-xs font-semibold text-on-surface-soft dark:text-on-surface-soft-dark">
+          Hosted workshops
+        </Text>
+      </View>
+      <ScrollView
+        horizontal
+        testID="profile-workshops-rail"
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingRight: 16 }}
+      >
+        {workshops.map((workshop) => (
+          <ProfileWorkshopCard
+            key={workshop.workshopId}
+            workshop={workshop}
+            onPress={onOpenWorkshop}
+          />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
 function renderAvailabilitySection({
   isMentorMode,
   showAvailability,
@@ -302,6 +349,10 @@ export default function ProfileScreen() {
   const authUser = useAuthStore((state) => state.user);
   const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
   const currentUsername = useAuthStore((state) => state.user?.username);
+  const bumpAvatarVersion = useAvatarVersionStore((state) => state.bump);
+  const currentUserAvatarVersion = useAvatarVersionStore((state) =>
+    currentUsername ? state.versions[currentUsername] : undefined,
+  );
   const availabilityQuery = useAvailabilitySlotsQuery(currentUsername || "");
   const mentorshipMatchesQuery = useMentorshipMatchesQuery(
     currentUsername || "",
@@ -310,6 +361,10 @@ export default function ProfileScreen() {
     currentUsername || "",
   );
   const updateProfileMutation = useUpdateOwnProfileMutation();
+  const uploadProfilePictureMutation =
+    useUploadProfilePictureMutation(currentUsername);
+  const deleteProfilePictureMutation =
+    useDeleteProfilePictureMutation(currentUsername);
   const createProfilePostMutation =
     useCreateProfilePostMutation(currentUsername);
   const updateProfilePostMutation =
@@ -322,6 +377,10 @@ export default function ProfileScreen() {
     useDeleteCommunityPostMutation(currentUsername);
   const profileRatingQuery = useProfileRatingQuery(currentUsername);
   const myCommunitiesQuery = useMyCommunityTagsQuery(currentUsername);
+  const myWorkshopAttendanceQuery = useMyWorkshopAttendanceQuery(
+    currentUsername,
+    { status: "all", limit: 50 },
+  );
 
   const showExpertise = useProfileVisibilityStore(
     (state) => state.showExpertise,
@@ -517,6 +576,14 @@ export default function ProfileScreen() {
       ) as Record<string, string>,
     [myCommunitiesQuery.data],
   );
+  const myWorkshops = useMemo(
+    () =>
+      mapWorkshopAttendanceToDashboard(
+        myWorkshopAttendanceQuery.data?.results ?? [],
+        currentUsername,
+      ).filter((workshop) => workshop.myRole === "Mentor"),
+    [currentUsername, myWorkshopAttendanceQuery.data?.results],
+  );
 
   useEffect(() => {
     if (mentorshipMatchesQuery.data) {
@@ -582,13 +649,21 @@ export default function ProfileScreen() {
       });
 
       if (updatedData.pictureFile) {
-        const pictureResponse = await uploadProfilePicture(
+        const pictureResponse = await uploadProfilePictureMutation.mutateAsync(
           updatedData.pictureFile,
         );
         pictureUrl = pictureResponse.picture_url;
       } else if (updatedData.removePicture) {
-        const pictureResponse = await deleteProfilePicture();
+        const pictureResponse =
+          await deleteProfilePictureMutation.mutateAsync();
         pictureUrl = pictureResponse.picture_url;
+      }
+
+      if (
+        (updatedData.pictureFile || updatedData.removePicture) &&
+        currentUsername
+      ) {
+        bumpAvatarVersion(currentUsername);
       }
 
       setUserData({
@@ -718,12 +793,14 @@ export default function ProfileScreen() {
       mentorshipRequestsQuery.refetch(),
       profileRatingQuery.refetch(),
       myCommunitiesQuery.refetch(),
+      myWorkshopAttendanceQuery.refetch(),
       reviewsQuery.refetch(),
     ]);
   }, [
     availabilityQuery,
     mentorshipMatchesQuery,
     mentorshipRequestsQuery,
+    myWorkshopAttendanceQuery,
     myCommunitiesQuery,
     profileRatingQuery,
     reviewsQuery,
@@ -778,6 +855,7 @@ export default function ProfileScreen() {
           showRating={isMentorMode}
           showMenteesHelped={isMentorMode}
           imageUrl={userData.pictureUrl || undefined}
+          imageCacheKey={currentUserAvatarVersion}
           onEdit={() => setEditProfileModalOpen(true)}
         />
 
@@ -792,10 +870,27 @@ export default function ProfileScreen() {
             handleSaveSkills,
           })}
 
+          {renderAvailabilitySection({
+            isMentorMode,
+            showAvailability,
+            availabilityData,
+            onEdit: () => setAvailabilityModalOpen(true),
+          })}
+
           {renderCommunitiesSection({
             communities: myCommunitiesQuery.data,
             openCommunity,
           })}
+
+          {isMentorMode
+            ? renderMyWorkshopsSection({
+                workshops: myWorkshops,
+                onOpenWorkshop: (workshop) =>
+                  router.push(
+                    `/(tabs)/community/${encodeURIComponent(workshop.communityId)}/workshops/${encodeURIComponent(workshop.workshopId)}?from=profile`,
+                  ),
+              })
+            : null}
 
           {renderPostsSection({
             currentUsername,
@@ -807,13 +902,6 @@ export default function ProfileScreen() {
               router.push(
                 `/(tabs)/community/${encodeURIComponent(communityId)}?from=profile`,
               ),
-          })}
-
-          {renderAvailabilitySection({
-            isMentorMode,
-            showAvailability,
-            availabilityData,
-            onEdit: () => setAvailabilityModalOpen(true),
           })}
 
           {renderReviewsSection({

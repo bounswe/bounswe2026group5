@@ -70,7 +70,7 @@ function CommunityRow({
             <div className="flex items-end justify-between">
                 <div className="flex flex-col gap-1">
                     <h2 className="text-xl font-bold text-ink flex items-center gap-2">
-                        {icon}
+                        <span aria-hidden="true">{icon}</span>
                         {title}
                     </h2>
                     <Muted className="text-sm">{subtitle}</Muted>
@@ -274,7 +274,7 @@ export function CommunitiesPage() {
                                 className="shrink-0"
                                 aria-label="Clear search"
                             >
-                                <X className="h-4 w-4" />
+                                <X className="h-4 w-4" aria-hidden="true" />
                             </Button>
                         )}
                         {me && (
@@ -283,7 +283,7 @@ export function CommunitiesPage() {
                                 size="sm"
                                 onClick={() => setShowCreateModal(true)}
                             >
-                                <Plus className="h-4 w-4" />
+                                <Plus className="h-4 w-4" aria-hidden="true" />
                                 <span className="hidden sm:inline">Create</span>
                             </Button>
                         )}
@@ -350,7 +350,7 @@ export function CommunitiesPage() {
                                 Be the first to{' '}
                                 <button
                                     onClick={() => setShowCreateModal(true)}
-                                    className="text-accent underline-offset-2 hover:underline"
+                                    className="text-accent-aa underline-offset-2 hover:underline"
                                 >
                                     create one
                                 </button>
