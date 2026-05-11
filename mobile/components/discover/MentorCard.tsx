@@ -25,8 +25,15 @@ export function MentorCard({ profile, onPress }: Readonly<MentorCardProps>) {
     <TouchableOpacity
       activeOpacity={0.8}
       onPress={() => onPress?.(profile)}
-      className="bg-surface-card dark:bg-surface-card-dark border border-divider dark:border-divider-dark rounded-2xl p-4 mb-3"
+      className="relative bg-surface-card dark:bg-surface-card-dark border border-divider dark:border-divider-dark rounded-2xl p-4 mb-3"
     >
+      {profile.is_overloaded && (
+        <View className="absolute top-3 right-3 bg-amber-100 dark:bg-amber-900/40 px-2 py-1 rounded-full border border-amber-200 dark:border-amber-800/50">
+          <Text className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-tight">
+            Busy
+          </Text>
+        </View>
+      )}
       <View className="flex-row items-center mb-3">
         <View className="mr-3">
           <UserAvatar
@@ -49,13 +56,6 @@ export function MentorCard({ profile, onPress }: Readonly<MentorCardProps>) {
           >
             {profile.title || "Mentor"}
           </Text>
-          {profile.is_overloaded && (
-            <View className="bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 rounded self-start mt-0.5 border border-amber-200 dark:border-amber-800/50">
-              <Text className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-tighter">
-                Busy
-              </Text>
-            </View>
-          )}
           {Number(profile.average_rating) > 0 && (
             <View className="flex-row items-center gap-1 mt-0.5">
               <Ionicons name="star" size={12} color="#fbbf24" />
