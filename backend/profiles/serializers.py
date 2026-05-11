@@ -1,6 +1,8 @@
+import uuid
 from datetime import datetime, timedelta
 from typing import Any, cast
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
 from django.core import validators
@@ -13,13 +15,13 @@ from rest_framework import serializers
 from core.utils.image import resize_image
 from core.utils.timezone import get_project_timezone, to_local_time
 from core.utils.validators import (
+    IMAGE_CONTENT_TYPES,
     validate_audio_content_type,
     validate_file_size,
     validate_image_content_type,
+    validate_media_content_type,
     validate_video_content_type,
 )
-from mentorship.models import MeetingSession
-from core.utils.validators import validate_file_size, validate_image_content_type
 from mentorship.models import Match, MeetingSession
 from timeline.models import TimelineEvent
 
@@ -124,8 +126,6 @@ class ProfilePictureUploadSerializer(serializers.Serializer):
 
     def validate_picture(self, picture):
         """Validate image content-type and enforce a size limit."""
-        from django.conf import settings
-
         validate_image_content_type(picture)
         validate_file_size(
             picture,
@@ -163,8 +163,6 @@ class ProfileAudioUploadSerializer(serializers.Serializer):
 
     def validate_audio(self, audio):
         """Validate audio content-type and size limit."""
-        from django.conf import settings
-
         validate_audio_content_type(audio)
         validate_file_size(
             audio,
@@ -194,8 +192,6 @@ class ProfileVideoUploadSerializer(serializers.Serializer):
 
     def validate_video(self, video):
         """Validate video content-type and size limit."""
-        from django.conf import settings
-
         validate_video_content_type(video)
         validate_file_size(
             video,
@@ -225,10 +221,6 @@ class PostMediaUploadSerializer(serializers.Serializer):
 
     def validate_file(self, file):
         """Validate content-type (image or PDF) and enforce a size limit."""
-        from django.conf import settings
-
-        from core.utils.validators import validate_media_content_type
-
         validate_media_content_type(file)
         validate_file_size(
             file,
@@ -239,10 +231,7 @@ class PostMediaUploadSerializer(serializers.Serializer):
 
     def save_file(self):
         """Resize (if image) and persist the file, returning the public URL."""
-        from django.conf import settings
         from django.core.files.storage import default_storage
-
-        from core.utils.validators import IMAGE_CONTENT_TYPES
 
         uploaded = self.validated_data["file"]
 
@@ -256,12 +245,8 @@ class PostMediaUploadSerializer(serializers.Serializer):
         else:
             processed = uploaded
 
-        import uuid as _uuid
-
-        from django.utils import timezone as _tz
-
-        now = _tz.now()
-        filename = f"{_uuid.uuid4().hex}_{processed.name}"
+        now = timezone.now()
+        filename = f"{uuid.uuid4().hex}_{processed.name}"
         path = f"post_media/{now.year}/{now.month:02d}" f"/{now.day:02d}/{filename}"
         saved_path = default_storage.save(path, processed)
         return default_storage.url(saved_path)
@@ -481,16 +466,12 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_overloaded(self, obj: Profile) -> bool:
         """Return True when active matches meet or exceed the threshold."""
-        from django.conf import settings
-
         threshold = getattr(settings, "MENTOR_OVERLOAD_THRESHOLD", 5)
         return self.get_active_matches_count(obj) >= threshold
 
     @extend_schema_field(OpenApiTypes.INT)
     def get_active_matches_count(self, obj: Profile) -> int:
         """Return number of currently active mentorship matches for this mentor."""
-        from mentorship.models import Match
-
         active_matches_count = getattr(obj, "active_matches_count", None)
         if active_matches_count is not None:
             return active_matches_count
@@ -500,8 +481,6 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     @extend_schema_field(OpenApiTypes.INT)
     def get_overload_threshold(self, obj: Profile) -> int:
         """Return current overload threshold from settings."""
-        from django.conf import settings
-
         return getattr(settings, "MENTOR_OVERLOAD_THRESHOLD", 5)
 
 

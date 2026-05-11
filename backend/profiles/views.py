@@ -821,6 +821,12 @@ class AvailabilitySlotBookAPIView(ProfileLookupMixin, APIView):
         if profile is None or not self._is_mentor_profile(profile):
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
+        if request.user.app_usage_mode != AppUsageMode.MENTEE:
+            return Response(
+                {"detail": "Only mentees can book availability slots."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
             slot = book_match_session(mentor_profile=profile, slot_id=slot_id, actor=request.user)
         except AvailabilitySlot.DoesNotExist:

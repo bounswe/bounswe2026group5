@@ -3,6 +3,7 @@
 from datetime import timedelta
 from typing import Any
 
+from django.conf import settings
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.types import OpenApiTypes
@@ -70,8 +71,6 @@ class MentorshipRequestSerializer(serializers.ModelSerializer):
 
     def get_is_mentor_overloaded(self, obj: MentorshipRequest) -> bool:
         """Return True when the mentor has reached the active session limit."""
-        from django.conf import settings
-
         threshold = getattr(settings, "MENTOR_OVERLOAD_THRESHOLD", 5)
         active_count = Match.objects.filter(mentor=obj.mentor, is_active=True).count()
         return active_count >= threshold

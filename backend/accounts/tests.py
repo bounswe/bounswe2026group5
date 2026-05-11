@@ -1,6 +1,9 @@
+import uuid
 from datetime import timedelta
 from typing import Any, cast
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
+
+import requests
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, Group
@@ -29,6 +32,7 @@ from .models import (
 from .permissions import IsEmailVerified, IsRegularUser
 from .schema import CookieOrHeaderJWTAuthenticationScheme
 from .views import build_auth_response
+from .oauth import OAuthVerificationError, verify_google_id_token
 
 
 class UserModelTests(TestCase):
@@ -1734,3 +1738,188 @@ class ReportAPITests(TestCase):
         self.assertEqual(self.report.status, ReportStatus.RESOLVED)
         self.assertEqual(self.report.resolved_by, self.admin)
         self.assertEqual(self.report.resolution_note, "Banned user")
+
+
+class GoogleOAuthUnitTests(TestCase):
+    """Direct unit tests for accounts.oauth.verify_google_id_token."""
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="")
+    def test_fails_when_client_id_missing(self):
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("some-token")
+        self.assertIn("not configured", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.google_id_token.verify_oauth2_token")
+    def test_verify_jwt_success(self, mock_verify):
+        mock_verify.return_value = {
+            "email": "test@example.com",
+            "email_verified": True,
+            "given_name": "Test",
+            "family_name": "User",
+            "picture": "http://example.com/pic.jpg",
+        }
+        # JWT must have 2 dots
+        result = verify_google_id_token("a.b.c")
+        self.assertEqual(result["email"], "test@example.com")
+        self.assertEqual(result["given_name"], "Test")
+        mock_verify.assert_called_once()
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.google_id_token.verify_oauth2_token")
+    def test_verify_jwt_unverified_email(self, mock_verify):
+        mock_verify.return_value = {
+            "email": "test@example.com",
+            "email_verified": False,
+        }
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("a.b.c")
+        self.assertIn("not verified", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.google_id_token.verify_oauth2_token")
+    def test_verify_jwt_missing_email(self, mock_verify):
+        mock_verify.return_value = {
+            "email_verified": True,
+        }
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("a.b.c")
+        self.assertIn("does not contain an email", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.google_id_token.verify_oauth2_token")
+    def test_verify_jwt_value_error(self, mock_verify):
+        mock_verify.side_effect = ValueError("Invalid token")
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("a.b.c")
+        self.assertIn("Invalid or expired Google token", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.requests.get")
+    def test_verify_access_token_success(self, mock_get):
+        # First call: tokeninfo
+        mock_token_info = MagicMock()
+        mock_token_info.status_code = 200
+        mock_token_info.json.return_value = {"aud": "test-client-id"}
+
+        # Second call: userinfo
+        mock_user_info = MagicMock()
+        mock_user_info.status_code = 200
+        mock_user_info.json.return_value = {
+            "email": "access@example.com",
+            "email_verified": "true",
+            "name": "Access User",
+        }
+
+        mock_get.side_effect = [mock_token_info, mock_user_info]
+
+        # No dots -> Access Token flow
+        result = verify_google_id_token("some_access_token")
+        self.assertEqual(result["email"], "access@example.com")
+        self.assertEqual(result["name"], "Access User")
+        self.assertEqual(mock_get.call_count, 2)
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.requests.get")
+    def test_verify_access_token_invalid(self, mock_get):
+        mock_res = MagicMock()
+        mock_res.status_code = 401
+        mock_get.return_value = mock_res
+
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("bad_token")
+        self.assertIn("Invalid or expired Google access token", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.requests.get")
+    def test_verify_access_token_audience_mismatch(self, mock_get):
+        mock_res = MagicMock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {"aud": "wrong-client-id"}
+        mock_get.return_value = mock_res
+
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("token")
+        self.assertIn("audience mismatch", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.requests.get")
+    def test_verify_access_token_userinfo_fail(self, mock_get):
+        mock_token_info = MagicMock()
+        mock_token_info.status_code = 200
+        mock_token_info.json.return_value = {"aud": "test-client-id"}
+
+        mock_user_info = MagicMock()
+        mock_user_info.status_code = 404
+        mock_get.side_effect = [mock_token_info, mock_user_info]
+
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("token")
+        self.assertIn("UserInfo fetch failed", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.google_id_token.verify_oauth2_token")
+    def test_unexpected_error_mapping(self, mock_verify):
+        mock_verify.side_effect = Exception("System crash")
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("a.b.c")
+        self.assertIn("verification failed", str(cm.exception))
+
+
+class EmailEdgeCaseTests(TestCase):
+    """Tests for email delivery failure scenarios."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.get_or_create(
+            email="edge@example.com",
+            defaults={"password": "password123", "is_active": True},
+        )[0]
+
+    @patch("accounts.views.send_mail")
+    def test_forgot_password_email_failure_graceful(self, mock_send):
+        """ForgotPasswordAPIView should return 200 even if email delivery fails."""
+        mock_send.side_effect = Exception("SMTP Timeout")
+        with self.assertLogs("accounts.views", level="ERROR") as cm:
+            response = self.client.post("/api/auth/forgot-password/", {"email": "edge@example.com"})
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("detail", response.data)
+        self.assertTrue(any("Failed to issue password reset email" in log for log in cm.output))
+        mock_send.assert_called_once()
+
+    @patch("accounts.views.send_mail")
+    def test_register_email_failure_graceful(self, mock_send):
+        """RegisterAPIView should return 201 even if verification email fails."""
+        mock_send.side_effect = Exception("SMTP Error")
+        # Use a unique email to avoid IntegrityError in case of re-runs
+        email = f"newuser_{uuid.uuid4().hex[:8]}@example.com"
+        with self.assertLogs("accounts.views", level="ERROR") as cm:
+            response = self.client.post(
+                "/api/auth/register/",
+                {
+                    "email": email,
+                    "password": "Password123!",
+                    "confirm_password": "Password123!",
+                },
+            )
+        
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("access_token", response.data)
+        self.assertTrue(any("Failed to issue verification email" in log for log in cm.output))
+        mock_send.assert_called_once()
+
+    @patch("accounts.views.send_mail")
+    def test_resend_verification_email_failure_graceful(self, mock_send):
+        """ResendVerificationAPIView should return 200 even if email delivery fails."""
+        self.client.force_authenticate(user=self.user)
+        self.user.is_email_verified = False
+        self.user.save()
+        
+        mock_send.side_effect = Exception("Connection Refused")
+        with self.assertLogs("accounts.views", level="ERROR") as cm:
+            response = self.client.post("/api/auth/resend-verification/")
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any("Failed to resend verification email" in log for log in cm.output))
+        mock_send.assert_called_once()
