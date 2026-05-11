@@ -84,6 +84,12 @@ export class ProfilePage {
     await expect(card.getByRole('link', { name: communityName })).toBeVisible();
   }
 
+  async expectMentorshipJourneyOrigin(content: string, partnerUsername: string) {
+    const card = this.postCard(content);
+    await expect(card.getByText(/^Mentorship Journey$/)).toBeVisible();
+    await expect(card.getByRole('link', { name: `@${partnerUsername}` })).toBeVisible();
+  }
+
   async nextWeek() {
     await this.page.getByRole('button', { name: 'Next week' }).click();
   }

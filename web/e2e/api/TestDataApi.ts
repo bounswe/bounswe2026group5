@@ -202,6 +202,36 @@ export type ProfilePostFeed = {
   results: ProfilePost[];
 };
 
+export type JourneyEvent = {
+  id: string;
+  source_id: string;
+  type: string;
+  category: 'AGTE' | 'MCTE';
+  timestamp: string;
+  created_at: string;
+  last_edited: string | null;
+  actor_role: string;
+  payload: Record<string, unknown> | null;
+  content: string;
+  media_url: string | null;
+  show_on_profile: boolean;
+  author: {
+    id: string;
+    username: string;
+    display_name: string;
+    picture_url: string | null;
+  } | null;
+  is_editable: boolean;
+};
+
+export type JourneyFeed = {
+  ordering: string;
+  count: number;
+  offset: number;
+  limit: number;
+  results: JourneyEvent[];
+};
+
 export class TestDataApi {
   readonly request: APIRequestContext;
 
@@ -519,6 +549,39 @@ export class TestDataApi {
     );
     expect(response.ok()).toBeTruthy();
     return response.json() as Promise<ProfilePostFeed>;
+  }
+
+  async fetchJourney(auth: AuthResponse, matchId: string, offset = 0, limit = 50) {
+    const response = await this.request.get(
+      `${API_BASE_URL}/mentorship/matches/${matchId}/journey/?offset=${offset}&limit=${limit}`,
+      {
+        headers: this.authHeaders(auth),
+      },
+    );
+    expect(response.ok()).toBeTruthy();
+    return response.json() as Promise<JourneyFeed>;
+  }
+
+  async tryFetchJourney(auth: AuthResponse, matchId: string, offset = 0, limit = 50) {
+    return this.request.get(
+      `${API_BASE_URL}/mentorship/matches/${matchId}/journey/?offset=${offset}&limit=${limit}`,
+      {
+        headers: this.authHeaders(auth),
+      },
+    );
+  }
+
+  clearJourneyEvents(matchId: string) {
+    const python = [
+      'from timeline.models import TimelineEvent',
+      `TimelineEvent.objects.filter(mentorship_id=${JSON.stringify(matchId)}).delete()`,
+    ].join('; ');
+
+    execFileSync(
+      'docker',
+      ['compose', 'exec', '-T', 'backend', 'python', 'manage.py', 'shell', '-c', python],
+      { cwd: REPO_ROOT, stdio: 'pipe' },
+    );
   }
 
   private async registerOrLogin(email: string): Promise<AuthResponse> {
