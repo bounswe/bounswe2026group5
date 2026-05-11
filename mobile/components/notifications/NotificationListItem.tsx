@@ -43,6 +43,10 @@ function iconNameForType(type: string): keyof typeof Ionicons.glyphMap {
       return "star-outline";
     case "report_resolved":
       return "checkmark-done-circle-outline";
+    case "workshop_cancelled":
+      return "calendar-clear-outline";
+    case "workshop_rescheduled":
+      return "calendar-outline";
     default:
       return "notifications-outline";
   }

@@ -90,9 +90,43 @@ export function getNotificationTitle(notification: BackendNotification): string 
       return "Community deleted";
     case "tag_matches_interest":
       return "New community match";
+    case "workshop_cancelled":
+      return "Workshop Cancelled";
+    case "workshop_rescheduled":
+      return "Workshop Rescheduled";
     default:
       return prettifyNotificationType(notification.type);
   }
+}
+
+function formatWorkshopRescheduledMessage(
+  extra: Record<string, unknown>,
+): string {
+  const title =
+    typeof extra.workshop_title === "string" ? extra.workshop_title : "A workshop";
+  const oldStart =
+    typeof extra.old_scheduled_at === "string"
+      ? new Date(extra.old_scheduled_at)
+      : null;
+  const newStart =
+    typeof extra.new_scheduled_at === "string"
+      ? new Date(extra.new_scheduled_at)
+      : null;
+  const oldEnd =
+    typeof extra.old_end_at === "string" ? new Date(extra.old_end_at) : null;
+  const newEnd =
+    typeof extra.new_end_at === "string" ? new Date(extra.new_end_at) : null;
+  const fmt = (d: Date) =>
+    d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  const startChanged =
+    oldStart && newStart && oldStart.getTime() !== newStart.getTime();
+  if (startChanged && oldStart && newStart) {
+    return `The workshop "${title}" has been rescheduled from ${fmt(oldStart)} to ${fmt(newStart)}.`;
+  }
+  if (oldEnd && newEnd) {
+    return `The workshop "${title}"'s end time has been changed from ${fmt(oldEnd)} to ${fmt(newEnd)}.`;
+  }
+  return `The workshop "${title}" has been rescheduled.`;
 }
 
 export function getNotificationTargetPath(
@@ -162,7 +196,27 @@ export function getNotificationTargetPath(
     return "/(tabs)/profile";
   }
 
+  if (
+    notification.type === "workshop_cancelled" ||
+    notification.type === "workshop_rescheduled"
+  ) {
+    if (notification.resource_id) {
+      return `/(tabs)/community` as Href;
+    }
+    return "/(tabs)/community" as Href;
+  }
+
   return undefined;
+}
+
+function getDisplayMessage(notification: BackendNotification): string {
+  if (
+    notification.type === "workshop_rescheduled" &&
+    notification.extra_metadata
+  ) {
+    return formatWorkshopRescheduledMessage(notification.extra_metadata);
+  }
+  return notification.message;
 }
 
 export function mapBackendNotification(
@@ -172,7 +226,7 @@ export function mapBackendNotification(
     id: notification.id,
     type: notification.type,
     title: getNotificationTitle(notification),
-    message: notification.message,
+    message: getDisplayMessage(notification),
     isRead: notification.is_read,
     createdAt: notification.created_at,
     actorName:

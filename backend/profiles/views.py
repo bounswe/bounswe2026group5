@@ -2554,14 +2554,26 @@ class CommunityTagWorkshopDetailAPIView(ProfileLookupMixin, APIView):
             context={"request": request, "workshop": workshop},
         )
         serializer.is_valid(raise_exception=True)
-        is_rescheduling = (
-            "scheduled_at" in serializer.validated_data or "end_at" in serializer.validated_data
-        )
+        start_changed = "scheduled_at" in serializer.validated_data
+        end_changed = "end_at" in serializer.validated_data
+        is_rescheduling = start_changed or end_changed
         old_scheduled_at = workshop.scheduled_at
         old_end_at = workshop.end_at
         workshop = serializer.update(workshop, serializer.validated_data)
 
         if is_rescheduling:
+            if start_changed:
+                reschedule_message = (
+                    f'The workshop "{workshop.title}" has been rescheduled'
+                    f" from {old_scheduled_at.strftime('%b %d, %Y at %H:%M UTC')}"
+                    f" to {workshop.scheduled_at.strftime('%b %d, %Y at %H:%M UTC')}."
+                )
+            else:
+                reschedule_message = (
+                    f'The workshop "{workshop.title}"\'s end date has been rescheduled'
+                    f" from {old_end_at.strftime('%b %d, %Y at %H:%M UTC')}"
+                    f" to {workshop.end_at.strftime('%b %d, %Y at %H:%M UTC')}."
+                )
             participants_to_notify = workshop.participants.exclude(
                 participant=author_profile
             ).select_related("participant__user")
@@ -2571,7 +2583,7 @@ class CommunityTagWorkshopDetailAPIView(ProfileLookupMixin, APIView):
                         user=wp.participant.user,
                         type=NotificationType.WORKSHOP_RESCHEDULED,
                         title="Workshop Rescheduled",
-                        message=f'The workshop "{workshop.title}" has been rescheduled.',
+                        message=reschedule_message,
                         actor=author_profile,
                         resource_type="workshop",
                         resource_id=workshop.id,

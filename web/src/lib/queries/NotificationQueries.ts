@@ -27,6 +27,8 @@ export type NotificationType =
     | 'tag_description_updated'
     | 'tag_deleted'
     | 'tag_matches_interest'
+    | 'workshop_cancelled'
+    | 'workshop_rescheduled'
 
 export interface Notification {
     id: string
@@ -117,4 +119,6 @@ export const NOTIFICATION_INVALIDATION_MAP: Record<NotificationType, string[][]>
     tag_description_updated:     [['communities']],
     tag_deleted:                 [['communities']],
     tag_matches_interest:        [['communities']],
+    workshop_cancelled:          [['communities', 'workshops']],
+    workshop_rescheduled:        [['communities', 'workshops']],
 }

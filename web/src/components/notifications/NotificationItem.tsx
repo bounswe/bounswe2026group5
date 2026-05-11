@@ -92,6 +92,16 @@ const VARIANT_MAP: Record<NotificationType, VariantConfig> = {
         iconClass: 'text-blue-500',
         borderClass: 'border-l-blue-400',
     },
+    workshop_cancelled: {
+        icon: XCircle,
+        iconClass: 'text-red-500',
+        borderClass: 'border-l-red-400',
+    },
+    workshop_rescheduled: {
+        icon: Clock,
+        iconClass: 'text-yellow-600',
+        borderClass: 'border-l-yellow-400',
+    },
     tag_new_member: {
         icon: UserPlus,
         iconClass: 'text-accent',
@@ -126,6 +136,30 @@ const FALLBACK_VARIANT: VariantConfig = {
     borderClass: 'border-l-line',
 }
 
+function formatWorkshopRescheduledMessage(extra: Record<string, unknown>): string {
+    const title = typeof extra.workshop_title === 'string' ? extra.workshop_title : 'A workshop'
+    const oldStart = typeof extra.old_scheduled_at === 'string' ? new Date(extra.old_scheduled_at) : null
+    const newStart = typeof extra.new_scheduled_at === 'string' ? new Date(extra.new_scheduled_at) : null
+    const oldEnd = typeof extra.old_end_at === 'string' ? new Date(extra.old_end_at) : null
+    const newEnd = typeof extra.new_end_at === 'string' ? new Date(extra.new_end_at) : null
+    const fmt = (d: Date) => d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    const startChanged = oldStart && newStart && oldStart.getTime() !== newStart.getTime()
+    if (startChanged && oldStart && newStart) {
+        return `The workshop "${title}" has been rescheduled from ${fmt(oldStart)} to ${fmt(newStart)}.`
+    }
+    if (oldEnd && newEnd) {
+        return `The workshop "${title}"'s end time has been changed from ${fmt(oldEnd)} to ${fmt(newEnd)}.`
+    }
+    return `The workshop "${title}" has been rescheduled.`
+}
+
+function getDisplayMessage(notification: Notification): string {
+    if (notification.type === 'workshop_rescheduled') {
+        return formatWorkshopRescheduledMessage(notification.extra_metadata)
+    }
+    return notification.message
+}
+
 export function NotificationItem({ notification }: { notification: Notification }) {
     const variant = VARIANT_MAP[notification.type] ?? FALLBACK_VARIANT
     const Icon = variant.icon
@@ -142,7 +176,7 @@ export function NotificationItem({ notification }: { notification: Notification 
             <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', variant.iconClass)} />
             <div className="flex-1 min-w-0">
                 <p className="text-base font-medium text-ink">{notification.title}</p>
-                <p className="text-sm text-ink-soft mt-0.5 leading-relaxed">{notification.message}</p>
+                <p className="text-sm text-ink-soft mt-0.5 leading-relaxed">{getDisplayMessage(notification)}</p>
             </div>
             {conversationId && (
                 <Link
