@@ -8,6 +8,7 @@ import {
     UserPlus,
     UserX,
     XCircle,
+    Bell,
 } from 'lucide-react'
 import { cn } from '#/lib/utils.ts'
 import type { Notification, NotificationType } from '#/lib/queries/NotificationQueries.ts'
@@ -69,10 +70,36 @@ const VARIANT_MAP: Record<NotificationType, VariantConfig> = {
         iconClass: 'text-blue-500',
         borderClass: 'border-l-blue-400',
     },
+    tag_new_member: {
+        icon: UserPlus,
+        iconClass: 'text-accent',
+        borderClass: 'border-l-accent',
+    },
+    tag_description_updated: {
+        icon: Clock,
+        iconClass: 'text-yellow-600',
+        borderClass: 'border-l-yellow-400',
+    },
+    tag_deleted: {
+        icon: UserX,
+        iconClass: 'text-red-500',
+        borderClass: 'border-l-red-400',
+    },
+    tag_matches_interest: {
+        icon: Star,
+        iconClass: 'text-yellow-500',
+        borderClass: 'border-l-yellow-400',
+    },
+}
+
+const DEFAULT_VARIANT: VariantConfig = {
+    icon: Bell,
+    iconClass: 'text-ink-soft',
+    borderClass: 'border-l-line',
 }
 
 export function NotificationItem({ notification }: { notification: Notification }) {
-    const variant = VARIANT_MAP[notification.type]
+    const variant = VARIANT_MAP[notification.type] || DEFAULT_VARIANT
     const Icon = variant.icon
     const conversationId =
         notification.type === 'new_message' ? (notification.resource_id ?? undefined) : undefined
