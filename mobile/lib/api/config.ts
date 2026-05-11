@@ -55,6 +55,40 @@ export function getAbsoluteUrl(path: string | null | undefined): string {
   return `${API_BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
 }
 
+export function getAbsoluteImageUrl(
+  path: string | null | undefined,
+  cacheKey?: string | number,
+): string {
+  const absoluteUrl = getAbsoluteUrl(path);
+
+  if (
+    !absoluteUrl ||
+    cacheKey === undefined ||
+    cacheKey === null ||
+    cacheKey === ""
+  ) {
+    return absoluteUrl;
+  }
+
+  if (
+    absoluteUrl.startsWith("data:") ||
+    absoluteUrl.startsWith("content://") ||
+    absoluteUrl.startsWith("ph://") ||
+    absoluteUrl.startsWith("assets-library://")
+  ) {
+    return absoluteUrl;
+  }
+
+  try {
+    const url = new URL(absoluteUrl);
+    url.searchParams.set("v", String(cacheKey));
+    return url.toString();
+  } catch {
+    const separator = absoluteUrl.includes("?") ? "&" : "?";
+    return `${absoluteUrl}${separator}v=${encodeURIComponent(String(cacheKey))}`;
+  }
+}
+
 export const API_ACCESS_TOKEN = process.env.EXPO_PUBLIC_ACCESS_TOKEN ?? "";
 
 export const PROFILE_USERNAME = process.env.EXPO_PUBLIC_PROFILE_USERNAME ?? "";

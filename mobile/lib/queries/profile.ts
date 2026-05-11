@@ -163,6 +163,8 @@ export function useProfileRatingQuery(username?: string) {
  * Patch own profile by username.
  */
 export function useUpdateOwnProfileMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (payload: UpdateProfilePayload) => {
       const { username: _username, ...body } = payload;
@@ -170,6 +172,19 @@ export function useUpdateOwnProfileMutation() {
         ProfilePatchResponse,
         Omit<UpdateProfilePayload, "username">
       >(`/api/profiles/me/`, body);
+    },
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["profiles"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["profiles", "me", "settings"],
+        }),
+        variables.username
+          ? queryClient.invalidateQueries({
+              queryKey: ["profiles", variables.username, "posts"],
+            })
+          : Promise.resolve(),
+      ]);
     },
   });
 }

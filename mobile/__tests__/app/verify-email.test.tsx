@@ -7,6 +7,9 @@ const mockVerifyMutateAsync = jest.fn();
 const mockCurrentUserMutateAsync = jest.fn();
 const mockResendMutateAsync = jest.fn();
 const mockUpdateUser = jest.fn();
+const mockToastSuccess = jest.fn();
+const mockToastInfo = jest.fn();
+const mockToastError = jest.fn();
 let mockToken: string | undefined | string[] = "valid-token";
 let mockIsAuthenticated = true;
 
@@ -18,6 +21,14 @@ jest.mock("expo-router", () => ({
 }));
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
+
+jest.mock("@/components/ui/ToastProvider", () => ({
+  useToast: () => ({
+    success: mockToastSuccess,
+    info: mockToastInfo,
+    error: mockToastError,
+  }),
+}));
 
 jest.mock("@/lib/auth/store", () => ({
   useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
@@ -78,6 +89,10 @@ describe("VerifyEmailScreen", () => {
     expect(mockUpdateUser).toHaveBeenCalledWith(
       expect.objectContaining({ is_email_verified: true }),
     );
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      "Email has been verified successfully.",
+      { title: "Email verified" },
+    );
 
     fireEvent.press(getByTestId("go-to-dashboard-button"));
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
@@ -107,7 +122,7 @@ describe("VerifyEmailScreen", () => {
   it("shows a missing-token error without calling verify", async () => {
     mockToken = undefined;
 
-    const { findByText, getByTestId } = render(<VerifyEmailScreen />);
+    const { findByText, getByTestId, queryByText } = render(<VerifyEmailScreen />);
 
     expect(await findByText("Verification failed")).toBeTruthy();
     expect(
@@ -117,12 +132,18 @@ describe("VerifyEmailScreen", () => {
 
     fireEvent.press(getByTestId("resend-verification-button"));
 
-    expect(mockResendMutateAsync).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockResendMutateAsync).toHaveBeenCalledTimes(1);
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        "If your email is unverified, a new verification link has been sent.",
+        { title: "Verification email sent" },
+      );
+    });
     expect(
-      await findByText(
+      queryByText(
         "If your email is unverified, a new verification link has been sent.",
       ),
-    ).toBeTruthy();
+    ).toBeNull();
   });
 
   it("shows resend failures for authenticated users", async () => {
@@ -137,7 +158,12 @@ describe("VerifyEmailScreen", () => {
 
     fireEvent.press(getByTestId("resend-verification-button"));
 
-    expect(await findByText("Could not reach mail service.")).toBeTruthy();
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        "Could not reach mail service.",
+        { title: "Resend failed" },
+      );
+    });
   });
 
   it("shows invalid-token errors without requiring an authenticated user", async () => {

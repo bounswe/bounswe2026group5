@@ -106,8 +106,8 @@ function CancelModal({ slot, username, onClose, onSuccess }: CancelModalProps) {
             <div className="relative z-10 w-full max-w-sm rounded-3xl island-shell shadow-2xl flex flex-col">
                 <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-line">
                     <h2 className="text-lg font-semibold text-ink">Cancel booking?</h2>
-                    <button onClick={onClose} className="rounded-xl p-1.5 hover:bg-accent-muted transition-colors text-ink-soft hover:text-ink">
-                        <X className="h-5 w-5" />
+                    <button onClick={onClose} aria-label="Close" className="rounded-xl p-1.5 hover:bg-accent-muted transition-colors text-ink-soft hover:text-ink">
+                        <X className="h-5 w-5" aria-hidden="true" />
                     </button>
                 </div>
                 <div className="px-6 py-5">
@@ -202,8 +202,8 @@ function BookingModal({ slot, mentorUsername, isFirstTime, onClose, onSuccess }:
                                 : 'You already have a match with this mentor — book directly.'}
                         </Muted>
                     </div>
-                    <button onClick={onClose} className="rounded-xl p-1.5 hover:bg-accent-muted transition-colors text-ink-soft hover:text-ink">
-                        <X className="h-5 w-5" />
+                    <button onClick={onClose} aria-label="Close" className="rounded-xl p-1.5 hover:bg-accent-muted transition-colors text-ink-soft hover:text-ink">
+                        <X className="h-5 w-5" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -346,11 +346,11 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
 
     return (
         <>
-            <Card className="border-line bg-white/70 shadow-sm">
+            <Card className="border-line bg-card shadow-sm">
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <CardTitle className="text-lg flex items-center gap-2">
-                            <CalendarDays className="h-4 w-4" />
+                            <CalendarDays className="h-4 w-4" aria-hidden="true" />
                             Availability
                         </CardTitle>
                         <div className="flex items-center gap-2">
@@ -359,9 +359,9 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                 onClick={() => setWeekOffset(o => Math.max(o - 1, -4))}
                                 disabled={weekOffset <= -4}
                                 className="h-7 w-7 p-0"
-                                aria-label="Go to previous week"
+                                aria-label="Previous week"
                             >
-                                <ChevronLeft className="h-4 w-4" />
+                                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                             </Button>
                             <span className="text-xs text-ink-soft min-w-[140px] text-center">{weekLabel}</span>
                             <Button
@@ -369,9 +369,9 @@ export function AvailabilityCalendar({ username, isOwner, isAuthenticated }: Ava
                                 onClick={() => setWeekOffset(o => Math.min(o + 1, 4))}
                                 disabled={weekOffset >= 4}
                                 className="h-7 w-7 p-0"
-                                aria-label="Go to next week"
+                                aria-label="Next week"
                             >
-                                <ChevronRight className="h-4 w-4" />
+                                <ChevronRight className="h-4 w-4" aria-hidden="true" />
                             </Button>
                         </div>
                     </div>

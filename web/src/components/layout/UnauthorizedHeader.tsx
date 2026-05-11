@@ -14,7 +14,8 @@ export function UnauthorizedHeader() {
 
                 {/* Left: Logo and Navigation */}
                 <div className="flex items-center gap-8">
-                    <Link to="/discover" className="font-bold font-display tracking-tight text-lg text-ink">
+                    <Link to="/discover" className="flex items-center gap-2 font-bold font-display tracking-tight text-lg text-ink">
+                        <img src="/icon.png" alt="" aria-hidden="true" className="h-7 w-7 rounded-lg" />
                         Neighborship
                     </Link>
 

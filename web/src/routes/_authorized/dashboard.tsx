@@ -3,20 +3,21 @@ import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import { useMeetingSessions, useMyRequests, useRespondToRequest, matchFeedbackQueryOptions } from "#/lib/queries/MentorshipQueries.ts"
 import { useOwnProfile } from "#/lib/queries/ProfileQueries.ts"
 import { useNotifications, useMarkAllNotificationsRead, NOTIFICATION_INVALIDATION_MAP } from "#/lib/queries/NotificationQueries.ts"
-import { getInitials } from "#/lib/utils.ts"
+import { getAbsoluteMediaUrl, getInitials } from "#/lib/utils.ts"
 import { Body, Heading, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { NotificationItem } from '@/components/notifications/NotificationItem'
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowRight, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, Star, XCircle, X as XIcon, ShieldCheck, Users, AlertTriangle, Info } from 'lucide-react'
+import { ArrowRight, BookOpen, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, Star, XCircle, X as XIcon, ShieldCheck, Users, AlertTriangle, Info } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo } from "react"
 import type { Notification } from "#/lib/queries/NotificationQueries.ts"
 import { RatingModal } from '#/components/RatingModal.tsx'
 import { SessionManagementModal } from '#/components/dashboard/SessionManagementModal.tsx'
 import { toast } from "sonner"
 import type { MeetingSession } from '#/lib/queries/MentorshipQueries.ts'
+import { myWorkshopAttendanceQueryOptions } from '#/lib/queries/WorkshopQueries.ts'
 
 function toSessionManagementData(session: MeetingSession) {
   return {
@@ -309,14 +310,15 @@ function MenteeDashboardView() {
       <>
       <div className="grid grid-cols-1 lg:grid-cols-[5fr_4fr] gap-8 items-start">
 
-        {/* LEFT COLUMN: Sessions */}
+        {/* LEFT COLUMN: Sessions + Workshops */}
         <div className="flex flex-col gap-8">
+          <UpcomingWorkshopsSection />
           <section className="space-y-5">
             <Heading as="h3" className="text-xl flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
               {!sessionsLoading && upcomingSessions.length > 0 && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent-aa text-xs font-bold">
                   {upcomingSessions.length}
                 </span>
               )}
@@ -349,7 +351,7 @@ function MenteeDashboardView() {
                       <div className="flex items-center gap-3">
                         {session.mentor.picture_url ? (
                             <img
-                                src={session.mentor.picture_url}
+                                src={getAbsoluteMediaUrl(session.mentor.picture_url)}
                                 alt={session.mentor.display_name}
                                 className="h-11 w-11 rounded-full object-cover border border-white/50 shadow-sm"
                             />
@@ -375,7 +377,7 @@ function MenteeDashboardView() {
                         <Link
                             to="/profiles/$username"
                             params={{ username: session.mentor.username }}
-                            className="text-xs text-accent hover:underline underline-offset-4"
+                            className="text-xs text-accent-aa hover:underline underline-offset-4"
                         >
                           View profile
                         </Link>
@@ -385,7 +387,7 @@ function MenteeDashboardView() {
                   </Card>
               ))}
               <Link to="/schedule" className="block mt-2">
-                <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
+                <Button variant="ghost" className="w-full text-accent-aa hover:bg-accent/10">
                   {upcomingSessions.length > 3
                       ? `View all ${upcomingSessions.length} sessions`
                       : 'View Full Schedule'
@@ -419,7 +421,7 @@ function MenteeDashboardView() {
                       <div className="flex items-center gap-3">
                         {session.mentor.picture_url ? (
                           <img
-                            src={session.mentor.picture_url}
+                            src={getAbsoluteMediaUrl(session.mentor.picture_url)}
                             alt={session.mentor.display_name}
                             className="h-10 w-10 rounded-full object-cover border border-white/50 shadow-sm"
                           />
@@ -462,7 +464,7 @@ function MenteeDashboardView() {
             <Heading as="h3" className="text-xl flex items-center gap-2">
               Sent Requests
               {!requestsLoading && sentRequests.length > 0 && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent-aa text-xs font-bold">
                   {sentRequests.length}
                 </span>
               )}
@@ -498,7 +500,7 @@ function MenteeDashboardView() {
                         <div className="flex items-center gap-3">
                           {req.mentor.picture_url ? (
                               <img
-                                  src={req.mentor.picture_url}
+                                  src={getAbsoluteMediaUrl(req.mentor.picture_url)}
                                   alt={req.mentor.display_name}
                                   className="h-11 w-11 rounded-full object-cover border border-white/50 shadow-sm"
                               />
@@ -519,7 +521,7 @@ function MenteeDashboardView() {
                           <Link
                               to="/profiles/$username"
                               params={{ username: req.mentor.username }}
-                              className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
+                              className="text-xs text-accent-aa hover:underline underline-offset-4 shrink-0"
                           >
                             View profile
                           </Link>
@@ -617,9 +619,8 @@ function MentorDashboardView() {
 
   return (
       <div className="grid grid-cols-1 lg:grid-cols-[5fr_4fr] gap-8 items-start">
-
-        {/* LEFT COLUMN: Upcoming Sessions */}
-        <div className="flex flex-col gap-8">
+        {/* LEFT COLUMN: Upcoming Sessions + Workshops */}
+        <div className="flex flex-col gap-10">
           {ownProfile?.is_overloaded && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
               <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
@@ -631,13 +632,13 @@ function MentorDashboardView() {
                 </Body>
               </div>
             </div>
-          )}
+          <UpcomingWorkshopsSection />
           <section className="space-y-5">
             <Heading as="h3" className="text-xl flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
               {!sessionsLoading && upcomingSessions.length > 0 && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent-aa text-xs font-bold">
                   {upcomingSessions.length}
                 </span>
               )}
@@ -675,7 +676,7 @@ function MentorDashboardView() {
                         <div className="flex items-center gap-3">
                           {session.mentee.picture_url ? (
                               <img
-                                  src={session.mentee.picture_url}
+                                  src={getAbsoluteMediaUrl(session.mentee.picture_url)}
                                   alt={displayName}
                                   className="h-11 w-11 rounded-full object-cover border border-white/50 shadow-sm"
                               />
@@ -699,7 +700,7 @@ function MentorDashboardView() {
                               <Link
                                   to="/profiles/$username"
                                   params={{ username: session.mentee.username }}
-                                  className="text-xs text-accent hover:underline underline-offset-4"
+                                  className="text-xs text-accent-aa hover:underline underline-offset-4"
                               >
                                 View profile
                               </Link>
@@ -712,7 +713,7 @@ function MentorDashboardView() {
               })}
 
               <Link to="/schedule" className="block mt-2">
-                <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
+                <Button variant="ghost" className="w-full text-accent-aa hover:bg-accent/10">
                   {upcomingSessions.length > 3
                       ? `View all ${upcomingSessions.length} sessions`
                       : 'View Full Schedule'
@@ -729,7 +730,7 @@ function MentorDashboardView() {
             <Heading as="h3" className="text-xl flex items-center gap-2">
               Incoming Requests
               {!requestsLoading && displayRequests.length > 0 && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent-aa text-xs font-bold">
                   {pendingRequests.length}
                 </span>
               )}
@@ -774,7 +775,7 @@ function MentorDashboardView() {
                           <Link
                               to="/profiles/$username"
                               params={{ username: req.mentee.username }}
-                              className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
+                              className="text-xs text-accent-aa hover:underline underline-offset-4 shrink-0"
                           >
                             View profile
                           </Link>
@@ -835,7 +836,7 @@ function MentorDashboardView() {
                 )
               })}
               {pendingRequests.length > 3 && (
-                  <Button variant="ghost" className="w-full text-accent hover:bg-accent/10 mt-2">
+                  <Button variant="ghost" className="w-full text-accent-aa hover:bg-accent/10 mt-2">
                     View all {pendingRequests.length} requests <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
               )}
@@ -843,6 +844,80 @@ function MentorDashboardView() {
           </section>
         </div>
       </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Upcoming Workshops Section (shared between mentor and mentee views)
+// ---------------------------------------------------------------------------
+
+function UpcomingWorkshopsSection() {
+  const { data, isLoading } = useQuery(myWorkshopAttendanceQueryOptions('attending'))
+  const now = Date.now()
+  const upcoming = (data?.results ?? []).filter(
+    w => w.workshop_status === 'SCHEDULED' && new Date(w.workshop_scheduled_at).getTime() > now
+  ).slice(0, 3)
+
+  if (!isLoading && upcoming.length === 0) return null
+
+  return (
+    <section className="space-y-5">
+      <Heading as="h3" className="text-xl flex items-center gap-2">
+        <BookOpen className="w-5 h-5 text-accent" />
+        Upcoming Workshops
+        {!isLoading && upcoming.length > 0 && (
+          <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+            {upcoming.length}
+          </span>
+        )}
+      </Heading>
+      <div className="flex flex-col gap-4">
+        {isLoading && (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
+          </div>
+        )}
+        {upcoming.map(w => (
+          <Card key={w.id} className="island-shell border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
+            <div className="bg-violet-400 h-1.5 w-full" />
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-start gap-4">
+                <CardTitle className="text-base leading-tight">{w.workshop_title}</CardTitle>
+                <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200">
+                  Upcoming
+                </span>
+              </div>
+              <Muted className="text-xs">{w.community_name}</Muted>
+            </CardHeader>
+            <CardContent className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-0.5">
+                  <Muted className="text-sm flex items-center gap-1.5">
+                    <CalendarDays className="w-3.5 h-3.5" />
+                    {new Date(w.workshop_scheduled_at).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {' · '}
+                    {new Date(w.workshop_scheduled_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    {' – '}
+                    {new Date(w.workshop_end_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                  </Muted>
+                  <Muted className="text-xs flex items-center gap-1">
+                    <Users className="w-3 h-3" />
+                    Hosted by {w.author.display_name}
+                  </Muted>
+                </div>
+              </div>
+              <Link
+                to="/profiles/$username"
+                params={{ username: w.author.username }}
+                className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
+              >
+                View host
+              </Link>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </section>
   )
 }
 

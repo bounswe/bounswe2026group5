@@ -14,6 +14,12 @@ export const Route = createFileRoute('/_unauthorized')({
 function RouteComponent() {
   return (
       <div className="flex flex-col min-h-screen bg-bg dark:bg-background">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white focus:shadow-lg"
+        >
+          Skip to main content
+        </a>
         <UnauthorizedHeader />
         <Outlet />
         <UnauthorizedFooter />
