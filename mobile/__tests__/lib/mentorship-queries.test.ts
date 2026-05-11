@@ -1,6 +1,6 @@
 import {
-  mapJourneyFeedToTimelineEvents,
   mapAvailabilityToSchedule,
+  mapJourneyFeedToTimelineEvents,
   mapMeetingSessionsToDashboard,
   mapRequestsToDashboard,
   mapUpcomingSessionsToDashboard,
@@ -315,7 +315,7 @@ describe("mentorship query mappers", () => {
     });
   });
 
-  it("deduplicates active meeting sessions by match after reschedule", () => {
+  it("keeps multiple active meeting sessions for the same match", () => {
     const sessions: BackendMeetingSession[] = [
       {
         session_id: "session-old",
@@ -379,10 +379,91 @@ describe("mentorship query mappers", () => {
 
     const mapped = mapMeetingSessionsToDashboard(sessions);
 
+    expect(mapped).toHaveLength(2);
+    expect(mapped[0]).toMatchObject({
+      id: "slot-old",
+      sessionId: "session-old",
+      requestId: "match-1",
+      user: "Ada Lovelace",
+      status: "Upcoming",
+    });
+    expect(mapped[1]).toMatchObject({
+      id: "slot-new",
+      sessionId: "session-new",
+      requestId: "match-1",
+      user: "Ada Lovelace",
+      status: "Upcoming",
+    });
+  });
+
+  it("deduplicates meeting sessions by session id", () => {
+    const sessions: BackendMeetingSession[] = [
+      {
+        session_id: "session-dup",
+        match_id: "match-1",
+        mentor: {
+          id: "mentor-1",
+          username: "mentor_ada",
+          display_name: "Ada Lovelace",
+          picture_url: "",
+          title: "Mentor",
+        },
+        mentee: {
+          id: "mentee-1",
+          username: "me_user",
+          display_name: "Me User",
+          picture_url: "",
+          title: "Mentee",
+        },
+        source_slot_id: "slot-old",
+        scheduled_start_at: "2026-04-20T09:00:00Z",
+        scheduled_end_at: "2026-04-20T10:00:00Z",
+        status: "SCHEDULED",
+        display_status: "SCHEDULED",
+        my_role: "MENTEE",
+        allowed_actions: ["cancel"],
+        canceled_by_role: null,
+        cancel_reason: "",
+        created_at: "2026-04-10T08:00:00Z",
+        updated_at: "2026-04-10T09:00:00Z",
+      },
+      {
+        session_id: "session-dup",
+        match_id: "match-1",
+        mentor: {
+          id: "mentor-1",
+          username: "mentor_ada",
+          display_name: "Ada Lovelace",
+          picture_url: "",
+          title: "Mentor",
+        },
+        mentee: {
+          id: "mentee-1",
+          username: "me_user",
+          display_name: "Me User",
+          picture_url: "",
+          title: "Mentee",
+        },
+        source_slot_id: "slot-new",
+        scheduled_start_at: "2026-04-21T11:00:00Z",
+        scheduled_end_at: "2026-04-21T12:00:00Z",
+        status: "SCHEDULED",
+        display_status: "SCHEDULED",
+        my_role: "MENTEE",
+        allowed_actions: ["cancel", "reschedule"],
+        canceled_by_role: null,
+        cancel_reason: "",
+        created_at: "2026-04-10T08:00:00Z",
+        updated_at: "2026-04-10T10:00:00Z",
+      },
+    ];
+
+    const mapped = mapMeetingSessionsToDashboard(sessions);
+
     expect(mapped).toHaveLength(1);
     expect(mapped[0]).toMatchObject({
       id: "slot-new",
-      sessionId: "session-new",
+      sessionId: "session-dup",
       requestId: "match-1",
       user: "Ada Lovelace",
       status: "Upcoming",

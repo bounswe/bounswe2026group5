@@ -468,7 +468,10 @@ export function useUpdateTimelineEventMutation(currentUsername?: string) {
       timestamp,
       show_on_profile,
     }: UpdateTimelineEventPayload) =>
-      apiPatch<TimelineEvent, Omit<UpdateTimelineEventPayload, "matchId" | "eventId">>(
+      apiPatch<
+        TimelineEvent,
+        Omit<UpdateTimelineEventPayload, "matchId" | "eventId">
+      >(
         `/api/mentorship/matches/${encodeURIComponent(matchId)}/journey/events/${encodeURIComponent(eventId)}/`,
         {
           ...(event_type ? { event_type } : {}),
@@ -852,7 +855,10 @@ export function useRespondToMentorshipRequestMutation() {
  *
  * @param username Profile username path parameter.
  */
-export function useAvailabilitySlotsQuery(username: string, enabled: boolean = true) {
+export function useAvailabilitySlotsQuery(
+  username: string,
+  enabled: boolean = true,
+) {
   return useQuery({
     queryKey: ["profiles", username, "availability-slots"],
     queryFn: () =>
@@ -1056,22 +1062,15 @@ export function mapMeetingSessionsToDashboard(
   sessions: BackendMeetingSession[],
 ): DashboardSessionItem[] {
   const now = new Date();
-  const latestActiveSessionByMatch = new Map<string, BackendMeetingSession>();
-  const nonActiveSessions: BackendMeetingSession[] = [];
+  const latestSessionById = new Map<string, BackendMeetingSession>();
 
   sessions.forEach((session) => {
-    const isActive =
-      session.display_status === "SCHEDULED" ||
-      session.display_status === "RESCHEDULED";
+    const key =
+      session.session_id || `${session.match_id}:${session.scheduled_start_at}`;
+    const current = latestSessionById.get(key);
 
-    if (!isActive) {
-      nonActiveSessions.push(session);
-      return;
-    }
-
-    const current = latestActiveSessionByMatch.get(session.match_id);
     if (!current) {
-      latestActiveSessionByMatch.set(session.match_id, session);
+      latestSessionById.set(key, session);
       return;
     }
 
@@ -1079,7 +1078,7 @@ export function mapMeetingSessionsToDashboard(
     const nextUpdatedAt = new Date(session.updated_at).getTime();
 
     if (nextUpdatedAt > currentUpdatedAt) {
-      latestActiveSessionByMatch.set(session.match_id, session);
+      latestSessionById.set(key, session);
       return;
     }
 
@@ -1088,14 +1087,11 @@ export function mapMeetingSessionsToDashboard(
       new Date(session.scheduled_start_at).getTime() >
         new Date(current.scheduled_start_at).getTime()
     ) {
-      latestActiveSessionByMatch.set(session.match_id, session);
+      latestSessionById.set(key, session);
     }
   });
 
-  const normalizedSessions = [
-    ...latestActiveSessionByMatch.values(),
-    ...nonActiveSessions,
-  ];
+  const normalizedSessions = Array.from(latestSessionById.values());
 
   return normalizedSessions
     .map((session) => {
