@@ -664,38 +664,49 @@ export function CommunityDetailPage() {
             {/* ── Two-column layout: LEFT = members sidebar, RIGHT = header + feed ── */}
             <div className="flex items-start gap-6 px-4 sm:px-6 w-full">
 
-                {/* ── LEFT: Members sidebar (authenticated users only) ────── */}
-                {me && (
-                    <aside className="hidden lg:flex flex-col w-64 shrink-0 sticky top-20 self-start">
-                        <div className="island-shell rounded-xl flex flex-col max-h-[calc(100vh-6rem)] overflow-hidden">
-                            <div className="px-4 py-3 border-b border-line flex items-center justify-between">
-                                <span className="text-sm font-semibold text-ink">Members</span>
-                                <span className="text-xs text-ink-soft">{totalMembers.toLocaleString()}</span>
-                            </div>
-                            <div className="overflow-y-auto divide-y divide-line">
-                                {members.length === 0 ? (
-                                    <p className="text-xs text-ink-soft px-4 py-6 text-center">No members yet.</p>
-                                ) : (
-                                    <>
-                                        {members.map((profile) => (
-                                            <MemberCard
-                                                key={profile.id}
-                                                profile={profile}
-                                                onViewProfile={(username) => navigate({ to: '/profiles/$username', params: { username } })}
-                                                onSendMessage={matchedUsernames.has(profile.username) ? sendMessageTo : undefined}
-                                            />
-                                        ))}
-                                        {totalMembers > 50 && (
-                                            <p className="text-xs text-ink-soft px-4 py-3 text-center">
-                                                and {(totalMembers - 50).toLocaleString()} more
-                                            </p>
-                                        )}
-                                    </>
-                                )}
-                            </div>
+                {/* ── LEFT: Members sidebar ────── */}
+                <aside className="hidden lg:flex flex-col w-64 shrink-0 sticky top-20 self-start">
+                    <div className="island-shell rounded-xl flex flex-col max-h-[calc(100vh-6rem)] overflow-hidden">
+                        <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+                            <span className="text-sm font-semibold text-ink">Members</span>
+                            {me && <span className="text-xs text-ink-soft">{totalMembers.toLocaleString()}</span>}
                         </div>
-                    </aside>
-                )}
+                        <div className="overflow-y-auto divide-y divide-line">
+                            {!me ? (
+                                <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+                                    <Lock className="h-5 w-5 text-ink-soft/50" aria-hidden="true" />
+                                    <p className="text-xs text-ink-soft leading-snug">
+                                        Log in to see who's in this community.
+                                    </p>
+                                    <Link
+                                        to="/login"
+                                        className="mt-1 inline-flex items-center justify-center text-xs font-medium px-3 py-1.5 rounded-md bg-accent hover:bg-accent/90 text-white transition-colors"
+                                    >
+                                        Log in
+                                    </Link>
+                                </div>
+                            ) : members.length === 0 ? (
+                                <p className="text-xs text-ink-soft px-4 py-6 text-center">No members in this community yet.</p>
+                            ) : (
+                                <>
+                                    {members.map((profile) => (
+                                        <MemberCard
+                                            key={profile.id}
+                                            profile={profile}
+                                            onViewProfile={(username) => navigate({ to: '/profiles/$username', params: { username } })}
+                                            onSendMessage={matchedUsernames.has(profile.username) ? sendMessageTo : undefined}
+                                        />
+                                    ))}
+                                    {totalMembers > 50 && (
+                                        <p className="text-xs text-ink-soft px-4 py-3 text-center">
+                                            and {(totalMembers - 50).toLocaleString()} more
+                                        </p>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </aside>
 
                 {/* ── RIGHT: Community header + feed ──────────────────────── */}
                 <div className="flex-1 min-w-0 flex flex-col gap-5 max-w-6xl mx-auto">
