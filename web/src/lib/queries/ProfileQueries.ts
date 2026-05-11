@@ -17,6 +17,7 @@ export interface MenteeProfile {
     picture_url: string
     skills: string[] | null
     app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
+    share_precise_location: boolean
 }
 
 export interface MentorProfile {
@@ -31,6 +32,7 @@ export interface MentorProfile {
     review_count: number
     total_mentee_count: number
     app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
+    share_precise_location: boolean
     is_overloaded: boolean
     active_matches_count: number
     overload_threshold: number
@@ -49,6 +51,7 @@ export interface UpdateProfileBody {
     title?: string
     location?: string
     show_initials_only?: boolean
+    share_precise_location?: boolean
     skills?: string[]
 }
 
