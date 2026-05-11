@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/table"
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Globe, Loader2, X } from 'lucide-react'
+import { BookOpen, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Globe, Loader2, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { myWorkshopAttendanceQueryOptions } from '#/lib/queries/WorkshopQueries.ts'
 
 export const Route = createFileRoute('/_authorized/schedule')({
   component: SchedulePage,
@@ -36,6 +37,7 @@ interface NormalizedSession {
   peerPicture: string | null
   peerTitle: string | null
   status: 'Upcoming' | 'Completed'
+  type?: 'session' | 'workshop'
 }
 
 type ScheduleTableProps = Readonly<{
@@ -126,16 +128,24 @@ function ScheduleTable({ sessions, peerLabel }: ScheduleTableProps) {
                     </div>
                   </TableCell>
                   <TableCell className="pr-6 py-4">
-                    <Badge
-                        variant="secondary"
-                        className={`font-normal ${
-                            session.status === 'Completed'
-                                ? 'bg-gray-100 text-gray-600'
-                                : 'bg-green-100 text-green-800'
-                        }`}
-                    >
-                      {session.status}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge
+                          variant="secondary"
+                          className={`font-normal w-fit ${
+                              session.status === 'Completed'
+                                  ? 'bg-gray-100 text-gray-600'
+                                  : 'bg-green-100 text-green-800'
+                          }`}
+                      >
+                        {session.status}
+                      </Badge>
+                      {session.type === 'workshop' && (
+                        <Badge variant="secondary" className="font-normal w-fit bg-violet-100 text-violet-700 border border-violet-200 flex items-center gap-1">
+                          <BookOpen className="w-3 h-3" />
+                          Workshop
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
             ))}
@@ -158,10 +168,14 @@ export function SchedulePage() {
     status: 'upcoming',
   })
 
-  const isLoading = sessionsLoading
+  const { data: workshopAttendance, isLoading: workshopsLoading } = useQuery(
+    myWorkshopAttendanceQueryOptions()
+  )
+
+  const isLoading = sessionsLoading || workshopsLoading
 
   const rawSessions: NormalizedSession[] = useMemo(() => {
-    return sessions.map((session) => {
+    const sessionRows: NormalizedSession[] = sessions.map((session) => {
       const startDate = new Date(session.scheduled_start_at)
       const endDate = new Date(session.scheduled_end_at)
       const counterpart = isMentor ? session.mentee : session.mentor
@@ -176,9 +190,35 @@ export function SchedulePage() {
         peerPicture: counterpart.picture_url,
         peerTitle: counterpart.title,
         status: toUiStatus(session.display_status),
+        type: 'session' as const,
       }
     })
-  }, [isMentor, sessions])
+
+    const workshopRows: NormalizedSession[] = (workshopAttendance?.results ?? [])
+      .filter(w => w.workshop_status === 'SCHEDULED' || w.attendance_status === 'attended')
+      .map(w => {
+        const startDate = new Date(w.workshop_scheduled_at)
+        const endDate = new Date(w.workshop_end_at)
+        return {
+          id: w.workshop_id,
+          isoDate: toIso(startDate),
+          startTime: toClockTime(startDate),
+          endTime: toClockTime(endDate),
+          peerName: w.author.display_name,
+          peerUsername: w.author.username,
+          peerPicture: w.author.picture_url,
+          peerTitle: w.author.title || null,
+          status: w.attendance_status === 'attended' ? ('Completed' as const) : ('Upcoming' as const),
+          type: 'workshop' as const,
+        }
+      })
+
+    return [...sessionRows, ...workshopRows].sort((a, b) => {
+      const dateCompare = a.isoDate.localeCompare(b.isoDate)
+      if (dateCompare !== 0) return dateCompare
+      return a.startTime.localeCompare(b.startTime)
+    })
+  }, [isMentor, sessions, workshopAttendance])
 
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -328,7 +368,7 @@ export function SchedulePage() {
               {/* List header */}
               <div className="px-6 py-4 flex items-center justify-between bg-card border-t border-line">
                 <Heading as="h4" className="text-lg">
-                  {selectedDate ? `Sessions for ${formattedSelectedDate}` : 'All Sessions'}
+                  {selectedDate ? `Sessions for ${formattedSelectedDate}` : 'All Sessions & Workshops'}
                 </Heading>
                 {selectedDate && (
                     <Button variant="ghost" size="sm" onClick={() => setSelectedDate(null)} className="h-8 text-ink-soft hover:text-ink">

@@ -30,8 +30,9 @@ export function AuthorizedHeader() {
           <div className="flex items-center gap-8">
             <Link
                 to="/dashboard"
-                className="font-bold font-display tracking-tight text-lg text-ink"
+                className="flex items-center gap-2 font-bold font-display tracking-tight text-lg text-ink"
             >
+              <img src="/icon.png" alt="" aria-hidden="true" className="h-7 w-7 rounded-lg" />
               Neighborship
             </Link>
 

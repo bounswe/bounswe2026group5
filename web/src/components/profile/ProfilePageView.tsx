@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Body, Heading, Muted } from '@/components/Typography'
-import { Star, Sparkles, Pencil, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Star, Sparkles, Pencil, ChevronLeft, ChevronRight, Calendar, Clock, Users, BookOpen } from 'lucide-react'
 import { EditProfileModal } from '#/components/profile/EditProfileModal.tsx'
 import { ProfilePostsSection } from '#/components/profile/ProfilePostsSection.tsx'
 import { useState } from 'react'
@@ -11,6 +11,11 @@ import { useAvailabilitySlots } from "#/lib/queries/ProfileTimeSlotQueries.ts";
 import { useMentorReviews } from '#/lib/queries/ProfileQueries.ts'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
+import { useProfileWorkshopAttendance } from '#/lib/queries/WorkshopQueries.ts'
+import type { WorkshopAttendanceItem, CommunityWorkshop } from '#/lib/queries/WorkshopQueries.ts'
+import { WorkshopDetailModal } from '#/components/community/WorkshopDetailModal.tsx'
+import { useQuery } from '@tanstack/react-query'
+import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 interface BaseMappedProfile {
   username: string
   full_name: string
@@ -120,6 +125,134 @@ function MentorReviewsList({ username }: { username: string }) {
 
 import { ReportUserDialog } from '#/components/ReportUserDialog.tsx'
 
+// ---------------------------------------------------------------------------
+// Profile Workshops Section
+// ---------------------------------------------------------------------------
+
+function attendanceToWorkshop(item: WorkshopAttendanceItem): CommunityWorkshop {
+    return {
+        id: item.workshop_id,
+        community_id: item.community_id,
+        community_name: item.community_name,
+        author: item.author,
+        title: item.workshop_title,
+        description: item.workshop_description,
+        scheduled_at: item.workshop_scheduled_at,
+        end_at: item.workshop_end_at,
+        max_participants: 0,
+        participant_count: 0,
+        is_full: false,
+        status: item.workshop_status as CommunityWorkshop['status'],
+        current_user_enrolled: true,
+        created_at: item.joined_at,
+        updated_at: item.joined_at,
+    }
+}
+
+function WorkshopAttendanceCard({ item, onClick }: { item: WorkshopAttendanceItem; onClick: () => void }) {
+    const isUpcoming = item.attendance_status === 'attending'
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="w-full text-left rounded-lg border border-line bg-white/70 px-4 py-3 flex flex-col gap-2 hover:border-accent/40 hover:shadow-sm transition-all cursor-pointer"
+        >
+            <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold text-ink leading-snug line-clamp-2">{item.workshop_title}</p>
+                <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                    item.workshop_status === 'CANCELLED'
+                        ? 'bg-red-100 text-red-700 border-red-200'
+                        : item.workshop_status === 'COMPLETED'
+                        ? 'bg-gray-100 text-gray-600 border-gray-200'
+                        : isUpcoming
+                        ? 'bg-green-100 text-green-700 border-green-200'
+                        : 'bg-gray-100 text-gray-600 border-gray-200'
+                }`}>
+                    {item.workshop_status === 'CANCELLED' ? 'Cancelled' : isUpcoming ? 'Upcoming' : 'Attended'}
+                </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-ink-soft">
+                <Calendar className="w-3.5 h-3.5 shrink-0" />
+                {new Date(item.workshop_scheduled_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                <span className="mx-1">·</span>
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                {new Date(item.workshop_scheduled_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+            </div>
+            <div className="flex items-center justify-between gap-2">
+                <Muted className="text-xs flex items-center gap-1">
+                    <Users className="w-3 h-3 shrink-0" />
+                    {item.community_name}
+                </Muted>
+                <span className="text-xs text-accent shrink-0">
+                    by {item.author.display_name}
+                </span>
+            </div>
+        </button>
+    )
+}
+
+function ProfileWorkshopsSection({ username }: { username: string }) {
+    const { data, isLoading } = useProfileWorkshopAttendance(username)
+    const { data: me } = useQuery(meQueryOptions)
+    const [selectedWorkshop, setSelectedWorkshop] = useState<CommunityWorkshop | null>(null)
+    const workshops = data?.results ?? []
+
+    if (isLoading) return (
+        <div className="flex justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-ink-soft" /></div>
+    )
+
+    if (workshops.length === 0) return null
+
+    const upcoming = workshops.filter(w => w.attendance_status === 'attending')
+    const past = workshops.filter(w => w.attendance_status === 'attended')
+
+    return (
+        <>
+            <section className="island-shell rounded-3xl p-6 sm:p-8 space-y-5">
+                <h2 className="text-xl font-semibold text-ink flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-accent" />
+                    Workshops
+                </h2>
+                {upcoming.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                        <p className="text-sm font-medium text-ink-soft uppercase tracking-wide">Upcoming</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {upcoming.slice(0, 4).map(w => (
+                                <WorkshopAttendanceCard
+                                    key={w.id}
+                                    item={w}
+                                    onClick={() => setSelectedWorkshop(attendanceToWorkshop(w))}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+                {past.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                        <p className="text-sm font-medium text-ink-soft uppercase tracking-wide">Past</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {past.slice(0, 4).map(w => (
+                                <WorkshopAttendanceCard
+                                    key={w.id}
+                                    item={w}
+                                    onClick={() => setSelectedWorkshop(attendanceToWorkshop(w))}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </section>
+            <WorkshopDetailModal
+                workshop={selectedWorkshop}
+                tagId={selectedWorkshop?.community_id ?? ''}
+                open={Boolean(selectedWorkshop)}
+                onClose={() => setSelectedWorkshop(null)}
+                currentUsername={me?.username}
+            />
+        </>
+    )
+}
+
 export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: ProfilePageViewProps) {
   const [editOpen, setEditOpen] = useState(false)
   const { data: slots = [] } = useAvailabilitySlots(profile.username, profile.isMentor)
@@ -226,6 +359,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
               </div>
             </div>
           </section>
+          <ProfileWorkshopsSection username={profile.username} />
           {isAuthenticatedViewer && (
               <ProfilePostsSection username={profile.username} isOwner={isOwner} />
           )}
@@ -314,6 +448,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                 />
 
             </section>
+            <ProfileWorkshopsSection username={profile.username} />
             {isAuthenticatedViewer && (
                 <ProfilePostsSection username={profile.username} isOwner={isOwner} />
             )}

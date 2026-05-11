@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
     Users, ChevronLeft, Pencil, Plus, Trophy, TrendingUp,
-    Trash2, Loader2, User, MessageSquare,
+    Trash2, Loader2, Lock, User, MessageSquare, BookOpen,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -35,6 +35,13 @@ import {
     type CommunityPostCreatePayload,
     type CommunityPostUpdatePayload,
 } from '@/lib/queries/CommunityQueries.ts'
+import {
+    communityWorkshopsQueryOptions,
+    type CommunityWorkshop,
+} from '@/lib/queries/WorkshopQueries.ts'
+import { WorkshopCard } from '@/components/community/WorkshopCard.tsx'
+import { WorkshopDetailModal } from '@/components/community/WorkshopDetailModal.tsx'
+import { CreateWorkshopDialog } from '@/components/community/CreateWorkshopDialog.tsx'
 import { meQueryOptions } from '@/lib/queries/AuthQueries.ts'
 import { useMessaging } from '@/lib/queries/MessagingQueries.ts'
 import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
@@ -563,6 +570,9 @@ export function CommunityDetailPage() {
     const [createOpen, setCreateOpen] = useState(false)
     const [editPost, setEditPost] = useState<CommunityPost | null>(null)
     const [deletePost, setDeletePost] = useState<CommunityPost | null>(null)
+    const [selectedWorkshop, setSelectedWorkshop] = useState<CommunityWorkshop | null>(null)
+    const [workshopDetailOpen, setWorkshopDetailOpen] = useState(false)
+    const [createWorkshopOpen, setCreateWorkshopOpen] = useState(false)
 
     const { data: me } = useQuery(meQueryOptions)
     const { data: community, isLoading } = useQuery(communityDetailQueryOptions(communitySlug))
@@ -583,6 +593,11 @@ export function CommunityDetailPage() {
     const joinMutation = useJoinCommunityMutation()
     const leaveMutation = useLeaveCommunityMutation()
     const updateMutation = useUpdateCommunityDescriptionMutation()
+
+    const { data: workshopsData, isLoading: workshopsLoading } = useQuery({
+        ...communityWorkshopsQueryOptions(community?.id ?? ''),
+        enabled: Boolean(community?.id),
+    })
 
     const isMember = community?.is_member ?? false
     const isCreator = Boolean(me && community?.created_by_username === me.username)
@@ -792,6 +807,59 @@ export function CommunityDetailPage() {
                         </>
                     </div>
 
+                    {/* Workshops section — visible to everyone */}
+                    <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-base font-semibold text-ink flex items-center gap-2">
+                                <BookOpen className="w-4 h-4 text-accent" />
+                                Workshops
+                                {workshopsData && workshopsData.count > 0 && (
+                                    <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                                        {workshopsData.count}
+                                    </span>
+                                )}
+                            </h2>
+                            {isMember && me?.app_usage_mode === 'MENTOR' && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1.5 text-xs h-7"
+                                    onClick={() => setCreateWorkshopOpen(true)}
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    Create Workshop
+                                </Button>
+                            )}
+                        </div>
+
+                        {workshopsLoading ? (
+                            <div className="flex justify-center py-8">
+                                <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
+                            </div>
+                        ) : !workshopsData || workshopsData.results.length === 0 ? (
+                            <div className="island-shell rounded-xl p-8 text-center flex flex-col items-center gap-2 shadow-sm opacity-70">
+                                <BookOpen className="h-7 w-7 text-ink-soft/40" />
+                                <p className="text-sm font-medium text-ink">No workshops yet.</p>
+                                {isMember && me?.app_usage_mode === 'MENTOR' && (
+                                    <p className="text-xs text-ink-soft">Be the first to create one for this community.</p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {workshopsData.results.map(w => (
+                                    <WorkshopCard
+                                        key={w.id}
+                                        workshop={w}
+                                        onViewDetails={(workshop) => {
+                                            setSelectedWorkshop(workshop)
+                                            setWorkshopDetailOpen(true)
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                 </div>{/* end RIGHT column */}
 
             </div>{/* end two-column */}
@@ -813,6 +881,18 @@ export function CommunityDetailPage() {
                     {deletePost && (
                         <DeletePostDialog communityId={community.id} post={deletePost} open={!!deletePost} onOpenChange={(open) => { if (!open) setDeletePost(null) }} />
                     )}
+                    <WorkshopDetailModal
+                        workshop={selectedWorkshop}
+                        tagId={community.id}
+                        open={workshopDetailOpen}
+                        onClose={() => { setWorkshopDetailOpen(false); setSelectedWorkshop(null) }}
+                        currentUsername={me?.username}
+                    />
+                    <CreateWorkshopDialog
+                        tagId={community.id}
+                        open={createWorkshopOpen}
+                        onClose={() => setCreateWorkshopOpen(false)}
+                    />
                 </>
             )}
         </div>
