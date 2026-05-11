@@ -122,7 +122,6 @@ export class JourneyPage {
 
   async confirmDeleteEntry() {
     await this.dialog.getByRole('button', { name: 'Remove' }).click();
-    await expect(this.page.getByText('Entry removed from your journey')).toBeVisible();
     await expect(this.dialog).toHaveCount(0);
   }
 

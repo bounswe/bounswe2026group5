@@ -196,6 +196,171 @@ export class CommunityDetailPage {
     await expect(this.deleteDialog).toHaveCount(0);
   }
 
+  async expectCreateWorkshopVisible() {
+    await expect(this.page.getByRole('button', { name: 'Create Workshop' })).toBeVisible();
+  }
+
+  async expectCreateWorkshopHidden() {
+    await expect(this.page.getByRole('button', { name: 'Create Workshop' })).toHaveCount(0);
+  }
+
+  async openCreateWorkshopDialog() {
+    await this.page.getByRole('button', { name: 'Create Workshop' }).click();
+    await expect(this.workshopDialog).toBeVisible();
+    await expect(this.workshopDialog.getByRole('heading', { name: 'Create Workshop' })).toBeVisible();
+  }
+
+  async expectCreateWorkshopSubmitEnabled() {
+    await expect(this.workshopDialog.getByRole('button', { name: 'Create Workshop' })).toBeEnabled();
+  }
+
+  async fillWorkshopTitle(title: string) {
+    await this.workshopDialog.getByLabel(/^Title/i).fill(title);
+  }
+
+  async clearWorkshopTitle() {
+    await this.workshopDialog.getByLabel(/^Title/i).fill('');
+  }
+
+  async fillWorkshopDescription(description: string) {
+    await this.workshopDialog.getByLabel(/^Description/i).fill(description);
+  }
+
+  async fillWorkshopStart(localDateTime: string) {
+    await this.workshopDialog.getByLabel(/^Start/i).fill(localDateTime);
+  }
+
+  async fillWorkshopEnd(localDateTime: string) {
+    await this.workshopDialog.getByLabel(/^End/i).fill(localDateTime);
+  }
+
+  async fillWorkshopCapacity(capacity: string) {
+    await this.workshopDialog.getByLabel(/^Max Participants/i).fill(capacity);
+  }
+
+  async submitWorkshopCreate() {
+    await this.workshopDialog.getByRole('button', { name: 'Create Workshop' }).click();
+  }
+
+  async expectWorkshopDialogOpen(title: 'Create Workshop' | 'Edit Workshop') {
+    await expect(this.workshopDialog).toBeVisible();
+    await expect(this.workshopDialog.getByRole('heading', { name: title })).toBeVisible();
+  }
+
+  async expectWorkshopValidationError(message: string) {
+    await expect(this.workshopDialog.getByText(message)).toBeVisible();
+  }
+
+  async expectWorkshopCreated() {
+    await expect(this.page.getByText('Workshop created!')).toBeVisible();
+    await expect(this.workshopDialog).toHaveCount(0);
+  }
+
+  async expectWorkshopCardVisible(title: string) {
+    await expect(this.workshopCard(title)).toBeVisible();
+  }
+
+  async expectNoWorkshopsEmptyState() {
+    await expect(this.page.getByText('No workshops yet.')).toBeVisible();
+  }
+
+  async expectWorkshopCardSummary(title: string, participantCount: number, maxParticipants: number, status: 'Open' | 'Full' | 'Cancelled' | 'Ended') {
+    const card = this.workshopCard(title);
+    await expect(card).toBeVisible();
+    await expect(card.getByText(`${participantCount}/${maxParticipants} Enrolled`)).toBeVisible();
+    await expect(card.getByText(status)).toBeVisible();
+  }
+
+  async openWorkshopDetails(title: string) {
+    const card = this.workshopCard(title);
+    await expect(card).toBeVisible();
+    await card.getByRole('button', { name: 'View Details' }).click();
+    await expect(this.workshopDetailDialog).toBeVisible();
+    await expect(this.workshopDetailDialog.getByText(title, { exact: true })).toBeVisible();
+  }
+
+  async expectWorkshopJoinVisible() {
+    await expect(this.workshopDetailDialog.getByRole('button', { name: 'Join Workshop' })).toBeVisible();
+  }
+
+  async expectWorkshopJoinHidden() {
+    await expect(this.workshopDetailDialog.getByRole('button', { name: 'Join Workshop' })).toHaveCount(0);
+  }
+
+  async joinWorkshop() {
+    await this.workshopDetailDialog.getByRole('button', { name: 'Join Workshop' }).click();
+    await expect(this.workshopDetailDialog.getByRole('button', { name: 'Leave Workshop' })).toBeVisible();
+  }
+
+  async expectWorkshopLeaveVisible() {
+    await expect(this.workshopDetailDialog.getByRole('button', { name: 'Leave Workshop' })).toBeVisible();
+  }
+
+  async leaveWorkshop() {
+    await this.workshopDetailDialog.getByRole('button', { name: 'Leave Workshop' }).click();
+    await expect(this.workshopDetailDialog.getByRole('button', { name: 'Join Workshop' })).toBeVisible();
+  }
+
+  async expectWorkshopParticipantCount(participantCount: number, maxParticipants: number) {
+    await expect(this.workshopDetailDialog.getByText(`${participantCount}/${maxParticipants} Enrolled`)).toBeVisible();
+  }
+
+  async expectWorkshopStatus(status: 'Open' | 'Full' | 'Cancelled' | 'Ended') {
+    await expect(this.workshopDetailDialog.getByText(status)).toBeVisible();
+  }
+
+  async expectHostWorkshopActionsVisible() {
+    await expect(this.workshopDetailDialog.getByRole('button', { name: 'Edit Workshop' })).toBeVisible();
+    await expect(this.workshopDetailDialog.getByRole('button', { name: 'Cancel Workshop' })).toBeVisible();
+  }
+
+  async expectHostWorkshopActionsHidden() {
+    await expect(this.workshopDetailDialog.getByRole('button', { name: 'Edit Workshop' })).toHaveCount(0);
+    await expect(this.workshopDetailDialog.getByRole('button', { name: 'Cancel Workshop' })).toHaveCount(0);
+  }
+
+  async openWorkshopEditDialog() {
+    await this.workshopDetailDialog.getByRole('button', { name: 'Edit Workshop' }).click();
+    await expect(this.workshopDialog).toBeVisible();
+    await expect(this.workshopDialog.getByRole('heading', { name: 'Edit Workshop' })).toBeVisible();
+  }
+
+  async saveWorkshopChanges() {
+    await this.workshopDialog.getByRole('button', { name: 'Save Changes' }).click();
+  }
+
+  async expectWorkshopUpdated() {
+    await expect(this.page.getByText('Workshop updated.')).toBeVisible();
+    await expect(this.page.getByRole('heading', { name: 'Edit Workshop' })).toHaveCount(0);
+  }
+
+  async startWorkshopCancelFlow() {
+    await this.workshopDetailDialog.getByRole('button', { name: 'Cancel Workshop' }).click();
+    await expect(this.workshopDetailDialog.getByText('Cancel this workshop?')).toBeVisible();
+  }
+
+  async keepWorkshopActive() {
+    await this.workshopDetailDialog.getByRole('button', { name: 'Keep' }).click();
+    await expect(this.workshopDetailDialog.getByText('Cancel this workshop?')).toHaveCount(0);
+  }
+
+  async confirmWorkshopCancellation() {
+    await this.workshopDetailDialog.getByRole('button', { name: 'Yes, Cancel Workshop' }).click();
+    await expect(this.page.getByText('Workshop cancelled.')).toBeVisible();
+  }
+
+  async expectWorkshopParticipantsVisible(...names: string[]) {
+    await expect(this.workshopDetailDialog.getByText('Participants')).toBeVisible();
+    for (const name of names) {
+      await expect(this.workshopDetailDialog.getByText(name, { exact: true })).toBeVisible();
+    }
+  }
+
+  async closeWorkshopDetails() {
+    await this.workshopDetailDialog.locator('button').filter({ hasText: 'Close' }).first().click();
+    await expect(this.workshopDetailDialog).toHaveCount(0);
+  }
+
   private get postDialog() {
     return this.page.getByRole('dialog');
   }
@@ -208,9 +373,23 @@ export class CommunityDetailPage {
     return this.page.getByRole('dialog');
   }
 
+  private get workshopDialog() {
+    return this.page.getByRole('dialog');
+  }
+
+  private get workshopDetailDialog() {
+    return this.page.getByRole('dialog');
+  }
+
   private postCard(content: string) {
     return this.page.locator('div.rounded-lg.border', {
       has: this.page.getByText(content),
+    }).first();
+  }
+
+  private workshopCard(title: string) {
+    return this.page.locator('.island-shell', {
+      has: this.page.getByText(title, { exact: true }),
     }).first();
   }
 }
