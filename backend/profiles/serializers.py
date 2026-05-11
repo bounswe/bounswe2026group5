@@ -249,6 +249,7 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
     picture_url = serializers.SerializerMethodField()
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     show_initials_only = serializers.BooleanField(read_only=True)
+    share_precise_location = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Profile
@@ -258,6 +259,7 @@ class MenteeProfileResponseSerializer(serializers.ModelSerializer):
             "full_name",
             "bio",
             "show_initials_only",
+            "share_precise_location",
             "picture_url",
             "skills",
         )
@@ -291,6 +293,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
     average_rating = serializers.DecimalField(max_digits=3, decimal_places=2, read_only=True)
     total_mentee_count = serializers.IntegerField(read_only=True)
     show_initials_only = serializers.BooleanField(read_only=True)
+    share_precise_location = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Profile
@@ -301,6 +304,7 @@ class MentorProfileResponseSerializer(serializers.ModelSerializer):
             "title",
             "bio",
             "show_initials_only",
+            "share_precise_location",
             "picture_url",
             "skills",
             "average_rating",
@@ -332,6 +336,7 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
     location = LocationField(read_only=True)
     skills = serializers.ListField(child=serializers.CharField(), read_only=True)
     picture_url = serializers.SerializerMethodField()
+    share_precise_location = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Profile
@@ -344,6 +349,7 @@ class ProfileResponseSerializer(serializers.ModelSerializer):
             "title",
             "location",
             "show_initials_only",
+            "share_precise_location",
             "skills",
             "created_at",
             "updated_at",

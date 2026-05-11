@@ -17,6 +17,7 @@ export interface MenteeProfile {
     picture_url: string
     skills: string[] | null
     app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
+    share_precise_location: boolean
 }
 
 export interface MentorProfile {
@@ -30,6 +31,7 @@ export interface MentorProfile {
     average_rating: number
     total_mentee_count: number
     app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
+    share_precise_location: boolean
 }
 
 export type ProfileResponse = MenteeProfile | MentorProfile
@@ -45,6 +47,7 @@ export interface UpdateProfileBody {
     title?: string
     location?: string
     show_initials_only?: boolean
+    share_precise_location?: boolean
     skills?: string[]
 }
 

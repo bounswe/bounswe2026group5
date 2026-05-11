@@ -24,6 +24,7 @@ interface BaseMappedProfile {
   picture_url: string
   skills: string[]
   app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
+  share_precise_location: boolean
 }
 
 interface MentorMappedProfile extends BaseMappedProfile {
@@ -318,6 +319,7 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
             bio: profile.bio ?? '',
             title: profile.isMentor ? profile.title : undefined,
             show_initials_only: profile.show_initials_only,
+            share_precise_location: profile.share_precise_location,
             skills: profile.skills,
           }}
           onClose={() => setEditOpen(false)}
