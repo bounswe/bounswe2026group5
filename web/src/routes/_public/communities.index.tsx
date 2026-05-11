@@ -170,7 +170,7 @@ function CreateCommunityModal({ open, onClose }: CreateCommunityModalProps) {
                             rows={3}
                         />
                     </div>
-                    <DialogFooter className="mt-2">
+                    <DialogFooter className="mt-2 border-line border-t">
                         <Button type="button" variant="ghost" onClick={handleClose} disabled={isPending}>
                             Cancel
                         </Button>

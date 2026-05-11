@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { Calendar, Clock, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
+import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
 import type { CommunityWorkshop } from '@/lib/queries/WorkshopQueries.ts'
 
 const AVATAR_COLORS = [
@@ -104,7 +104,7 @@ export function WorkshopCard({ workshop, onViewDetails }: WorkshopCardProps) {
                 <div className="flex items-center gap-2 mt-auto pt-2 border-t border-line">
                     {workshop.author.picture_url ? (
                         <img
-                            src={workshop.author.picture_url}
+                            src={getAbsoluteMediaUrl(workshop.author.picture_url)}
                             alt={workshop.author.display_name}
                             className="h-7 w-7 rounded-full object-cover border border-white/50 shrink-0"
                         />

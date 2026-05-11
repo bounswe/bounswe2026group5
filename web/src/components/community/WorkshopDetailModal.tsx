@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Muted } from '@/components/Typography'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
 import {
     useCommunityWorkshopDetail,
     useJoinWorkshopMutation,
@@ -149,7 +149,7 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
                         {/* Host */}
                         <div className="flex items-center gap-3">
                             {resolved.author.picture_url ? (
-                                <img src={resolved.author.picture_url} alt={resolved.author.display_name} className="h-9 w-9 rounded-full object-cover border border-white/50 shrink-0" />
+                                <img src={getAbsoluteMediaUrl(resolved.author.picture_url)} alt={resolved.author.display_name} className="h-9 w-9 rounded-full object-cover border border-white/50 shrink-0" />
                             ) : (
                                 <div className={cn('h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border border-white/50', avatarColor(resolved.author.display_name))}>
                                     {miniInitials(resolved.author.display_name)}
@@ -182,7 +182,7 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
                                         {participants.map(p => (
                                             <div key={p.id} className="flex items-center gap-2.5 px-3 py-2">
                                                 {p.participant.picture_url ? (
-                                                    <img src={p.participant.picture_url} alt={p.participant.display_name} className="h-7 w-7 rounded-full object-cover border border-white/50 shrink-0" />
+                                                    <img src={getAbsoluteMediaUrl(p.participant.picture_url)} alt={p.participant.display_name} className="h-7 w-7 rounded-full object-cover border border-white/50 shrink-0" />
                                                 ) : (
                                                     <div className={cn('h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0', avatarColor(p.participant.display_name))}>
                                                         {miniInitials(p.participant.display_name)}
@@ -221,7 +221,7 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
                         )}
                     </div>
 
-                    <DialogFooter className="mt-4 flex flex-wrap gap-2">
+                    <DialogFooter className="mt-4 flex flex-wrap gap-2 border-t border-line">
                         {Boolean(isAuthor) && isActive && !confirmCancel && (
                             <>
                                 <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Edit Workshop</Button>
