@@ -175,7 +175,7 @@ export function CreateWorkshopDialog({ tagId, open, onClose, editWorkshop }: Cre
                         </p>
                     )}
 
-                    <DialogFooter className="mt-2">
+                    <DialogFooter className="mt-2 border-line border-t">
                         <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>Cancel</Button>
                         <Button type="submit" disabled={isPending} className="bg-accent hover:bg-accent/90 text-white">
                             {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : isEdit ? 'Save Changes' : 'Create Workshop'}

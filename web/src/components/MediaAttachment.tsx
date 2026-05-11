@@ -14,20 +14,22 @@ interface MediaAttachmentProps {
     url: string
     imgClassName?: string
     linkClassName?: string
+    onLoad?: () => void
 }
 
-export function MediaAttachment({ url, imgClassName, linkClassName }: MediaAttachmentProps) {
+export function MediaAttachment({ url, imgClassName, linkClassName, onLoad }: MediaAttachmentProps) {
     const absUrl = getAbsoluteMediaUrl(url)
     const [imgFailed, setImgFailed] = useState(isPdfUrl(absUrl))
 
     if (!imgFailed) {
         return (
-            <a href={absUrl} target="_blank" rel="noopener noreferrer" className="block">
+            <a href={absUrl} target="_blank" rel="noopener noreferrer" className="block max-w-full overflow-hidden">
                 <img
                     src={absUrl}
                     alt={mediaFileName(url)}
                     className={cn('max-h-60 rounded-lg border border-line object-contain', imgClassName)}
                     onError={() => setImgFailed(true)}
+                    onLoad={onLoad}
                 />
             </a>
         )

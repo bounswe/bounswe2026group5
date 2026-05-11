@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 import { useMyMatches, useDeactivateMatch } from '#/lib/queries/MentorshipQueries.ts'
 import { getAbsoluteMediaUrl, getInitials } from '#/lib/utils.ts'
-import { Loader2, UserCircle, BookOpen, AlertCircle } from 'lucide-react'
+import { Loader2, UserCircle, BookOpen, UserMinus } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import {
     Dialog,
@@ -89,7 +89,7 @@ export function ConnectionsPage() {
                     <p className="text-sm text-ink-soft mt-1">
                         Are you sure you want to end this match? This will end the active mentorship connection.
                     </p>
-                    <DialogFooter className="mt-4">
+                    <DialogFooter className="mt-4 border-t border-line">
                         <Button type="button" variant="outline" onClick={() => setDeactivateTarget(null)}>
                             Keep Connection
                         </Button>
@@ -187,12 +187,12 @@ function ConnectionCard({ matchId, username, displayName, pictureUrl, title, onD
                         </Button>
                     </Link>
                     <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={onDeactivate}
-                        className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors gap-2 mt-1"
+                        className="w-full border-line text-ink-soft hover:border-red-200 hover:text-red-600 hover:bg-red-50 transition-colors gap-2"
                     >
-                        <AlertCircle className="w-4 h-4" />
+                        <UserMinus className="w-4 h-4" />
                         End Match
                     </Button>
                 </div>

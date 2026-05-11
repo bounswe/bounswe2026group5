@@ -93,7 +93,7 @@ export class DiscoverPage {
   }
 
   async search(value: string) {
-    await this.page.getByLabel('Search profiles, skills, or projects...').fill(value);
+    await this.page.getByLabel('Search profiles or skills...').fill(value);
     await this.page.waitForTimeout(400);
   }
 }

@@ -12,7 +12,7 @@ interface DiscoverSearchBarProps {
 export function DiscoverSearchBar({
   value,
   onChange,
-  placeholder = 'Search profiles, skills, or projects...',
+  placeholder = 'Search profiles or skills...',
   className,
 
 }: Readonly<DiscoverSearchBarProps>) {

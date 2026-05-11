@@ -143,7 +143,7 @@ describe('DiscoverPage', () => {
 
   it('renders the search bar', () => {
     renderDiscover()
-    expect(screen.getByPlaceholderText(/Search profiles, skills, or projects/i)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/Search profiles or skills/i)).toBeInTheDocument()
   })
 
   it('renders the filter button', () => {
@@ -171,7 +171,7 @@ describe('DiscoverPage', () => {
 
   it('shows the empty state when no profiles match the search query', async () => {
     renderDiscover()
-    const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
+    const input = screen.getByPlaceholderText(/Search profiles or skills/i)
     fireEvent.change(input, { target: { value: 'xyznonexistent' } })
     await waitFor(() => {
       expect(screen.getByText(/No mentors found matching/i)).toBeInTheDocument()
@@ -180,7 +180,7 @@ describe('DiscoverPage', () => {
 
   it('filters profiles by skill name via search', async () => {
     renderDiscover()
-    const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
+    const input = screen.getByPlaceholderText(/Search profiles or skills/i)
     fireEvent.change(input, { target: { value: 'Kubernetes' } })
     await waitFor(() => {
       expect(screen.getByText('Mentor 1')).toBeInTheDocument()
@@ -190,7 +190,7 @@ describe('DiscoverPage', () => {
 
   it('restores profiles when search query is cleared', async () => {
     renderDiscover()
-    const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
+    const input = screen.getByPlaceholderText(/Search profiles or skills/i)
 
     fireEvent.change(input, { target: { value: 'Kubernetes' } })
     await waitFor(() => expect(screen.getByText('Mentor 1')).toBeInTheDocument())
@@ -295,7 +295,7 @@ describe('DiscoverPage', () => {
       expect(screen.getAllByRole('button', { name: /View Profile/i }).length).toBeGreaterThan(6)
     })
 
-    const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
+    const input = screen.getByPlaceholderText(/Search profiles or skills/i)
     fireEvent.change(input, { target: { value: 'python' } })
 
     await waitFor(() => {
