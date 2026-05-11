@@ -152,12 +152,13 @@ class ProfileLookupMixin:
     def _serialize_profile_by_mode(self, profile: Profile) -> dict[str, object]:
         """Serialize profile response using role-appropriate schema shape."""
         app_usage_mode = profile.user.app_usage_mode
+        context = {"request": self.request}
         if app_usage_mode == AppUsageMode.MENTEE:
-            serializer = MenteeProfileResponseSerializer(profile)
+            serializer = MenteeProfileResponseSerializer(profile, context=context)
         elif app_usage_mode == AppUsageMode.MENTOR:
-            serializer = MentorProfileResponseSerializer(profile)
+            serializer = MentorProfileResponseSerializer(profile, context=context)
         else:
-            serializer = ProfileResponseSerializer(profile)
+            serializer = ProfileResponseSerializer(profile, context=context)
 
         data = dict(serializer.data)
         data["app_usage_mode"] = app_usage_mode
@@ -497,7 +498,7 @@ class ProfileUsernameUpdateAPIView(ProfileLookupMixin, APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return Response(ProfileResponseSerializer(profile).data, status=status.HTTP_200_OK)
+        return Response(self._serialize_profile_by_mode(profile), status=status.HTTP_200_OK)
 
 
 class AvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
@@ -867,7 +868,7 @@ class RecentlyAddedMentorsListAPIView(APIView):
             .order_by("-created_at")[:limit]
         )
 
-        serializer = PublicMentorProfileSearchResultSerializer(qs, many=True)
+        serializer = PublicMentorProfileSearchResultSerializer(qs, many=True, context={"request": request})
         return Response({"results": serializer.data}, status=status.HTTP_200_OK)
 
 
@@ -1156,7 +1157,7 @@ class PublicMentorProfilesSearchListAPIView(ProfileLookupMixin, APIView):
         offset = (page - 1) * page_size
         items = qs[offset : offset + page_size]
 
-        serializer = PublicMentorProfileSearchResultSerializer(items, many=True)
+        serializer = PublicMentorProfileSearchResultSerializer(items, many=True, context={"request": request})
         return Response(
             {
                 "count": total,
@@ -2057,7 +2058,7 @@ class CommunityTagMembersListAPIView(APIView):
         page_items = memberships[offset : offset + page_size]
         profiles = [m.profile for m in page_items]
 
-        serializer = PublicMentorProfileSearchResultSerializer(profiles, many=True)
+        serializer = PublicMentorProfileSearchResultSerializer(profiles, many=True, context={"request": request})
         return Response(
             {
                 "count": total,
@@ -2169,7 +2170,7 @@ class ProfileAudioUploadAPIView(ProfileLookupMixin, APIView):
             }
         },
         responses={
-            200: OpenApiResponse(description="Profile audio uploaded."),
+            201: OpenApiResponse(description="Profile audio uploaded."),
             400: OpenApiResponse(description="Validation error."),
             401: OpenApiResponse(description="Authentication required."),
             404: OpenApiResponse(description="Profile not found."),
@@ -2193,7 +2194,7 @@ class ProfileAudioUploadAPIView(ProfileLookupMixin, APIView):
                 "detail": "Profile audio uploaded.",
                 "audio_url": resolve_audio_url(profile),
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_201_CREATED,
         )
 
     @extend_schema(
@@ -2246,7 +2247,7 @@ class ProfileVideoUploadAPIView(ProfileLookupMixin, APIView):
             }
         },
         responses={
-            200: OpenApiResponse(description="Profile video uploaded."),
+            201: OpenApiResponse(description="Profile video uploaded."),
             400: OpenApiResponse(description="Validation error."),
             401: OpenApiResponse(description="Authentication required."),
             404: OpenApiResponse(description="Profile not found."),
@@ -2270,7 +2271,7 @@ class ProfileVideoUploadAPIView(ProfileLookupMixin, APIView):
                 "detail": "Profile video uploaded.",
                 "video_url": resolve_video_url(profile),
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_201_CREATED,
         )
 
     @extend_schema(

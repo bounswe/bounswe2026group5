@@ -666,6 +666,7 @@ export default function ProfileScreen() {
         username: currentUsername,
         display_name: updatedData.name,
         bio: updatedData.bio,
+        linkedin_url: updatedData.linkedinUrl,
         ...(updatedData.removePicture ? { picture_url: "" } : {}),
       });
 

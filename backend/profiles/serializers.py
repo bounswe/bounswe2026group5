@@ -631,7 +631,6 @@ class ProfileUpdateSerializer(UsernameUpdateMixin, serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance: Profile, validated_data: dict[str, Any]) -> Profile:
-        print(f"DEBUG: Profile update validated_data: {validated_data}")
         new_username = validated_data.get("username")
         if new_username:
             self._sync_user_username(instance.user, new_username)
