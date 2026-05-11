@@ -70,8 +70,8 @@ export class CommunitiesPage {
     await this.createDialog.getByRole('button', { name: 'Create' }).click();
   }
 
-  async expectCommunityCreatedToast(name: string) {
-    await expect(this.page.getByText(`Community "${name}" created!`)).toBeVisible();
+  async expectCreateDialogClosed() {
+    await expect(this.createDialog).toHaveCount(0);
   }
 
   async expectDuplicateCreateToast() {

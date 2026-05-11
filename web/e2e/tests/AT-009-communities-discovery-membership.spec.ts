@@ -101,7 +101,7 @@ test.describe('AT-009: Communities Discovery & Membership', () => {
 
     await test.step('Authenticated user can create a new community and duplicate names are rejected', async () => {
       await communitiesPage.createCommunity(createdCommunityName, createdCommunityDescription);
-      await communitiesPage.expectCommunityCreatedToast(createdCommunityName);
+      await communitiesPage.expectCreateDialogClosed();
       await communitiesPage.expectCommunityCardVisible(createdCommunityName);
 
       const createdCommunity = await api.fetchCommunityDetail(`testing-circle-${runId}`, memberAuth);

@@ -44,6 +44,11 @@ export class DashboardPage {
     await expect(notification).toBeVisible({ timeout: 10_000 });
   }
 
+  async expectUnreadMessagesBadge() {
+    const messagesLink = this.page.getByRole('link', { name: /Messages/i });
+    await expect(messagesLink.locator('span.sr-only').filter({ hasText: 'unread messages' })).toBeVisible();
+  }
+
   async openConversationFromNotification(messagePart: string) {
     const notification = this.page.locator('.border-l-4').filter({ hasText: messagePart }).first();
     await expect(notification).toBeVisible({ timeout: 10_000 });

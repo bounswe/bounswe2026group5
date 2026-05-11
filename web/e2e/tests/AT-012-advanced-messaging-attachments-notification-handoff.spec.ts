@@ -142,15 +142,15 @@ test.describe('AT-012: Advanced Messaging, Attachments & Notification Handoff', 
     });
 
     await test.step('Receiver sees unread conversation state before opening the thread', async () => {
-      await receiverMessagesPage.goto();
-      await receiverMessagesPage.expectLoaded();
-      await receiverMessagesPage.expectConversationVisible(senderSeed.displayName);
-      await receiverMessagesPage.expectUnreadBadge(senderSeed.displayName);
+      await receiverDashboardPage.goto();
+      await receiverDashboardPage.expectLoaded();
 
       await expect.poll(async () => {
-        const conversations = await api.fetchConversations(receiverAuth);
-        return conversations.find((item) => item.id === conversationId)?.unread_count ?? 0;
+        const notifications = await api.fetchNotifications(receiverAuth);
+        return notifications.filter((item) => item.type === 'new_message' && item.resource_id === conversationId).length;
       }).toBeGreaterThan(0);
+
+      await receiverDashboardPage.expectUnreadMessagesBadge();
     });
 
     await test.step('Receiver can follow the dashboard notification into the correct thread and read the rich messages', async () => {

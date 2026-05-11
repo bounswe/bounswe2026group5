@@ -9,6 +9,13 @@ function toDateString(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+function nextMonday(from = new Date()) {
+  const next = new Date(from);
+  const daysUntilNextMonday = ((8 - next.getDay()) % 7) || 7;
+  next.setDate(next.getDate() + daysUntilNextMonday);
+  return next;
+}
+
 test.describe('AT-006: Mentorship Requests & Matching', () => {
   test('validates request submission, duplicate prevention, acceptance, matching, and decline', async ({
     browser,
@@ -51,9 +58,7 @@ test.describe('AT-006: Mentorship Requests & Matching', () => {
     const acceptedMenteeAuth = await api.seedUser(acceptedMentee, 'MENTEE');
     const otherMenteeAuth = await api.seedUser(otherMentee, 'MENTEE');
 
-    const nextMonday = new Date();
-    nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7 || 7);
-    const slotDate = toDateString(nextMonday);
+    const slotDate = toDateString(nextMonday());
     const firstSlot = await api.createAvailabilitySlot(mentorAuth, {
       date: slotDate,
       startTime: '14:00:00',

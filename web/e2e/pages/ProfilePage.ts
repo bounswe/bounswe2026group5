@@ -28,8 +28,9 @@ export class ProfilePage {
   }
 
   async createAvailabilityCell(dayIndexFromMonday: number, hour: number) {
+    const beforeCount = await this.page.getByText('Available ✕').count();
     await this.clickAvailabilityCell(dayIndexFromMonday, hour);
-    await expect(this.page.getByText('Slot added').first()).toBeVisible();
+    await expect(this.page.getByText('Available ✕')).toHaveCount(beforeCount + 1);
   }
 
   async expectAvailabilityCount(count: number) {
@@ -41,6 +42,7 @@ export class ProfilePage {
   }
 
   async sendMentorshipRequest(coverLetter?: string) {
+    await expect.poll(async () => this.page.getByText(/^Book$/).count()).toBeGreaterThan(0);
     await this.page.getByText(/^Book$/).first().click();
     await expect(this.page.getByRole('heading', { name: 'Send Mentorship Request' })).toBeVisible();
     if (coverLetter) {
@@ -114,9 +116,13 @@ export class ProfilePage {
       }
 
       if (targetDate > range.end) {
+        const previousLabel = label ?? '';
         await this.nextWeek();
+        await expect(this.page.getByText(previousLabel)).toHaveCount(0);
       } else {
+        const previousLabel = label ?? '';
         await this.prevWeek();
+        await expect(this.page.getByText(previousLabel)).toHaveCount(0);
       }
     }
 
