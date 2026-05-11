@@ -138,7 +138,6 @@ test.describe('AT-006: Mentorship Requests & Matching', () => {
       const mentorConnections = new ConnectionsPage(mentorPage);
 
       await dashboardPage.goto();
-      await page.reload();
       await dashboardPage.expectNotification('Request Accepted', mentor.displayName);
       await menteeConnections.goto();
       await menteeConnections.expectMenteeConnection(mentor.displayName);

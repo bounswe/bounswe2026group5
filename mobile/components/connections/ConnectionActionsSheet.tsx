@@ -137,7 +137,7 @@ export function ConnectionActionsSheet({
       <ConfirmationSheet
         visible={visible && showRemoveConfirmation}
         title={`Remove ${name}?`}
-        message="This will end the active mentorship connection."
+        message="Are you sure you want to end this match?"
         confirmLabel="Remove"
         cancelLabel="Keep Connection"
         variant="destructive"

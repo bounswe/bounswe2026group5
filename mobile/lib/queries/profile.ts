@@ -79,6 +79,7 @@ interface UpdateProfilePayload {
   bio?: string;
   skills?: string[];
   picture_url?: string;
+  show_initials_only?: boolean;
   share_precise_location?: boolean;
   linkedin_url?: string;
 }

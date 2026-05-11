@@ -110,18 +110,20 @@ export function DashboardHome() {
   const { mutate: markAllRead } = useMarkAllNotificationsRead()
   const queryClient = useQueryClient()
 
-  // Show unread notifications + the 4 most recent notifications overall
+  const sessionUnreadIds = useRef<Set<string>>(new Set())
+
+  // Track notifications that were unread at any point during this component's lifecycle.
+  // This allows them to stay visible even after they are marked as read in the backend.
+  notifications.forEach(n => {
+    if (!n.is_read) {
+      sessionUnreadIds.current.add(n.id)
+    }
+  })
+
   const displayNotifications = useMemo(() => {
-    const unread = notifications.filter(n => !n.is_read)
-    const recentlyRead = notifications.filter(n => n.is_read).slice(0, 4)
-    const combined = [...unread]
-    
-    // Add recently read that aren't already in unread (shouldn't happen but for safety)
-    recentlyRead.forEach(rn => {
-        if (!combined.some(c => c.id === rn.id)) combined.push(rn)
-    })
-    
-    return combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    return notifications
+      .filter(n => !n.is_read || sessionUnreadIds.current.has(n.id))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }, [notifications])
 
   const seenIds = useRef<Set<string>>(new Set())
@@ -181,7 +183,7 @@ export function DashboardHome() {
       {displayNotifications.length > 0 && (
         <section className="flex flex-col gap-3">
           <Heading as="h3" className="text-xl flex items-center gap-2">
-            <Bell className="w-5 h-5 text-accent" />
+            <Bell className="w-5 h-5 text-accent" aria-hidden="true" />
             Notifications
           </Heading>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">

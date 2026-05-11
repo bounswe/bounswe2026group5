@@ -295,6 +295,7 @@ function renderBodyContent({
         linkedinUrl={profile.linkedin_url || undefined}
         audioUrl={profile.audio_url || undefined}
         videoUrl={profile.video_url || undefined}
+        showInitialsOnly={profile.show_initials_only}
       />
 
       <View className="px-4 mt-4">

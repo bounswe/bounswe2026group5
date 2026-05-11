@@ -10,7 +10,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useGoogleLogin } from '@react-oauth/google'
+import { useGoogleLoginSafe } from '#/hooks/useGoogleLoginSafe'
 import { useMutation } from "@tanstack/react-query"
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { Mail } from 'lucide-react'
@@ -91,7 +91,7 @@ export function RegisterPage() {
         },
     })
 
-    const triggerGoogleLogin = useGoogleLogin({
+    const triggerGoogleLogin = useGoogleLoginSafe({
         onSuccess: (tokenResponse) => {
             if (tokenResponse.access_token) {
                 googleLogin.mutate(tokenResponse.access_token)

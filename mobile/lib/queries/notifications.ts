@@ -80,6 +80,8 @@ export function getNotificationTitle(notification: BackendNotification): string 
     case "new_feedback_available":
     case "feedback_received":
       return "New feedback";
+    case "report_resolved":
+      return "Report resolved";
     case "tag_new_member":
       return "New community member";
     case "tag_description_updated":
@@ -154,7 +156,8 @@ export function getNotificationTargetPath(
 
   if (
     notification.type === "feedback_received" ||
-    notification.type === "new_feedback_available"
+    notification.type === "new_feedback_available" ||
+    notification.type === "report_resolved"
   ) {
     return "/(tabs)/profile";
   }
@@ -222,7 +225,7 @@ export function useNotificationsQuery(username?: string) {
     enabled: Boolean(username),
     staleTime: 10_000,
     refetchOnMount: "always",
-    refetchInterval: false,
+    refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
 }

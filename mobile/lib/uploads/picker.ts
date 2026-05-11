@@ -204,7 +204,7 @@ export async function pickMessageAudioFile(): Promise<LocalUploadFile | null> {
 export async function pickMessageDeviceFile(): Promise<LocalUploadFile | null> {
   const DocumentPicker = await import("expo-document-picker");
   const result = await DocumentPicker.getDocumentAsync({
-    type: ["*/*"], // Truly generic
+    type: ["image/*", "application/pdf", "audio/*"],
     copyToCacheDirectory: true,
     multiple: false,
   });

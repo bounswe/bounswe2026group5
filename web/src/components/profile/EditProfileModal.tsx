@@ -36,6 +36,7 @@ interface EditProfileModalProps {
     initialValues: EditProfileValues & {
         title?: string
         show_initials_only?: boolean
+        share_precise_location?: boolean
     }
     onClose: () => void
 }
@@ -64,6 +65,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
     const [linkedinUrl, setLinkedinUrl] = useState(initialValues.linkedin_url ?? '')
     const [showInitialsOnly, setShowInitialsOnly] = useState(initialValues.show_initials_only ?? false)
     const [errors, setErrors] = useState<{ title?: string; bio?: string; linkedin_url?: string }>({})
+    const [sharePreciseLocation, setSharePreciseLocation] = useState(initialValues.share_precise_location ?? true)
 
     function handlePictureChange(file: File) {
         if (file.size > 5 * 1024 * 1024) {
@@ -139,6 +141,7 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                 bio,
                 title: isMentor ? title : undefined,
                 show_initials_only: showInitialsOnly,
+                share_precise_location: sharePreciseLocation,
                 skills: skills,
                 linkedin_url: linkedinUrl,
             },
@@ -403,6 +406,19 @@ export function EditProfileModal({ mode, initialValues, onClose }: EditProfileMo
                         <div>
                             <label htmlFor="show-initials-toggle" className="text-sm font-medium text-ink cursor-pointer">Show initials only</label>
                             <Muted className="text-xs">Your full name and picture will be hidden from others.</Muted>
+                        </div>
+                    </div>
+
+                    {/* Share precise location toggle */}
+                    <div className="flex items-center gap-4 rounded-xl border border-line p-4 bg-black/[0.02]">
+                        <Switch
+                            id="share-location-toggle"
+                            checked={sharePreciseLocation}
+                            onCheckedChange={setSharePreciseLocation}
+                        />
+                        <div>
+                            <label htmlFor="share-location-toggle" className="text-sm font-medium text-ink cursor-pointer">Share precise location</label>
+                            <Muted className="text-xs">Allow others to see your exact location. If disabled, a generalized location will be shown.</Muted>
                         </div>
                     </div>
 

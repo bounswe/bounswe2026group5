@@ -100,6 +100,7 @@ const mockUseMyMatches = vi.fn()
 
 vi.mock('#/lib/queries/MentorshipQueries.ts', () => ({
   useMyMatches: () => mockUseMyMatches(),
+  useDeactivateMatch: () => ({ mutate: vi.fn(), isPending: false }),
   myMatchesQueryOptions: { queryKey: ['mentorship', 'matches'], queryFn: () => null },
 }))
 

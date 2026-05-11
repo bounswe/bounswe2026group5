@@ -65,6 +65,7 @@ describe("EditProfileModal", () => {
         removeAudio: false,
         videoFile: null,
         removeVideo: false,
+        showInitialsOnly: false,
       });
       expect(onClose).toHaveBeenCalled();
     });

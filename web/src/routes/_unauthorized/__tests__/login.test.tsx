@@ -26,14 +26,13 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   }
 })
 
-vi.mock('@react-oauth/google', () => ({
-  useGoogleLogin: vi.fn((config) => {
+vi.mock('#/hooks/useGoogleLoginSafe', () => ({
+  useGoogleLoginSafe: vi.fn((config) => {
     // Return a function that triggers the onSuccess callback with a fake token
     return () => {
       config.onSuccess({ access_token: 'fake-google-token' })
     }
   }),
-  GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
 vi.mock('#/lib/queries/AuthQueries.ts', () => ({

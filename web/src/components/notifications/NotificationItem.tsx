@@ -64,6 +64,11 @@ const VARIANT_MAP: Record<NotificationType, VariantConfig> = {
         iconClass: 'text-yellow-500',
         borderClass: 'border-l-yellow-400',
     },
+    report_resolved: {
+        icon: CheckCircle2,
+        iconClass: 'text-blue-500',
+        borderClass: 'border-l-blue-400',
+    },
 }
 
 export function NotificationItem({ notification }: { notification: Notification }) {

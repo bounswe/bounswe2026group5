@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,6 +26,7 @@ export interface UserProfileData {
   linkedinUrl?: string;
   audioUrl?: string;
   videoUrl?: string;
+  showInitialsOnly?: boolean;
 }
 
 export interface SaveProfileData extends UserProfileData {
@@ -34,6 +36,7 @@ export interface SaveProfileData extends UserProfileData {
   removeAudio?: boolean;
   videoFile?: LocalUploadFile | null;
   removeVideo?: boolean;
+  showInitialsOnly?: boolean;
 }
 
 interface EditProfileModalProps {
@@ -76,6 +79,7 @@ export function EditProfileModal({
   const [removeVideo, setRemoveVideo] = useState(false);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [isSaving, setSaving] = useState(false);
+  const [showInitialsOnly, setShowInitialsOnly] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -89,6 +93,7 @@ export function EditProfileModal({
       setVideoFile(null);
       setRemoveVideo(false);
       setPickerError(null);
+      setShowInitialsOnly(initialData.showInitialsOnly ?? false);
     }
   }, [visible, initialData]);
 
@@ -162,6 +167,7 @@ export function EditProfileModal({
       removeAudio,
       videoFile,
       removeVideo,
+      showInitialsOnly,
     });
     setSaving(false);
 
@@ -435,6 +441,27 @@ export function EditProfileModal({
                 </View>
               </View>
 
+              {/* Show Initials Only Toggle */}
+              <View
+                testID="show-initials-toggle-container"
+                className="flex-row items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-4"
+              >
+                <View className="flex-1 mr-3">
+                  <Text className="text-sm font-bold text-gray-700">
+                    Show initials only
+                  </Text>
+                  <Text className="text-xs text-gray-400 mt-0.5">
+                    Your full name and picture will be hidden from others.
+                  </Text>
+                </View>
+                <Switch
+                  testID="show-initials-toggle"
+                  value={showInitialsOnly}
+                  onValueChange={setShowInitialsOnly}
+                  trackColor={{ false: "#d1d5db", true: "#4f46e5" }}
+                  thumbColor="#ffffff"
+                />
+              </View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>

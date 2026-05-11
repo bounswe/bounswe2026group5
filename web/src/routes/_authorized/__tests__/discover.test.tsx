@@ -52,6 +52,7 @@ vi.mock('lucide-react', async (importOriginal) => {
     ...actual,
     Search: () => <div data-testid="icon-search" />,
     SlidersHorizontal: () => <div data-testid="icon-sliders" />,
+    MapPin: () => <div data-testid="icon-map-pin" />,
     X: () => <div data-testid="icon-x" />,
   }
 })
@@ -94,7 +95,7 @@ vi.mock('@/lib/queries/DiscoverQueries.ts', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
-    mentorSearchInfiniteQueryOptions: (params: { pageSize?: number; q?: string; skills?: string[] }) =>
+    mentorSearchInfiniteQueryOptions: (params: { pageSize?: number; q?: string; skills?: string[]; lat?: number; lng?: number; distanceKm?: number }) =>
         infiniteQueryOptions({
           queryKey: ['mentors', 'search', params],
           queryFn: async ({ pageParam }) => mockMentorSearchLogic(MOCK_MENTORS, params, pageParam),
@@ -147,7 +148,7 @@ describe('DiscoverPage', () => {
 
   it('renders the filter button', () => {
     renderDiscover()
-    expect(screen.getByRole('button', { name: /Filter by skill/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Filter mentors/i })).toBeInTheDocument()
   })
 
   it('renders at least one ProfileCard on initial load', async () => {
@@ -208,26 +209,26 @@ describe('DiscoverPage', () => {
     // Wait for skills to load first
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
-    expect(screen.getByText(/Filter by Skill/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Filter mentors/i }))
+    expect(screen.getByText(/Filter Mentors/i)).toBeInTheDocument()
   })
 
   it('closes the filter panel when clicked outside', async () => {
     renderDiscover()
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
-    expect(screen.getByText(/Filter by Skill/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Filter mentors/i }))
+    expect(screen.getByText(/Filter Mentors/i)).toBeInTheDocument()
 
     fireEvent.mouseDown(document.body)
-    expect(screen.queryByText(/Filter by Skill/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Filter Mentors/i)).not.toBeInTheDocument()
   })
 
   it('filters profiles when a skill chip is selected', async () => {
     renderDiscover()
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Filter mentors/i }))
 
     const pythonChip = await screen.findByRole('button', { name: /^Python$/i })
     fireEvent.click(pythonChip)
@@ -242,7 +243,7 @@ describe('DiscoverPage', () => {
     renderDiscover()
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Filter mentors/i }))
     const goChip = await screen.findByRole('button', { name: /^Go$/i })
     fireEvent.click(goChip)
 
@@ -253,7 +254,7 @@ describe('DiscoverPage', () => {
     renderDiscover()
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Filter mentors/i }))
     const goChip = await screen.findByRole('button', { name: /^Go$/i })
     fireEvent.click(goChip)
 

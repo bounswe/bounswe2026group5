@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useDebounce } from '@/lib/queries/useDebounce'
@@ -71,6 +71,20 @@ function MentorRow({ title, subtitle, icon, profiles, onViewProfile, onSendMessa
 }
 
 // ---------------------------------------------------------------------------
+// Geolocation toast
+// ---------------------------------------------------------------------------
+
+function LocationDeniedToast({ visible, onDismiss }: { visible: boolean; onDismiss: () => void }) {
+    if (!visible) return null
+    return (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-ink text-white px-5 py-3 rounded-xl shadow-lg flex items-center gap-3 text-sm font-medium animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <span>Location access denied. Distance filter has been cleared.</span>
+            <button type="button" onClick={onDismiss} className="text-white/60 hover:text-white ml-1 font-bold">✕</button>
+        </div>
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -79,11 +93,25 @@ export function DiscoverPage() {
     const { matchedUsernames, sendMessageTo } = useMessaging()
     const [query, setQuery] = useState('')
     const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set())
+    const [selectedDistanceKm, setSelectedDistanceKm] = useState<number | null>(null)
+    const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null)
+    const [locationDeniedToast, setLocationDeniedToast] = useState(false)
+    const geolocationRequested = useRef(false)
 
     const debouncedQuery = useDebounce(query, 300)
-    const isSearching = !!debouncedQuery || selectedSkills.size > 0
+    const isSearching = !!debouncedQuery || selectedSkills.size > 0 || selectedDistanceKm !== null
     const sortedSelectedSkills =
         selectedSkills.size > 0 ? Array.from(selectedSkills).sort((a, b) => a.localeCompare(b)) : undefined
+
+    // Build search params — include geolocation only when we have both coords and a distance
+    const searchParams = {
+        q: debouncedQuery || undefined,
+        skills: sortedSelectedSkills,
+        pageSize: PAGE_SIZE,
+        ...(selectedDistanceKm != null && userCoords != null
+            ? { lat: userCoords.lat, lng: userCoords.lng, distanceKm: selectedDistanceKm }
+            : {}),
+    }
 
     const {
         data,
@@ -91,11 +119,7 @@ export function DiscoverPage() {
         fetchNextPage,
         hasNextPage,
     } = useInfiniteQuery(
-        mentorSearchInfiniteQueryOptions({
-            q: debouncedQuery || undefined,
-            skills: sortedSelectedSkills,
-            pageSize: PAGE_SIZE,
-        }),
+        mentorSearchInfiniteQueryOptions(searchParams),
     )
 
     const { data: skillsData } = useQuery(allSkillsQueryOptions)
@@ -116,6 +140,48 @@ export function DiscoverPage() {
     const handleSkillClear = useCallback(() => {
         setSelectedSkills(new Set())
     }, [])
+
+    const handleDistanceChange = useCallback((distanceKm: number | null) => {
+        if (distanceKm === null) {
+            // Clearing distance filter
+            setSelectedDistanceKm(null)
+            return
+        }
+
+        // If we already have coords cached, just set the distance
+        if (userCoords) {
+            setSelectedDistanceKm(distanceKm)
+            return
+        }
+
+        // Request browser geolocation
+        if (!navigator.geolocation) {
+            setLocationDeniedToast(true)
+            return
+        }
+
+        // Prevent multiple simultaneous requests
+        if (geolocationRequested.current) return
+        geolocationRequested.current = true
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                geolocationRequested.current = false
+                setUserCoords({
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                })
+                setSelectedDistanceKm(distanceKm)
+            },
+            () => {
+                // Denied or error
+                geolocationRequested.current = false
+                setSelectedDistanceKm(null)
+                setLocationDeniedToast(true)
+            },
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+        )
+    }, [userCoords])
 
     const handleViewProfile = (username: string) => {
         navigate({ to: '/profiles/$username', params: { username } })
@@ -142,8 +208,10 @@ export function DiscoverPage() {
                         <DiscoverFilterPanel
                             allSkills={allSkillNames}
                             selectedSkills={selectedSkills}
+                            selectedDistanceKm={selectedDistanceKm}
                             onToggle={handleSkillToggle}
                             onClear={handleSkillClear}
+                            onDistanceChange={handleDistanceChange}
                         />
                     </div>
                 </section>
@@ -196,10 +264,12 @@ export function DiscoverPage() {
                         <p className="text-ink-soft text-lg">
                             {query
                                 ? (<>No mentors found matching <span className="font-semibold text-ink">"{query}"</span>.</>)
-                                : 'No mentors match the selected filters.'}
+                                : selectedDistanceKm !== null
+                                    ? 'No mentors found within the selected distance.'
+                                    : 'No mentors match the selected filters.'}
                         </p>
                         <p className="text-ink-soft text-sm mt-2">
-                            Try adjusting your search or clearing the skill filters.
+                            Try adjusting your search or clearing the filters.
                         </p>
                     </div>
                 ) : (
@@ -229,6 +299,11 @@ export function DiscoverPage() {
                 )}
             </section>
 
+            {/* ── Location Denied Toast ─────────────────────────────────────────── */}
+            <LocationDeniedToast
+                visible={locationDeniedToast}
+                onDismiss={() => setLocationDeniedToast(false)}
+            />
         </div>
     )
 }
