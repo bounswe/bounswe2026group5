@@ -66,6 +66,10 @@ import {
 import {
   useDeleteProfilePictureMutation,
   useUploadProfilePictureMutation,
+  useUploadProfileAudioMutation,
+  useDeleteProfileAudioMutation,
+  useUploadProfileVideoMutation,
+  useDeleteProfileVideoMutation,
 } from "@/lib/queries/uploads";
 
 const PROFILE_DEFAULTS = {
@@ -79,6 +83,9 @@ interface OwnProfileResponse {
   hidden?: boolean;
   show_initials_only?: boolean;
   skills?: string[];
+  linkedin_url?: string;
+  audio_url?: string;
+  video_url?: string;
 }
 
 const REVIEWS_PAGE_SIZE = 6;
@@ -366,6 +373,14 @@ export default function ProfileScreen() {
     useUploadProfilePictureMutation(currentUsername);
   const deleteProfilePictureMutation =
     useDeleteProfilePictureMutation(currentUsername);
+  const uploadProfileAudioMutation =
+    useUploadProfileAudioMutation(currentUsername);
+  const deleteProfileAudioMutation =
+    useDeleteProfileAudioMutation(currentUsername);
+  const uploadProfileVideoMutation =
+    useUploadProfileVideoMutation(currentUsername);
+  const deleteProfileVideoMutation =
+    useDeleteProfileVideoMutation(currentUsername);
   const createProfilePostMutation =
     useCreateProfilePostMutation(currentUsername);
   const updateProfilePostMutation =
@@ -403,6 +418,9 @@ export default function ProfileScreen() {
     name: authUser?.username ?? "User",
     bio: "",
     pictureUrl: "",
+    linkedinUrl: "",
+    audioUrl: "",
+    videoUrl: "",
   });
 
   useEffect(() => {
@@ -477,6 +495,9 @@ export default function ProfileScreen() {
           name: payload.full_name || prev.name,
           bio: payload.bio || "",
           pictureUrl: payload.picture_url || "",
+          linkedinUrl: payload.linkedin_url || "",
+          audioUrl: payload.audio_url || "",
+          videoUrl: payload.video_url || "",
         }));
 
         setIsProfileHidden(Boolean(payload.hidden));
@@ -648,6 +669,7 @@ export default function ProfileScreen() {
         username: currentUsername,
         display_name: updatedData.name,
         bio: updatedData.bio,
+        linkedin_url: updatedData.linkedinUrl,
         show_initials_only: updatedData.showInitialsOnly,
         ...(updatedData.removePicture ? { picture_url: "" } : {}),
       });
@@ -663,6 +685,28 @@ export default function ProfileScreen() {
         pictureUrl = pictureResponse.picture_url;
       }
 
+      let audioUrl = userData.audioUrl ?? "";
+      if (updatedData.audioFile) {
+        const audioResponse = await uploadProfileAudioMutation.mutateAsync(
+          updatedData.audioFile,
+        );
+        audioUrl = audioResponse.audio_url;
+      } else if (updatedData.removeAudio) {
+        const audioResponse = await deleteProfileAudioMutation.mutateAsync();
+        audioUrl = audioResponse.audio_url;
+      }
+
+      let videoUrl = userData.videoUrl ?? "";
+      if (updatedData.videoFile) {
+        const videoResponse = await uploadProfileVideoMutation.mutateAsync(
+          updatedData.videoFile,
+        );
+        videoUrl = videoResponse.video_url;
+      } else if (updatedData.removeVideo) {
+        const videoResponse = await deleteProfileVideoMutation.mutateAsync();
+        videoUrl = videoResponse.video_url;
+      }
+
       if (
         (updatedData.pictureFile || updatedData.removePicture) &&
         currentUsername
@@ -673,7 +717,10 @@ export default function ProfileScreen() {
       setUserData({
         name: response.display_name || updatedData.name,
         bio: response.bio || updatedData.bio,
+        linkedinUrl: response.linkedin_url || updatedData.linkedinUrl,
         pictureUrl,
+        audioUrl,
+        videoUrl,
       });
       setShowInitialsOnly(response.show_initials_only ?? updatedData.showInitialsOnly ?? false);
       return true;
@@ -861,6 +908,9 @@ export default function ProfileScreen() {
           showMenteesHelped={isMentorMode}
           imageUrl={userData.pictureUrl || undefined}
           imageCacheKey={currentUserAvatarVersion}
+          linkedinUrl={userData.linkedinUrl || undefined}
+          audioUrl={userData.audioUrl || undefined}
+          videoUrl={userData.videoUrl || undefined}
           onEdit={() => setEditProfileModalOpen(true)}
         />
 

@@ -49,3 +49,35 @@ def validate_media_content_type(file) -> None:
         raise serializers.ValidationError(
             "Unsupported file type. Allowed types: JPEG, PNG, GIF, WebP, PDF."
         )
+
+
+AUDIO_CONTENT_TYPES = {
+    "audio/mpeg",
+    "audio/wav",
+    "audio/ogg",
+    "audio/mp4",
+    "audio/webm",
+    "audio/x-m4a",
+}
+
+VIDEO_CONTENT_TYPES = {
+    "video/mp4",
+    "video/quicktime",
+    "video/webm",
+}
+
+
+def validate_audio_content_type(file) -> None:
+    """Raise ValidationError when *file* is not a recognised audio type."""
+    if file.content_type not in AUDIO_CONTENT_TYPES:
+        raise serializers.ValidationError(
+            "Unsupported file type. Allowed audio types: MP3, WAV, OGG, M4A, WebM."
+        )
+
+
+def validate_video_content_type(file) -> None:
+    """Raise ValidationError when *file* is not a recognised video type."""
+    if file.content_type not in VIDEO_CONTENT_TYPES:
+        raise serializers.ValidationError(
+            "Unsupported file type. Allowed video types: MP4, QuickTime (MOV), WebM."
+        )

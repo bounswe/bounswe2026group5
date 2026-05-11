@@ -6,6 +6,7 @@ let mockColorScheme: "light" | "dark" = "light";
 let mockAuthState = {
   isAuthenticated: false,
   isLoading: false,
+  user: { username: "testuser", app_usage_mode: "MENTOR" } as any,
   initializeAuth: mockInitializeAuth,
 };
 
@@ -56,6 +57,7 @@ describe("RootLayout — session restoration", () => {
     mockAuthState = {
       isAuthenticated: false,
       isLoading: false,
+      user: { username: "testuser", app_usage_mode: "MENTOR" } as any,
       initializeAuth: mockInitializeAuth,
     };
   });

@@ -57,9 +57,14 @@ describe("EditProfileModal", () => {
       expect(onSave).toHaveBeenCalledWith({
         name: "Ali Aydin",
         bio: "Loves mentoring on React Native.",
+        linkedinUrl: "",
         pictureFile: null,
         pictureUrl: undefined,
         removePicture: false,
+        audioFile: null,
+        removeAudio: false,
+        videoFile: null,
+        removeVideo: false,
         showInitialsOnly: false,
       });
       expect(onClose).toHaveBeenCalled();
@@ -157,6 +162,11 @@ describe("EditProfileModal", () => {
             type: "image/jpeg",
           },
           removePicture: false,
+          linkedinUrl: "",
+          audioFile: null,
+          removeAudio: false,
+          videoFile: null,
+          removeVideo: false,
         }),
       );
     });
@@ -204,6 +214,11 @@ describe("EditProfileModal", () => {
         expect.objectContaining({
           pictureFile: null,
           removePicture: true,
+          linkedinUrl: "",
+          audioFile: null,
+          removeAudio: false,
+          videoFile: null,
+          removeVideo: false,
         }),
       );
     });

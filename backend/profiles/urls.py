@@ -34,6 +34,8 @@ from .views import (
     ProfileByUsernameAPIView,
     ProfileMeAPIView,
     ProfilePictureUploadAPIView,
+    ProfileAudioUploadAPIView,
+    ProfileVideoUploadAPIView,
     ProfilePostsListAPIView,
     ProfileReviewsByUsernameAPIView,
     ProfileUsernameUpdateAPIView,
@@ -47,6 +49,8 @@ urlpatterns = [
     path("", PublicMentorProfilesSearchListAPIView.as_view(), name="mentor-profiles-search"),
     path("me/", ProfileMeAPIView.as_view(), name="profile-me"),
     path("me/picture/", ProfilePictureUploadAPIView.as_view(), name="profile-picture-upload"),
+    path("me/audio/", ProfileAudioUploadAPIView.as_view(), name="profile-audio-upload"),
+    path("me/video/", ProfileVideoUploadAPIView.as_view(), name="profile-video-upload"),
     path("me/uploads/", PostMediaUploadAPIView.as_view(), name="post-media-upload"),
     path(
         "me/workshops/attendance/",

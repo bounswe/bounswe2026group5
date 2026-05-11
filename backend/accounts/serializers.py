@@ -16,7 +16,7 @@ from profiles.models import Profile
 from profiles.serializers import LocationField
 from profiles.serializers import resolve_picture_url
 
-from .models import AppUsageMode, AuthProvider, PasswordResetToken, User, UserRole
+from .models import AppUsageMode, AuthProvider, PasswordResetToken, User, UserRole, ReportStatus
 
 _INVALID_TOKEN_ERROR = {"token": "Invalid or expired token."}
 
@@ -389,5 +389,5 @@ class ReportListSerializer(serializers.Serializer):
 class ReportResolveSerializer(serializers.Serializer):
     """Serializer for admin to resolve/dismiss a report."""
 
-    status = serializers.ChoiceField(choices=["IN_REVIEW", "RESOLVED", "DISMISSED"])
+    status = serializers.ChoiceField(choices=ReportStatus.choices)
     resolution_note = serializers.CharField(required=False, allow_blank=True, default="")

@@ -72,8 +72,11 @@ function PublicProfileRoute() {
             total_mentee_count: profile.total_mentee_count,
             username: username,
             app_usage_mode: profile.app_usage_mode,
+            linkedin_url: profile.linkedin_url,
+            audio_url: profile.audio_url,
+            video_url: profile.video_url,
         }
-        : {
+    : {
             isMentor: false as const,
             full_name: profile.full_name,
             bio: profile.bio,
@@ -83,6 +86,9 @@ function PublicProfileRoute() {
             skills: profile.skills ?? [],
             username: username,
             app_usage_mode: profile.app_usage_mode,
+            linkedin_url: profile.linkedin_url,
+            audio_url: profile.audio_url,
+            video_url: profile.video_url,
         }
 
     return (

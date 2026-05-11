@@ -60,7 +60,7 @@ const STEPS = [
 
 function About() {
     return (
-        <div className="rise-in flex flex-col gap-20 py-16 sm:py-24">
+        <main id="main-content" className="rise-in flex flex-col gap-20 py-16 sm:py-24">
 
             {/* ── Hero ──────────────────────────────────────────────────── */}
             <div className="page-wrap">
@@ -171,6 +171,6 @@ function About() {
                 </div>
             </div>
 
-        </div>
+        </main>
     )
 }

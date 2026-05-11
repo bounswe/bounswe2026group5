@@ -1,6 +1,7 @@
 import { SettingItem } from "@/components/settings/SettingItem";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { LegalModal } from "@/components/ui/LegalModal";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
@@ -64,6 +65,7 @@ export default function SettingsScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
+  const [legalType, setLegalType] = useState<"tos" | "privacy" | null>(null);
 
   const handleLogout = () => {
     setShowLogoutConfirmation(true);
@@ -209,6 +211,23 @@ export default function SettingsScreen() {
           />
         </View>
 
+        {/* Section: Legal */}
+        <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-8 mb-2">
+          Legal
+        </Text>
+        <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
+          <SettingItem
+            icon="document-text-outline"
+            label="Terms of Service"
+            onPress={() => setLegalType("tos")}
+          />
+          <SettingItem
+            icon="shield-checkmark-outline"
+            label="Privacy Policy"
+            onPress={() => setLegalType("privacy")}
+          />
+        </View>
+
         {/* Section: Account */}
         <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-8 mb-2">
           Account
@@ -252,6 +271,12 @@ export default function SettingsScreen() {
             );
           }
         }}
+      />
+
+      <LegalModal
+        type={legalType}
+        visible={legalType !== null}
+        onClose={() => setLegalType(null)}
       />
 
     </View>
