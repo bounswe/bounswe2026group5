@@ -35,10 +35,10 @@ SCENARIO_MENTOR_PASSWORD = f"{SCENARIO_MENTOR_USERNAME}{TEST_SECRET_SUFFIX}"
 SCENARIO_MENTOR_DISPLAY_NAME = "Deniz Arman"
 SCENARIO_MENTOR_TITLE = "Senior Product Engineer"
 SCENARIO_MENTOR_BIO = (
-    "Works with student teams on web project structure, page flow, delivery planning, "
-    "and practical testing habits. Deniz is especially good at turning broad product "
-    "ideas into a focused sequence of screens, tasks, and acceptance checks that a team "
-    "can complete without losing sight of the user experience."
+    "I work with student teams on web project structure, page flow, delivery planning, "
+    "and practical testing habits. I like turning broad product ideas into a focused "
+    "sequence of screens, tasks, and acceptance checks that a team can actually finish "
+    "without losing sight of the user experience."
 )
 SCENARIO_MENTOR_INTERESTS = (
     "Product-led engineering, student project planning, readable technical decisions."
@@ -57,19 +57,20 @@ BACKUP_MENTOR_PASSWORD = f"{BACKUP_MENTOR_USERNAME}{TEST_SECRET_SUFFIX}"
 BACKUP_MENTOR_DISPLAY_NAME = "Göksel Deniz Çelik"
 BACKUP_MENTOR_TITLE = "Full-Stack Project Mentor"
 BACKUP_MENTOR_BIO = (
-    "Helps students connect backend APIs, frontend flows, and realistic weekly delivery "
-    "plans. Göksel likes to review both the user story and the database shape, then leave "
-    "mentees with a concrete checklist for API contracts, page ownership, and presentation "
-    "confidence."
+    "I help student teams connect backend APIs, frontend flows, and realistic weekly "
+    "delivery plans. Most of my sessions focus on turning messy web ideas into a smaller "
+    "MVP with clear page scope, API contracts, and a demo path the team can explain "
+    "confidently."
 )
 BACKUP_MENTOR_INTERESTS = (
-    "Full-stack project reviews, API boundaries, student presentations, study routines."
+    "Full-stack web projects, MVP planning, API boundaries, workshop facilitation."
 )
 BACKUP_MENTOR_SKILLS = [
     "Django",
     "React",
     "Project Planning",
-    "Public Speaking",
+    "Testing",
+    "Workshop Facilitation",
 ]
 
 SCENARIO_MENTEE_USERNAME = "mehmet-ali-ozdemir"
@@ -78,10 +79,10 @@ SCENARIO_MENTEE_PASSWORD = f"{SCENARIO_MENTEE_USERNAME}{TEST_SECRET_SUFFIX}"
 SCENARIO_MENTEE_DISPLAY_NAME = "Mehmet Ali Özdemir"
 SCENARIO_MENTEE_TITLE = "Computer Engineering Student"
 SCENARIO_MENTEE_BIO = (
-    "Building a student web project and looking for guidance on scope, landing flow, "
-    "testing, and weekly planning. Mehmet Ali wants the project to feel coherent: fewer "
-    "pages, clearer user flow, better task ordering, and enough testing notes to explain "
-    "the engineering choices."
+    "I am building a student web project and looking for guidance on scope, landing flow, "
+    "testing, and weekly planning. I want the project to feel coherent: fewer pages, "
+    "clearer user flow, better task ordering, and enough testing notes to explain the "
+    "engineering choices."
 )
 SCENARIO_MENTEE_INTERESTS = (
     "Student web projects, product planning, community learning, React."
@@ -113,6 +114,56 @@ SCENARIO_WORKSHOP_DESCRIPTION = (
     "turning large goals into testable weekly plans."
 )
 SCENARIO_FEEDBACK_COMMENT = "Clear feedback and practical next steps for my project."
+
+SCENARIO_COMMUNITY_POSTS = [
+    (
+        "We sketched landing, dashboard, profile, and settings pages for our student platform, "
+        "but now I am not sure which ones actually belong in the MVP. How do you decide what is essential first?"
+    ),
+    (
+        "Our team keeps jumping into React components before agreeing on the user flow. "
+        "Has anyone found a simple way to lock page scope before coding starts?"
+    ),
+    (
+        "I am trying to break our web project into weekly goals, but every feature feels connected to everything else. "
+        "How do you split work without losing the product story?"
+    ),
+    (
+        "We can answer technical questions during reviews, but we still struggle when someone asks why a feature belongs in version one. "
+        "Any framework for defending MVP decisions during demos?"
+    ),
+    (
+        "A planning board helped us separate must-have pages from later ideas, but our backlog is still too vague. "
+        "How detailed should page definitions be before development?"
+    ),
+    (
+        "We realized our API plan changed three times because the frontend scope was never stable. "
+        "Do you start from pages, user stories, or data models when student teams are stuck?"
+    ),
+    (
+        "We are preparing for faculty demo day next week. "
+        "How polished should the first release be before you switch from building to rehearsal?"
+    ),
+    (
+        "Our retrospective showed that communication was the real bottleneck, not coding speed. "
+        "I am curious how other student teams divide frontend, backend, and testing responsibilities."
+    ),
+]
+
+GOKSEL_COMMUNITY_POSTS = [
+    (
+        "I keep seeing student web teams over-design version one. If your dashboard needs three explanations, "
+        "it probably needs one fewer feature before demo day."
+    ),
+    (
+        "A useful planning exercise: list your MVP pages first, then write the API calls each page truly needs. "
+        "That usually reveals which ideas belong later."
+    ),
+    (
+        "When a team says their backend keeps changing, I usually ask whether the page scope was ever stable. "
+        "A surprising number of technical problems start as product-boundary problems."
+    ),
+]
 
 CORE_SKILLS = [
     "Academic Writing",
@@ -1007,52 +1058,6 @@ def seed_primary_story(profile_by_username, slots_by_username):
         is_read=False,
     )
 
-    backup = profile_by_username.get(BACKUP_MENTOR_USERNAME)
-    backup_slots = slots_by_username.get(BACKUP_MENTOR_USERNAME, [])
-    if backup is not None and backup_slots:
-        backup_slot = backup_slots[-1]
-        backup_slot.mark_booked(mehmet.user)
-        backup_request = create_request(
-            backup,
-            mehmet,
-            slot=backup_slot,
-            status=MentorshipRequest.Status.ACCEPTED,
-            cover_letter=(
-                "Backup rehearsal connection for the same web project planning story, "
-                "focused on API boundaries and final demo confidence."
-            ),
-            created_at=aware_at(-9, 9, 45),
-            responded_at=aware_at(-8, 18, 15),
-        )
-        backup_match = create_match_for_request(backup_request)
-        create_session(
-            backup_match,
-            backup_slot.start_at,
-            backup_slot.end_at,
-            MeetingSession.Status.SCHEDULED,
-            slot=backup_slot,
-        )
-        create_timeline_event(
-            source_id=f"seed:journey:{backup_match.id}:backup-plan",
-            category=TimelineEvent.Category.MCTE,
-            event_type=TimelineEvent.MCTEEventType.PROGRESS,
-            author=backup,
-            mentorship=backup_match,
-            actor_role="mentor",
-            content=(
-                "Backup demo path: reviewed API responsibilities, page ownership, and a "
-                "short checklist for rehearsing the final presentation."
-            ),
-            timestamp=aware_at(-7, 19, 10),
-            show_on_profile=False,
-        )
-        backup_conversation, _ = Conversation.objects.get_or_create(match=backup_match)
-        Message.objects.create(
-            conversation=backup_conversation,
-            sender=backup,
-            body="If Deniz is unavailable, we can use this backup connection to rehearse the same planning clinic flow.",
-        )
-
     return match, conversation
 
 
@@ -1065,15 +1070,21 @@ def seed_general_mentorship(profiles_by_mode, slots_by_username, rng: random.Ran
     from notifications.models import Notification, NotificationType
     from timeline.models import TimelineEvent
 
-    mentors = profiles_by_mode["MENTOR"]
-    mentees = profiles_by_mode["MENTEE"]
+    mentors = [
+        profile
+        for profile in profiles_by_mode["MENTOR"]
+        if profile.username not in {SCENARIO_MENTOR_USERNAME, BACKUP_MENTOR_USERNAME}
+    ]
+    mentees = [
+        profile
+        for profile in profiles_by_mode["MENTEE"]
+        if profile.username != SCENARIO_MENTEE_USERNAME
+    ]
     matches = []
 
     pairs = []
-    for mentee in mentees[1:46]:
+    for mentee in mentees[:45]:
         mentor = rng.choice(mentors)
-        if mentor.username == SCENARIO_MENTOR_USERNAME and mentee.username == SCENARIO_MENTEE_USERNAME:
-            continue
         pairs.append((mentor, mentee))
 
     for idx, (mentor, mentee) in enumerate(pairs):
@@ -1126,21 +1137,22 @@ def seed_general_mentorship(profiles_by_mode, slots_by_username, rng: random.Ran
                 show_on_profile=rng.random() < 0.35,
             )
 
-            conversation, _ = Conversation.objects.get_or_create(match=match)
-            for sender, body in [
-                (mentee, "Thanks for the last session. I updated the checklist."),
-                (mentor, "Nice progress. Bring one open question to the next call."),
-            ]:
-                message = Message.objects.create(conversation=conversation, sender=sender, body=body)
-                ReadReceipt.objects.update_or_create(
-                    message=message,
-                    user=mentor if sender == mentee else mentee,
-                    defaults={
-                        "status": rng.choice(
-                            [ReadReceipt.Status.READ, ReadReceipt.Status.DELIVERED]
-                        )
-                    },
-                )
+            if match.is_active:
+                conversation, _ = Conversation.objects.get_or_create(match=match)
+                for sender, body in [
+                    (mentee, "Thanks for the last session. I updated the checklist."),
+                    (mentor, "Nice progress. Bring one open question to the next call."),
+                ]:
+                    message = Message.objects.create(conversation=conversation, sender=sender, body=body)
+                    ReadReceipt.objects.update_or_create(
+                        message=message,
+                        user=mentor if sender == mentee else mentee,
+                        defaults={
+                            "status": rng.choice(
+                                [ReadReceipt.Status.READ, ReadReceipt.Status.DELIVERED]
+                            )
+                        },
+                    )
             if idx % 2 == 0:
                 Feedback.objects.create(
                     match=match,
@@ -1220,10 +1232,11 @@ def seed_communities(profile_by_username, profiles_by_mode, rng: random.Random):
     mentors = profiles_by_mode["MENTOR"]
     mentees = profiles_by_mode["MENTEE"]
     deniz = profile_by_username[SCENARIO_MENTOR_USERNAME]
+    goksel = profile_by_username[BACKUP_MENTOR_USERNAME]
     mehmet = profile_by_username[SCENARIO_MENTEE_USERNAME]
 
     for index, (name, description, skills, city) in enumerate(COMMUNITY_DEFINITIONS):
-        creator = deniz if name == SCENARIO_COMMUNITY_NAME else rng.choice(mentors)
+        creator = goksel if name == SCENARIO_COMMUNITY_NAME else rng.choice(mentors)
         community = CommunityTag.objects.create(
             name=name,
             description=description,
@@ -1233,9 +1246,13 @@ def seed_communities(profile_by_username, profiles_by_mode, rng: random.Random):
         communities[name] = community
         local_members = [p for p in mentors + mentees if p.location and rng.random() < 0.18]
         if name == SCENARIO_COMMUNITY_NAME:
-            local_members.extend([deniz, mehmet])
+            local_members.extend([deniz, goksel, mehmet])
             local_members.extend(rng.sample([p for p in mentees if p != mehmet], k=32))
-            local_members.extend(rng.sample([p for p in mentors if p != deniz], k=11))
+            local_members.extend(rng.sample([p for p in mentors if p not in {deniz, goksel}], k=10))
+        elif name == "Backend API Circle":
+            local_members.append(goksel)
+            local_members.extend(rng.sample(mentees, k=rng.randint(9, 18)))
+            local_members.extend(rng.sample(mentors, k=rng.randint(3, 7)))
         else:
             local_members.extend(rng.sample(mentees, k=rng.randint(9, 18)))
             local_members.extend(rng.sample(mentors, k=rng.randint(3, 7)))
@@ -1249,29 +1266,42 @@ def seed_communities(profile_by_username, profiles_by_mode, rng: random.Random):
 
         post_count = 8 if name == SCENARIO_COMMUNITY_NAME else rng.randint(3, 6)
         members = list(community.members.all())
+        scenario_member_pool = [
+            member
+            for member in members
+            if member.id not in {deniz.id, goksel.id, mehmet.id}
+        ]
         for post_index in range(post_count):
-            author = (
-                mehmet
-                if name == SCENARIO_COMMUNITY_NAME and post_index == 2
-                else rng.choice(members)
-            )
-            seeded_texts = [
-                "Weekly prompt: map your user flow before building new pages.",
-                "Sharing a lightweight checklist for planning MVP scope.",
-                "A small planning board helped our team separate must-have pages from later ideas.",
-                "Reminder: write the demo path before polishing secondary screens.",
-            ]
-            content = (
-                seeded_texts[post_index % len(seeded_texts)]
-                if name == SCENARIO_COMMUNITY_NAME
-                else rng.choice(
+            if name == SCENARIO_COMMUNITY_NAME:
+                scenario_posts = [
+                    (mehmet, SCENARIO_COMMUNITY_POSTS[0]),
+                    (rng.choice(scenario_member_pool), SCENARIO_COMMUNITY_POSTS[1]),
+                    (mehmet, SCENARIO_COMMUNITY_POSTS[2]),
+                    (rng.choice(scenario_member_pool), SCENARIO_COMMUNITY_POSTS[5]),
+                    (deniz, SCENARIO_COMMUNITY_POSTS[3]),
+                    (rng.choice(scenario_member_pool), SCENARIO_COMMUNITY_POSTS[4]),
+                    (rng.choice(scenario_member_pool), SCENARIO_COMMUNITY_POSTS[6]),
+                    (rng.choice(scenario_member_pool), SCENARIO_COMMUNITY_POSTS[7]),
+                ]
+                author, content = scenario_posts[post_index % len(scenario_posts)]
+            elif name == "Backend API Circle":
+                api_circle_posts = [
+                    (goksel, GOKSEL_COMMUNITY_POSTS[0]),
+                    (rng.choice(members), f"Looking for feedback on a {skills[0]} learning plan this week."),
+                    (goksel, GOKSEL_COMMUNITY_POSTS[1]),
+                    (rng.choice(members), "We compared two project scopes and picked the one we can test fastest."),
+                    (goksel, GOKSEL_COMMUNITY_POSTS[2]),
+                ]
+                author, content = api_circle_posts[post_index % len(api_circle_posts)]
+            else:
+                author = rng.choice(members)
+                content = rng.choice(
                     [
                         f"Looking for feedback on a {skills[0]} learning plan this week.",
                         "We compared two project scopes and picked the one we can test fastest.",
                         "Sharing notes from a helpful peer review session.",
                     ]
                 )
-            )
             create_timeline_event(
                 category=TimelineEvent.Category.COP,
                 event_type=rng.choice(TimelineEvent.MCTEEventType.values),
@@ -1295,33 +1325,45 @@ def seed_communities(profile_by_username, profiles_by_mode, rng: random.Random):
 
         workshop_specs = [
             (
-                SCENARIO_WORKSHOP_TITLE,
-                SCENARIO_WORKSHOP_DESCRIPTION,
-                aware_at(8, 19, 0),
-                12,
+                f"{skills[0]} Study Clinic",
+                f"A practical group session for students working on {skills[0]} projects.",
+                aware_at(rng.randint(5, 24), rng.choice([17, 19, 20])),
+                rng.choice([10, 12, 16, 20]),
                 Workshop.Status.SCHEDULED,
+            ),
+            (
+                f"{skills[-1]} Retrospective",
+                f"Members share lessons learned from recent {skills[-1]} practice.",
+                aware_at(-rng.randint(2, 12), rng.choice([17, 19])),
+                rng.choice([8, 12, 15]),
+                Workshop.Status.COMPLETED,
+            ),
+        ]
+        if name == SCENARIO_COMMUNITY_NAME:
+            workshop_specs.extend(
+                [
+                    (
+                        "MVP Feedback Hour",
+                        "A group discussion on shrinking student product ideas into a believable first release.",
+                        aware_at(6, 18, 30),
+                        14,
+                        Workshop.Status.SCHEDULED,
+                    ),
+                    (
+                        "Demo Flow Retro",
+                        "Members share what confused users during recent project demos and what they changed after.",
+                        aware_at(-6, 19, 0),
+                        10,
+                        Workshop.Status.COMPLETED,
+                    ),
+                ]
             )
-        ] if name == SCENARIO_COMMUNITY_NAME else []
-        workshop_specs.extend(
-            [
-                (
-                    f"{skills[0]} Study Clinic",
-                    f"A practical group session for students working on {skills[0]} projects.",
-                    aware_at(rng.randint(5, 24), rng.choice([17, 19, 20])),
-                    rng.choice([10, 12, 16, 20]),
-                    Workshop.Status.SCHEDULED,
-                ),
-                (
-                    f"{skills[-1]} Retrospective",
-                    f"Members share lessons learned from recent {skills[-1]} practice.",
-                    aware_at(-rng.randint(2, 12), rng.choice([17, 19])),
-                    rng.choice([8, 12, 15]),
-                    Workshop.Status.COMPLETED,
-                ),
-            ]
-        )
         for title, description_text, start_at, capacity, status in workshop_specs:
-            author = deniz if title == SCENARIO_WORKSHOP_TITLE else rng.choice([m for m in members if m.user.app_usage_mode == "MENTOR"] or [creator])
+            mentor_members = [m for m in members if m.user.app_usage_mode == "MENTOR"] or [creator]
+            if name == SCENARIO_COMMUNITY_NAME and title in {"MVP Feedback Hour", "Demo Flow Retro"}:
+                author = goksel
+            else:
+                author = rng.choice(mentor_members)
             workshop = Workshop.objects.create(
                 community=community,
                 author=author,
@@ -1332,10 +1374,24 @@ def seed_communities(profile_by_username, profiles_by_mode, rng: random.Random):
                 max_participants=capacity,
                 status=status,
             )
-            participants = [author]
-            if title == SCENARIO_WORKSHOP_TITLE:
+            non_author_members = [member for member in members if member.id != author.id]
+            non_actor_mentees = [
+                member
+                for member in non_author_members
+                if member.user.app_usage_mode == "MENTEE"
+                and member.id not in {mehmet.id}
+            ]
+            participants = []
+            if name == SCENARIO_COMMUNITY_NAME and title == "MVP Feedback Hour":
                 participants.append(mehmet)
-            participants.extend(rng.sample(members, k=min(len(members), rng.randint(4, capacity - 1))))
+                if non_actor_mentees:
+                    participants.append(rng.choice(non_actor_mentees))
+            elif name == SCENARIO_COMMUNITY_NAME and title == "Demo Flow Retro" and non_actor_mentees:
+                participants.append(rng.choice(non_actor_mentees))
+            sample_pool = [member for member in non_author_members if member.id not in {p.id for p in participants}]
+            participant_target = min(len(sample_pool), rng.randint(4, max(4, capacity - 1)))
+            if participant_target > 0:
+                participants.extend(rng.sample(sample_pool, k=participant_target))
             for participant in dict.fromkeys(participants):
                 WorkshopParticipant.objects.get_or_create(
                     workshop=workshop,
@@ -1350,6 +1406,7 @@ def seed_demo_profile_reviews(profile_by_username, profiles_by_mode, rng: random
     """Seed enough text reviews for demo mentor profiles to pass public batching rules."""
 
     from mentorship.models import Feedback, MeetingSession, MentorshipRequest
+    from messaging.models import Conversation
     from timeline.models import TimelineEvent
 
     deniz = profile_by_username[SCENARIO_MENTOR_USERNAME]
@@ -1363,19 +1420,13 @@ def seed_demo_profile_reviews(profile_by_username, profiles_by_mode, rng: random
             [
                 "Deniz helped our team remove two unnecessary pages and explain the project flow much more clearly.",
                 "The feedback was specific and practical. I left with a task order that made the week feel manageable.",
-                "A very calm mentor for project planning. The testing checklist he suggested saved us time before demo day.",
-                "Deniz connected design decisions to implementation work, which helped me understand what to build first.",
-                "Clear page breakdown, realistic scope, and useful follow-up resources after the session.",
             ],
         ),
         (
             goksel,
             [
-                "Göksel reviewed both our API plan and presentation path, then gave us a short checklist we could actually finish.",
-                "Helpful full-stack perspective. He explained which backend details mattered for the demo and which could wait.",
-                "The session made our responsibilities clearer across frontend, backend, and documentation.",
-                "I appreciated the way Göksel balanced technical feedback with confidence for the final presentation.",
-                "Good mentor for connecting database choices to user-facing screens and weekly implementation goals.",
+                "Göksel helped us cut an oversized web project into a believable MVP with a much clearer page plan.",
+                "Helpful full-stack perspective. He explained which backend endpoints mattered for the first release and which could wait.",
             ],
         ),
     ]
@@ -1401,6 +1452,7 @@ def seed_demo_profile_reviews(profile_by_username, profiles_by_mode, rng: random
                 initial_end=responded_at + timedelta(days=1, hours=1),
             )
             match = create_match_for_request(request, active=False)
+            Conversation.objects.filter(match=match).delete()
             create_session(
                 match,
                 responded_at + timedelta(days=1),
@@ -1415,6 +1467,122 @@ def seed_demo_profile_reviews(profile_by_username, profiles_by_mode, rng: random
             )
             Feedback.objects.filter(id=feedback.id).update(
                 created_at=aware_at(-(40 - index), 12, 0)
+            )
+
+
+def seed_demo_actor_networks(profile_by_username, profiles_by_mode, slots_by_username, rng: random.Random) -> None:
+    """Give the demo actors a fuller but still coherent mentorship graph."""
+
+    from mentorship.models import Feedback, MeetingSession, MentorshipRequest
+    from messaging.models import Conversation, Message
+
+    deniz = profile_by_username[SCENARIO_MENTOR_USERNAME]
+    goksel = profile_by_username[BACKUP_MENTOR_USERNAME]
+    mehmet = profile_by_username[SCENARIO_MENTEE_USERNAME]
+
+    extra_mentees = [profile for profile in profiles_by_mode["MENTEE"] if profile != mehmet]
+    extra_mentors = [
+        profile
+        for profile in profiles_by_mode["MENTOR"]
+        if profile.username not in {SCENARIO_MENTOR_USERNAME, BACKUP_MENTOR_USERNAME}
+    ]
+
+    actor_match_specs = [
+        {
+            "mentor": deniz,
+            "mentee": extra_mentees[3],
+            "created_at": aware_at(-11, 13, 0),
+            "responded_at": aware_at(-10, 17, 20),
+            "past_session": aware_at(-6, 18, 0),
+            "future_session": aware_at(3, 17, 30),
+            "cover_letter": "I need help reducing my web project scope before our department demo.",
+            "message": "I simplified the page flow after your last suggestion. Could we review the updated board next time?",
+            "feedback": "Deniz helped me stop overbuilding and focus on the most important screens first.",
+        },
+        {
+            "mentor": deniz,
+            "mentee": extra_mentees[9],
+            "created_at": aware_at(-8, 11, 15),
+            "responded_at": aware_at(-7, 16, 10),
+            "past_session": aware_at(-3, 19, 0),
+            "future_session": aware_at(6, 11, 30),
+            "cover_letter": "I want a second opinion on weekly planning and testing priorities for my app.",
+            "message": "Your testing checklist made the release plan much easier to explain to my teammates.",
+            "feedback": "Very clear mentor. I left the session with a practical plan instead of vague advice.",
+        },
+        {
+            "mentor": goksel,
+            "mentee": extra_mentees[15],
+            "created_at": aware_at(-10, 9, 40),
+            "responded_at": aware_at(-9, 18, 0),
+            "past_session": aware_at(-5, 18, 30),
+            "future_session": aware_at(7, 19, 0),
+            "cover_letter": "I need help connecting page scope, API endpoints, and weekly delivery for a student platform.",
+            "message": "The way you mapped our pages to endpoints made the whole project feel much less chaotic.",
+            "feedback": "Göksel was great at connecting frontend decisions to backend responsibilities.",
+        },
+        {
+            "mentor": goksel,
+            "mentee": extra_mentees[21],
+            "created_at": aware_at(-7, 14, 10),
+            "responded_at": aware_at(-6, 19, 15),
+            "past_session": aware_at(-2, 17, 0),
+            "future_session": aware_at(8, 10, 0),
+            "cover_letter": "I am trying to decide which product ideas belong in version one and which can wait.",
+            "message": "Our session helped me turn an oversized feature list into a believable MVP.",
+            "feedback": "Excellent for student teams that need both technical structure and product clarity.",
+        },
+        {
+            "mentor": extra_mentors[4],
+            "mentee": mehmet,
+            "created_at": aware_at(-9, 12, 30),
+            "responded_at": aware_at(-8, 17, 45),
+            "past_session": aware_at(-4, 16, 0),
+            "future_session": aware_at(5, 14, 0),
+            "cover_letter": "I want another mentor perspective on presenting the product flow more confidently.",
+            "message": "The second mentor perspective really helped me think about how to explain the project, not just build it.",
+            "feedback": None,
+        },
+    ]
+
+    for spec in actor_match_specs:
+        request = create_request(
+            spec["mentor"],
+            spec["mentee"],
+            slot=None,
+            status=MentorshipRequest.Status.ACCEPTED,
+            cover_letter=spec["cover_letter"],
+            created_at=spec["created_at"],
+            responded_at=spec["responded_at"],
+            initial_start=spec["future_session"],
+            initial_end=spec["future_session"] + timedelta(hours=1),
+        )
+        match = create_match_for_request(request, active=True)
+        create_session(
+            match,
+            spec["past_session"],
+            spec["past_session"] + timedelta(hours=1),
+            MeetingSession.Status.COMPLETED,
+        )
+        create_session(
+            match,
+            spec["future_session"],
+            spec["future_session"] + timedelta(hours=1),
+            MeetingSession.Status.SCHEDULED,
+        )
+        conversation, _ = Conversation.objects.get_or_create(match=match)
+        Message.objects.create(conversation=conversation, sender=spec["mentee"], body=spec["message"])
+        Message.objects.create(
+            conversation=conversation,
+            sender=spec["mentor"],
+            body="Looks good. Bring the updated flow and we can turn it into the next action plan together.",
+        )
+        if spec["feedback"]:
+            Feedback.objects.create(
+                match=match,
+                submitted_by=spec["mentee"],
+                rating=5,
+                text=spec["feedback"],
             )
 
 
@@ -1489,6 +1657,7 @@ def seed_demo_data() -> None:
     slots_by_username = create_availability(profiles_by_mode["MENTOR"], rng)
     primary_match, primary_conversation = seed_primary_story(profile_by_username, slots_by_username)
     other_matches = seed_general_mentorship(profiles_by_mode, slots_by_username, rng)
+    seed_demo_actor_networks(profile_by_username, profiles_by_mode, slots_by_username, rng)
     seed_demo_profile_reviews(profile_by_username, profiles_by_mode, rng)
     communities = seed_communities(profile_by_username, profiles_by_mode, rng)
     dedupe_mentorship_began_events()
