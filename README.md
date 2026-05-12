@@ -34,31 +34,29 @@ This README is intentionally production-focused. Detailed contributor workflows 
 
 ## Environment Configuration
 
-1. Create an environment file at repository root:
+Create all three environment files from the provided examples:
 
 ```bash
 cp .env.example .env
+cp backend/.env.example backend/.env
+cp mobile/.env.example mobile/.env
 ```
 
-Windows PowerShell alternative:
+Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
+Copy-Item backend\.env.example backend\.env
+Copy-Item mobile\.env.example mobile\.env
 ```
 
-2. Review and update required values in `.env`:
+The default values in the example files work out of the box for local development. You do **not** need to set any third-party credentials (Firebase, Google OAuth, SMTP) — see [Third-Party Services & Fallback Behaviors](#third-party-services--fallback-behaviors).
 
-- `SECRET_KEY`
-- `POSTGRES_DB`
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-- `VITE_API_BASE_URL`
-- `ALLOWED_HOSTS`
-- `CORS_ALLOWED_ORIGINS`
-- `CSRF_TRUSTED_ORIGINS`
+For production, update the following before deploying:
 
-3. For production-like usage, set:
-
+- `SECRET_KEY` — replace with a long random string
+- `POSTGRES_PASSWORD` — set a strong database password
+- `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` — set to your domain / or localhost
 - `DEBUG=False`
 - `AUTH_COOKIE_SECURE=True`
 
@@ -66,25 +64,56 @@ Copy-Item .env.example .env
 
 Follow this order on a fresh machine:
 
-1. Create `.env` from `.env.example` and set required values.
+1. Copy all environment files (see [Environment Configuration](#environment-configuration) above).
+
 2. Start containers:
 
 ```bash
 docker compose up --build -d
 ```
 
-3. Run backend migrations:
+3. (Optional) Run backend migrations (creates database tables and seeds the admin account): (This is the optional)
 
 ```bash
 docker compose exec backend python manage.py migrate
 ```
 
-4. Verify services:
+4. Seed demo data — populates 50 mentors, 120 mentees, communities, sessions, and posts: (This is handled automatically by migrations)
+
+```bash
+docker compose exec backend python scripts_seed_demo.py
+```
+
+5. Verify services:
 
 - Frontend: `http://localhost:3000`
 - API: `http://localhost:8000`
 
-5. (Optional) Start mobile app using the steps in "Run Mobile App Separately".
+6. Log in with the default admin account: `admin@test.com` / `AdminPass123!`
+
+7. (Optional) Start mobile app using the steps in "Run Mobile App Separately".
+
+## Default Credentials
+
+The following accounts are ready to use after running the setup steps above.
+
+### Admin Account (created by `migrate`)
+
+| Role | Email | Password |
+| :--- | :--- | :--- |
+| **Admin** | `admin@test.com` | `AdminPass123!` |
+
+Access the web UI at `http://localhost:3000` or the Django admin panel at `http://localhost:8000/admin/`.
+
+### Demo Accounts (created by `scripts_seed_demo.py`)
+
+| Role | Email | Password |
+| :--- | :--- | :--- |
+| **Mentor** | `deniz-arman@neighborship.local` | `deniz-arman-2026!` |
+| **Mentee** | `mehmet-ali-ozdemir@neighborship.local` | `mehmet-ali-ozdemir-2026!` |
+| **Mentor (backup)** | `goksel-deniz-celik@neighborship.local` | `goksel-deniz-celik-2026!` |
+
+> Email verification is disabled by default (`REQUIRE_EMAIL_VERIFICATION=False`). All accounts are immediately active.
 
 ## Run with Docker Compose (Web + API + DB)
 
@@ -117,7 +146,7 @@ docker compose down
 
 The mobile app is not started by Docker Compose. Run it independently while backend services are available.
 
-1. Make sure API is running (preferred):
+1. Make sure the API is running:
 
 ```bash
 docker compose up -d backend db
@@ -130,19 +159,23 @@ cd mobile
 npm install
 ```
 
-3. Configure mobile API base URL with `mobile/.env.local`:
+3. Set the API base URL in `mobile/.env` (already copied from `.env.example`):
+
+| Target | Value |
+| :----- | :---- |
+| Android emulator | `EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:8000` |
+| iOS simulator | `EXPO_PUBLIC_API_BASE_URL=http://localhost:8000` |
+| Physical device (Wi-Fi) | `EXPO_PUBLIC_API_BASE_URL=http://<YOUR_MACHINE_IP>:8000` |
+
+For physical device testing, also add your machine IP to the root `.env`:
 
 ```bash
-EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+ALLOWED_HOSTS=localhost,127.0.0.1,<YOUR_MACHINE_IP>
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://<YOUR_MACHINE_IP>:8081
+CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://<YOUR_MACHINE_IP>:8081
 ```
 
-Use your machine IP instead of `127.0.0.1` when testing on a physical device.
-
-Example for physical device on same Wi-Fi:
-
-```bash
-EXPO_PUBLIC_API_BASE_URL=http://192.168.1.23:8000
-```
+Find your IP with `hostname -I` (macOS/Linux) or `ipconfig` (Windows).
 
 4. Start Expo:
 
@@ -193,7 +226,7 @@ npm run test
 
 ### Local arm64 APK build
 
-1. Set mobile API URL in `mobile/.env.local`:
+1. Set mobile API URL in `mobile/.env`:
 
 ```bash
 EXPO_PUBLIC_API_BASE_URL=http://your-api-host:8000
@@ -211,6 +244,47 @@ Output APK:
 ```text
 mobile/android/app/build/outputs/apk/release/app-release.apk
 ```
+
+### EAS Build (Expo Application Services)
+
+To build the APK without `google-services.json`:
+
+1. **Modify `mobile/app.json`:** Ensure the line `"googleServicesFile": "./google-services.json"` is commented out (this has been done in the current repo state).
+
+2. **Development Build:**
+    ```bash
+    cd mobile
+    eas build --profile development --platform android --local
+    ```
+
+3. **Production APK Build:**
+    ```bash
+    cd mobile
+    eas build --profile production_apk --platform android --local
+    ```
+
+> [!TIP]
+> **APK vs AAB:** By default, the `production` profile produces an `.aab` file for the Play Store. To get an installable `.apk` file for testing on your phone, use the `production_apk` profile.
+
+### Manual Build (Android SDK & Gradle)
+
+If you have the Android SDK and JDK (17+) installed locally:
+
+1. **Prebuild:** Ensure the `android/` directory is generated:
+    ```bash
+    cd mobile
+    npx expo prebuild
+    ```
+
+2. **Build with Gradle:**
+    ```bash
+    cd mobile/android
+    ./gradlew assembleRelease
+    ```
+    *Note: Use `gradlew.bat` on Windows.*
+
+3. **Output APK:**
+    `mobile/android/app/build/outputs/apk/release/app-release.apk`
 
 ### GitHub Actions APK workflow
 
@@ -265,7 +339,7 @@ If sensitive credential files are removed, follow these steps to use the fallbac
     -   `GS_BUCKET_NAME` (Ensure this is empty to use local media storage)
     -   `EMAIL_BACKEND` (Set to `django.core.mail.backends.console.EmailBackend`)
 
-### 3. Email & Verification Logic
+### 2. Email & Verification Logic
 
 The system handles email verification based on the `REQUIRE_EMAIL_VERIFICATION` flag in `backend/.env`:
 
@@ -280,43 +354,8 @@ The system handles email verification based on the `REQUIRE_EMAIL_VERIFICATION` 
 > [!IMPORTANT]
 > **Forgot Password Console Logs:** To prevent "User Enumeration" attacks, the system always returns a `200 OK` response even if the email does not exist in the database. If you click "Forgot Password" and do **not** see an email in the backend console, double-check for typos in the email address or ensure the user is registered and active.
 
-### 2. Mobile APK Build Methods
-
-#### A. EAS Build (Expo Application Services)
-To build the APK without `google-services.json`:
-1.  **Modify `mobile/app.json`:** Ensure the line `"googleServicesFile": "./google-services.json"` is commented out (This has been done in the current repo state).
-2.  **Development Build:**
-    ```bash
-    cd mobile
-    eas build --profile development --platform android --local
-    ```
-3.  **Production APK Build:**
-    ```bash
-    cd mobile
-    eas build --profile production_apk --platform android --local
-    ```
-
-> [!TIP]
-> **APK vs AAB:** By default, the `production` profile produces an `.aab` file for the Play Store. To get an installable `.apk` file for testing on your phone, use the `production_apk` profile.
-
-#### B. Manual Build (Android SDK & Gradle)
-If you have the Android SDK and JDK (17+) installed locally, you can build the APK manually:
-
-1.  **Prebuild:** Ensure the `android/` directory is generated:
-    ```bash
-    cd mobile
-    npx expo prebuild
-    ```
-2.  **Build with Gradle:**
-    ```bash
-    cd mobile/android
-    ./gradlew assembleRelease
-    ```
-    *Note: Use `gradlew.bat` on Windows.*
-3.  **Output APK:**
-    `mobile/android/app/build/outputs/apk/release/app-release.apk`
-
 ### 3. Testing the Web UI
+
 1. Start the project: `docker compose up --build`
 2. Access `http://localhost:3000`.
 3. Log in with the default admin account: `admin@test.com` / `AdminPass123!`.
