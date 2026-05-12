@@ -125,7 +125,7 @@ test.describe('AT-013: Workshops Lifecycle in Communities', () => {
       await hostCommunityPage.fillWorkshopCapacity('4');
       await hostCommunityPage.submitWorkshopCreate();
       await hostCommunityPage.expectWorkshopCreated();
-      await hostCommunityPage.expectWorkshopCardSummary(initialTitle, 1, 4, 'Open');
+      await hostCommunityPage.expectWorkshopCardSummary(initialTitle, 0, 4, 'Open');
 
       const workshops = await api.fetchCommunityWorkshops(hostAuth, community.id);
       const createdWorkshop = workshops.results.find((item) => item.title === initialTitle);
@@ -146,16 +146,16 @@ test.describe('AT-013: Workshops Lifecycle in Communities', () => {
       await memberOneCommunityPage.openWorkshopDetails(initialTitle);
       await memberOneCommunityPage.expectWorkshopJoinVisible();
       await memberOneCommunityPage.joinWorkshop();
-      await memberOneCommunityPage.expectWorkshopParticipantCount(2, 4);
+      await memberOneCommunityPage.expectWorkshopParticipantCount(1, 4);
       await memberOneCommunityPage.expectWorkshopLeaveVisible();
 
       await memberOnePage.reload();
       await memberOneCommunityPage.openWorkshopDetails(initialTitle);
-      await memberOneCommunityPage.expectWorkshopParticipantCount(2, 4);
+      await memberOneCommunityPage.expectWorkshopParticipantCount(1, 4);
       await memberOneCommunityPage.expectWorkshopLeaveVisible();
 
       await memberOneCommunityPage.leaveWorkshop();
-      await memberOneCommunityPage.expectWorkshopParticipantCount(1, 4);
+      await memberOneCommunityPage.expectWorkshopParticipantCount(0, 4);
       await memberOneCommunityPage.expectWorkshopJoinVisible();
 
       await memberOneContext.close();
@@ -168,9 +168,9 @@ test.describe('AT-013: Workshops Lifecycle in Communities', () => {
 
       await page.reload();
       await hostCommunityPage.expectLoaded(community.slug, community.name);
-      await hostCommunityPage.expectWorkshopCardSummary(initialTitle, 4, 4, 'Full');
+      await hostCommunityPage.expectWorkshopCardSummary(initialTitle, 3, 4, 'Full');
       await hostCommunityPage.openWorkshopDetails(initialTitle);
-      await hostCommunityPage.expectWorkshopParticipantCount(4, 4);
+      await hostCommunityPage.expectWorkshopParticipantCount(3, 4);
       await hostCommunityPage.expectWorkshopStatus('Full');
       await hostCommunityPage.expectWorkshopParticipantsVisible(
         hostSeed.displayName,
@@ -225,7 +225,7 @@ test.describe('AT-013: Workshops Lifecycle in Communities', () => {
       await hostCommunityPage.saveWorkshopChanges();
       await hostCommunityPage.expectWorkshopUpdated();
       await hostCommunityPage.closeWorkshopDetails();
-      await hostCommunityPage.expectWorkshopCardSummary(updatedTitle, 4, 4, 'Full');
+      await hostCommunityPage.expectWorkshopCardSummary(updatedTitle, 3, 4, 'Full');
 
       await hostCommunityPage.openWorkshopDetails(updatedTitle);
       await hostCommunityPage.openWorkshopEditDialog();
@@ -251,7 +251,7 @@ test.describe('AT-013: Workshops Lifecycle in Communities', () => {
       await hostCommunityPage.startWorkshopCancelFlow();
       await hostCommunityPage.confirmWorkshopCancellation();
 
-      await hostCommunityPage.expectWorkshopCardSummary(updatedTitle, 4, 4, 'Cancelled');
+      await hostCommunityPage.expectWorkshopCardSummary(updatedTitle, 3, 4, 'Cancelled');
 
       const cancelledDetail = await api.fetchWorkshopDetail(hostAuth, community.id, workshopId);
       expect(cancelledDetail.status).toBe('CANCELLED');

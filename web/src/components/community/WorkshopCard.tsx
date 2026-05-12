@@ -1,9 +1,9 @@
-import { Link } from '@tanstack/react-router'
-import { Calendar, Clock, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
 import type { CommunityWorkshop } from '@/lib/queries/WorkshopQueries.ts'
+import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
+import { Link } from '@tanstack/react-router'
+import { Calendar, Clock, Users } from 'lucide-react'
 
 const AVATAR_COLORS = [
     'bg-blue-100 text-blue-700',
