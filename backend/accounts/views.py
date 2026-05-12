@@ -122,12 +122,13 @@ class RegisterAPIView(APIView):
         user = cast(User, serializer.save())
         refresh = RefreshToken.for_user(user)
 
-        try:
-            raw_token, _ = EmailVerificationToken.issue_for_user(user)
-            _send_email_verification_email(user, raw_token)
-        except Exception:
-            # We log and continue so the user is still logged in even if email fails
-            logger.exception("Failed to issue verification email for user %s", user.id)
+        if getattr(settings, "REQUIRE_EMAIL_VERIFICATION", True):
+            try:
+                raw_token, _ = EmailVerificationToken.issue_for_user(user)
+                _send_email_verification_email(user, raw_token)
+            except Exception:
+                # We log and continue so the user is still logged in even if email fails
+                logger.exception("Failed to issue verification email for user %s", user.id)
 
         response = Response(
             build_auth_response(user, refresh),
