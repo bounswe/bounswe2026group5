@@ -54,11 +54,10 @@ The default values in the example files work out of the box for local developmen
 
 For production, update the following before deploying:
 
-- `SECRET_KEY` — replace with a long random string
+- `SECRET_KEY` — replace with a long random string **(Optional)**
 - `POSTGRES_PASSWORD` — set a strong database password
 - `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` — set to your domain / or localhost
-- `DEBUG=False`
-- `AUTH_COOKIE_SECURE=True`
+- `DEBUG=True` (for development) / `DEBUG=False` (for production) 
 
 ## Quick Start (First Run Order)
 
@@ -148,6 +147,9 @@ docker compose down
 
 Uses `docker-compose.prod.yml` on top of the base config. This builds production-optimized images and starts Nginx on ports 80/443.
 
+> [!IMPORTANT]
+> Nginx requires valid SSL certificates at `/etc/letsencrypt` to start. Without them, the Nginx container will fail to start. Obtain certificates (e.g. via Let's Encrypt / Certbot) before running in production.
+
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ```
@@ -216,14 +218,6 @@ npx expo start
 ```
 
 ## Migrations
-
-Run backend migrations locally:
-
-```bash
-cd backend
-python manage.py makemigrations
-python manage.py migrate
-```
 
 Run migrations in Docker:
 
@@ -383,9 +377,6 @@ The system handles email verification based on the `REQUIRE_EMAIL_VERIFICATION` 
     -   Users must click the link in the verification email to activate their account's verified status.
     -   Access to protected features (e.g., mentorship requests, community posts) will be blocked with a "Please verify your email" message until verification is complete.
 
-> [!IMPORTANT]
-> **Forgot Password Console Logs:** To prevent "User Enumeration" attacks, the system always returns a `200 OK` response even if the email does not exist in the database. If you click "Forgot Password" and do **not** see an email in the backend console, double-check for typos in the email address or ensure the user is registered and active.
-
 ### 3. Testing the Web UI
 
 1. Start the project: `docker compose up --build`
@@ -395,8 +386,6 @@ The system handles email verification based on the `REQUIRE_EMAIL_VERIFICATION` 
 ## Documentation
 
 - [Wiki Home Page](https://github.com/bounswe/bounswe2026group5/wiki)
-- [Project Standards and Workflow](https://github.com/bounswe/bounswe2026group5/wiki/Project-Standards-&-Workflow)
-- [Knowledge Base](https://github.com/bounswe/bounswe2026group5/wiki/Knowledge-Base)
 
 ## Team
 
