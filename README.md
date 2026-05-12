@@ -231,6 +231,96 @@ Required GitHub secret:
 
 - `EXPO_PUBLIC_API_BASE_URL` (must start with `http://` or `https://`)
 
+## Third-Party Services & Fallback Behaviors
+
+The project integrates several third-party services. To ensure the application remains functional for evaluators and assistants without these credentials, we have implemented the following graceful fallbacks:
+
+| Service | Primary Feature | Fallback Behavior |
+| :--- | :--- | :--- |
+| **Firebase Firestore** | Real-time Messaging | **2-second HTTP Polling** (Automatically detected) |
+| **Firebase Cloud Messaging** | Push Notifications | **10-second HTTP Polling** (Automatically detected) |
+| **Google Cloud Storage** | Media Hosting | **Local Filesystem Storage** (Stored in `backend/media/`) |
+| **SMTP Server** | Email Verification | **Console Logging** (Links printed to backend terminal/logs) |
+| **Google OAuth 2.0** | Social Login | **Disabled** (Evaluators should use Email/Password login) |
+
+### 1. Environment Setup for Fallback Mode
+
+If sensitive credential files are removed, follow these steps to use the fallback mode:
+
+1.  **Copy Environment Examples:**
+    -   Root: `cp .env.example .env`
+    -   Backend: `cp backend/.env.example backend/.env`
+    -   Mobile: `cp mobile/.env.example mobile/.env`
+
+    > [!TIP]
+    > **For Physical Device Testing:** If you are testing the mobile app on a physical device, you must use your machine's local IP address instead of `localhost`.
+    > - Find your IP: Run `hostname -I` or `ifconfig` (Linux/macOS) or `ipconfig` (Windows).
+    > - Update Root `.env`: Add your IP to `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and `CSRF_TRUSTED_ORIGINS`.
+    > - Update Mobile `.env`: Set `EXPO_PUBLIC_API_BASE_URL=http://<YOUR_IP>:8000`.
+
+2.  **Leave Credentials Empty:**
+    In the created `.env` files, keep the following sections empty or with their default values:
+    -   `VITE_FIREBASE_*` / `EXPO_PUBLIC_FIREBASE_*`
+    -   `VITE_GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_ID`
+    -   `GS_BUCKET_NAME` (Ensure this is empty to use local media storage)
+    -   `EMAIL_BACKEND` (Set to `django.core.mail.backends.console.EmailBackend`)
+
+### 3. Email & Verification Logic
+
+The system handles email verification based on the `REQUIRE_EMAIL_VERIFICATION` flag in `backend/.env`:
+
+-   **If `REQUIRE_EMAIL_VERIFICATION=False` (Default for Fallback):**
+    -   New users are created as **automatically verified**.
+    -   Email sending is **skipped** upon registration to reduce console noise.
+    -   Email sending remains **active** for the "Forgot Password" feature.
+-   **If `REQUIRE_EMAIL_VERIFICATION=True`:**
+    -   Users must click the link in the verification email to activate their account's verified status.
+    -   Access to protected features (e.g., mentorship requests, community posts) will be blocked with a "Please verify your email" message until verification is complete.
+
+> [!IMPORTANT]
+> **Forgot Password Console Logs:** To prevent "User Enumeration" attacks, the system always returns a `200 OK` response even if the email does not exist in the database. If you click "Forgot Password" and do **not** see an email in the backend console, double-check for typos in the email address or ensure the user is registered and active.
+
+### 2. Mobile APK Build Methods
+
+#### A. EAS Build (Expo Application Services)
+To build the APK without `google-services.json`:
+1.  **Modify `mobile/app.json`:** Ensure the line `"googleServicesFile": "./google-services.json"` is commented out (This has been done in the current repo state).
+2.  **Development Build:**
+    ```bash
+    cd mobile
+    eas build --profile development --platform android --local
+    ```
+3.  **Production APK Build:**
+    ```bash
+    cd mobile
+    eas build --profile production_apk --platform android --local
+    ```
+
+> [!TIP]
+> **APK vs AAB:** By default, the `production` profile produces an `.aab` file for the Play Store. To get an installable `.apk` file for testing on your phone, use the `production_apk` profile.
+
+#### B. Manual Build (Android SDK & Gradle)
+If you have the Android SDK and JDK (17+) installed locally, you can build the APK manually:
+
+1.  **Prebuild:** Ensure the `android/` directory is generated:
+    ```bash
+    cd mobile
+    npx expo prebuild
+    ```
+2.  **Build with Gradle:**
+    ```bash
+    cd mobile/android
+    ./gradlew assembleRelease
+    ```
+    *Note: Use `gradlew.bat` on Windows.*
+3.  **Output APK:**
+    `mobile/android/app/build/outputs/apk/release/app-release.apk`
+
+### 3. Testing the Web UI
+1. Start the project: `docker compose up --build`
+2. Access `http://localhost:3000`.
+3. Log in with the default admin account: `admin@test.com` / `AdminPass123!`.
+
 ## Documentation
 
 - [Wiki Home Page](https://github.com/bounswe/bounswe2026group5/wiki)

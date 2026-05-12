@@ -50,11 +50,21 @@ jobs:
         env:
           MOBILE_ENV: ${{ secrets.MOBILE_ENV }}
         run: |
+          # Start with the secret if it exists
           if [ -n "$MOBILE_ENV" ]; then
             echo "$MOBILE_ENV" > .env
           else
-            echo "EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL" > .env
+            touch .env
           fi
+          
+          # Force the production API URL for this build
+          # This ensures that even if MOBILE_ENV contains a local IP or localhost,
+          # the final APK points to the live app.
+          sed -i '/EXPO_PUBLIC_API_BASE_URL/d' .env
+          echo "EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL" >> .env
+          
+          echo "Final .env content (obfuscated):"
+          sed 's/=.*/=*** /' .env
 
       - name: Decode Google Services JSON
         env:
