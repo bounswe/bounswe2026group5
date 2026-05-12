@@ -1889,6 +1889,7 @@ class EmailEdgeCaseTests(TestCase):
         mock_send.assert_called_once()
 
     @patch("accounts.views.send_mail")
+    @override_settings(REQUIRE_EMAIL_VERIFICATION=True)
     def test_register_email_failure_graceful(self, mock_send):
         """RegisterAPIView should return 201 even if verification email fails."""
         mock_send.side_effect = Exception("SMTP Error")
