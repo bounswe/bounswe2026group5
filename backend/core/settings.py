@@ -216,7 +216,7 @@ GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 # ==============================================================================
 
 # Business Logic Limits
-RATING_UPDATE_THRESHOLD = 1
+RATING_UPDATE_THRESHOLD = 5
 MENTOR_OVERLOAD_THRESHOLD = 5
 NOTIFICATIONS_HISTORY_LIMIT = 100
 MAX_MESSAGE_ATTACHMENT_SIZE_MB = 20
