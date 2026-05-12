@@ -74,14 +74,36 @@ jobs:
             printf "%s" "$GOOGLE_SERVICES_JSON" | tr -cd 'A-Za-z0-9+/=' | base64 --decode > google-services.json
           fi
 
+      - name: Decode Android Keystore
+        env:
+          ENCODED_STRING: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ENCODED_STRING" ]; then
+            echo "$ENCODED_STRING" | base64 --decode > android-release-key.jks
+          else
+            echo "Warning: ANDROID_KEYSTORE_BASE64 secret is missing. APK will be unsigned."
+          fi
+
       - name: Generate native Android project
         run: npx expo prebuild --platform android --non-interactive
 
-      - name: Build release APK
+      - name: Build and Sign release APK
+        env:
+          # Pass signing credentials to Gradle via environment variables
+          MYAPP_RELEASE_STORE_FILE: ../android-release-key.jks
+          MYAPP_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
+          MYAPP_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || 'c9d0f89b48ef1501cfba73b068b77040' }}
+          MYAPP_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || '' }}
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64 --no-daemon
+          # We pass the signing properties directly to the assembleRelease command
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$MYAPP_RELEASE_STORE_FILE \
+            -Pandroid.injected.signing.store.password=$MYAPP_RELEASE_STORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$MYAPP_RELEASE_KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$MYAPP_RELEASE_KEY_PASSWORD \
+            -PreactNativeArchitectures=arm64-v8a,x86_64 --no-daemon
 
       - name: Prepare universal APK
         run: |
