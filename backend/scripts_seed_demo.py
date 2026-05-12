@@ -1007,14 +1007,6 @@ def seed_primary_story(profile_by_username, slots_by_username):
         is_read=False,
     )
 
-    primary_feedback = Feedback.objects.create(
-        match=match,
-        submitted_by=mehmet,
-        rating=5,
-        text=SCENARIO_FEEDBACK_COMMENT,
-    )
-    Feedback.objects.filter(id=primary_feedback.id).update(created_at=aware_at(0, 13, 0))
-
     backup = profile_by_username.get(BACKUP_MENTOR_USERNAME)
     backup_slots = slots_by_username.get(BACKUP_MENTOR_USERNAME, [])
     if backup is not None and backup_slots:

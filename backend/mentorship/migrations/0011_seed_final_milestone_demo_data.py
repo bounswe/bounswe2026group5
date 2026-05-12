@@ -6,7 +6,11 @@ from django.db import migrations
 def seed_final_milestone_demo_data(apps, schema_editor):
     """Run the deterministic demo seed script after all required tables exist."""
 
-    del apps, schema_editor
+    del apps
+
+    db_name = str(schema_editor.connection.settings_dict.get("NAME") or "")
+    if db_name.startswith("test_"):
+        return
 
     from scripts_seed_demo import seed_demo_data
 
@@ -21,6 +25,7 @@ class Migration(migrations.Migration):
         ("notifications", "0004_fcmtoken"),
         ("profiles", "0020_profile_audio_profile_linkedin_url_profile_video"),
         ("timeline", "0003_alter_timelineevent_media_url"),
+        ("token_blacklist", "0013_alter_blacklistedtoken_options_and_more"),
     ]
 
     operations = [
