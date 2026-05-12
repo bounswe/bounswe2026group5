@@ -97,7 +97,7 @@ export function WorkshopCard({ workshop, onViewDetails }: WorkshopCardProps) {
                 {/* Capacity */}
                 <div className={cn('flex items-center gap-1.5 text-xs font-medium', capacityClass)}>
                     <Users className="w-3.5 h-3.5 shrink-0" />
-                    {workshop.participant_count}/{workshop.max_participants} Enrolled
+                    {workshop.participant_count-1}/{workshop.max_participants} Enrolled
                 </div>
 
                 {/* Author */}
