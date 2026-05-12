@@ -32,16 +32,10 @@ export class DashboardPage {
   async expectNotification(title: string, messagePart: string) {
     const notification = this.page.locator('.border-l-4', { hasText: title }).filter({ hasText: messagePart }).first();
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      if (await notification.isVisible().catch(() => false)) {
-        return;
-      }
-
-      await this.page.reload();
-      await this.expectLoaded();
-    }
-
-    await expect(notification).toBeVisible({ timeout: 10_000 });
+    // We avoid reloads here because the dashboard marks notifications as read immediately on display.
+    // A reload would cause a notification that was fetched but not yet asserted to disappear.
+    // We use a 25s timeout to account for the 10s polling interval.
+    await expect(notification).toBeVisible({ timeout: 25_000 });
   }
 
   async expectUnreadMessagesBadge() {
@@ -51,7 +45,7 @@ export class DashboardPage {
 
   async openConversationFromNotification(messagePart: string) {
     const notification = this.page.locator('.border-l-4').filter({ hasText: messagePart }).first();
-    await expect(notification).toBeVisible({ timeout: 10_000 });
+    await expect(notification).toBeVisible({ timeout: 25_000 });
     await notification.getByRole('link', { name: 'View conversation →' }).click();
     await expect(this.page).toHaveURL(/\/messages\?conversationId=/);
   }
@@ -60,7 +54,7 @@ export class DashboardPage {
     const notification = this.page.locator('.border-l-4', {
       has: this.page.getByRole('link', { name: 'View conversation →' }),
     }).first();
-    await expect(notification).toBeVisible({ timeout: 10_000 });
+    await expect(notification).toBeVisible({ timeout: 25_000 });
     await notification.getByRole('link', { name: 'View conversation →' }).click();
     await expect(this.page).toHaveURL(/\/messages\?conversationId=/);
   }

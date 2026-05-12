@@ -79,7 +79,7 @@ export class CommunitiesPage {
   }
 
   private get searchInput() {
-    return this.page.getByRole('textbox', { name: 'Search profiles, skills, or projects...' });
+    return this.page.getByRole('textbox', { name: 'Search communities...' });
   }
 
   private get createDialog() {
