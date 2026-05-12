@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework.permissions import BasePermission
 
 from .models import UserRole
@@ -46,3 +47,16 @@ class IsRegularUser(BasePermission):
             return False
 
         return request.user.role == UserRole.USER
+
+
+class IsEmailVerified(BasePermission):
+    message = "Please verify your email address to perform this action."
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if not getattr(settings, "REQUIRE_EMAIL_VERIFICATION", True):
+            return True
+
+        return bool(getattr(request.user, "is_email_verified", False))

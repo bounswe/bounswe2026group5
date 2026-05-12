@@ -12,7 +12,7 @@ interface DiscoverSearchBarProps {
 export function DiscoverSearchBar({
   value,
   onChange,
-  placeholder = 'Search profiles, skills, or projects...',
+  placeholder = 'Search profiles or skills...',
   className,
 
 }: Readonly<DiscoverSearchBarProps>) {
@@ -20,7 +20,7 @@ export function DiscoverSearchBar({
   return (
     <div className={cn('relative w-full', className)}>
       <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
-        <Search className="h-6 w-6 text-ink-soft" />
+        <Search className="h-6 w-6 text-ink-soft" aria-hidden="true" />
       </div>
       <input
         type="text"

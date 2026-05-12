@@ -1,18 +1,21 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, useRef, useEffect, type FormEvent } from 'react'
+import { useMessageQueue } from '#/hooks/useMessageQueue'
 import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 import {
     useConversations,
+    useMarkRead,
     useMessages,
     useSendMessage,
     type Conversation,
+    type Message,
 } from '#/lib/queries/MessagingQueries.ts'
-import { useNotifications, useMarkAllNotificationsRead } from '#/lib/queries/NotificationQueries.ts'
-import { getInitials } from '#/lib/utils.ts'
+import { useMarkAllNotificationsRead, useNotifications } from '#/lib/queries/NotificationQueries.ts'
+import { cn, getAbsoluteMediaUrl, getInitials } from '#/lib/utils.ts'
+import { MediaAttachment } from '@/components/MediaAttachment'
 import { Button } from '@/components/ui/button'
-import { Loader2, MessageSquare, Send } from 'lucide-react'
-import { cn } from '#/lib/utils.ts'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { Check, CheckCheck, Loader2, MessageSquare, Paperclip, Send, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
 
 export const Route = createFileRoute('/_authorized/messages')({
     component: MessagesPage,
@@ -27,7 +30,18 @@ export const Route = createFileRoute('/_authorized/messages')({
 
 export function MessagesPage() {
     const { conversationId } = Route.useSearch()
+    const navigate = Route.useNavigate()
     const [selectedId, setSelectedId] = useState<string | null>(conversationId || null)
+
+    useEffect(() => {
+        document.documentElement.style.overflow = 'hidden'
+        return () => { document.documentElement.style.overflow = '' }
+    }, [])
+
+    const handleSelect = (id: string) => {
+        setSelectedId(id)
+        navigate({ search: { conversationId: id } })
+    }
 
     const { data: notifications = [] } = useNotifications()
     const { mutate: markAllRead } = useMarkAllNotificationsRead()
@@ -48,9 +62,9 @@ export function MessagesPage() {
     }, [markAllRead])
 
     return (
-        <div className="p-4 md:p-6 h-[calc(100vh-3.5rem)]">
+        <div className="p-4 md:p-6 h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden">
             <div className="flex h-full rounded-xl border border-line overflow-hidden shadow-sm bg-background max-w-5xl mx-auto">
-                <ConversationList selectedId={selectedId} onSelect={setSelectedId} />
+                <ConversationList selectedId={selectedId} onSelect={handleSelect} />
                 <MessageThread conversationId={selectedId} />
             </div>
         </div>
@@ -65,8 +79,8 @@ function ConversationList({
     selectedId,
     onSelect,
 }: {
-    selectedId: string | null
-    onSelect: (id: string) => void
+    readonly selectedId: string | null
+    readonly onSelect: (id: string) => void
 }) {
     const { data: me } = useQuery(meQueryOptions)
     const { data: conversations = [], isLoading } = useConversations()
@@ -108,29 +122,47 @@ function ConversationItem({
     isSelected,
     onSelect,
 }: {
-    conversation: Conversation
-    myUsername: string
-    isSelected: boolean
-    onSelect: () => void
+    readonly conversation: Conversation
+    readonly myUsername: string
+    readonly isSelected: boolean
+    readonly onSelect: () => void
 }) {
     const other =
         conversation.mentor.username === myUsername
             ? conversation.mentee
             : conversation.mentor
 
+    const updatedAt = new Date(conversation.updated_at)
+    const now = new Date()
+    const isToday = updatedAt.toDateString() === now.toDateString()
+    const timeLabel = isToday
+        ? updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : updatedAt.toLocaleDateString([], { month: 'short', day: 'numeric' })
+
     return (
         <button
             onClick={onSelect}
             className={cn(
-                'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent-muted/60',
-                isSelected && 'bg-accent-muted',
+                'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent-muted/60 border-l-2',
+                isSelected ? 'bg-accent-muted border-l-accent' : 'border-l-transparent',
             )}
         >
             <Avatar name={other.display_name} pictureUrl={other.picture_url} size="md" />
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-ink truncate">{other.display_name}</p>
+                <div className="flex items-center justify-between gap-1">
+                    <p className={cn('text-sm truncate', isSelected ? 'font-semibold text-ink' : 'font-medium text-ink')}>{other.display_name}</p>
+                    <time className="text-[10px] text-ink-soft shrink-0">{timeLabel}</time>
+                </div>
                 <p className="text-xs text-ink-soft truncate">@{other.username}</p>
             </div>
+            {conversation.unread_count > 0 && (
+                <span
+                    className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white shadow-sm"
+                    aria-label={`${conversation.unread_count} unread messages`}
+                >
+                    {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
+                </span>
+            )}
         </button>
     )
 }
@@ -139,7 +171,7 @@ function ConversationItem({
 // Message Thread (right pane)
 // ---------------------------------------------------------------------------
 
-function MessageThread({ conversationId }: { conversationId: string | null }) {
+function MessageThread({ conversationId }: { readonly conversationId: string | null }) {
     if (!conversationId) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 text-ink-soft">
@@ -152,125 +184,312 @@ function MessageThread({ conversationId }: { conversationId: string | null }) {
     return <Thread conversationId={conversationId} />
 }
 
-function Thread({ conversationId }: { conversationId: string }) {
+function Thread({ conversationId }: { readonly conversationId: string }) {
     const { data: me } = useQuery(meQueryOptions)
-    const { data: messages = [], isLoading } = useMessages(conversationId)
+    const { data: conversations = [] } = useConversations()
+    const conversation = conversations.find(c => c.id === conversationId)
+    const other = conversation
+        ? (conversation.mentor.username === me?.username ? conversation.mentee : conversation.mentor)
+        : null
+    const { data: messages = [], isLoading, loadMore, hasMore } = useMessages(conversationId)
+    const { mutate: markRead } = useMarkRead(conversationId)
     const sendMessage = useSendMessage(conversationId)
     const queryClient = useQueryClient()
+    const { enqueueMessage, updateMessageStatus, dequeueMessage } = useMessageQueue(conversationId)
     const [text, setText] = useState('')
-    const bottomRef = useRef<HTMLDivElement>(null)
+    const [attachedFile, setAttachedFile] = useState<File | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+
+    // Mark conversation as read when opening
+    useEffect(() => {
+        if (conversationId) {
+            markRead()
+        }
+    }, [conversationId, markRead])
+    
+    const scrollContainerRef = useRef<HTMLDivElement>(null)
+    const [isAtBottom, setIsAtBottom] = useState(true)
+    const isAtBottomRef = useRef(true)
+    const initialScrollDone = useRef(false)
 
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, [messages])
+        isAtBottomRef.current = isAtBottom
+    }, [isAtBottom])
 
-    async function handleSubmit(e: FormEvent) {
-        e.preventDefault()
-        const body = text.trim()
-        if (!body || sendMessage.isPending) return
-        setText('')
-        await sendMessage.mutateAsync(body)
-        queryClient.invalidateQueries({ queryKey: ['messaging', 'messages', conversationId] })
+    const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+        const el = scrollContainerRef.current
+        if (el) el.scrollTo({ top: el.scrollHeight, behavior })
+    }, [])
+
+    // Auto-scroll on new messages; use instant on first load to avoid page scroll
+    useEffect(() => {
+        if (isAtBottom) {
+            const behavior = initialScrollDone.current ? 'smooth' : 'instant'
+            scrollToBottom(behavior)
+            initialScrollDone.current = true
+        }
+    }, [messages, isAtBottom, scrollToBottom])
+
+    // Re-scroll after an image/attachment loads if user was at bottom
+    const handleMediaLoad = useCallback(() => {
+        if (isAtBottomRef.current) scrollToBottom('instant')
+    }, [scrollToBottom])
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const target = e.currentTarget
+        const atTop = target.scrollTop === 0
+        const atBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 100
+        
+        setIsAtBottom(atBottom)
+
+        if (atTop && hasMore && !isLoading) {
+            // Store height to maintain scroll position after loading
+            const oldHeight = target.scrollHeight
+            loadMore()
+            
+            // Adjust scroll position after render
+            requestAnimationFrame(() => {
+                if (target) {
+                    target.scrollTop = target.scrollHeight - oldHeight
+                }
+            })
+        }
     }
 
+    const handleSubmit = useCallback(
+        async (e: SyntheticEvent) => {
+            e.preventDefault()
+            const body = text.trim()
+            if ((!body && !attachedFile) || sendMessage.isPending) return
+
+            setIsAtBottom(true) // Force scroll to bottom for new message
+            const queuedMsg = enqueueMessage(body)
+            setText('')
+            setAttachedFile(null)
+            if (fileInputRef.current) fileInputRef.current.value = ''
+
+            try {
+                updateMessageStatus(queuedMsg.tempId, 'sending')
+                await sendMessage.mutateAsync({ body, attachment: attachedFile ?? undefined })
+                dequeueMessage(queuedMsg.tempId)
+                queryClient.invalidateQueries({ queryKey: ['messaging', 'messages', conversationId] })
+            } catch (error) {
+                updateMessageStatus(queuedMsg.tempId, 'failed', error instanceof Error ? error.message : 'Failed to send')
+                console.error('[Messages] Error sending message:', error)
+            }
+        },
+        [text, attachedFile, sendMessage, enqueueMessage, updateMessageStatus, dequeueMessage, queryClient, conversationId],
+    )
+
     return (
-        <div className="flex-1 flex flex-col min-w-0">
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3">
-                {isLoading ? (
-                    <div className="flex justify-center py-10">
-                        <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
+        <div className="flex-1 min-h-0 flex flex-col min-w-0">
+            {/* Thread header */}
+            {other && (
+                <div className="shrink-0 flex items-center gap-3 px-5 py-3 border-b border-line">
+                    <Avatar name={other.display_name} pictureUrl={other.picture_url} size="md" />
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-ink truncate">{other.display_name}</p>
+                        <p className="text-xs text-ink-soft truncate">@{other.username}</p>
                     </div>
-                ) : messages.length === 0 ? (
-                    <p className="text-sm text-ink-soft text-center mt-10">
-                        No messages yet. Say hello!
-                    </p>
-                ) : (
-                    messages.map(msg => {
-                        const isMe = msg.sender.username === me?.username
-                        return (
-                            <div
-                                key={msg.id}
-                                className={cn('flex items-end gap-2', isMe && 'flex-row-reverse')}
-                            >
-                                {!isMe && (
-                                    <Avatar
-                                        name={msg.sender.display_name}
-                                        pictureUrl={msg.sender.picture_url}
-                                        size="sm"
-                                    />
-                                )}
-                                <div
-                                    className={cn(
-                                        'max-w-[70%] rounded-2xl px-4 py-2 text-sm',
-                                        isMe
-                                            ? 'bg-accent text-white rounded-br-sm'
-                                            : 'bg-accent-muted text-ink rounded-bl-sm',
-                                    )}
-                                >
-                                    <p className="whitespace-pre-wrap break-words">{msg.body}</p>
-                                    {msg.attachment_url && (
-                                        <a
-                                            href={msg.attachment_url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="block mt-1 underline text-xs opacity-80"
-                                        >
-                                            Attachment
-                                        </a>
-                                    )}
-                                    <time className={cn('block text-[10px] mt-1 opacity-60', isMe ? 'text-right' : '')}>
-                                        {new Date(msg.created_at).toLocaleTimeString([], {
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                        })}
-                                    </time>
-                                </div>
-                            </div>
-                        )
-                    })
-                )}
-                <div ref={bottomRef} />
+                    <Link
+                        to="/profiles/$username"
+                        params={{ username: other.username }}
+                        className="text-xs text-accent-aa hover:underline shrink-0"
+                    >
+                        View profile
+                    </Link>
+                </div>
+            )}
+            {/* Messages */}
+            <div
+                ref={scrollContainerRef}
+                onScroll={handleScroll}
+                className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+            >
+                <div className="flex flex-col gap-3 px-6 py-4">
+                    {hasMore && (
+                        <div className="flex justify-center py-2">
+                            {isLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-ink-soft" />
+                            ) : (
+                                <p className="text-[10px] text-ink-soft italic">Scroll up to load more</p>
+                            )}
+                        </div>
+                    )}
+
+                    {isLoading && messages.length === 0 ? (
+                        <div className="flex justify-center py-10">
+                            <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
+                        </div>
+                    ) : messages.length === 0 ? (
+                        <p className="text-sm text-ink-soft text-center mt-10">
+                            No messages yet. Say hello!
+                        </p>
+                    ) : (
+                        messages.map(msg => {
+                            const isMe = msg.sender.username === me?.username
+                            return (
+                                <MessageBubble
+                                    key={msg.id}
+                                    message={msg}
+                                    isMe={isMe}
+                                    onMediaLoad={handleMediaLoad}
+                                />
+                            )
+                        })
+                    )}
+                </div>
             </div>
 
             {/* Input */}
             <form
                 onSubmit={handleSubmit}
-                className="shrink-0 border-t border-line px-4 py-3 flex items-end gap-2"
+                className="shrink-0 border-t border-line px-4 py-3 flex flex-col gap-2"
             >
-                <textarea
-                    value={text}
-                    onChange={e => setText(e.target.value)}
-                    onKeyDown={e => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault()
-                            handleSubmit(e as unknown as FormEvent)
-                        }
-                    }}
-                    placeholder="Type a message… (Enter to send)"
-                    rows={1}
-                    className="flex-1 resize-none rounded-xl border border-line bg-background px-3 py-2 text-sm text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent/40 max-h-32 overflow-y-auto"
-                />
-                <Button
-                    type="submit"
-                    size="icon"
-                    aria-label="Send message"
-                    disabled={!text.trim() || sendMessage.isPending}
-                    className="rounded-xl bg-accent hover:bg-accent/90 text-white shrink-0"
-                >
-                    {sendMessage.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                        <Send className="h-4 w-4" />
-                    )}
-                </Button>
+                {attachedFile && (
+                    <div className="flex items-center gap-2 rounded-lg border border-line bg-background px-3 py-1.5 text-xs text-ink-soft w-fit max-w-full">
+                        <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{attachedFile.name}</span>
+                        <button
+                            type="button"
+                            onClick={() => { setAttachedFile(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                            className="shrink-0 hover:text-ink"
+                        >
+                            <X className="h-3.5 w-3.5" />
+                        </button>
+                    </div>
+                )}
+                <div className="flex items-end gap-2">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*,application/pdf,audio/*"
+                        className="hidden"
+                        onChange={e => setAttachedFile(e.target.files?.[0] ?? null)}
+                    />
+                    <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label="Attach file"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="rounded-xl shrink-0 text-ink-soft hover:text-ink"
+                    >
+                        <Paperclip className="h-4 w-4" />
+                    </Button>
+                    <textarea
+                        value={text}
+                        onChange={e => setText(e.target.value)}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault()
+                                handleSubmit(e as unknown as SyntheticEvent)
+                            }
+                        }}
+                        placeholder="Type a message… (Enter to send)"
+                        rows={1}
+                        className="flex-1 resize-none rounded-xl border border-line bg-background px-3 py-2 text-sm text-ink placeholder:text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent/40 max-h-32 overflow-y-auto"
+                    />
+                    <Button
+                        type="submit"
+                        size="icon"
+                        aria-label="Send message"
+                        disabled={(!text.trim() && !attachedFile) || sendMessage.isPending}
+                        className="rounded-xl bg-accent hover:bg-accent/90 text-white shrink-0"
+                    >
+                        {sendMessage.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <Send className="h-4 w-4" />
+                        )}
+                    </Button>
+                </div>
             </form>
         </div>
     )
 }
 
 // ---------------------------------------------------------------------------
-// Avatar helper
+// Message Bubble with status indicators
+// ---------------------------------------------------------------------------
+
+import { ReportMessageDialog } from '@/components/ReportMessageDialog'
+
+function MessageBubble({
+    message,
+    isMe,
+    onMediaLoad,
+}: {
+    readonly message: Message
+    readonly isMe: boolean
+    readonly onMediaLoad?: () => void
+}) {
+    const getStatusIcon = () => {
+        const status = message.status_for_me
+        if (status === 'read') {
+            return <CheckCheck className="h-3 w-3 text-white" aria-hidden="true" />
+        }
+        if (status === 'delivered') {
+            return <CheckCheck className="h-3 w-3 text-white/70" aria-hidden="true" />
+        }
+        if (status === 'sent' || (status as unknown as string) === 'sending') {
+            return <Check className="h-3 w-3 text-white/50" aria-hidden="true" />
+        }
+        return null
+    }
+
+    const isSending = (message.status_for_me as unknown as string) === 'sending'
+
+    return (
+        <div className={cn('flex items-end gap-2 group', isMe && 'flex-row-reverse')}>
+            {!isMe && (
+                <Avatar
+                    name={message.sender.display_name}
+                    pictureUrl={message.sender.picture_url}
+                    size="sm"
+                />
+            )}
+            <div
+                className={cn(
+                    'max-w-[70%] rounded-2xl px-4 py-2 text-sm relative',
+                    isMe
+                        ? 'bg-accent text-white rounded-br-sm'
+                        : 'bg-accent-muted text-ink rounded-bl-sm',
+                    isSending && 'opacity-70',
+                )}
+            >
+                <p className="whitespace-pre-wrap wrap-break-word">{message.body}</p>
+                {message.attachment_url && (
+                    <MediaAttachment
+                        url={message.attachment_url}
+                        imgClassName="mt-1 max-h-48 max-w-full rounded-lg border-0 object-contain"
+                        linkClassName="mt-1 block underline text-xs opacity-80 text-inherit"
+                        onLoad={onMediaLoad}
+                    />
+                )}
+                <div className={cn('flex items-center gap-1 text-[10px] mt-1', isMe ? 'justify-end' : 'justify-start')}>
+                    <time>
+                        {new Date(message.created_at).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                        })}
+                    </time>
+                    {isMe && getStatusIcon()}
+                </div>
+            </div>
+
+            {!isMe && (
+                <div className="opacity-40 group-hover:opacity-100 transition-opacity">
+                    <ReportMessageDialog
+                        messageId={message.id}
+                        reportedUsername={message.sender.username}
+                    />
+                </div>
+            )}
+        </div>
+    )
+}
+
 // ---------------------------------------------------------------------------
 
 function Avatar({
@@ -278,15 +497,15 @@ function Avatar({
     pictureUrl,
     size,
 }: {
-    name: string
-    pictureUrl: string | null
-    size: 'sm' | 'md'
+    readonly name: string
+    readonly pictureUrl: string | null
+    readonly size: 'sm' | 'md'
 }) {
     const dim = size === 'sm' ? 'h-7 w-7 text-xs' : 'h-9 w-9 text-sm'
     if (pictureUrl) {
         return (
             <img
-                src={pictureUrl}
+                src={getAbsoluteMediaUrl(pictureUrl)}
                 alt={name}
                 className={cn('rounded-full object-cover shrink-0', dim)}
             />

@@ -2,7 +2,8 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider } from '@tanstack/react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { router, queryClient } from './router'
+import { router } from './router'
+import { queryClient } from './queryClient'
 
 if (import.meta.env.DEV) {
   import('@axe-core/react').then((axe) => {

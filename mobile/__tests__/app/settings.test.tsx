@@ -4,7 +4,12 @@ import React from "react";
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
 const mockMutateAsync = jest.fn();
+const mockUpdateProfileMutateAsync = jest.fn();
+const mockRefetchOwnProfileSettings = jest.fn();
 let mockIsPending = false;
+let mockUpdateProfileIsPending = false;
+let mockOwnProfileSettingsLoading = false;
+let mockSharePreciseLocation = true;
 
 let mockAuthUser: { username: string; app_usage_mode: "MENTOR" | "MENTEE" | null } | null = {
   username: "testuser",
@@ -37,11 +42,9 @@ jest.mock("@/lib/profile/preferences", () => ({
       showExpertise: true,
       showEagerToLearn: true,
       showAvailability: true,
-      showOfferings: true,
       setShowExpertise: jest.fn(),
       setShowEagerToLearn: jest.fn(),
       setShowAvailability: jest.fn(),
-      setShowOfferings: jest.fn(),
     }),
 }));
 
@@ -49,6 +52,18 @@ jest.mock("@/lib/queries/auth", () => ({
   useLogoutMutation: () => ({
     mutateAsync: mockMutateAsync,
     isPending: mockIsPending,
+  }),
+}));
+
+jest.mock("@/lib/queries/profile", () => ({
+  useOwnProfileSettingsQuery: () => ({
+    data: { share_precise_location: mockSharePreciseLocation },
+    isLoading: mockOwnProfileSettingsLoading,
+    refetch: mockRefetchOwnProfileSettings,
+  }),
+  useUpdateOwnProfileMutation: () => ({
+    mutateAsync: mockUpdateProfileMutateAsync,
+    isPending: mockUpdateProfileIsPending,
   }),
 }));
 
@@ -137,6 +152,16 @@ function renderSettings() {
   return render(<SettingsScreen />);
 }
 
+beforeEach(() => {
+  mockSharePreciseLocation = true;
+  mockOwnProfileSettingsLoading = false;
+  mockUpdateProfileIsPending = false;
+  mockUpdateProfileMutateAsync.mockReset();
+  mockUpdateProfileMutateAsync.mockResolvedValue({});
+  mockRefetchOwnProfileSettings.mockReset();
+  mockRefetchOwnProfileSettings.mockResolvedValue({});
+});
+
 describe("SettingsScreen — role label", () => {
   it("shows 'Mentor' for MENTOR users", () => {
     mockAuthUser = { username: "u", app_usage_mode: "MENTOR" };
@@ -163,8 +188,8 @@ describe("SettingsScreen — visibility controls", () => {
     const { getByTestId, queryByTestId } = renderSettings();
     expect(getByTestId("toggle-show-expertise")).toBeTruthy();
     expect(getByTestId("toggle-show-availability")).toBeTruthy();
-    expect(getByTestId("toggle-show-offerings")).toBeTruthy();
     expect(queryByTestId("toggle-show-eager-to-learn")).toBeNull();
+    expect(queryByTestId("toggle-show-offerings")).toBeNull();
   });
 
   it("shows mentee visibility controls for MENTEE", () => {
@@ -181,7 +206,54 @@ describe("SettingsScreen — visibility controls", () => {
     expect(getByTestId("toggle-show-expertise")).toBeTruthy();
     expect(getByTestId("toggle-show-eager-to-learn")).toBeTruthy();
     expect(getByTestId("toggle-show-availability")).toBeTruthy();
-    expect(getByTestId("toggle-show-offerings")).toBeTruthy();
+  });
+
+  it("does not render unsupported settings", () => {
+    mockAuthUser = { username: "u", app_usage_mode: "MENTOR" };
+    const { queryByTestId } = renderSettings();
+    expect(queryByTestId("toggle-new-mentorship-requests")).toBeNull();
+    expect(queryByTestId("toggle-session-reminders")).toBeNull();
+    expect(queryByTestId("toggle-platform-updates")).toBeNull();
+    expect(queryByTestId("setting-item-delete-account")).toBeNull();
+  });
+});
+
+describe("SettingsScreen — location privacy", () => {
+  it("renders the share precise location toggle from profile settings", () => {
+    mockSharePreciseLocation = false;
+
+    const { getByTestId } = renderSettings();
+
+    expect(getByTestId("toggle-share-precise-location").props.value).toBe(
+      false,
+    );
+  });
+
+  it("patches share_precise_location when toggled", async () => {
+    const { getByTestId } = renderSettings();
+
+    fireEvent(getByTestId("toggle-share-precise-location"), "valueChange", false);
+
+    await waitFor(() => {
+      expect(mockUpdateProfileMutateAsync).toHaveBeenCalledWith({
+        share_precise_location: false,
+      });
+      expect(mockRefetchOwnProfileSettings).toHaveBeenCalled();
+    });
+  });
+
+  it("shows an error when precise location update fails", async () => {
+    mockUpdateProfileMutateAsync.mockRejectedValueOnce(
+      new Error("Could not update privacy"),
+    );
+
+    const { getByTestId } = renderSettings();
+
+    fireEvent(getByTestId("toggle-share-precise-location"), "valueChange", false);
+
+    await waitFor(() => {
+      expect(getByTestId("error-banner")).toBeTruthy();
+    });
   });
 });
 
@@ -226,34 +298,6 @@ describe("SettingsScreen — logout flow", () => {
     await waitFor(() => {
       expect(getByTestId("error-banner")).toBeTruthy();
     });
-  });
-});
-
-describe("SettingsScreen — delete account flow", () => {
-  beforeEach(() => {
-    mockAuthUser = { username: "u", app_usage_mode: "MENTOR" };
-  });
-
-  it("shows delete confirmation sheet when Delete Account is pressed", () => {
-    const { getByTestId } = renderSettings();
-    fireEvent.press(getByTestId("setting-item-delete-account"));
-    expect(getByTestId("confirmation-sheet-delete-account?")).toBeTruthy();
-  });
-
-  it("shows info message when delete is confirmed (not implemented)", async () => {
-    const { getByTestId } = renderSettings();
-    fireEvent.press(getByTestId("setting-item-delete-account"));
-    fireEvent.press(getByTestId("sheet-confirm-delete-account?"));
-    await waitFor(() => {
-      expect(getByTestId("error-banner")).toBeTruthy();
-    });
-  });
-
-  it("hides delete sheet when cancel is pressed", () => {
-    const { getByTestId, queryByTestId } = renderSettings();
-    fireEvent.press(getByTestId("setting-item-delete-account"));
-    fireEvent.press(getByTestId("sheet-cancel-delete-account?"));
-    expect(queryByTestId("confirmation-sheet-delete-account?")).toBeNull();
   });
 });
 

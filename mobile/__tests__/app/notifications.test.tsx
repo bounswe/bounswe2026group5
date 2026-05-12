@@ -1,6 +1,7 @@
 import NotificationsScreen from "@/app/notifications";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import React from "react";
+import { Alert } from "react-native";
 import { ApiError } from "@/lib/api/client";
 
 const mockBack = jest.fn();
@@ -43,8 +44,11 @@ jest.mock("@/lib/queries/notifications", () => {
 });
 
 describe("NotificationsScreen", () => {
+  let alertSpy: jest.SpyInstance;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     mockNotificationsQuery.mockReturnValue({
       data: [
         {
@@ -62,6 +66,10 @@ describe("NotificationsScreen", () => {
       refetch: mockRefetch,
     });
     mockMutateAsync.mockResolvedValue({ detail: "Notification marked as read." });
+  });
+
+  afterEach(() => {
+    alertSpy.mockRestore();
   });
 
   it("renders notifications and navigates after marking one as read", async () => {
@@ -123,6 +131,40 @@ describe("NotificationsScreen", () => {
     ).toBeTruthy();
   });
 
+  it("shows a session-expired retry state for unauthorized errors", () => {
+    mockNotificationsQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new ApiError(401, "Unauthorized"),
+      refetch: mockRefetch,
+    });
+
+    const { getByText } = render(<NotificationsScreen />);
+
+    expect(
+      getByText("Your session may have expired. Please sign in again and retry."),
+    ).toBeTruthy();
+  });
+
+  it("shows a connection timeout retry state", () => {
+    mockNotificationsQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error("Request timed out"),
+      refetch: mockRefetch,
+    });
+
+    const { getByText } = render(<NotificationsScreen />);
+
+    expect(
+      getByText(
+        "We could not reach the server in time. Check your connection and try again.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("retries loading notifications when pressing Try Again", () => {
     mockNotificationsQuery.mockReturnValue({
       data: undefined,
@@ -137,5 +179,29 @@ describe("NotificationsScreen", () => {
     fireEvent.press(getByText("Try Again"));
 
     expect(mockRefetch).toHaveBeenCalled();
+  });
+
+  it("goes back from the header button", () => {
+    const { getByTestId } = render(<NotificationsScreen />);
+
+    fireEvent.press(getByTestId("notifications-back-button"));
+
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("alerts when marking a notification as read fails", async () => {
+    mockMutateAsync.mockRejectedValueOnce(new Error("Could not mark read."));
+
+    const { getByTestId } = render(<NotificationsScreen />);
+
+    fireEvent.press(getByTestId("notification-item-notif-1"));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        "Notification Update Failed",
+        "Could not mark read.",
+      );
+    });
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

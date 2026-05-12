@@ -38,7 +38,7 @@ function renderWithClient(ui: React.ReactElement) {
 describe('AuthorizedHeader Component', () => {
   it('renders the branding text', () => {
     renderWithClient(<AuthorizedHeader />)
-    expect(screen.getByText('Mentorship')).toBeInTheDocument()
+    expect(screen.getByText('Neighborship')).toBeInTheDocument()
   })
 
   it('renders the navigation links', () => {

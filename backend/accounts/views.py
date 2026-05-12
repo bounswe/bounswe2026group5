@@ -1,6 +1,10 @@
+import logging
 from typing import Any, cast
 
 from django.conf import settings
+from django.core.mail import send_mail
+from django.db import transaction
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -8,20 +12,40 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
+from firebase_admin import auth
 
-from .models import User
-from .permissions import IsAdmin, IsNotBanned
+from notifications.models import Notification, NotificationType
+
+from .models import AuthProvider, EmailVerificationToken, PasswordResetToken, Report, User
+from .oauth import OAuthVerificationError, verify_google_id_token
+from .permissions import IsAdmin, IsNotBanned, IsUser
 from .serializers import (
+    AdminUserUpdateSerializer,
     AuthResponseSerializer,
     BannedAwareTokenRefreshSerializer,
+    ForgotPasswordSerializer,
     LoginSerializer,
     LogoutSerializer,
+    OAuthLoginSerializer,
     RegisterSerializer,
+    ReportCreateSerializer,
+    ReportListSerializer,
+    ReportResolveSerializer,
+    ResetPasswordSerializer,
     UserAppUsageModeUpdateSerializer,
     UserResponseSerializer,
+    VerifyEmailSerializer,
 )
+
+logger = logging.getLogger(__name__)
+
+_GENERIC_FORGOT_PASSWORD_RESPONSE = {
+    "detail": "If an account exists for that email, a password reset link has been sent."
+}
+_INVALID_TOKEN_RESPONSE = {"token": "Invalid or expired token."}
 
 
 def build_auth_response(user: User, refresh: RefreshToken | None = None) -> dict[str, object]:
@@ -29,9 +53,22 @@ def build_auth_response(user: User, refresh: RefreshToken | None = None) -> dict
     if refresh is None:
         refresh = RefreshToken.for_user(user)
 
+    # Generate a Firebase custom token for real-time messaging
+    firebase_token = None
+    try:
+        from messaging.firebase import get_firebase_app
+        app = get_firebase_app()
+        if app:
+            firebase_token = auth.create_custom_token(str(user.id), app=app).decode("utf-8")
+    except ImportError:
+        logger.warning("Firebase messaging module not available for user %s", user.id)
+    except Exception:
+        logger.exception("Failed to generate Firebase custom token for user %s", user.id)
+
     return {
         "access_token": str(refresh.access_token),
         "refresh_token": str(refresh),
+        "firebase_token": firebase_token,
         "user": UserResponseSerializer(user).data,
     }
 
@@ -85,8 +122,16 @@ class RegisterAPIView(APIView):
         user = cast(User, serializer.save())
         refresh = RefreshToken.for_user(user)
 
+        if getattr(settings, "REQUIRE_EMAIL_VERIFICATION", True):
+            try:
+                raw_token, _ = EmailVerificationToken.issue_for_user(user)
+                _send_email_verification_email(user, raw_token)
+            except Exception:
+                # We log and continue so the user is still logged in even if email fails
+                logger.exception("Failed to issue verification email for user %s", user.id)
+
         response = Response(
-            AuthResponseSerializer(build_auth_response(user, refresh)).data,
+            build_auth_response(user, refresh),
             status=status.HTTP_201_CREATED,
         )
         _set_auth_cookies(response, refresh)
@@ -117,7 +162,7 @@ class LoginAPIView(APIView):
         refresh = RefreshToken.for_user(user)
 
         response = Response(
-            AuthResponseSerializer(build_auth_response(user, refresh)).data,
+            build_auth_response(user, refresh),
             status=status.HTTP_200_OK,
         )
         _set_auth_cookies(response, refresh)
@@ -260,6 +305,228 @@ class UserAppUsageModeMeAPIView(APIView):
         )
 
 
+def _send_email_verification_email(user: User, raw_token: str) -> None:
+    verify_path = "/verify-email"
+    base_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    verify_link = f"{base_url}{verify_path}?token={raw_token}"
+    lifetime_hours = 24
+
+    subject = "Verify your Neighborship email address"
+    body = (
+        f"Welcome to Neighborship!\n\n"
+        f"Please confirm your email address by clicking the link below. "
+        f"This link will expire in {lifetime_hours} hours.\n\n"
+        f"{verify_link}\n\n"
+        f"If you did not create a Neighborship account, you can safely ignore this email.\n"
+    )
+
+    try:
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception("SMTP failure while sending verification email to %s", user.email)
+        raise
+
+
+def _send_password_reset_email(user: User, raw_token: str) -> None:
+    reset_path = "/reset-password"
+    base_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    reset_link = f"{base_url}{reset_path}?token={raw_token}"
+    lifetime = 30
+
+    subject = "Reset your Neighborship password"
+    body = (
+        f"Hi,\n\n"
+        f"We received a request to reset the password for your Neighborship account.\n"
+        f"Use the link below to choose a new password. "
+        f"This link will expire in {lifetime} minutes.\n\n"
+        f"{reset_link}\n\n"
+        f"If you did not request a password reset, you can safely ignore this email.\n"
+    )
+
+    try:
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception("SMTP failure while sending password reset email to %s", user.email)
+        raise
+
+
+def _blacklist_user_refresh_tokens(user: User) -> None:
+    """Blacklist all outstanding JWT refresh tokens for a user."""
+    outstanding = OutstandingToken.objects.filter(user=user)
+    for token_record in outstanding:
+        try:
+            RefreshToken(cast(Any, token_record.token)).blacklist()
+        except TokenError:
+            continue
+
+
+class ForgotPasswordAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=ForgotPasswordSerializer,
+        responses={
+            200: OpenApiResponse(description="Generic acknowledgement (no account enumeration)."),
+            400: OpenApiResponse(description="Validation error."),
+        },
+        description=(
+            "Request a password reset link. Always returns a generic success "
+            "response, regardless of whether the email matches an account, to "
+            "avoid user enumeration."
+        ),
+        tags=["Auth"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ForgotPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = cast(str, serializer.validated_data["email"])
+
+        user = User.objects.filter(email=email, is_active=True, is_banned=False).first()
+        if user is not None:
+            try:
+                raw_token, _ = PasswordResetToken.issue_for_user(user)
+                _send_password_reset_email(user, raw_token)
+            except Exception:
+                logger.exception("Failed to issue password reset email for user %s", user.id)
+
+        return Response(_GENERIC_FORGOT_PASSWORD_RESPONSE, status=status.HTTP_200_OK)
+
+
+class ResetPasswordAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=ResetPasswordSerializer,
+        responses={
+            200: OpenApiResponse(description="Password reset successful."),
+            400: OpenApiResponse(description="Invalid or expired token, or validation error."),
+        },
+        description=(
+            "Reset the user's password using a token delivered via email. "
+            "On success the token is invalidated and existing JWT refresh "
+            "tokens for the user are blacklisted."
+        ),
+        tags=["Auth"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = cast(dict[str, Any], serializer.validated_data)
+        user = cast(User, validated_data["user"])
+        reset_token = cast(PasswordResetToken, validated_data["reset_token"])
+        new_password = cast(str, validated_data["new_password"])
+
+        with transaction.atomic():
+            user.set_password(new_password)
+            user.save(update_fields=["password", "updated_at"])
+            reset_token.mark_used()
+
+        _blacklist_user_refresh_tokens(user)
+
+        return Response(
+            {"detail": "Password has been reset successfully."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class VerifyEmailAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        parameters=[VerifyEmailSerializer],
+        responses={
+            200: OpenApiResponse(description="Email verification successful."),
+            400: OpenApiResponse(description="Invalid or expired token."),
+        },
+        description=(
+            "Verify a user's email address using a token delivered via email. "
+            "On success the user's `is_email_verified` flag is set and the "
+            "token is invalidated."
+        ),
+        tags=["Auth"],
+    )
+    def get(self, request: Request) -> Response:
+        raw_token = cast(str | None, request.query_params.get("token"))
+        if not raw_token:
+            return Response(
+                {"token": "This field is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        token_hash = EmailVerificationToken.hash_token(raw_token)
+        try:
+            verification = EmailVerificationToken.objects.select_related("user").get(
+                token_hash=token_hash
+            )
+        except EmailVerificationToken.DoesNotExist:
+            return Response(_INVALID_TOKEN_RESPONSE, status=status.HTTP_400_BAD_REQUEST)
+
+        if not verification.is_valid():
+            return Response(_INVALID_TOKEN_RESPONSE, status=status.HTTP_400_BAD_REQUEST)
+
+        user = verification.user
+        if not user.is_active or user.is_banned:
+            return Response(_INVALID_TOKEN_RESPONSE, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            if not user.is_email_verified:
+                user.is_email_verified = True
+                user.email_verified_at = timezone.now()
+                user.save(update_fields=["is_email_verified", "email_verified_at", "updated_at"])
+            verification.mark_used()
+
+        return Response(
+            {"detail": "Email has been verified successfully."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class ResendVerificationAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsNotBanned]
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: OpenApiResponse(
+                description="Verification email sent if the account is unverified."
+            ),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Account banned."),
+        },
+        description=(
+            "Issue a new email-verification token for the authenticated user "
+            "and send the verification link. Returns a generic success response "
+            "even when the account is already verified, to avoid leaking state."
+        ),
+        tags=["Auth"],
+    )
+    def post(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        if not user.is_email_verified:
+            try:
+                raw_token, _ = EmailVerificationToken.issue_for_user(user)
+                _send_email_verification_email(user, raw_token)
+            except Exception:
+                logger.exception("Failed to resend verification email for user %s", user.id)
+
+        return Response(
+            {"detail": "If your email is unverified, a new verification link has been sent."},
+            status=status.HTTP_200_OK,
+        )
+
+
 class AdminUsersListAPIView(APIView):
     permission_classes = [IsAdmin]
 
@@ -273,7 +540,18 @@ class AdminUsersListAPIView(APIView):
         tags=["Admin"],
     )
     def get(self, request: Request) -> Response:
-        users = User.objects.all().values(
+        users_qs = User.objects.all().order_by("-created_at")
+
+        # Manual pagination
+        try:
+            page = max(int(request.query_params.get("page", 1)), 1)
+            page_size = min(max(int(request.query_params.get("pageSize", 50)), 1), 100)
+        except ValueError:
+            page = 1
+            page_size = 50
+
+        offset = (page - 1) * page_size
+        users = users_qs[offset : offset + page_size].values(
             "id",
             "email",
             "username",
@@ -286,8 +564,353 @@ class AdminUsersListAPIView(APIView):
 
         return Response(
             {
-                "count": User.objects.count(),
+                "count": users_qs.count(),
                 "results": list(users),
             },
+            status=status.HTTP_200_OK,
+        )
+
+
+# ---------------------------------------------------------------------------
+# OAuth2 login helpers & views
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def _get_or_create_oauth_user(
+    email: str,
+    provider: AuthProvider,
+    display_name: str = "",
+    picture_url: str = "",
+) -> User:
+    """Find an existing user by email or create a new OAuth user with Profile."""
+    existing_user = User.objects.filter(email=email).first()
+    if existing_user is not None:
+        return _handle_existing_oauth_user(existing_user)
+
+    return _create_new_oauth_user(email, provider, display_name, picture_url)
+
+
+def _handle_existing_oauth_user(user: User) -> User:
+    """Validate status of an existing user trying to login via OAuth."""
+    if not user.is_active:
+        raise OAuthVerificationError("This account is inactive.")
+    if user.is_banned:
+        raise OAuthVerificationError("This account has been banned.")
+    return user
+
+
+def _create_new_oauth_user(
+    email: str,
+    provider: AuthProvider,
+    display_name: str,
+    picture_url: str,
+) -> User:
+    """Create a new user and associated profile for OAuth registration."""
+    from django.contrib.auth.models import Group
+
+    from profiles.models import Profile
+
+    from .models import UserRole
+
+    user = User.objects.create_user(
+        email=email,
+        password=None,
+        role=UserRole.USER,
+        auth_provider=provider,
+        is_active=True,
+        is_email_verified=True,
+    )
+    user.email_verified_at = timezone.now()
+    user.save(update_fields=["email_verified_at"])
+
+    profile_name = display_name or email.split("@", 1)[0].replace(".", " ").title()
+    Profile.objects.create(
+        user=user,
+        username=user.username,
+        display_name=profile_name,
+        picture_url=picture_url or "",
+    )
+
+    default_group, _ = Group.objects.get_or_create(name=UserRole.USER)
+    user.groups.add(default_group)
+
+    return user
+
+
+class GoogleOAuthLoginAPIView(APIView):
+    """Exchange a Google ID-token for local JWT tokens."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=OAuthLoginSerializer,
+        responses={
+            200: AuthResponseSerializer,
+            400: OpenApiResponse(description="Invalid or expired token."),
+        },
+        description=(
+            "Authenticate using a Google-issued ID token. "
+            "If no account exists for the token's email, a new user and "
+            "profile are created automatically. Returns JWT tokens."
+        ),
+        tags=["Auth"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = OAuthLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        raw_token = serializer.validated_data["id_token"]
+
+        try:
+            token_data = verify_google_id_token(raw_token)
+        except OAuthVerificationError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Build display name from Google's given/family names
+        parts = [token_data.get("given_name", ""), token_data.get("family_name", "")]
+        display_name = " ".join(p for p in parts if p).strip() or token_data.get("name", "").strip()
+
+        try:
+            user = _get_or_create_oauth_user(
+                email=token_data["email"],
+                provider=AuthProvider.GOOGLE,
+                display_name=display_name,
+                picture_url=token_data.get("picture", ""),
+            )
+        except OAuthVerificationError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        refresh = RefreshToken.for_user(user)
+        response = Response(
+            build_auth_response(user, refresh),
+            status=status.HTTP_200_OK,
+        )
+        _set_auth_cookies(response, refresh)
+        return response
+
+
+# ---------------------------------------------------------------------------
+# Admin – user management
+# ---------------------------------------------------------------------------
+
+
+class AdminUserUpdateAPIView(APIView):
+    permission_classes = [IsAdmin]
+    serializer_class = AdminUserUpdateSerializer
+
+    @extend_schema(
+        request=AdminUserUpdateSerializer,
+        responses={
+            200: UserResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Admin access required."),
+            404: OpenApiResponse(description="User not found."),
+        },
+        description="Admin only: update a user's ban status.",
+        tags=["Admin"],
+    )
+    def patch(self, request: Request, user_id: str) -> Response:
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {"detail": "User not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        admin = cast(User, request.user)
+        if str(target_user.id) == str(admin.id):
+            return Response(
+                {"detail": "You cannot modify your own account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = AdminUserUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        is_banned = serializer.validated_data["is_banned"]
+        target_user.is_banned = is_banned
+        target_user.save(update_fields=["is_banned", "updated_at"])
+
+        if is_banned:
+            _blacklist_user_refresh_tokens(target_user)
+
+        return Response(
+            UserResponseSerializer(target_user).data,
+            status=status.HTTP_200_OK,
+        )
+
+    # Support PUT as well for backward compatibility with E2E tests
+    @extend_schema(
+        request=AdminUserUpdateSerializer,
+        responses={
+            200: UserResponseSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Admin access required."),
+            404: OpenApiResponse(description="User not found."),
+        },
+        description="Admin only: update a user's ban status.",
+        tags=["Admin"],
+    )
+    def put(self, request: Request, user_id: str) -> Response:
+        return self.patch(request, user_id)
+
+
+# ---------------------------------------------------------------------------
+# Reports
+# ---------------------------------------------------------------------------
+
+
+class ReportCreateAPIView(APIView):
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=ReportCreateSerializer,
+        responses={
+            201: ReportListSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+        },
+        description="Submit a report against another user.",
+        tags=["Reports"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ReportCreateSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        reported_user_id = serializer.validated_data["reported_user_id"]
+        related_message_id = serializer.validated_data.get("related_message_id")
+
+        # Check if this user has already reported this target user
+        if Report.objects.filter(
+            submitted_by=request.user, reported_user_id=reported_user_id
+        ).exists():
+            return Response(
+                {"detail": "You have already reported this user."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        report = Report.objects.create(
+            submitted_by=cast(User, request.user),
+            reported_user_id=reported_user_id,
+            reason=serializer.validated_data["reason"],
+            description=serializer.validated_data.get("description", ""),
+            related_message_id=related_message_id,
+        )
+
+        return Response(
+            ReportListSerializer(report).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AdminReportListAPIView(APIView):
+    permission_classes = [IsAdmin]
+
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(description="List of reports."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Admin access required."),
+        },
+        description="Admin only: list all reports. Filterable by ?status=OPEN.",
+        tags=["Admin"],
+    )
+    def get(self, request: Request) -> Response:
+        queryset = Report.objects.select_related(
+            "submitted_by", "reported_user", "resolved_by"
+        ).order_by("-created_at")
+
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter.upper())
+
+        # Manual pagination
+        try:
+            page = max(int(request.query_params.get("page", 1)), 1)
+            page_size = min(max(int(request.query_params.get("pageSize", 50)), 1), 100)
+        except ValueError:
+            page = 1
+            page_size = 50
+
+        offset = (page - 1) * page_size
+        paginated_reports = queryset[offset : offset + page_size]
+
+        reports = ReportListSerializer(paginated_reports, many=True).data
+        return Response(
+            {
+                "count": queryset.count(),
+                "results": reports,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class AdminReportUpdateAPIView(APIView):
+    permission_classes = [IsAdmin]
+
+    @extend_schema(
+        request=ReportResolveSerializer,
+        responses={
+            200: ReportListSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Authentication required."),
+            403: OpenApiResponse(description="Admin access required."),
+            404: OpenApiResponse(description="Report not found."),
+        },
+        description="Admin only: update a report's status and resolution note.",
+        tags=["Admin"],
+    )
+    def patch(self, request: Request, report_id: str) -> Response:
+        try:
+            report = Report.objects.select_related(
+                "submitted_by", "reported_user", "resolved_by"
+            ).get(id=report_id)
+        except Report.DoesNotExist:
+            return Response(
+                {"detail": "Report not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = ReportResolveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        new_status = serializer.validated_data["status"]
+        report.status = new_status
+        report.resolution_note = serializer.validated_data.get("resolution_note", "")
+
+        if new_status in ("RESOLVED", "DISMISSED"):
+            report.resolved_by = cast(User, request.user)
+            report.resolved_at = timezone.now()
+
+            if new_status == "RESOLVED":
+                Notification.objects.create(
+                    user=report.submitted_by,
+                    type=NotificationType.REPORT_RESOLVED,
+                    title="Report Resolved",
+                    message="An admin has reviewed and resolved your report.",
+                    resource_type="report",
+                    resource_id=report.id,
+                )
+        else:
+            # Clear resolution fields if moving back to OPEN or IN_REVIEW
+            report.resolved_by = None
+            report.resolved_at = None
+
+        report.save()
+
+        return Response(
+            ReportListSerializer(report).data,
             status=status.HTTP_200_OK,
         )

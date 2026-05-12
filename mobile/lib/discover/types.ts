@@ -16,7 +16,10 @@ export interface DiscoverMentorProfile {
   show_initials_only: boolean;
   skills: string[];
   average_rating: string;
+  review_count: number;
   total_mentee_count: number;
+  is_overloaded: boolean;
+  distance_km?: number | null;
 }
 
 export interface DiscoverProfilesResponse {

@@ -32,7 +32,6 @@ export function ProfileReviews({
   totalCount = 0,
   onLoadMore,
   emptyMessage = "No public reviews yet.",
-  privacyMessage = "Reviews are anonymous and appear in privacy-protected batches.",
 }: Readonly<ProfileReviewsProps>) {
   if (isLoading) {
     return <ActivityIndicator size="small" color="#9ca3af" className="mt-4" />;
@@ -54,20 +53,12 @@ export function ProfileReviews({
         <Text className="text-on-surface-muted text-[13px] font-medium text-center">
           {emptyMessage}
         </Text>
-        <Text className="mt-2 text-center text-[12px] text-on-surface-soft dark:text-on-surface-soft-dark">
-          {privacyMessage}
-        </Text>
       </View>
     );
   }
 
   return (
     <View className="gap-3">
-      <View className="rounded-2xl border border-divider/20 bg-surface-card dark:bg-surface-card-dark px-4 py-3">
-        <Text className="text-[12px] font-semibold text-on-surface-soft dark:text-on-surface-soft-dark">
-          {privacyMessage}
-        </Text>
-      </View>
       {reviews.map((review) => (
         <View
           key={`${review.created_at}-${review.text}`}

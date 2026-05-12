@@ -12,6 +12,9 @@ from django.contrib.postgres.fields.ranges import RangeOperators
 from django.db import models
 from django.db.models import F, Func, Q, Value
 from django.utils import timezone
+from django.utils.text import slugify
+
+_PROFILE_REF = "profiles.Profile"
 
 
 class Skill(models.Model):
@@ -40,9 +43,28 @@ class Profile(models.Model):
     display_name = models.CharField(max_length=120)
     bio = models.TextField(blank=True, default="")
     picture_url = models.URLField(blank=True, default="")
+    picture = models.ImageField(
+        upload_to="profile_pictures/%Y/%m/",
+        null=True,
+        blank=True,
+        help_text="User-uploaded profile picture. Takes priority over picture_url.",
+    )
     title = models.CharField(max_length=120, blank=True, default="")
+    linkedin_url = models.URLField(blank=True, default="")
+    audio = models.FileField(
+        upload_to="profile_audio/%Y/%m/",
+        null=True,
+        blank=True,
+        help_text="User-uploaded profile audio (e.g. pronunciation).",
+    )
+    video = models.FileField(
+        upload_to="profile_video/%Y/%m/",
+        null=True,
+        blank=True,
+        help_text="User-uploaded profile video intro.",
+    )
     location = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
-    is_visible = models.BooleanField(default=True)
+    share_precise_location = models.BooleanField(default=True)
     show_initials_only = models.BooleanField(default=False)
     skills = ArrayField(
         models.CharField(max_length=120),
@@ -63,7 +85,7 @@ class Profile(models.Model):
         db_table = "profiles"
         ordering = ["display_name", "-created_at"]
         indexes = [
-            models.Index(fields=["is_visible", "show_initials_only"]),
+            models.Index(fields=["show_initials_only"]),
         ]
 
     def __str__(self) -> str:
@@ -115,7 +137,6 @@ class AvailabilitySlot(models.Model):
         choices=Status.choices,
         default=Status.AVAILABLE,
     )
-    is_booked = models.BooleanField(default=False)
     booked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -154,21 +175,19 @@ class AvailabilitySlot(models.Model):
         indexes = [
             models.Index(fields=["profile", "start_at"]),
             models.Index(fields=["status", "start_at"]),
-            models.Index(fields=["is_booked", "start_at"]),
             models.Index(fields=["booked_by", "start_at"]),
         ]
 
     def __str__(self) -> str:
         return f"{self.profile.display_name}: {self.start_at.isoformat()}"
 
-    def mark_booked(self, user=None) -> None:
-        """Mark slot as booked and optionally track who booked it."""
+    def mark_booked(self, user) -> None:
+        """Mark slot as booked by a specific user."""
 
         self.status = self.Status.BOOKED
-        self.is_booked = True
         self.booked_by = user
         self.booked_at = timezone.now()
-        self.save(update_fields=["status", "is_booked", "booked_by", "booked_at", "updated_at"])
+        self.save(update_fields=["status", "booked_by", "booked_at", "updated_at"])
 
     def mark_pending(self) -> None:
         """Mark slot as pending (requested)."""
@@ -177,10 +196,82 @@ class AvailabilitySlot(models.Model):
         self.save(update_fields=["status", "updated_at"])
 
     def mark_available(self) -> None:
-        """Mark slot as available again."""
+        """Reset slot to available state."""
 
         self.status = self.Status.AVAILABLE
-        self.is_booked = False
         self.booked_by = None
         self.booked_at = None
-        self.save(update_fields=["status", "is_booked", "booked_by", "booked_at", "updated_at"])
+        self.save(update_fields=["status", "booked_by", "booked_at", "updated_at"])
+
+
+class CommunityTag(models.Model):
+    """A public community tag that users can join for shared-interest grouping."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=120, unique=True)
+    slug = models.SlugField(max_length=130, unique=True)
+    description = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        _PROFILE_REF,
+        on_delete=models.SET_NULL,
+        related_name="created_tags",
+        null=True,
+        blank=True,
+    )
+    location = gis_models.PointField(geography=True, srid=4326, null=True, blank=True)
+    members = models.ManyToManyField(
+        _PROFILE_REF,
+        through="CommunityTagMembership",
+        related_name="community_tags",
+        blank=True,
+    )
+    member_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "community_tags"
+        ordering = ["name"]
+        indexes = [
+            models.Index(fields=["slug"]),
+            models.Index(fields=["-member_count", "name"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        """Auto-generate slug from name and enforce case-insensitive uniqueness."""
+
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+
+class CommunityTagMembership(models.Model):
+    """Through table recording a profile's membership in a community tag."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile = models.ForeignKey(
+        _PROFILE_REF,
+        on_delete=models.CASCADE,
+        related_name="tag_memberships",
+    )
+    tag = models.ForeignKey(
+        CommunityTag,
+        on_delete=models.CASCADE,
+        related_name="memberships",
+    )
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "community_tag_memberships"
+        ordering = ["-joined_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["profile", "tag"],
+                name="uniq_membership_per_profile_tag",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.profile.display_name} @ {self.tag.name}"

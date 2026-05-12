@@ -1,5 +1,5 @@
-import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
+import React from "react";
 
 import { RegistrationProfileSetupSheet } from "@/components/profile/RegistrationProfileSetupSheet";
 
@@ -8,7 +8,7 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 describe("RegistrationProfileSetupSheet", () => {
   const baseProps = {
     visible: true,
-    role: "mentor" as const,
+    initialRole: "mentor" as const,
     username: "new_user",
     skills: ["React Native", "Testing"],
     isLoadingSkills: false,
@@ -32,6 +32,17 @@ describe("RegistrationProfileSetupSheet", () => {
     expect(getByText("Display Name")).toBeTruthy();
   });
 
+  it("strips numeric suffixes from the suggested display name", () => {
+    const { getByDisplayValue } = render(
+      <RegistrationProfileSetupSheet
+        {...baseProps}
+        username="rating_mentor_1778101658092"
+      />,
+    );
+
+    expect(getByDisplayValue("Rating Mentor")).toBeTruthy();
+  });
+
   it("blocks submit when the username is invalid", () => {
     const onSubmit = jest.fn();
     const { getByLabelText, getByText } = render(
@@ -48,6 +59,20 @@ describe("RegistrationProfileSetupSheet", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it("blocks submit when the display name contains numbers", () => {
+    const onSubmit = jest.fn();
+    const { getByLabelText, getByText } = render(
+      <RegistrationProfileSetupSheet {...baseProps} onSubmit={onSubmit} />,
+    );
+
+    fireEvent.changeText(getByLabelText("Display Name"), "Mentor 123");
+    fireEvent.press(getByText("React Native"));
+    fireEvent.press(getByText("Save and continue"));
+
+    expect(getByText("Display name cannot contain numbers.")).toBeTruthy();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it("submits trimmed username and profile values", () => {
     const onSubmit = jest.fn();
     const { getByLabelText, getByText } = render(
@@ -61,6 +86,7 @@ describe("RegistrationProfileSetupSheet", () => {
     fireEvent.press(getByText("Save and continue"));
 
     expect(onSubmit).toHaveBeenCalledWith({
+      role: "mentor",
       username: "custom_user",
       displayName: "New User",
       bio: "Loves mentoring.",

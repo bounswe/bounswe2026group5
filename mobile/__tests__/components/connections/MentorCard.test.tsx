@@ -18,6 +18,25 @@ describe("MentorCard — rendering", () => {
     expect(getByTestId("mentor-message-button")).toBeTruthy();
     expect(getByTestId("mentor-more-button")).toBeTruthy();
   });
+
+  it("renders avatar image when avatarUrl is provided", () => {
+    const { getByTestId, queryByTestId } = render(
+      <MentorCard {...baseProps} avatarUrl="https://cdn.example.com/jane.jpg" />,
+    );
+
+    expect(getByTestId("mentor-avatar-image")).toBeTruthy();
+    expect(queryByTestId("mentor-avatar-fallback")).toBeNull();
+  });
+
+  it("falls back to initials when avatarUrl is missing", () => {
+    const { getByTestId, queryByTestId, getByText } = render(
+      <MentorCard {...baseProps} />,
+    );
+
+    expect(getByTestId("mentor-avatar-fallback")).toBeTruthy();
+    expect(queryByTestId("mentor-avatar-image")).toBeNull();
+    expect(getByText("JD")).toBeTruthy();
+  });
 });
 
 describe("MentorCard — interactions", () => {

@@ -4,14 +4,28 @@ import React from "react";
 import { act } from "react-test-renderer";
 import { Alert } from "react-native";
 
+const mockRouterPush = jest.fn();
 const mockMeetingSessionsQuery = jest.fn();
 const mockCancelSessionMutation = jest.fn();
 const mockRescheduleSessionMutation = jest.fn();
 const mockAvailabilitySlotsQuery = jest.fn();
+const mockToastSuccess = jest.fn();
+let mockMappedWorkshops: any[] = [];
+
+jest.mock("expo-router", () => ({
+  useRouter: () => ({
+    push: mockRouterPush,
+  }),
+}));
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: "View" }));
 jest.mock("@/components/notifications/NotificationBell", () => ({
   NotificationBell: () => null,
+}));
+jest.mock("@/components/ui/ToastProvider", () => ({
+  useToast: () => ({
+    success: mockToastSuccess,
+  }),
 }));
 jest.mock("react-native-calendars", () => ({ Calendar: "View" }));
 jest.mock("@/components/dashboard/RescheduleBottomSheet", () => ({
@@ -41,14 +55,18 @@ jest.mock("@/components/dashboard/RescheduleBottomSheet", () => ({
 jest.mock("@/components/dashboard/SessionCard", () => ({
   SessionCard: ({
     user,
+    title,
     onPress,
   }: {
     user: string;
+    title?: string;
     onPress: () => void;
   }) => {
-    const { TouchableOpacity } = jest.requireActual("react-native");
+    const { Text, TouchableOpacity } = jest.requireActual("react-native");
     return (
-      <TouchableOpacity onPress={onPress} testID={`session-card-${user}`} />
+      <TouchableOpacity onPress={onPress} testID={`session-card-${user}`}>
+        <Text>{title ?? user}</Text>
+      </TouchableOpacity>
     );
   },
 }));
@@ -76,6 +94,15 @@ jest.mock("@/lib/queries/mentorship", () => {
   };
 });
 
+jest.mock("@/lib/queries/workshops", () => ({
+  mapWorkshopAttendanceToDashboard: () => mockMappedWorkshops,
+  useMyWorkshopAttendanceQuery: () => ({
+    data: { results: mockMappedWorkshops },
+    isError: false,
+    refetch: jest.fn(),
+  }),
+}));
+
 jest.mock("@/lib/auth/store", () => ({
   useAuthStore: (selector: (state: any) => unknown) =>
     selector({
@@ -92,6 +119,7 @@ describe("ScheduleScreen", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockMappedWorkshops = [];
     jest.spyOn(Alert, "alert").mockImplementation(() => {});
     mockAvailabilitySlotsQuery.mockReturnValue({
       data: [
@@ -100,11 +128,12 @@ describe("ScheduleScreen", () => {
           date: today,
           startTime: "11:00:00",
           endTime: "12:00:00",
-          is_booked: false,
+          status: "AVAILABLE",
         },
       ],
       isLoading: false,
     });
+    mockCancelSessionMutation.mockResolvedValue({});
     mockRescheduleSessionMutation.mockResolvedValue({});
     mockMeetingSessionsQuery.mockReturnValue({
       data: [
@@ -173,7 +202,9 @@ describe("ScheduleScreen", () => {
     expect(mockRescheduleSessionMutation).toHaveBeenCalledWith({
       sessionId: "session-1",
       newSlotId: "slot-2",
+      mentorUsername: "mentor_ada",
     });
+    expect(mockToastSuccess).toHaveBeenCalledWith("Your session was updated.");
     expect(queryByTestId("reschedule-sheet")).toBeNull();
   });
 
@@ -219,6 +250,25 @@ describe("ScheduleScreen", () => {
     expect(await findByText("Cancellation not allowed")).toBeTruthy();
   });
 
+  it("shows a toast after cancelling a session", async () => {
+    jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
+
+    const { getByTestId, findByTestId, findByText, queryByText } = render(
+      <ScheduleScreen />,
+    );
+
+    fireEvent.press(getByTestId("session-card-Ada Lovelace"));
+    fireEvent.press(await findByTestId("action-cancel"));
+    fireEvent.press(await findByText("Cancel Session"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockCancelSessionMutation).toHaveBeenCalledWith("session-1");
+    expect(mockToastSuccess).toHaveBeenCalledWith("The session was cancelled.");
+    expect(queryByText("The session was cancelled.")).toBeNull();
+  });
+
   it("shows empty state when no sessions exist for selected date", () => {
     jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
     mockMeetingSessionsQuery.mockReturnValue({ data: [] });
@@ -226,6 +276,36 @@ describe("ScheduleScreen", () => {
     const { getByTestId } = render(<ScheduleScreen />);
 
     expect(getByTestId("empty-sessions-state")).toBeTruthy();
+  });
+
+  it("routes workshop cards to workshop detail", () => {
+    jest.setSystemTime(new Date(2026, 3, 15, 8, 0, 0));
+    mockMappedWorkshops = [
+      {
+        id: "workshop-1",
+        workshopId: "workshop-1",
+        communityId: "tag-1",
+        communityName: "AI Lab",
+        user: "Mentor AI",
+        date: "Apr 15",
+        rawDate: today,
+        time: "13:30 - 15:00",
+        status: "Upcoming",
+        topic: "Prompt Engineering 101",
+        myRole: "Mentee",
+        isWorkshop: true,
+        workshopStatus: "SCHEDULED",
+      },
+    ];
+
+    const { getByTestId, getByText } = render(<ScheduleScreen />);
+
+    expect(getByText("Prompt Engineering 101")).toBeTruthy();
+    fireEvent.press(getByTestId("session-card-Mentor AI"));
+
+    expect(mockRouterPush).toHaveBeenCalledWith(
+      "/(tabs)/community/tag-1/workshops/workshop-1?from=schedule",
+    );
   });
 
   it("renders empty state when sessions data is undefined (loading)", () => {

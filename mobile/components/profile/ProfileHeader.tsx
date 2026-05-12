@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Modal, Pressable, Text, View, Linking, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { getAbsoluteImageUrl, getAbsoluteUrl } from "@/lib/api/config";
 
 const BIO_PREVIEW_LENGTH = 240;
 
@@ -9,11 +10,18 @@ interface ProfileHeaderProps {
   bio: string;
   rating?: number;
   reviewCount?: number;
-  totalSessions?: number;
+  openSlots?: number;
   menteesHelped?: number;
+  showStats?: boolean;
+  showRating?: boolean;
   showMenteesHelped?: boolean;
   imageUrl?: string;
+  showInitialsOnly?: boolean;
+  imageCacheKey?: string | number;
   coverUrl?: string;
+  linkedinUrl?: string;
+  audioUrl?: string;
+  videoUrl?: string;
   onEdit?: () => void;
 }
 
@@ -22,14 +30,22 @@ export function ProfileHeader({
   bio,
   rating,
   reviewCount = 0,
-  totalSessions = 0,
+  openSlots = 0,
   menteesHelped = 0,
+  showStats = true,
+  showRating = true,
   showMenteesHelped = true,
   imageUrl,
+  showInitialsOnly = false,
+  imageCacheKey,
   coverUrl,
+  linkedinUrl,
+  audioUrl,
+  videoUrl,
   onEdit,
 }: Readonly<ProfileHeaderProps>) {
   const [isBioExpanded, setIsBioExpanded] = useState(false);
+  const [isAvatarPreviewOpen, setAvatarPreviewOpen] = useState(false);
 
   useEffect(() => {
     setIsBioExpanded(false);
@@ -46,11 +62,11 @@ export function ProfileHeader({
   }, [isBioExpanded, shouldShowReadMore, trimmedBio]);
 
   return (
-    <View className="bg-surface-card dark:bg-surface-card-dark mb-6">
+    <View className="bg-surface dark:bg-surface-dark mb-6">
       {/* 1. Cover Photo Area */}
       <View className="h-32 bg-surface-active dark:bg-surface-active-dark w-full">
         {coverUrl ? (
-          <Image source={{ uri: coverUrl }} className="w-full h-full" />
+          <Image source={{ uri: getAbsoluteUrl(coverUrl) }} className="w-full h-full" />
         ) : (
           <View className="flex-1 bg-surface-active dark:bg-surface-active-dark border-b border-divider dark:border-divider-dark" />
         )}
@@ -59,21 +75,39 @@ export function ProfileHeader({
       {/* 2. Top Row: Avatar & Top-Right Actions */}
       <View className="flex-row justify-between px-4 -mt-12">
         {/* Left: Overlapping Avatar */}
-        <View className="w-24 h-24 bg-surface-card dark:bg-surface-card-dark rounded-full p-1 shadow-sm border border-divider dark:border-divider-dark">
+        <Pressable
+          testID={imageUrl && !showInitialsOnly ? "profile-avatar-button" : undefined}
+          disabled={!imageUrl || showInitialsOnly}
+          onPress={() => setAvatarPreviewOpen(true)}
+          className="w-24 h-24 bg-surface-card dark:bg-surface-card-dark rounded-full p-1 shadow-sm border border-divider dark:border-divider-dark"
+        >
           <View className="w-full h-full bg-surface dark:bg-surface-dark rounded-full items-center justify-center overflow-hidden">
-            {imageUrl ? (
-              <Image source={{ uri: imageUrl }} className="w-full h-full" />
+            {imageUrl && !showInitialsOnly ? (
+              <Image
+                testID="profile-avatar-image"
+                source={{ uri: getAbsoluteImageUrl(imageUrl, imageCacheKey) }}
+                className="w-full h-full"
+              />
             ) : (
-              <Text className="text-3xl font-bold text-on-surface-soft dark:text-on-surface-soft-dark">
-                {name.charAt(0)}
+              <Text
+                testID="profile-avatar-fallback"
+                className="text-3xl font-bold text-on-surface-soft dark:text-on-surface-soft-dark"
+              >
+                {name
+                  .trim()
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((p) => p[0])
+                  .join("")
+                  .toUpperCase()}
               </Text>
             )}
           </View>
-        </View>
+        </Pressable>
 
         {/* Right: Rating & Edit Button */}
         <View className="flex-row items-center pt-14 gap-2">
-          {rating !== undefined && rating !== null ? (
+          {showRating && rating !== undefined && rating !== null ? (
             <View className="h-8 flex-row items-center bg-amber-50 dark:bg-amber-950/40 px-2 rounded-lg border border-amber-200 dark:border-amber-800">
               <Ionicons name="star" size={14} color="#f59e0b" />
               <Text className="text-amber-700 dark:text-amber-300 font-bold text-xs ml-1">
@@ -82,8 +116,19 @@ export function ProfileHeader({
             </View>
           ) : null}
 
+          {linkedinUrl ? (
+            <Pressable
+              testID="profile-linkedin-button"
+              className="h-8 w-8 items-center justify-center bg-blue-50 dark:bg-blue-900/40 rounded-lg border border-blue-200 dark:border-blue-800"
+              onPress={() => Linking.openURL(linkedinUrl).catch(() => {})}
+            >
+              <Ionicons name="logo-linkedin" size={16} color="#2563eb" />
+            </Pressable>
+          ) : null}
+
           {onEdit ? (
             <Pressable
+              testID="profile-edit-button"
               className="h-8 w-8 items-center justify-center bg-surface dark:bg-surface-dark rounded-lg border border-divider dark:border-divider-dark"
               onPress={onEdit}
             >
@@ -118,39 +163,91 @@ export function ProfileHeader({
         )}
       </View>
 
-      {/* Impact Stats Row */}
-      <View className="px-4 mt-6">
-        <View className="flex-row items-center justify-between bg-surface dark:bg-surface-dark p-4 rounded-2xl border border-divider dark:border-divider-dark">
-          <View className="items-center flex-1 border-r border-divider dark:border-divider-dark">
-            <Text className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mb-0.5">
-              {totalSessions}
-            </Text>
-            <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
-              Sessions
-            </Text>
-          </View>
-
-          {showMenteesHelped ? (
-            <View testID="mentees-section" className="items-center flex-1 border-r border-divider dark:border-divider-dark">
-              <Text testID="mentees-count" className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-0.5">
-                {menteesHelped}
+      {/* Media Introductions */}
+      {(audioUrl || videoUrl) ? (
+        <View className="px-4 mt-4 flex-row gap-2">
+          {audioUrl ? (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(getAbsoluteUrl(audioUrl)).catch(() => {})}
+              className="flex-row items-center px-3 py-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg border border-indigo-100 dark:border-indigo-800/50"
+            >
+              <Ionicons name="play-circle" size={16} color="#4338ca" />
+              <Text className="text-xs font-bold text-indigo-700 dark:text-indigo-400 ml-1">
+                Listen Intro
               </Text>
-              <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
-                Mentees
-              </Text>
-            </View>
+            </TouchableOpacity>
           ) : null}
 
-          <View className="items-center flex-1">
-            <Text className="text-xl font-extrabold text-on-surface dark:text-on-surface-dark mb-0.5">
-              {reviewCount}
-            </Text>
-            <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
-              Reviews
-            </Text>
+          {videoUrl ? (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(getAbsoluteUrl(videoUrl)).catch(() => {})}
+              className="flex-row items-center px-3 py-2 bg-rose-50 dark:bg-rose-900/30 rounded-lg border border-rose-100 dark:border-rose-800/50"
+            >
+              <Ionicons name="videocam" size={16} color="#e11d48" />
+              <Text className="text-xs font-bold text-rose-700 dark:text-rose-400 ml-1">
+                Watch Intro
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
+
+      {showStats ? (
+        <View className="px-4 mt-6">
+          <View className="flex-row items-center justify-between bg-surface dark:bg-surface-dark p-4 rounded-2xl border border-divider dark:border-divider-dark">
+            <View className="items-center flex-1 border-r border-divider dark:border-divider-dark">
+              <Text className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mb-0.5">
+                {openSlots}
+              </Text>
+              <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
+                Open Slots
+              </Text>
+            </View>
+
+            {showMenteesHelped ? (
+              <View testID="mentees-section" className="items-center flex-1 border-r border-divider dark:border-divider-dark">
+                <Text testID="mentees-count" className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mb-0.5">
+                  {menteesHelped}
+                </Text>
+                <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
+                  Mentees
+                </Text>
+              </View>
+            ) : null}
+
+            <View className="items-center flex-1">
+              <Text className="text-xl font-extrabold text-on-surface dark:text-on-surface-dark mb-0.5">
+                {reviewCount}
+              </Text>
+              <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider">
+                Reviews
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
+      ) : null}
+
+      <Modal
+        visible={isAvatarPreviewOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAvatarPreviewOpen(false)}
+      >
+        <Pressable
+          testID="profile-avatar-preview-backdrop"
+          className="flex-1 items-center justify-center bg-black/80 px-6"
+          onPress={() => setAvatarPreviewOpen(false)}
+        >
+          {imageUrl ? (
+            <Image
+              testID="profile-avatar-preview-image"
+              source={{ uri: getAbsoluteImageUrl(imageUrl, imageCacheKey) }}
+              className="h-80 w-80 max-w-full rounded-3xl bg-surface-card"
+              resizeMode="cover"
+            />
+          ) : null}
+        </Pressable>
+      </Modal>
     </View>
   );
 }

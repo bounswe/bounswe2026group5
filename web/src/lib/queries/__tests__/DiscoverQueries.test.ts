@@ -78,4 +78,38 @@ describe('DiscoverQueries fetchers', () => {
     await expect(fetchPopularMentors()).rejects.toThrow('Something went wrong. Please try again.')
     await expect(fetchRecentlyAddedMentors()).rejects.toThrow('Something went wrong. Please try again.')
   })
+
+  it('appends lat, lng, and distanceKm params for location-based filtering', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse({ count: 2, page: 1, pageSize: 6, results: [{ id: 'nearby-1' }] }, { status: 200 }),
+    )
+
+    const response = await fetchMentors({
+      page: 1,
+      pageSize: 6,
+      lat: 39.9334,
+      lng: 32.8597,
+      distanceKm: 15,
+    })
+
+    expect(response.results).toEqual([{ id: 'nearby-1' }])
+
+    const calledUrl = new URL(fetchSpy.mock.calls[0][0] as string, globalThis.location.origin)
+    expect(calledUrl.searchParams.get('lat')).toBe('39.9334')
+    expect(calledUrl.searchParams.get('lng')).toBe('32.8597')
+    expect(calledUrl.searchParams.get('distanceKm')).toBe('15')
+  })
+
+  it('does not include location params when they are undefined', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse({ count: 0, page: 1, pageSize: 6, results: [] }, { status: 200 }),
+    )
+
+    await fetchMentors({ page: 1, pageSize: 6 })
+
+    const calledUrl = new URL(fetchSpy.mock.calls[0][0] as string, globalThis.location.origin)
+    expect(calledUrl.searchParams.has('lat')).toBe(false)
+    expect(calledUrl.searchParams.has('lng')).toBe(false)
+    expect(calledUrl.searchParams.has('distanceKm')).toBe(false)
+  })
 })

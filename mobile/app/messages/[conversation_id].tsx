@@ -7,6 +7,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Linking,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -14,16 +15,31 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ReportSheet } from "@/components/report/ReportSheet";
+import { BasicFormattedText } from "@/components/ui/BasicFormattedText";
 import { useAuthStore } from "@/lib/auth/store";
 import {
   useConversations,
   useMessages,
   useSendMessage,
+  useMarkRead,
   type Message,
 } from "@/lib/queries/MessagingQueries";
+import { useSubmitReportMutation } from "@/lib/queries/reporting";
+import type { LocalUploadFile } from "@/lib/queries/uploads";
+import {
+  pickMessageImageFile,
+  pickMessagePdfFile,
+  pickMessageAudioFile,
+  pickMessageDeviceFile,
+} from "@/lib/uploads/picker";
+import { getAbsoluteUrl } from "@/lib/api/config";
+
+import { API_BASE_URL } from "@/lib/api/config";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,6 +77,23 @@ function formatDateLabel(dateStr: string): string {
 
 function isDifferentDay(a: string, b: string): boolean {
   return new Date(a).toDateString() !== new Date(b).toDateString();
+}
+
+function isImageAttachment(url: string): boolean {
+  const path = url.split("?")[0]?.toLowerCase() ?? "";
+  return /\.(jpe?g|png|gif|webp)$/.test(path);
+}
+
+function getAttachmentLabel(url: string, originalName?: string | null): string {
+  if (originalName) return originalName;
+  const path = url.split("?")[0] ?? "";
+  const fileName = decodeURIComponent(path.split("/").pop() || "");
+  return fileName || "Attachment";
+}
+
+function isAudioAttachment(url: string): boolean {
+  const path = url.split("?")[0]?.toLowerCase() ?? "";
+  return /\.(mp3|wav|ogg|m4a|aac)$/.test(path);
 }
 
 // ---------------------------------------------------------------------------
@@ -103,10 +136,11 @@ function Avatar({
   pictureUrl: string | null;
   size: number;
 }) {
-  if (pictureUrl) {
+  const absoluteUrl = getAbsoluteUrl(pictureUrl);
+  if (absoluteUrl) {
     return (
       <Image
-        source={{ uri: pictureUrl }}
+        source={{ uri: absoluteUrl }}
         style={{ width: size, height: size, borderRadius: size / 2 }}
       />
     );
@@ -138,10 +172,43 @@ function DateSeparator({ dateStr }: { dateStr: string }) {
   );
 }
 
-function MessageBubble({ message, isMe }: { message: Message; isMe: boolean }) {
+function MessageBubble({
+  message,
+  isMe,
+  onImagePress,
+  onLongPress,
+}: {
+  message: Message;
+  isMe: boolean;
+  onImagePress?: (imageUrl: string) => void;
+  onLongPress?: () => void;
+}) {
+  const attachmentUrl = getAbsoluteUrl(message.attachment_url);
+  
+  const getStatusIcon = () => {
+    const status = message.status_for_me;
+    if (status === "read") {
+      return <Ionicons name="checkmark-done" size={14} color="#ffffffcc" style={{ marginLeft: 4 }} />;
+    }
+    if (status === "delivered") {
+      return <Ionicons name="checkmark-done" size={14} color="#ffffffcc" style={{ marginLeft: 4 }} />;
+    }
+    if (status === "sent") {
+      return <Ionicons name="checkmark" size={14} color="#ffffff99" style={{ marginLeft: 4 }} />;
+    }
+    return null;
+  };
+
   return (
     <View className={`w-full mb-1 ${isMe ? "items-end" : "items-start"}`}>
-      <View style={{ maxWidth: "80%" }}>
+      <TouchableOpacity
+        testID={`message-bubble-${message.id}`}
+        activeOpacity={0.85}
+        disabled={!onLongPress}
+        onLongPress={onLongPress}
+        delayLongPress={350}
+        style={{ maxWidth: "80%" }}
+      >
         <View
           className={`rounded-2xl px-4 py-3 ${
             isMe ? "bg-primary rounded-br-sm" : "bg-surface-input rounded-bl-sm"
@@ -154,35 +221,103 @@ function MessageBubble({ message, isMe }: { message: Message; isMe: boolean }) {
             elevation: 1,
           }}
         >
-          <Text
-            className={`text-[14px] leading-5 ${
-              isMe ? "text-white" : "text-on-surface"
-            }`}
-          >
-            {message.body}
-          </Text>
-          {message.attachment_url ? (
-            <Text
-              className={`text-[12px] mt-1 underline ${
-                isMe ? "text-white/70" : "text-primary"
+          {message.body ? (
+            <BasicFormattedText
+              className={`text-[14px] leading-5 ${
+                isMe ? "text-white" : "text-on-surface"
               }`}
+              linkColor={isMe ? "#ffffff" : "#2563eb"}
             >
-              Attachment
-            </Text>
+              {message.body}
+            </BasicFormattedText>
+          ) : null}
+          {attachmentUrl ? (
+            <TouchableOpacity
+              testID={`message-attachment-${message.id}`}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (attachmentUrl && isImageAttachment(attachmentUrl)) {
+                  onImagePress?.(attachmentUrl);
+                } else if (attachmentUrl) {
+                  void Linking.openURL(attachmentUrl);
+                }
+              }}
+              className={message.body ? "mt-2" : ""}
+            >
+              {attachmentUrl && isImageAttachment(attachmentUrl) ? (
+                <Image
+                  source={{ uri: attachmentUrl }}
+                  className="rounded-xl mb-2"
+                  style={{ width: 180, height: 130 }}
+                  resizeMode="cover"
+                />
+              ) : null}
+              <View
+                className={`flex-row items-center rounded-xl px-3 py-2 ${
+                  isMe ? "bg-white/15" : "bg-white"
+                }`}
+              >
+                <Ionicons
+                  name={
+                    isImageAttachment(attachmentUrl)
+                      ? "image"
+                      : isAudioAttachment(attachmentUrl)
+                      ? "musical-notes"
+                      : "document-text"
+                  }
+                  size={16}
+                  color={isMe ? "#ffffff" : "#4a7c6f"}
+                />
+                <Text
+                  className={`text-[12px] font-semibold ml-2 flex-1 ${
+                    isMe ? "text-white" : "text-primary"
+                  }`}
+                  numberOfLines={1}
+                >
+                  {getAttachmentLabel(attachmentUrl, message.original_filename)}
+                </Text>
+              </View>
+            </TouchableOpacity>
           ) : null}
         </View>
-        <Text
-          className={`text-[10px] text-on-surface-muted px-1 mt-0.5 ${
-            isMe ? "text-right" : "text-left"
-          }`}
-        >
-          {formatTime(message.created_at)}
-        </Text>
-      </View>
+        <View className={`flex-row items-center px-1 mt-0.5 ${isMe ? "justify-end" : "justify-start"}`}>
+          <Text className="text-[10px] text-on-surface-muted">
+            {formatTime(message.created_at)}
+          </Text>
+          {isMe && getStatusIcon()}
+        </View>
+      </TouchableOpacity>
     </View>
   );
 }
 
+
+function ImageViewer({
+  url,
+  onClose,
+}: {
+  url: string | null;
+  onClose: () => void;
+}) {
+  if (!url) return null;
+  return (
+    <Modal visible={!!url} transparent animationType="fade" onRequestClose={onClose}>
+      <View className="flex-1 bg-black items-center justify-center">
+        <TouchableOpacity 
+          onPress={onClose} 
+          className="absolute top-12 right-6 z-10 w-10 h-10 items-center justify-center rounded-full bg-white/20"
+        >
+          <Ionicons name="close" size={24} color="white" />
+        </TouchableOpacity>
+        <Image
+          source={{ uri: url }}
+          className="w-full h-full"
+          resizeMode="contain"
+        />
+      </View>
+    </Modal>
+  );
+}
 function EmptyMessages() {
   return (
     <View className="flex-1 items-center justify-center py-20">
@@ -195,7 +330,7 @@ function EmptyMessages() {
       <Text className="text-[15px] font-semibold text-on-surface text-center mb-1">
         No messages yet
       </Text>
-      <Text className="text-[13px] text-on-surface-muted text-center">
+      <Text className="text-[13px] text-on-surface-muted text-center px-8">
         Say hello to start the conversation!
       </Text>
     </View>
@@ -222,14 +357,48 @@ export default function ConversationScreen() {
     data: messages = [],
     isLoading: messagesLoading,
     isError: messagesError,
+    loadMore,
+    hasMore,
   } = useMessages(conversation_id ?? "");
 
+  const markRead = useMarkRead(conversation_id ?? "");
   const sendMessage = useSendMessage(conversation_id ?? "");
+  const submitReportMutation = useSubmitReportMutation();
   const [text, setText] = useState("");
+  const [messageToReport, setMessageToReport] = useState<Message | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [attachment, setAttachment] = useState<LocalUploadFile | null>(null);
+  const [showAttachOptions, setShowAttachOptions] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [focusedImageUrl, setFocusedImageUrl] = useState<string | null>(null);
   const flatListRef = useRef<FlatList<ListItem>>(null);
   const isNearBottomRef = useRef(true);
   const hasInitialScrollDoneRef = useRef(false);
   const prevLastMessageIdRef = useRef<string | null>(null);
+
+  // Mark conversation as read on mount and when new messages arrive if near bottom
+  useEffect(() => {
+    if (conversation_id) {
+      markRead.mutate();
+    }
+  }, [conversation_id]);
+
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && isNearBottomRef.current) {
+        markRead.mutate();
+    }
+  }, [messages.length]);
+
+  const handleHeaderScroll = useCallback(async () => {
+    if (hasMore && !messagesLoading && !isRefreshing) {
+      setIsRefreshing(true);
+      await loadMore();
+      setIsRefreshing(false);
+    }
+  }, [hasMore, messagesLoading, isRefreshing, loadMore]);
 
   const other = conversation
     ? conversation.mentor.username === currentUsername
@@ -278,16 +447,25 @@ export default function ConversationScreen() {
       const distanceFromBottom =
         contentSize.height - (contentOffset.y + layoutMeasurement.height);
       isNearBottomRef.current = distanceFromBottom <= 80;
+
+      // Detect top of list to load more (older) messages
+      if (contentOffset.y <= 10 && !messagesLoading && hasMore) {
+        void handleHeaderScroll();
+      }
     },
-    [],
+    [messagesLoading, hasMore, handleHeaderScroll],
   );
 
   const handleSend = useCallback(async () => {
     const body = text.trim();
-    if (!body || sendMessage.isPending || !conversation_id) return;
+    const currentAttachment = attachment;
+    if ((!body && !currentAttachment) || sendMessage.isPending || !conversation_id) return;
     setText("");
+    setAttachment(null);
+    setShowAttachOptions(false);
+    setAttachmentError(null);
     try {
-      await sendMessage.mutateAsync(body);
+      await sendMessage.mutateAsync({ body, attachment: currentAttachment });
       queryClient.invalidateQueries({
         queryKey: ["messaging", "messages", conversation_id],
       });
@@ -295,10 +473,95 @@ export default function ConversationScreen() {
         queryKey: ["messaging", "conversations"],
       });
     } catch {
-      // Restore text if send failed
+      // Restore draft if send failed
       setText(body);
+      setAttachment(currentAttachment);
     }
-  }, [text, sendMessage, queryClient, conversation_id]);
+  }, [text, attachment, sendMessage, queryClient, conversation_id]);
+
+  const handlePickImage = useCallback(async () => {
+    setAttachmentError(null);
+    try {
+      const file = await pickMessageImageFile();
+      if (file) {
+        setAttachment(file);
+        setShowAttachOptions(false);
+      }
+    } catch {
+      setAttachmentError("Could not attach that image.");
+    }
+  }, []);
+
+  const handlePickPdf = useCallback(async () => {
+    setAttachmentError(null);
+    try {
+      const file = await pickMessagePdfFile();
+      if (file) {
+        setAttachment(file);
+        setShowAttachOptions(false);
+      }
+    } catch {
+      setAttachmentError("Could not attach that PDF.");
+    }
+  }, []);
+
+  const handlePickAudio = useCallback(async () => {
+    setAttachmentError(null);
+    try {
+      const file = await pickMessageAudioFile();
+      if (file) {
+        setAttachment(file);
+        setShowAttachOptions(false);
+      }
+    } catch {
+      setAttachmentError("Could not attach that audio file.");
+    }
+  }, []);
+
+  const handlePickDevice = useCallback(async () => {
+    setAttachmentError(null);
+    try {
+      const file = await pickMessageDeviceFile();
+      if (file) {
+        setAttachment(file);
+        setShowAttachOptions(false);
+      }
+    } catch {
+      setAttachmentError("Could not attach that file.");
+    }
+  }, []);
+
+  const handleSubmitReport = useCallback(
+    async ({
+      reason,
+      description,
+    }: {
+      reason: "SPAM" | "HARASSMENT" | "INAPPROPRIATE_CONTENT" | "OTHER";
+      description: string;
+    }) => {
+      if (!messageToReport) {
+        return;
+      }
+
+      setReportError(null);
+      try {
+        await submitReportMutation.mutateAsync({
+          reported_username: messageToReport.sender.username,
+          related_message_id: messageToReport.id,
+          reason,
+          description,
+        });
+        setMessageToReport(null);
+      } catch (reportSubmitError) {
+        setReportError(
+          reportSubmitError instanceof Error
+            ? reportSubmitError.message
+            : "Failed to submit report.",
+        );
+      }
+    },
+    [messageToReport, submitReportMutation],
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: ListItem }) => {
@@ -309,6 +572,15 @@ export default function ConversationScreen() {
         <MessageBubble
           message={item.message}
           isMe={item.message.sender.username === currentUsername}
+          onImagePress={(url) => setFullScreenImage(url)}
+          onLongPress={
+            item.message.sender.username === currentUsername
+              ? undefined
+              : () => {
+                  setReportError(null);
+                  setMessageToReport(item.message);
+                }
+          }
         />
       );
     },
@@ -399,6 +671,7 @@ export default function ConversationScreen() {
             data={listItems}
             keyExtractor={(item) => item.key}
             renderItem={renderItem}
+            ListHeaderComponent={isRefreshing ? <ActivityIndicator size="small" color="#4a7c6f" style={{ marginVertical: 10 }} /> : null}
             contentContainerStyle={{
               paddingHorizontal: 16,
               paddingTop: 12,
@@ -417,7 +690,121 @@ export default function ConversationScreen() {
           className="bg-surface-card border-t border-divider px-4 pt-3"
           style={{ paddingBottom: Math.max(insets.bottom, 12) }}
         >
+          {showAttachOptions ? (
+            <View className="flex-row gap-2 mb-3">
+              <TouchableOpacity
+                testID="attach-image-button"
+                activeOpacity={0.85}
+                onPress={handlePickImage}
+                className="flex-row items-center bg-surface-input rounded-xl px-3 py-2"
+              >
+                <Ionicons name="image-outline" size={18} color="#4a7c6f" />
+                <Text className="text-[13px] font-semibold text-on-surface ml-2">
+                  Image
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="attach-pdf-button"
+                activeOpacity={0.85}
+                onPress={handlePickPdf}
+                className="flex-row items-center bg-surface-input rounded-xl px-3 py-2"
+              >
+                <Ionicons
+                  name="document-text-outline"
+                  size={18}
+                  color="#4a7c6f"
+                />
+                <Text className="text-[13px] font-semibold text-on-surface ml-2">
+                  PDF
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="attach-audio-button"
+                activeOpacity={0.85}
+                onPress={handlePickAudio}
+                className="flex-row items-center bg-surface-input rounded-xl px-3 py-2"
+              >
+                <Ionicons
+                  name="musical-notes-outline"
+                  size={18}
+                  color="#4a7c6f"
+                />
+                <Text className="text-[13px] font-semibold text-on-surface ml-2">
+                  Audio
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="attach-file-button"
+                activeOpacity={0.85}
+                onPress={handlePickDevice}
+                className="flex-row items-center bg-surface-input rounded-xl px-3 py-2"
+              >
+                <Ionicons
+                  name="folder-outline"
+                  size={18}
+                  color="#4a7c6f"
+                />
+                <Text className="text-[13px] font-semibold text-on-surface ml-2">
+                  Device
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {attachment ? (
+            <View
+              testID="selected-attachment"
+              className="flex-row items-center bg-surface-input rounded-xl px-3 py-2 mb-3"
+            >
+              <Ionicons
+                name={
+                  attachment.type.startsWith("image/")
+                    ? "image"
+                    : attachment.type.startsWith("audio/")
+                    ? "musical-notes"
+                    : "document-text"
+                }
+                size={18}
+                color="#4a7c6f"
+              />
+              <Text
+                className="text-[13px] font-semibold text-on-surface ml-2 flex-1"
+                numberOfLines={1}
+              >
+                {attachment.name}
+              </Text>
+              <TouchableOpacity
+                testID="selected-attachment-remove"
+                activeOpacity={0.7}
+                onPress={() => setAttachment(null)}
+              >
+                <Ionicons name="close-circle" size={20} color="#8a8172" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {attachmentError ? (
+            <Text className="text-[12px] text-red-700 mb-2">
+              {attachmentError}
+            </Text>
+          ) : null}
+
           <View className="flex-row items-end" style={{ gap: 10 }}>
+            <TouchableOpacity
+              testID="attachment-plus-button"
+              onPress={() => setShowAttachOptions((current) => !current)}
+              activeOpacity={0.8}
+              disabled={sendMessage.isPending}
+              className="items-center justify-center rounded-xl bg-surface-input"
+              style={{
+                width: 48,
+                height: 48,
+                opacity: sendMessage.isPending ? 0.45 : 1,
+              }}
+            >
+              <Ionicons name="add" size={24} color="#4a7c6f" />
+            </TouchableOpacity>
+
             <View
               className="flex-1 bg-surface-input rounded-xl px-4 py-3"
               style={{ minHeight: 48 }}
@@ -444,12 +831,15 @@ export default function ConversationScreen() {
               testID="send-button"
               onPress={handleSend}
               activeOpacity={0.8}
-              disabled={!text.trim() || sendMessage.isPending}
+              disabled={(!text.trim() && !attachment) || sendMessage.isPending}
               className="items-center justify-center rounded-xl bg-primary"
               style={{
                 width: 48,
                 height: 48,
-                opacity: !text.trim() || sendMessage.isPending ? 0.45 : 1,
+                opacity:
+                  (!text.trim() && !attachment) || sendMessage.isPending
+                    ? 0.45
+                    : 1,
               }}
             >
               {sendMessage.isPending ? (
@@ -461,6 +851,26 @@ export default function ConversationScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      <ReportSheet
+        visible={Boolean(messageToReport)}
+        title="Report message"
+        isSubmitting={submitReportMutation.isPending}
+        errorMessage={reportError}
+        onClose={() => {
+          if (!submitReportMutation.isPending) {
+            setMessageToReport(null);
+          }
+        }}
+        onSubmit={(payload) => {
+          void handleSubmitReport(payload);
+        }}
+      />
+
+      <ImageViewer 
+        url={fullScreenImage} 
+        onClose={() => setFullScreenImage(null)} 
+      />
     </View>
   );
 }

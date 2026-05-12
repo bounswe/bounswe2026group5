@@ -31,6 +31,7 @@ export interface MentorshipRequest {
     slot_end_time: string
     status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED'
     cover_letter: string
+    is_mentor_overloaded: boolean
     created_at: string
     responded_at: string | null
 }
@@ -166,6 +167,14 @@ export async function rescheduleSession(sessionId: string, newSlotId: string): P
     return res.json()
 }
 
+async function deactivateMatch(matchId: string): Promise<Match> {
+    const res = await fetch(`${API_BASE_URL}/mentorship/matches/${matchId}/deactivate/`, {
+        method: 'POST',
+        headers: withAuthHeaders(),
+    })
+    if (!res.ok) await throwApiError(res)
+    return res.json()
+}
 
 // ---- Query Options ----
 
@@ -178,7 +187,7 @@ export const myMatchesQueryOptions = queryOptions({
 export const myRequestsQueryOptions = queryOptions({
     queryKey: ['mentorship', 'requests'],
     queryFn: fetchMyRequests,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
     gcTime: Infinity,
 })
 
@@ -232,6 +241,12 @@ export function useRescheduleSession() {
     return useMutation({
         mutationFn: ({ sessionId, newSlotId }: { sessionId: string; newSlotId: string }) =>
             rescheduleSession(sessionId, newSlotId),
+    })
+}
+
+export function useDeactivateMatch() {
+    return useMutation({
+        mutationFn: deactivateMatch,
     })
 }
 

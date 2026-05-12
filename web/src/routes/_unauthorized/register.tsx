@@ -1,19 +1,22 @@
-import {createFileRoute, Link, useRouter} from '@tanstack/react-router'
-import { z } from 'zod'
-import { useState } from 'react'
+import { requestForToken } from "#/lib/firebase-client"
+import { googleLoginFn, handleAuthSuccess, registerFn } from "#/lib/queries/AuthQueries.ts"
+import { Body, Display, Heading, Muted } from "@/components/Typography"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
     Card,
     CardContent,
     CardFooter,
 } from "@/components/ui/card"
-import { Heading, Body, Display } from "@/components/Typography"
-import { User, Mail } from 'lucide-react'
-import {useMutation} from "@tanstack/react-query";
-import {handleAuthSuccess, registerFn} from "#/lib/queries/AuthQueries.ts";
+import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useGoogleLoginSafe } from '#/hooks/useGoogleLoginSafe'
+import { useMutation } from "@tanstack/react-query"
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
+import { Mail } from 'lucide-react'
+import { LegalModal } from "@/components/common/LegalModal"
+import { useState } from 'react'
+import { z } from 'zod'
 
 
 
@@ -47,6 +50,7 @@ export function RegisterPage() {
         terms: false,
     });
     const [errors, setErrors] = useState<Partial<Record<keyof RegisterFormData, string>>>({});
+    const [legalType, setLegalType] = useState<'tos' | 'privacy' | null>(null);
 
     const validateField = (field: keyof RegisterFormData, value: unknown) => {
         const result = registerSchema.safeParse({ ...formData, [field]: value });
@@ -67,11 +71,33 @@ export function RegisterPage() {
         mutationFn: registerFn,
         onSuccess: (data) => {
             handleAuthSuccess(data)
+            requestForToken(true).catch(() => {})
             router.navigate({ to: '/gettingToKnowYou' })
         },
         onError: (error) => {
             console.error('Register error:', error)
         },
+    })
+
+    const googleLogin = useMutation({
+        mutationFn: googleLoginFn,
+        onSuccess: (data) => {
+            handleAuthSuccess(data)
+            requestForToken(true).catch(() => {})
+            router.navigate({ to: '/dashboard' })
+        },
+        onError: (error) => {
+            console.error('Google login error:', error)
+        },
+    })
+
+    const triggerGoogleLogin = useGoogleLoginSafe({
+        onSuccess: (tokenResponse) => {
+            if (tokenResponse.access_token) {
+                googleLogin.mutate(tokenResponse.access_token)
+            }
+        },
+        onError: () => console.error('Google Login Failed'),
     })
 
 
@@ -100,31 +126,32 @@ export function RegisterPage() {
     return (
         <div className="grid min-h-screen lg:grid-cols-[5fr_4fr]">
             {/* Left Column: Editorial Content */}
-            <aside className="lg:flex flex-col px-14 py-12 bg-petal border-r border-line relative overflow-hidden">
-                <Display className="mb-10 relative z-10">Campus Tutor</Display>
+            <aside aria-hidden="true" className="hidden lg:flex flex-col px-14 py-12 bg-petal border-r border-line relative overflow-hidden">
+                <Display className="mb-10 relative z-10">Neighborship</Display>
 
                 <div className="island-shell rounded-2xl px-8 py-10 space-y-6 min-h-3/4 relative z-10 rise-in">
-                    <Body className="island-kicker">Academic Editorial Excellence</Body>
-                    <Display as="h2" className="leading-[1.2] max-w-md">
-                        Join our community of academic excellence
+                    <Body className="island-kicker">Join the community</Body>
+                    <Display as="h2" className="leading-[1.2] max-w-xs">
+                        Your next mentor is already here.
                     </Display>
-                    <Body className="text-(--color-brand-ink-soft) max-w-md">
-                        Connect with top-tier tutors and fellow scholars. Refine your research,
-                        master your curriculum, and achieve editorial-grade perfection in your academic work.
+                    <Body className="text-ink-soft max-w-sm">
+                        No cold emails, no guesswork. Create your profile, find someone further
+                        down the road, and start the conversation that changes your trajectory.
                     </Body>
 
                     {/* Avatar Group */}
                     <div className="flex items-center gap-4 pt-4">
                         <div className="flex -space-x-3">
-                            <div className="w-12 h-12 rounded-full border-2 border-background bg-primary/20 flex items-center justify-center overflow-hidden">
-                                <User className="w-6 h-6 text-primary" />
-                            </div>
-                            <div className="w-12 h-12 rounded-full border-2 border-background bg-primary/20 flex items-center justify-center overflow-hidden">
-                                <User className="w-6 h-6 text-primary" />
-                            </div>
-                            <div className="w-12 h-12 rounded-full border-2 border-background bg-accent/20 flex items-center justify-center overflow-hidden">
-                                <User className="w-6 h-6 text-accent" />
-                            </div>
+                            {[
+                                { initials: 'AK', bg: 'bg-accent/20',   text: 'text-accent'   },
+                                { initials: 'MJ', bg: 'bg-primary/15',  text: 'text-primary'  },
+                                { initials: 'SR', bg: 'bg-accent/30',   text: 'text-accent'   },
+                                { initials: 'TL', bg: 'bg-primary/20',  text: 'text-primary'  },
+                            ].map(({ initials, bg, text }) => (
+                                <div key={initials} className={`w-10 h-10 rounded-full border-2 border-petal ${bg} flex items-center justify-center overflow-hidden shrink-0`}>
+                                    <span className={`text-xs font-bold ${text}`}>{initials}</span>
+                                </div>
+                            ))}
                         </div>
                         <span className="text-sm text-ink-soft font-medium">Join 2,000+ scholars</span>
                     </div>
@@ -136,12 +163,12 @@ export function RegisterPage() {
             </aside>
 
             {/* Right Column: Registration Form */}
-            <main className="flex flex-col justify-start items-center px-6 py-16 sm:px-12">
+            <main id="main-content" className="flex flex-col justify-start items-center px-6 py-16 sm:px-12">
                 <div className="w-full max-w-md rise-in">
 
                     <div className="text-center md:text-left mb-10">
-                        <Heading as="h2" className="mb-2">Create your account</Heading>
-                        <Body className="text-muted-foreground">Enter your details to begin your academic journey.</Body>
+                        <Heading as="h1" className="mb-2">Create your account</Heading>
+                        <Muted className="mt-1 text-ink-soft">Free to join. Free to discover. Takes under a minute.</Muted>
                     </div>
 
                     <Card className="w-full island-shell border-line">
@@ -162,9 +189,10 @@ export function RegisterPage() {
                                             value={formData.email}
                                             onChange={(e) => handleChange('email', e.target.value)}
                                             aria-invalid={!!errors.email}
-                                            className="w-full px-4 py-3 rounded-xl"
+                                            autoComplete="email"
+                                            className="w-full px-4 py-3 pr-10 rounded-xl"
                                         />
-                                        <Mail className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                        <Mail aria-hidden="true" className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                     </div>
                                     {errors.email && (
                                         <p className="text-xs text-destructive ml-1">{errors.email}</p>
@@ -181,6 +209,7 @@ export function RegisterPage() {
                                             value={formData.password}
                                             onChange={(e) => handleChange('password', e.target.value)}
                                             aria-invalid={!!errors.password}
+                                            autoComplete="new-password"
                                             className="w-full px-4 py-3 rounded-xl"
                                         />
                                         {errors.password && (
@@ -197,6 +226,7 @@ export function RegisterPage() {
                                             value={formData.confirmPassword}
                                             onChange={(e) => handleChange('confirmPassword', e.target.value)}
                                             aria-invalid={!!errors.confirmPassword}
+                                            autoComplete="new-password"
                                             className="w-full px-4 py-3 rounded-xl"
                                         />
                                         {errors.confirmPassword && (
@@ -214,19 +244,21 @@ export function RegisterPage() {
                                     <div className="text-sm leading-tight">
                                         <Label htmlFor="terms" className="font-normal cursor-pointer">
                                             I agree to the{" "}
-                                            <a
-                                                href="#"
+                                            <button
+                                                type="button"
+                                                onClick={() => setLegalType('tos')}
                                                 className="text-primary hover:underline underline-offset-4"
                                             >
                                                 Terms of Service
-                                            </a>{" "}
+                                            </button>{" "}
                                             and{" "}
-                                            <a
-                                                href="#"
+                                            <button
+                                                type="button"
+                                                onClick={() => setLegalType('privacy')}
                                                 className="text-primary hover:underline underline-offset-4"
                                             >
                                                 Privacy Policy
-                                            </a>.
+                                            </button>.
                                         </Label>
                                         {errors.terms && (
                                             <p className="text-xs text-destructive mt-1">{errors.terms}</p>
@@ -246,21 +278,50 @@ export function RegisterPage() {
                                 {register.isPending ? "Creating account..." : "Create Account"}
                             </Button>
 
+                            <LegalModal 
+                                type={legalType} 
+                                isOpen={legalType !== null} 
+                                onClose={() => setLegalType(null)} 
+                            />
+
                             {register.isError && (
                                 <p className="text-xs text-destructive text-center">{register.error.message}</p>
                             )}
 
-                            <div className="mt-2 pt-2 border-t border-border/10 text-center w-full">
-                                <p className="text-primary/70">
-                                    Already have an account?{" "}
-                                    <Link
-                                        to="/login"
-                                        className="font-bold text-primary hover:underline underline-offset-4 transition-all"
-                                    >
-                                        Log in
-                                    </Link>
-                                </p>
+                            {googleLogin.isError && (
+                                <p className="text-xs text-destructive text-center">{googleLogin.error.message}</p>
+                            )}
+
+                            <div className="flex items-center gap-3 w-full mt-2">
+                                 <div className="flex-1 h-px bg-(--color-brand-line)" />
+                                 <Muted as="span" className="text-xs uppercase tracking-widest">or</Muted>
+                                 <div className="flex-1 h-px bg-(--color-brand-line)" />
                             </div>
+
+                            <Button
+                                variant="outline"
+                                className="w-full gap-2 border-line py-4 rounded-xl"
+                                onClick={() => triggerGoogleLogin()}
+                                disabled={googleLogin.isPending}
+                            >
+                                <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden>
+                                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
+                                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                                </svg>
+                                {googleLogin.isPending ? 'Logging in...' : 'Sign up with Google'}
+                            </Button>
+
+                            <Muted className="text-xs text-center w-full">
+                                Already have an account?{' '}
+                                <Link
+                                    to="/login"
+                                    className="font-medium text-accent-aa underline-offset-4 hover:underline hover:text-accent transition-colors"
+                                >
+                                    Log in
+                                </Link>
+                            </Muted>
                         </CardFooter>
                     </Card>
                 </div>
@@ -268,3 +329,4 @@ export function RegisterPage() {
         </div>
     );
 }
+

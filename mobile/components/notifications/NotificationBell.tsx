@@ -5,7 +5,11 @@ import { TouchableOpacity, View, Text } from "react-native";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
-import { useNotificationsQuery } from "@/lib/queries/notifications";
+import { useNotificationBadgeStore } from "@/lib/notifications/badgePreferences";
+import { 
+  useNotificationsQuery, 
+  useMarkAllNotificationsReadMutation 
+} from "@/lib/queries/notifications";
 
 function formatUnreadCount(count: number): string {
   if (count > 99) {
@@ -20,17 +24,47 @@ export function NotificationBell() {
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
   const currentUsername = useAuthStore((state) => state.user?.username);
+  const dismissedThrough = useNotificationBadgeStore((state) =>
+    state.getDismissedThrough(currentUsername),
+  );
+  const dismissUnreadBadge = useNotificationBadgeStore(
+    (state) => state.dismissUnreadBadge,
+  );
   const notificationsQuery = useNotificationsQuery(currentUsername);
-  const unreadCount =
-    notificationsQuery.data?.filter((notification) => !notification.isRead)
-      .length ?? 0;
+  const { mutate: markAllRead } = useMarkAllNotificationsReadMutation(currentUsername);
+
+  const unreadNotifications =
+    notificationsQuery.data?.filter((notification) => !notification.isRead) ??
+    [];
+  const latestUnreadTimestamp = unreadNotifications.reduce((latest, item) => {
+    const timestamp = new Date(item.createdAt).getTime();
+    if (Number.isNaN(timestamp)) {
+      return latest;
+    }
+
+    return Math.max(latest, timestamp);
+  }, 0);
+  const unreadCount = unreadNotifications.length;
+  const shouldShowBadge =
+    unreadCount > 0 && latestUnreadTimestamp > dismissedThrough;
+
+  const handlePress = () => {
+    if (currentUsername) {
+      if (latestUnreadTimestamp > 0) {
+        dismissUnreadBadge(currentUsername, latestUnreadTimestamp);
+      }
+      markAllRead();
+    }
+
+    router.push("/notifications" as Href);
+  };
 
   return (
     <TouchableOpacity
       accessibilityLabel="Open notifications"
       accessibilityRole="button"
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      onPress={() => router.push("/notifications" as Href)}
+      onPress={handlePress}
       testID="notification-bell-button"
     >
       <View className="relative">
@@ -39,7 +73,7 @@ export function NotificationBell() {
           size={24}
           color={theme.textSoft}
         />
-        {unreadCount > 0 && (
+        {shouldShowBadge && (
           <View className="absolute -top-1.5 -right-2 min-w-5 h-5 px-1 rounded-full bg-primary border border-surface-card dark:border-surface-card-dark items-center justify-center">
             <Text className="text-[10px] font-bold text-white">
               {formatUnreadCount(unreadCount)}

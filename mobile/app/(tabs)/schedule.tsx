@@ -9,7 +9,8 @@ import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { SuccessCard } from "@/components/ui/SuccessCard";
+import { useToast } from "@/components/ui/ToastProvider";
+import { useRouter } from "expo-router";
 
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -21,8 +22,14 @@ import {
   useMentorshipMeetingSessionsQuery,
   useRescheduleSessionMutation,
 } from "@/lib/queries/mentorship";
-import React, { useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import {
+  mapWorkshopAttendanceToDashboard,
+  useMyWorkshopAttendanceQuery,
+  type WorkshopDashboardItem,
+} from "@/lib/queries/workshops";
+import { useRefreshControl } from "@/hooks/use-refresh-control";
+import React, { useCallback, useMemo, useState } from "react";
+import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { Calendar, DateData } from "react-native-calendars";
 import {
   SafeAreaView,
@@ -47,6 +54,12 @@ type ScheduleSession = {
   myRole: string;
 };
 
+type ScheduleWorkshop = WorkshopDashboardItem & {
+  kind: "workshop";
+};
+
+type ScheduleItem = ScheduleSession | ScheduleWorkshop;
+
 const formatFriendlyDate = (dateString: string) => {
   const date = new Date(dateString);
   return date.toLocaleDateString("en-US", {
@@ -58,12 +71,13 @@ const formatFriendlyDate = (dateString: string) => {
 
 export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const toast = useToast();
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [selectedSession, setSelectedSession] =
     useState<ScheduleSession | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
@@ -80,6 +94,9 @@ export default function ScheduleScreen() {
     currentUsername,
     { status: "upcoming" },
   );
+  const workshopAttendanceQuery = useMyWorkshopAttendanceQuery(currentUsername, {
+    status: "attending",
+  });
 
   const sessions = useMemo(
     () =>
@@ -92,9 +109,42 @@ export default function ScheduleScreen() {
       ),
     [meetingSessionsQuery.data],
   );
+  const workshops = useMemo(
+    () =>
+      mapWorkshopAttendanceToDashboard(
+        workshopAttendanceQuery.data?.results ?? [],
+        currentUsername,
+      )
+        .filter(
+          (workshop) =>
+            workshop.workshopStatus === "SCHEDULED" &&
+            workshop.status === "Upcoming",
+        )
+        .map(
+        (workshop) =>
+          ({
+            kind: "workshop",
+            ...workshop,
+          }) as ScheduleWorkshop,
+        ),
+    [currentUsername, workshopAttendanceQuery.data?.results],
+  );
+  const scheduleItems = useMemo<ScheduleItem[]>(
+    () =>
+      [
+        ...sessions,
+        ...workshops,
+      ].sort(
+        (left, right) =>
+          new Date(left.rawDate).getTime() - new Date(right.rawDate).getTime(),
+      ),
+    [sessions, workshops],
+  );
   const queryError = meetingSessionsQuery.isError
     ? "Failed to load upcoming sessions."
-    : null;
+    : workshopAttendanceQuery.isError
+      ? "Failed to load your upcoming workshops."
+      : null;
 
   const mentorAvailabilityForReschedule = useAvailabilitySlotsQuery(
     rescheduleMentorUsername,
@@ -105,10 +155,11 @@ export default function ScheduleScreen() {
       .mutateAsync({
         sessionId,
         newSlotId,
+        mentorUsername: rescheduleMentorUsername,
       })
       .then(() => {
         setActionError(null);
-        setSuccessMessage("Your session was updated.");
+        toast.success("Your session was updated.");
         setSelectedSession(null);
         setShowRescheduleSheet(false);
         setRescheduleSessionId(null);
@@ -134,7 +185,7 @@ export default function ScheduleScreen() {
       }
     > = {};
 
-    sessions.forEach((session) => {
+    scheduleItems.forEach((session) => {
       if (!marks[session.rawDate]) {
         marks[session.rawDate] = { dots: [] };
       }
@@ -160,11 +211,23 @@ export default function ScheduleScreen() {
     };
 
     return marks;
-  }, [selectedDate, sessions, theme.primary]);
+  }, [scheduleItems, selectedDate, theme.primary]);
 
-  const selectedSessions = sessions.filter(
+  const selectedSessions = scheduleItems.filter(
     (session) => session.rawDate === selectedDate,
   );
+  const openWorkshop = (workshop: WorkshopDashboardItem) => {
+    router.push(
+      `/(tabs)/community/${encodeURIComponent(workshop.communityId)}/workshops/${encodeURIComponent(workshop.workshopId)}?from=schedule`,
+    );
+  };
+  const refreshSchedule = useCallback(async () => {
+    await Promise.all([
+      meetingSessionsQuery.refetch(),
+      workshopAttendanceQuery.refetch(),
+    ]);
+  }, [meetingSessionsQuery, workshopAttendanceQuery]);
+  const { refreshing, onRefresh } = useRefreshControl(refreshSchedule);
 
   return (
     <SafeAreaView
@@ -183,16 +246,16 @@ export default function ScheduleScreen() {
         </View>
       </View>
 
-      <ScrollView className="flex-1 pt-4" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1 pt-4"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {queryError ? (
           <View className="px-4 mb-4">
             <ErrorBanner message={queryError} />
-          </View>
-        ) : null}
-
-        {successMessage ? (
-          <View className="px-4 mb-4">
-            <SuccessCard message={successMessage} />
           </View>
         ) : null}
 
@@ -241,12 +304,22 @@ export default function ScheduleScreen() {
                 date={session.date}
                 time={session.time}
                 status={session.status}
-                onPress={() =>
+                title={"kind" in session ? session.topic : undefined}
+                subtitle={
+                  "kind" in session ? session.communityName : undefined
+                }
+                kindLabel={"kind" in session ? "Workshop" : undefined}
+                onPress={() => {
+                  if ("kind" in session) {
+                    openWorkshop(session);
+                    return;
+                  }
+
                   setSelectedSession({
                     ...session,
                     date: formatFriendlyDate(session.rawDate),
-                  })
-                }
+                  });
+                }}
               />
             ))
           )}
@@ -291,7 +364,7 @@ export default function ScheduleScreen() {
             .mutateAsync(selectedSession.sessionId)
             .then(() => {
               setActionError(null);
-              setSuccessMessage("The session was cancelled.");
+              toast.success("The session was cancelled.");
               setSelectedSession(null);
             })
             .catch((error) => {

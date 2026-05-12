@@ -24,6 +24,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 })
 
 vi.mock('lucide-react', () => ({
+  BookOpen: () => <div data-testid="icon-book-open" />,
   ChevronLeft: () => <div data-testid="icon-left" />,
   ChevronRight: () => <div data-testid="icon-right" />,
   Calendar: () => <div data-testid="icon-calendar" />,
@@ -170,6 +171,15 @@ vi.mock('#/lib/utils.ts', async (importOriginal) => {
   }
 })
 
+const EMPTY_WORKSHOP_ATTENDANCE = {
+  count: 0,
+  attending_count: 0,
+  attended_count: 0,
+  offset: 0,
+  limit: 50,
+  results: [],
+}
+
 function renderWithUser(appUsageMode: 'MENTOR' | 'MENTEE') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -184,6 +194,7 @@ function renderWithUser(appUsageMode: 'MENTOR' | 'MENTEE') {
     is_active: true,
     created_at: '2026-01-01',
   })
+  queryClient.setQueryData(['workshops', 'attendance', 'me', 'all'], EMPTY_WORKSHOP_ATTENDANCE)
   return render(
       <QueryClientProvider client={queryClient}>
         <SchedulePage />
@@ -261,7 +272,7 @@ describe('SchedulePage', () => {
     expect(screen.getAllByText('John Smith').length).toBeGreaterThan(0)
 
     // Click day 28
-    const day28 = screen.getByText('28')
+    const day28 = screen.getAllByText('28')[0]
     fireEvent.click(day28)
 
     // Filter header updates
@@ -269,19 +280,19 @@ describe('SchedulePage', () => {
 
     // Click day 28 again to deselect
     fireEvent.click(day28)
-    expect(screen.getByText('All Sessions')).toBeInTheDocument()
+    expect(screen.getByText('All Sessions & Workshops')).toBeInTheDocument()
   })
 
   it('clears filter when Clear Filter is clicked', () => {
     renderWithUser('MENTEE')
 
-    const day28 = screen.getByText('28')
+    const day28 = screen.getAllByText('28')[0]
     fireEvent.click(day28)
     expect(screen.getByText(/Sessions for 28 April 2026/i)).toBeInTheDocument()
 
     const clearButton = screen.getByRole('button', { name: /Clear Filter/i })
     fireEvent.click(clearButton)
-    expect(screen.getByText('All Sessions')).toBeInTheDocument()
+    expect(screen.getByText('All Sessions & Workshops')).toBeInTheDocument()
   })
 
   it('does not render MentorAvailabilityModal', () => {

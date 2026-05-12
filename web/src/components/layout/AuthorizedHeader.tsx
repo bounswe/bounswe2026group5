@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { logout, meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import { useQuery } from "@tanstack/react-query"
 import { useProfile } from "#/lib/queries/ProfileQueries.ts"
-import { getInitials } from "#/lib/utils.ts"
+import { getAbsoluteMediaUrl, getInitials } from "#/lib/utils.ts"
 import { useNotifications } from "#/lib/queries/NotificationQueries.ts"
 
 export function AuthorizedHeader() {
@@ -11,8 +11,10 @@ export function AuthorizedHeader() {
   const { data: profile } = useProfile(me?.username ?? '')
   const { data: notifications = [] } = useNotifications()
 
-  const hasUnread = notifications.some(n => !n.is_read && n.type !== 'new_message')
-  const hasMessageNotification = notifications.some(n => n.type === 'new_message' && !n.is_read)
+  const unreadCount = notifications.filter(n => !n.is_read && n.type !== 'new_message').length
+  const unreadMessageCount = notifications.filter(n => n.type === 'new_message' && !n.is_read).length
+  const hasUnread = unreadCount > 0
+  const hasMessageNotification = unreadMessageCount > 0
 
   const initials = profile?.full_name
       ? getInitials(profile.full_name)
@@ -28,12 +30,13 @@ export function AuthorizedHeader() {
           <div className="flex items-center gap-8">
             <Link
                 to="/dashboard"
-                className="font-bold font-display tracking-tight text-lg text-ink"
+                className="flex items-center gap-2 font-bold font-display tracking-tight text-lg text-ink"
             >
-              Mentorship
+              <img src="/icon.png" alt="" aria-hidden="true" className="h-7 w-7 rounded-lg" />
+              Neighborship
             </Link>
 
-            <nav className="hidden sm:flex items-center gap-1">
+            <nav className="hidden sm:flex items-center gap-1" aria-label="Main navigation">
               <Link
                   to="/dashboard"
                   activeProps={{ className: "bg-accent-muted text-ink font-semibold" }}
@@ -42,7 +45,10 @@ export function AuthorizedHeader() {
                 <span className="relative">
                   Dashboard
                   {hasUnread && (
-                    <span className="absolute -top-1 -right-2.5 h-2 w-2 rounded-full bg-accent" />
+                    <span className="absolute -top-2 -right-3.5 min-w-[1.1rem] h-[1.1rem] px-0.5 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                      <span className="sr-only"> unread notifications</span>
+                    </span>
                   )}
                 </span>
               </Link>
@@ -61,6 +67,13 @@ export function AuthorizedHeader() {
                 Discover
               </Link>
               <Link
+                  to="/communities"
+                  activeProps={{ className: "bg-accent-muted text-ink font-semibold" }}
+                  className="text-sm font-medium text-ink-soft hover:text-ink hover:bg-accent-muted/60 transition-colors px-3 py-1.5 rounded-lg"
+              >
+                Communities
+              </Link>
+              <Link
                   to="/connections"
                   activeProps={{ className: "bg-accent-muted text-ink font-semibold" }}
                   className="text-sm font-medium text-ink-soft hover:text-ink hover:bg-accent-muted/60 transition-colors px-3 py-1.5 rounded-lg"
@@ -76,10 +89,22 @@ export function AuthorizedHeader() {
                 <span className="relative">
                   Messages
                   {hasMessageNotification && (
-                    <span className="absolute -top-1 -right-2.5 h-2 w-2 rounded-full bg-accent" />
+                    <span className="absolute -top-2 -right-3.5 min-w-[1.1rem] h-[1.1rem] px-0.5 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                      {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                      <span className="sr-only"> unread messages</span>
+                    </span>
                   )}
                 </span>
               </Link>
+              {me?.role === 'ADMIN' && (
+                <Link
+                    to="/admin-moderation"
+                    activeProps={{ className: "bg-accent-muted text-ink font-semibold" }}
+                    className="text-sm font-medium text-ink-soft hover:text-ink hover:bg-accent-muted/60 transition-colors px-3 py-1.5 rounded-lg"
+                >
+                  Admin
+                </Link>
+              )}
             </nav>
           </div>
 
@@ -88,10 +113,12 @@ export function AuthorizedHeader() {
             <Link
                 to="/profiles/$username"
                 params={{ username: me?.username ?? '' }}
-                aria-label="Open profile page"
-                className="h-8 w-8 rounded-full bg-accent text-background flex items-center justify-center text-sm font-bold shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                aria-label={`${profile?.full_name ?? me?.username ?? 'My'} profile`}
+                className="h-8 w-8 rounded-full overflow-hidden bg-accent text-background flex items-center justify-center text-sm font-bold shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             >
-              {initials}
+              {profile?.picture_url
+                ? <img src={getAbsoluteMediaUrl(profile.picture_url)} alt={initials} className="h-full w-full object-cover" />
+                : initials}
             </Link>
             <Button
                 variant="ghost"

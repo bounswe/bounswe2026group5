@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Href } from "expo-router";
 
-import { apiGet, apiPut } from "@/lib/api/client";
+import { apiGet, apiPost, apiPut } from "@/lib/api/client";
 
 export interface BackendNotificationActor {
   username?: string;
@@ -80,15 +80,59 @@ export function getNotificationTitle(notification: BackendNotification): string 
     case "new_feedback_available":
     case "feedback_received":
       return "New feedback";
+    case "report_resolved":
+      return "Report resolved";
+    case "tag_new_member":
+      return "New community member";
+    case "tag_description_updated":
+      return "Community updated";
+    case "tag_deleted":
+      return "Community deleted";
+    case "tag_matches_interest":
+      return "New community match";
+    case "workshop_cancelled":
+      return "Workshop Cancelled";
+    case "workshop_rescheduled":
+      return "Workshop Rescheduled";
     default:
       return prettifyNotificationType(notification.type);
   }
 }
 
+function formatWorkshopRescheduledMessage(
+  extra: Record<string, unknown>,
+): string {
+  const title =
+    typeof extra.workshop_title === "string" ? extra.workshop_title : "A workshop";
+  const oldStart =
+    typeof extra.old_scheduled_at === "string"
+      ? new Date(extra.old_scheduled_at)
+      : null;
+  const newStart =
+    typeof extra.new_scheduled_at === "string"
+      ? new Date(extra.new_scheduled_at)
+      : null;
+  const oldEnd =
+    typeof extra.old_end_at === "string" ? new Date(extra.old_end_at) : null;
+  const newEnd =
+    typeof extra.new_end_at === "string" ? new Date(extra.new_end_at) : null;
+  const fmt = (d: Date) =>
+    d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  const startChanged =
+    oldStart && newStart && oldStart.getTime() !== newStart.getTime();
+  if (startChanged && oldStart && newStart) {
+    return `The workshop "${title}" has been rescheduled from ${fmt(oldStart)} to ${fmt(newStart)}.`;
+  }
+  if (oldEnd && newEnd) {
+    return `The workshop "${title}"'s end time has been changed from ${fmt(oldEnd)} to ${fmt(newEnd)}.`;
+  }
+  return `The workshop "${title}" has been rescheduled.`;
+}
+
 export function getNotificationTargetPath(
   notification: Pick<
     BackendNotification,
-    "type" | "resource_type" | "action_url" | "extra_metadata"
+    "type" | "resource_type" | "resource_id" | "action_url" | "extra_metadata"
   >,
 ): Href | undefined {
   const extraMetadata = notification.extra_metadata ?? {};
@@ -101,6 +145,17 @@ export function getNotificationTargetPath(
   }
 
   const normalizedResourceType = notification.resource_type?.toLowerCase();
+
+  if (
+    (normalizedResourceType === "community_tag" ||
+      normalizedResourceType === "community" ||
+      notification.type.startsWith("tag_")) &&
+    notification.resource_id
+  ) {
+    return `/(tabs)/community/${encodeURIComponent(
+      notification.resource_id,
+    )}?from=community` as Href;
+  }
 
   if (
     normalizedResourceType === "meeting_session" ||
@@ -135,12 +190,33 @@ export function getNotificationTargetPath(
 
   if (
     notification.type === "feedback_received" ||
-    notification.type === "new_feedback_available"
+    notification.type === "new_feedback_available" ||
+    notification.type === "report_resolved"
   ) {
     return "/(tabs)/profile";
   }
 
+  if (
+    notification.type === "workshop_cancelled" ||
+    notification.type === "workshop_rescheduled"
+  ) {
+    if (notification.resource_id) {
+      return `/(tabs)/community` as Href;
+    }
+    return "/(tabs)/community" as Href;
+  }
+
   return undefined;
+}
+
+function getDisplayMessage(notification: BackendNotification): string {
+  if (
+    notification.type === "workshop_rescheduled" &&
+    notification.extra_metadata
+  ) {
+    return formatWorkshopRescheduledMessage(notification.extra_metadata);
+  }
+  return notification.message;
 }
 
 export function mapBackendNotification(
@@ -150,7 +226,7 @@ export function mapBackendNotification(
     id: notification.id,
     type: notification.type,
     title: getNotificationTitle(notification),
-    message: notification.message,
+    message: getDisplayMessage(notification),
     isRead: notification.is_read,
     createdAt: notification.created_at,
     actorName:
@@ -203,7 +279,7 @@ export function useNotificationsQuery(username?: string) {
     enabled: Boolean(username),
     staleTime: 10_000,
     refetchOnMount: "always",
-    refetchInterval: 15_000,
+    refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
 }
@@ -221,5 +297,34 @@ export function useMarkNotificationReadMutation(username?: string) {
         queryKey: notificationsQueryKey(username),
       });
     },
+  });
+}
+
+export function useMarkAllNotificationsReadMutation(username?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => apiPost<{ detail: string }>("/api/notifications/mark-all-read/"),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: notificationsQueryKey(username),
+      });
+    },
+  });
+}
+
+export function useRegisterFCMTokenMutation() {
+  return useMutation({
+    mutationFn: ({
+      token,
+      device_type,
+    }: {
+      token: string;
+      device_type: "android" | "ios";
+    }) =>
+      apiPost<{ detail: string }>("/api/notifications/fcm-token/", {
+        token,
+        device_type,
+      }),
   });
 }

@@ -9,10 +9,16 @@
     "dev": "vite dev --port 3000",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report",
+    "test:access": "playwright test e2e/accessibility.spec.ts --project=accessibility"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.8",
+    "@react-oauth/google": "^0.13.5",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",
     "@tanstack/react-query": "^5.95.2",
@@ -23,6 +29,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "firebase": "^11.5.0",
     "lucide-react": "^0.545.0",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.4.3",
@@ -37,7 +44,9 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@axe-core/react": "^4.11.1",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/devtools-vite": "latest",
     "@tanstack/react-query-devtools": "^5.91.3",
@@ -51,6 +60,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.4",
     "@vitest/coverage-v8": "^3.2.4",
+    "axe-html-reporter": "^2.2.11",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "jsdom": "^28.1.0",
     "typescript": "^5.7.2",

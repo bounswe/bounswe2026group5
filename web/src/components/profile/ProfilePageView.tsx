@@ -1,28 +1,40 @@
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Body, Heading, Muted } from '@/components/Typography'
-import { Star, Sparkles, Pencil, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Star, Sparkles, Pencil, ChevronLeft, ChevronRight, Calendar, Clock, Users, BookOpen, Linkedin, FileAudio, FileVideo } from 'lucide-react'
 import { EditProfileModal } from '#/components/profile/EditProfileModal.tsx'
+import { ProfilePostsSection } from '#/components/profile/ProfilePostsSection.tsx'
 import { useState } from 'react'
-import { getInitials } from '#/lib/utils.ts'
+import { getAbsoluteMediaUrl, getInitials } from '#/lib/utils.ts'
 import { AvailabilityCalendar } from "#/components/profile/AvailabilityCalendar.tsx";
 import { useAvailabilitySlots } from "#/lib/queries/ProfileTimeSlotQueries.ts";
 import { useMentorReviews } from '#/lib/queries/ProfileQueries.ts'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
+import { useProfileWorkshopAttendance } from '#/lib/queries/WorkshopQueries.ts'
+import type { WorkshopAttendanceItem, CommunityWorkshop } from '#/lib/queries/WorkshopQueries.ts'
+import { WorkshopDetailModal } from '#/components/community/WorkshopDetailModal.tsx'
+import { useQuery } from '@tanstack/react-query'
+import { meQueryOptions } from '#/lib/queries/AuthQueries.ts'
 interface BaseMappedProfile {
+  username: string
   full_name: string
   bio: string
-  hidden: boolean
+  show_initials_only: boolean
   picture_url: string
+  audio_url?: string
+  video_url?: string
+  linkedin_url?: string
   skills: string[]
-  username: string,
+  app_usage_mode: "MENTOR" | "MENTEE" | "ADMIN"
+  share_precise_location: boolean
 }
 
 interface MentorMappedProfile extends BaseMappedProfile {
   isMentor: true
   title: string
   average_rating: number
+  review_count: number
   total_mentee_count: number
 }
 
@@ -40,10 +52,11 @@ interface ProfilePageViewProps {
 
 function StarRow({ rating }: { rating: number }) {
     return (
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0.5" aria-label={`${rating} out of 5 stars`}>
             {[1, 2, 3, 4, 5].map(n => (
                 <Star
                     key={n}
+                    aria-hidden="true"
                     className={`h-3.5 w-3.5 ${n <= rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`}
                 />
             ))}
@@ -65,7 +78,7 @@ function MentorReviewsList({ username }: { username: string }) {
     }
 
     if (!data || data.results.length === 0) {
-        return <p className="text-sm text-gray-500 italic">No public reviews yet.</p>
+        return <p className="text-sm text-ink-soft italic">No public reviews yet.</p>
     }
 
     const totalPages = Math.ceil(data.count / pageSize)
@@ -93,8 +106,9 @@ function MentorReviewsList({ username }: { username: string }) {
                         disabled={page === 1}
                         onClick={() => setPage(p => p - 1)}
                         className="h-7 px-2"
+                        aria-label="Previous page"
                     >
-                        <ChevronLeft className="h-4 w-4" />
+                        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                     </Button>
                     <Muted className="text-xs">{page} / {totalPages}</Muted>
                     <Button
@@ -103,8 +117,9 @@ function MentorReviewsList({ username }: { username: string }) {
                         disabled={page === totalPages}
                         onClick={() => setPage(p => p + 1)}
                         className="h-7 px-2"
+                        aria-label="Next page"
                     >
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
                     </Button>
                 </div>
             )}
@@ -112,25 +127,146 @@ function MentorReviewsList({ username }: { username: string }) {
     )
 }
 
-function HiddenField({ label }: { label: string }) {
-  return (
-      <div className="flex items-center gap-2 text-ink-soft text-sm italic">
-        <EyeOff className="h-4 w-4" />
-        {label} is hidden by the user.
-      </div>
-  )
+
+import { ReportUserDialog } from '#/components/ReportUserDialog.tsx'
+
+// ---------------------------------------------------------------------------
+// Profile Workshops Section
+// ---------------------------------------------------------------------------
+
+function attendanceToWorkshop(item: WorkshopAttendanceItem): CommunityWorkshop {
+    return {
+        id: item.workshop_id,
+        community_id: item.community_id,
+        community_name: item.community_name,
+        author: item.author,
+        title: item.workshop_title,
+        description: item.workshop_description,
+        scheduled_at: item.workshop_scheduled_at,
+        end_at: item.workshop_end_at,
+        max_participants: 0,
+        participant_count: 0,
+        is_full: false,
+        status: item.workshop_status as CommunityWorkshop['status'],
+        current_user_enrolled: true,
+        created_at: item.joined_at,
+        updated_at: item.joined_at,
+    }
+}
+
+function WorkshopAttendanceCard({ item, onClick }: { item: WorkshopAttendanceItem; onClick: () => void }) {
+    const isUpcoming = item.attendance_status === 'attending'
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="w-full text-left rounded-lg border border-line bg-white/70 px-4 py-3 flex flex-col gap-2 hover:border-accent/40 hover:shadow-sm transition-all cursor-pointer"
+        >
+            <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold text-ink leading-snug line-clamp-2">{item.workshop_title}</p>
+                <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                    item.workshop_status === 'CANCELLED'
+                        ? 'bg-red-100 text-red-700 border-red-200'
+                        : item.workshop_status === 'COMPLETED'
+                        ? 'bg-gray-100 text-gray-600 border-gray-200'
+                        : isUpcoming
+                        ? 'bg-green-100 text-green-700 border-green-200'
+                        : 'bg-gray-100 text-gray-600 border-gray-200'
+                }`}>
+                    {item.workshop_status === 'CANCELLED' ? 'Cancelled' : isUpcoming ? 'Upcoming' : 'Attended'}
+                </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-ink-soft">
+                <Calendar className="w-3.5 h-3.5 shrink-0" />
+                {new Date(item.workshop_scheduled_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                <span className="mx-1">·</span>
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                {new Date(item.workshop_scheduled_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+            </div>
+            <div className="flex items-center justify-between gap-2">
+                <Muted className="text-xs flex items-center gap-1">
+                    <Users className="w-3 h-3 shrink-0" />
+                    {item.community_name}
+                </Muted>
+                <span className="text-xs text-accent shrink-0">
+                    by {item.author.display_name}
+                </span>
+            </div>
+        </button>
+    )
+}
+
+function ProfileWorkshopsSection({ username }: { username: string }) {
+    const { data, isLoading } = useProfileWorkshopAttendance(username)
+    const { data: me } = useQuery(meQueryOptions)
+    const [selectedWorkshop, setSelectedWorkshop] = useState<CommunityWorkshop | null>(null)
+    const workshops = data?.results ?? []
+
+    if (isLoading) return (
+        <div className="flex justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-ink-soft" /></div>
+    )
+
+    if (workshops.length === 0) return null
+
+    const upcoming = workshops.filter(w => w.attendance_status === 'attending')
+    const past = workshops.filter(w => w.attendance_status === 'attended')
+
+    return (
+        <>
+            <section className="island-shell rounded-3xl p-6 sm:p-8 space-y-5">
+                <h2 className="text-xl font-semibold text-ink flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-accent" />
+                    Workshops
+                </h2>
+                {upcoming.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                        <p className="text-sm font-medium text-ink-soft uppercase tracking-wide">Upcoming</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {upcoming.slice(0, 4).map(w => (
+                                <WorkshopAttendanceCard
+                                    key={w.id}
+                                    item={w}
+                                    onClick={() => setSelectedWorkshop(attendanceToWorkshop(w))}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+                {past.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                        <p className="text-sm font-medium text-ink-soft uppercase tracking-wide">Past</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {past.slice(0, 4).map(w => (
+                                <WorkshopAttendanceCard
+                                    key={w.id}
+                                    item={w}
+                                    onClick={() => setSelectedWorkshop(attendanceToWorkshop(w))}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </section>
+            <WorkshopDetailModal
+                workshop={selectedWorkshop}
+                tagId={selectedWorkshop?.community_id ?? ''}
+                open={Boolean(selectedWorkshop)}
+                onClose={() => setSelectedWorkshop(null)}
+                currentUsername={me?.username}
+            />
+        </>
+    )
 }
 
 export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: ProfilePageViewProps) {
   const [editOpen, setEditOpen] = useState(false)
-  const isHidden = profile.hidden && !isOwner
   const { data: slots = [] } = useAvailabilitySlots(profile.username, profile.isMentor)
 
   const avatarBlock = (
       <div className="flex flex-wrap items-center gap-5">
-        {profile.picture_url && !isHidden ? (
+        {profile.picture_url && !profile.show_initials_only ? (
             <img
-                src={profile.picture_url}
+                src={getAbsoluteMediaUrl(profile.picture_url)}
                 alt={`${profile.full_name} profile picture`}
                 className="h-20 w-20 rounded-2xl object-cover ring-1 ring-line"
             />
@@ -146,9 +282,8 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
               {profile.full_name}
             </Heading>
             <Badge className="bg-accent-muted text-ink border border-line">
-              {profile.isMentor ? 'Mentor' : 'Mentee'}
+              {profile.app_usage_mode === 'ADMIN' ? 'Admin' : profile.app_usage_mode === 'MENTOR' ? 'Mentor' : 'Mentee'}
             </Badge>
-            {isHidden && <Badge variant="secondary">Private</Badge>}
             {isOwner && (
                 <button
                     onClick={() => setEditOpen(true)}
@@ -158,30 +293,77 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                   <Pencil className="h-4 w-4" />
                 </button>
             )}
+            {profile.linkedin_url && (
+                <a
+                    href={profile.linkedin_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-lg p-1.5 text-[#0A66C2] hover:bg-[#0A66C2]/10 transition-colors"
+                    aria-label="LinkedIn Profile"
+                >
+                    <Linkedin className="h-4 w-4" />
+                </a>
+            )}
+            {!isOwner && isAuthenticatedViewer && (
+                <div className="ml-auto">
+                  <ReportUserDialog reportedUsername={profile.username} />
+                </div>
+            )}
           </div>
 
-          {profile.isMentor && (
-              isHidden
-                  ? <HiddenField label="Title" />
-                  : profile.title && <Body className="text-ink-soft">{profile.title}</Body>
-          )}
+          {profile.isMentor && profile.title && <Body className="text-ink-soft">{profile.title}</Body>}
         </div>
       </div>
   )
 
   const bioCard = (
-      <Card className="border-line bg-white/70 shadow-sm">
+      <Card className="border-line bg-card shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg">Bio</CardTitle>
         </CardHeader>
         <CardContent>
-          {isHidden
-              ? <HiddenField label="Bio" />
-              : <Body className="text-ink-soft leading-7">{profile.bio || 'No bio yet.'}</Body>
-          }
+          <Body className="text-ink-soft leading-7">{profile.bio || 'No bio yet.'}</Body>
         </CardContent>
       </Card>
   )
+
+  const mediaCard = (profile.audio_url || profile.video_url) ? (
+      <Card className="border-line bg-card shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg">Media Introduction</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+            {profile.video_url && (
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium text-ink-soft">
+                        <FileVideo className="h-4 w-4" /> Video Intro
+                    </div>
+                    <video 
+                        controls 
+                        className="w-full max-w-sm rounded-xl overflow-hidden shadow-sm"
+                        src={getAbsoluteMediaUrl(profile.video_url)}
+                    >
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            )}
+            {profile.audio_url && (
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium text-ink-soft">
+                        <FileAudio className="h-4 w-4" /> Audio Intro
+                    </div>
+                    <audio 
+                        controls 
+                        className="w-full max-w-sm"
+                        src={getAbsoluteMediaUrl(profile.audio_url)}
+                    >
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+            )}
+        </CardContent>
+      </Card>
+  ) : null
 
   const editModal = editOpen && (
       <EditProfileModal
@@ -189,8 +371,10 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
           initialValues={{
             bio: profile.bio ?? '',
             title: profile.isMentor ? profile.title : undefined,
-            hidden: profile.hidden,
+            show_initials_only: profile.show_initials_only,
+            share_precise_location: profile.share_precise_location,
             skills: profile.skills,
+            linkedin_url: profile.linkedin_url,
           }}
           onClose={() => setEditOpen(false)}
       />
@@ -204,18 +388,17 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
               <div className="space-y-6">
                 {avatarBlock}
                 {bioCard}
-                <Card className="border-line bg-white/70 shadow-sm">
+                {mediaCard}
+                <Card className="border-line bg-card shadow-sm">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-amber-500" />
+                      <Sparkles className="h-4 w-4 text-amber-500" aria-hidden="true" />
                       Eager to Learn
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {isHidden ? (
-                        <HiddenField label="Learning interests" />
-                    ) : profile.skills.length === 0 ? (
-                        <p className="text-gray-500 italic">No skills listed</p>
+                    {profile.skills.length === 0 ? (
+                        <p className="text-ink-soft italic">No skills listed</p>
                     ) : (
                         <div className="flex flex-wrap gap-2">
                             {profile.skills.map(skill => (
@@ -233,11 +416,15 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
               </div>
             </div>
           </section>
+          <ProfileWorkshopsSection username={profile.username} />
+          {isAuthenticatedViewer && (
+              <ProfilePostsSection username={profile.username} isOwner={isOwner} />
+          )}
           {editModal}
         </main>
     )
   }
-  const openSlots = slots.filter(s => !s.is_booked)
+  const openSlots = slots.filter(s => s.status !== 'BOOKED')
 
     // MENTOR layout — restructure to put calendar full width below
     return (
@@ -249,15 +436,14 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                     <div className="space-y-6">
                         {avatarBlock}
                         {bioCard}
-                        <Card className="border-line bg-white/70 shadow-sm">
+                        {mediaCard}
+                        <Card className="border-line bg-card shadow-sm">
                             <CardHeader>
                                 <CardTitle className="text-lg">Expertise</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                {isHidden ? (
-                                    <HiddenField label="Expertise" />
-                                ) : profile.skills.length === 0 ? (
-                                    <p className="text-gray-500 italic">No skills listed</p>
+                                {profile.skills.length === 0 ? (
+                                    <p className="text-ink-soft italic">No skills listed</p>
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
                                         {profile.skills.map(skill => (
@@ -273,45 +459,36 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                             </CardContent>
                         </Card>
 
-                        {!isHidden && (
-                            <Card className="border-line bg-white/70 shadow-sm">
-                                <CardHeader>
-                                    <CardTitle className="text-lg flex items-center gap-2">
-                                        <Star className="h-4 w-4 text-amber-500" />
-                                        Reviews
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <MentorReviewsList username={profile.username} />
-                                </CardContent>
-                            </Card>
-                        )}
+                        <Card className="border-line bg-card shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                    <Star className="h-4 w-4 text-amber-500" aria-hidden="true" />
+                                    Reviews
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <MentorReviewsList username={profile.username} />
+                            </CardContent>
+                        </Card>
                     </div>
 
                     <aside className="space-y-4">
-                        <Card className="border-line bg-white/80 shadow-sm">
+                        <Card className="border-line bg-card shadow-sm">
                             <CardHeader>
                                 <CardTitle className="text-lg">Snapshot</CardTitle>
                             </CardHeader>
                             <CardContent className="grid gap-3">
                                 <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
                                     <Muted className="text-xs uppercase tracking-wider">Average Rating</Muted>
-                                    {isHidden ? (
-                                        <HiddenField label="Rating" />
-                                    ) : (
-                                        <p className="text-2xl font-semibold text-ink mt-1 flex items-center gap-1">
-                                            <Star className="h-4 w-4 fill-current text-amber-500" />
-                                            {profile.average_rating.toFixed(1)}
-                                        </p>
-                                    )}
+                                    <p className="text-2xl font-semibold text-ink mt-1 flex items-center gap-1" aria-label={`Average rating: ${profile.average_rating.toFixed(1)} out of 5`}>
+                                        <Star className="h-4 w-4 fill-current text-amber-500" aria-hidden="true" />
+                                        {profile.average_rating.toFixed(1)}
+                                        <span className="text-sm font-normal text-ink-soft">({profile.review_count} reviews)</span>
+                                    </p>
                                 </div>
                                 <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
                                     <Muted className="text-xs uppercase tracking-wider">Total Mentees</Muted>
-                                    {isHidden ? (
-                                        <HiddenField label="Mentee count" />
-                                    ) : (
-                                        <p className="text-2xl font-semibold text-ink mt-1">{profile.total_mentee_count}</p>
-                                    )}
+                                    <p className="text-2xl font-semibold text-ink mt-1">{profile.total_mentee_count}</p>
                                 </div>
                                 <div className="rounded-lg bg-accent-muted/60 p-3 border border-line">
                                     <Muted className="text-xs uppercase tracking-wider">Open Slots</Muted>
@@ -323,15 +500,17 @@ export function ProfilePageView({ profile, isOwner, isAuthenticatedViewer }: Pro
                 </div>
 
                 {/* Full width calendar below */}
-                {!isHidden && (
-                    <AvailabilityCalendar
-                        username={profile.username}
-                        isOwner={isOwner}
-                        isAuthenticated={isAuthenticatedViewer}
-                    />
-                )}
+                <AvailabilityCalendar
+                    username={profile.username}
+                    isOwner={isOwner}
+                    isAuthenticated={isAuthenticatedViewer}
+                />
 
             </section>
+            <ProfileWorkshopsSection username={profile.username} />
+            {isAuthenticatedViewer && (
+                <ProfilePostsSection username={profile.username} isOwner={isOwner} />
+            )}
             {editModal}
         </main>
     )

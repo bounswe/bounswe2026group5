@@ -3,6 +3,7 @@ import React from "react";
 
 import LoginScreen from "@/app/login";
 import { useLoginMutation } from "@/lib/queries/auth";
+import { useGoogleLoginMutation } from "@/lib/queries/googleAuth";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -20,17 +21,38 @@ jest.mock("@/lib/queries/auth", () => ({
   useLoginMutation: jest.fn(),
 }));
 
+jest.mock("@/lib/queries/googleAuth", () => ({
+  useGoogleLoginMutation: jest.fn(),
+}));
+
 const mockMutateAsync = jest.fn();
+const mockGoogleMutateAsync = jest.fn();
 
 describe("LoginScreen", () => {
+  let logSpy: jest.SpyInstance;
+  let errorSpy: jest.SpyInstance;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
     (useLoginMutation as jest.Mock).mockReturnValue({
       mutateAsync: mockMutateAsync,
       isPending: false,
       data: undefined,
       error: null,
     });
+    (useGoogleLoginMutation as jest.Mock).mockReturnValue({
+      mutateAsync: mockGoogleMutateAsync,
+      isPending: false,
+      data: undefined,
+      error: null,
+    });
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   it("renders the login form with all required fields", () => {
@@ -90,15 +112,13 @@ describe("LoginScreen", () => {
     expect(queryByText("Log In")).toBeNull();
   });
 
-  it("navigates to the dashboard when login succeeds", async () => {
-    (useLoginMutation as jest.Mock).mockReturnValue({
-      mutateAsync: mockMutateAsync,
-      isPending: false,
-      data: { access_token: "tok" },
-      error: null,
-    });
+  it("navigates to the dashboard after a successful login submit", async () => {
+    mockMutateAsync.mockResolvedValueOnce({});
+    const { getByLabelText } = render(<LoginScreen />);
 
-    render(<LoginScreen />);
+    fireEvent.changeText(getByLabelText("Email or username"), "user@example.com");
+    fireEvent.changeText(getByLabelText("Password"), "secret123");
+    fireEvent.press(getByLabelText("Log in"));
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
@@ -118,6 +138,67 @@ describe("LoginScreen", () => {
         email: "user@example.com",
         password: "secret123",
       });
+    });
+  });
+
+  it("logs failed login attempts after validation passes", async () => {
+    mockMutateAsync.mockRejectedValueOnce(new Error("Invalid credentials"));
+    const { getByLabelText } = render(<LoginScreen />);
+
+    fireEvent.changeText(getByLabelText("Email or username"), "user@example.com");
+    fireEvent.changeText(getByLabelText("Password"), "secret123");
+    fireEvent.press(getByLabelText("Log in"));
+
+    await waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Login error:",
+        expect.any(Error),
+      );
+    });
+  });
+
+  it("toggles password visibility from the password icon", () => {
+    const { getByLabelText } = render(<LoginScreen />);
+
+    expect(getByLabelText("Show password")).toBeTruthy();
+
+    fireEvent.press(getByLabelText("Show password"));
+
+    expect(getByLabelText("Hide password")).toBeTruthy();
+  });
+
+  it("navigates to the forgot-password screen when the link is pressed", () => {
+    const { getByLabelText } = render(<LoginScreen />);
+
+    fireEvent.press(getByLabelText("Forgot password"));
+
+    expect(mockPush).toHaveBeenCalledWith("/forgot-password");
+  });
+
+  it("navigates to the dashboard after Google login for an onboarded user", async () => {
+    mockGoogleMutateAsync.mockResolvedValueOnce({
+      user: { app_usage_mode: "mentor" },
+    });
+    const { getByLabelText } = render(<LoginScreen />);
+
+    fireEvent.press(getByLabelText("Log in with Google"));
+
+    await waitFor(() => {
+      expect(mockGoogleMutateAsync).toHaveBeenCalled();
+      expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    });
+  });
+
+  it("navigates to register after Google login for a new user", async () => {
+    mockGoogleMutateAsync.mockResolvedValueOnce({
+      user: { app_usage_mode: null },
+    });
+    const { getByLabelText } = render(<LoginScreen />);
+
+    fireEvent.press(getByLabelText("Log in with Google"));
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/register");
     });
   });
 

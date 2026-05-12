@@ -1,12 +1,49 @@
 services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    # Overwrite the dev command with production gunicorn
+    command: sh -c "python manage.py migrate && gunicorn --bind 0.0.0.0:8000 core.wsgi:application"
+    env_file:
+      - .env
+      - ./backend/.env
+    volumes:
+      - ./backend/credentials:/app/credentials:ro
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: production
+      args:
+        - VITE_API_URL=${VITE_API_URL}
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+        - VITE_FIREBASE_API_KEY=${VITE_FIREBASE_API_KEY}
+        - VITE_FIREBASE_AUTH_DOMAIN=${VITE_FIREBASE_AUTH_DOMAIN}
+        - VITE_FIREBASE_PROJECT_ID=${VITE_FIREBASE_PROJECT_ID}
+        - VITE_FIREBASE_STORAGE_BUCKET=${VITE_FIREBASE_STORAGE_BUCKET}
+        - VITE_FIREBASE_MESSAGING_SENDER_ID=${VITE_FIREBASE_MESSAGING_SENDER_ID}
+        - VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID}
+        - VITE_FIREBASE_MEASUREMENT_ID=${VITE_FIREBASE_MEASUREMENT_ID}
+        - VITE_FIREBASE_VAPID_KEY=${VITE_FIREBASE_VAPID_KEY}
+        - VITE_GOOGLE_OAUTH_CLIENT_ID=${VITE_GOOGLE_OAUTH_CLIENT_ID}
+    volumes: []
+    restart: unless-stopped
+
   nginx:
     image: nginx:latest
+    container_name: mentorship_nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/.well-known:/etc/nginx/.well-known:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - backend
       - frontend
+    restart: unless-stopped

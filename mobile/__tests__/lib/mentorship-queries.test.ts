@@ -1,5 +1,6 @@
 import {
   mapAvailabilityToSchedule,
+  mapJourneyFeedToTimelineEvents,
   mapMeetingSessionsToDashboard,
   mapRequestsToDashboard,
   mapUpcomingSessionsToDashboard,
@@ -23,6 +24,81 @@ function addDays(value: Date, days: number): string {
 }
 
 describe("mentorship query mappers", () => {
+  it("normalizes legacy AGTE journey rows into timeline events", () => {
+    const mapped = mapJourneyFeedToTimelineEvents({
+      ordering: "desc",
+      count: 1,
+      offset: 0,
+      limit: 50,
+      results: [
+        {
+          id: "session_scheduled:session-1",
+          type: "session_scheduled",
+          timestamp: "2026-05-02T10:00:00Z",
+          actor_role: "mentor",
+          payload: {
+            session_id: "session-1",
+          },
+        },
+      ],
+    });
+
+    expect(mapped.results).toEqual([
+      {
+        id: "session_scheduled:session-1",
+        category: "AGTE",
+        event_type: "session_scheduled",
+        timestamp: "2026-05-02T10:00:00Z",
+        actor_role: "mentor",
+        author: null,
+        content: undefined,
+        media_url: null,
+        payload: {
+          session_id: "session-1",
+        },
+        show_on_profile: false,
+        is_editable: false,
+      },
+    ]);
+  });
+
+  it("preserves unified manually created timeline event fields", () => {
+    const mapped = mapJourneyFeedToTimelineEvents({
+      ordering: "desc",
+      count: 1,
+      offset: 0,
+      limit: 50,
+      results: [
+        {
+          id: "event-1",
+          category: "MCTE",
+          event_type: "achievement",
+          timestamp: "2026-05-02T11:00:00Z",
+          author: {
+            id: "profile-1",
+            username: "mentor_user",
+            display_name: "Mentor User",
+            picture_url: "",
+            title: "Mentor",
+          },
+          content: "Finished the first roadmap item.",
+          payload: {},
+          show_on_profile: true,
+          is_editable: true,
+        },
+      ],
+    });
+
+    expect(mapped.results[0]).toMatchObject({
+      id: "event-1",
+      category: "MCTE",
+      event_type: "achievement",
+      content: "Finished the first roadmap item.",
+      show_on_profile: true,
+      is_editable: true,
+    });
+  });
+
   it("maps pending requests into incoming and outgoing dashboard cards", () => {
     const requests: BackendRequestItem[] = [
       {
@@ -48,6 +124,7 @@ describe("mentorship query mappers", () => {
         slot_date: null,
         slot_start_time: null,
         slot_end_time: null,
+        is_mentor_overloaded: false,
         responded_at: null,
       },
       {
@@ -73,6 +150,7 @@ describe("mentorship query mappers", () => {
         slot_date: null,
         slot_start_time: null,
         slot_end_time: null,
+        is_mentor_overloaded: false,
         responded_at: null,
       },
       {
@@ -98,6 +176,7 @@ describe("mentorship query mappers", () => {
         slot_date: null,
         slot_start_time: null,
         slot_end_time: null,
+        is_mentor_overloaded: false,
         responded_at: null,
       },
     ];
@@ -128,21 +207,21 @@ describe("mentorship query mappers", () => {
         date: "2026-04-06",
         startTime: "10:00:00",
         endTime: "11:00:00",
-        is_booked: false,
+        status: "AVAILABLE",
       },
       {
         id: "slot-2",
         date: "2026-04-06",
         startTime: "15:00:00",
         endTime: "16:30:00",
-        is_booked: false,
+        status: "AVAILABLE",
       },
       {
         id: "slot-3",
         date: "2026-04-07",
         startTime: "09:00:00",
         endTime: "10:00:00",
-        is_booked: true,
+        status: "BOOKED",
       },
     ];
 
@@ -236,7 +315,7 @@ describe("mentorship query mappers", () => {
     });
   });
 
-  it("deduplicates active meeting sessions by match after reschedule", () => {
+  it("keeps multiple active meeting sessions for the same match", () => {
     const sessions: BackendMeetingSession[] = [
       {
         session_id: "session-old",
@@ -300,10 +379,91 @@ describe("mentorship query mappers", () => {
 
     const mapped = mapMeetingSessionsToDashboard(sessions);
 
+    expect(mapped).toHaveLength(2);
+    expect(mapped[0]).toMatchObject({
+      id: "slot-old",
+      sessionId: "session-old",
+      requestId: "match-1",
+      user: "Ada Lovelace",
+      status: "Upcoming",
+    });
+    expect(mapped[1]).toMatchObject({
+      id: "slot-new",
+      sessionId: "session-new",
+      requestId: "match-1",
+      user: "Ada Lovelace",
+      status: "Upcoming",
+    });
+  });
+
+  it("deduplicates meeting sessions by session id", () => {
+    const sessions: BackendMeetingSession[] = [
+      {
+        session_id: "session-dup",
+        match_id: "match-1",
+        mentor: {
+          id: "mentor-1",
+          username: "mentor_ada",
+          display_name: "Ada Lovelace",
+          picture_url: "",
+          title: "Mentor",
+        },
+        mentee: {
+          id: "mentee-1",
+          username: "me_user",
+          display_name: "Me User",
+          picture_url: "",
+          title: "Mentee",
+        },
+        source_slot_id: "slot-old",
+        scheduled_start_at: "2026-04-20T09:00:00Z",
+        scheduled_end_at: "2026-04-20T10:00:00Z",
+        status: "SCHEDULED",
+        display_status: "SCHEDULED",
+        my_role: "MENTEE",
+        allowed_actions: ["cancel"],
+        canceled_by_role: null,
+        cancel_reason: "",
+        created_at: "2026-04-10T08:00:00Z",
+        updated_at: "2026-04-10T09:00:00Z",
+      },
+      {
+        session_id: "session-dup",
+        match_id: "match-1",
+        mentor: {
+          id: "mentor-1",
+          username: "mentor_ada",
+          display_name: "Ada Lovelace",
+          picture_url: "",
+          title: "Mentor",
+        },
+        mentee: {
+          id: "mentee-1",
+          username: "me_user",
+          display_name: "Me User",
+          picture_url: "",
+          title: "Mentee",
+        },
+        source_slot_id: "slot-new",
+        scheduled_start_at: "2026-04-21T11:00:00Z",
+        scheduled_end_at: "2026-04-21T12:00:00Z",
+        status: "SCHEDULED",
+        display_status: "SCHEDULED",
+        my_role: "MENTEE",
+        allowed_actions: ["cancel", "reschedule"],
+        canceled_by_role: null,
+        cancel_reason: "",
+        created_at: "2026-04-10T08:00:00Z",
+        updated_at: "2026-04-10T10:00:00Z",
+      },
+    ];
+
+    const mapped = mapMeetingSessionsToDashboard(sessions);
+
     expect(mapped).toHaveLength(1);
     expect(mapped[0]).toMatchObject({
       id: "slot-new",
-      sessionId: "session-new",
+      sessionId: "session-dup",
       requestId: "match-1",
       user: "Ada Lovelace",
       status: "Upcoming",

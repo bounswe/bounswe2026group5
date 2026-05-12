@@ -18,6 +18,8 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 import { useLoginMutation } from "@/lib/queries/auth";
+import { useGoogleLoginMutation } from "@/lib/queries/googleAuth";
+import { useAuthStore } from "@/lib/auth/store";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -26,19 +28,24 @@ export default function LoginScreen() {
   const [localError, setLocalError] = useState<string | null>(null);
 
   const loginMutation = useLoginMutation();
+  const googleLoginMutation = useGoogleLoginMutation();
 
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme];
 
+  const authUser = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
   /**
-   * Navigate to dashboard when login succeeds.
+   * If the user is already authenticated but hasn't finished onboarding,
+   * redirect them to the registration screen.
    */
   useEffect(() => {
-    if (loginMutation.data) {
-      router.replace("/(tabs)");
+    if (isAuthenticated && !authUser?.app_usage_mode) {
+      router.replace("/register");
     }
-  }, [loginMutation.data]);
+  }, [isAuthenticated, authUser, router]);
 
   /**
    * Handle login button press.
@@ -59,13 +66,33 @@ export default function LoginScreen() {
 
     try {
       await loginMutation.mutateAsync({ email: email.trim(), password });
+      router.replace("/(tabs)");
     } catch (error) {
       // Error is already handled by mutation's onError, but we can add local handling if needed
       console.error("Login error:", error);
     }
   };
 
+  /**
+   * Handle Google sign-in button press.
+   */
+  const handleGoogleLogin = async () => {
+    setLocalError(null);
+    try {
+      const data = await googleLoginMutation.mutateAsync();
+      if (!data.user.app_usage_mode) {
+        // New user needs to select role and skills
+        router.replace("/register");
+      } else {
+        router.replace("/(tabs)");
+      }
+    } catch (error) {
+      console.error("Google login error:", error);
+    }
+  };
+
   const isLoading = loginMutation.isPending;
+  const isGoogleLoading = googleLoginMutation.isPending;
 
   return (
     <SafeAreaView
@@ -87,9 +114,9 @@ export default function LoginScreen() {
         >
           {/* ── Brand Header ── */}
           <View className="flex-row items-center gap-2 mb-12">
-            <Ionicons name="leaf" size={28} color={theme.primary} />
+            <Ionicons name="people-circle-outline" size={28} color={theme.primary} />
             <Text className="text-2xl font-black tracking-tight text-primary dark:text-primary-dim">
-              Mentorship
+              Neighborship
             </Text>
           </View>
 
@@ -109,8 +136,8 @@ export default function LoginScreen() {
           {/* ── Form ── */}
           <View className="gap-5">
             {/* Error Message */}
-            {(loginMutation.error || localError) && (
-              <ErrorBanner message={localError || loginMutation.error?.message || ""} />
+            {(loginMutation.error || googleLoginMutation.error || localError) && (
+              <ErrorBanner message={localError || loginMutation.error?.message || googleLoginMutation.error?.message || ""} />
             )}
 
             {/* Email / Username */}
@@ -150,9 +177,7 @@ export default function LoginScreen() {
                 <TouchableOpacity
                   accessibilityRole="link"
                   accessibilityLabel="Forgot password"
-                  onPress={() =>
-                    console.log("TODO: Navigate to forgot-password screen")
-                  }
+                  onPress={() => router.push("/forgot-password" as Href)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Text className="text-sm font-semibold text-primary dark:text-primary-dim">
@@ -231,22 +256,31 @@ export default function LoginScreen() {
 
           {/* ── Google Sign-In ── */}
           <TouchableOpacity
-            className="w-full h-14 rounded-full flex-row items-center justify-center gap-3 shadow-sm border bg-surface-card dark:bg-surface-card-dark border-divider/25 dark:border-divider-dark"
+            className={`w-full h-14 rounded-full flex-row items-center justify-center gap-3 shadow-sm border bg-surface-card dark:bg-surface-card-dark border-divider/25 dark:border-divider-dark ${
+              isGoogleLoading ? "opacity-60" : ""
+            }`}
             activeOpacity={0.8}
+            disabled={isGoogleLoading}
             accessibilityRole="button"
             accessibilityLabel="Log in with Google"
-            onPress={() => console.log("TODO: Implement Google OAuth sign-in")}
+            onPress={handleGoogleLogin}
           >
-            <Ionicons
-              name="logo-google"
-              size={20}
-              color={theme.textPrimary}
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-            />
-            <Text className="font-bold text-base text-on-surface dark:text-on-surface-dark">
-              Log In with Google
-            </Text>
+            {isGoogleLoading ? (
+              <ActivityIndicator size="small" color={theme.textPrimary} />
+            ) : (
+              <>
+                <Ionicons
+                  name="logo-google"
+                  size={20}
+                  color={theme.textPrimary}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                />
+                <Text className="font-bold text-base text-on-surface dark:text-on-surface-dark">
+                  Log In with Google
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
 
           {/* ── Sign Up Footer ── */}

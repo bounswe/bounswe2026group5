@@ -23,6 +23,28 @@ describe("MenteeCard — rendering", () => {
     const { queryAllByTestId } = render(<MenteeCard {...baseProps} tags={[]} />);
     expect(queryAllByTestId("mentee-tag")).toHaveLength(0);
   });
+
+  it("renders avatar image when avatarUrl is provided", () => {
+    const { getByTestId, queryByTestId } = render(
+      <MenteeCard
+        {...baseProps}
+        avatarUrl="https://cdn.example.com/john.jpg"
+      />,
+    );
+
+    expect(getByTestId("mentee-avatar-image")).toBeTruthy();
+    expect(queryByTestId("mentee-avatar-fallback")).toBeNull();
+  });
+
+  it("falls back to initials when avatarUrl is missing", () => {
+    const { getByTestId, queryByTestId, getByText } = render(
+      <MenteeCard {...baseProps} />,
+    );
+
+    expect(getByTestId("mentee-avatar-fallback")).toBeTruthy();
+    expect(queryByTestId("mentee-avatar-image")).toBeNull();
+    expect(getByText("JS")).toBeTruthy();
+  });
 });
 
 describe("MenteeCard — interactions", () => {

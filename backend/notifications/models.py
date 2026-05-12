@@ -17,6 +17,13 @@ class NotificationType(models.TextChoices):
     MATCH_DEACTIVATED = "match_deactivated", "Match Deactivated"
     NEW_MESSAGE = "new_message", "New Message"
     NEW_FEEDBACK_AVAILABLE = "new_feedback_available", "New Feedback Available"
+    TAG_NEW_MEMBER = "tag_new_member", "Tag New Member"
+    TAG_DESCRIPTION_UPDATED = "tag_description_updated", "Tag Description Updated"
+    TAG_DELETED = "tag_deleted", "Tag Deleted"
+    TAG_MATCHES_INTEREST = "tag_matches_interest", "Tag Matches Interest"
+    REPORT_RESOLVED = "report_resolved", "Report Resolved"
+    WORKSHOP_CANCELLED = "workshop_cancelled", "Workshop Cancelled"
+    WORKSHOP_RESCHEDULED = "workshop_rescheduled", "Workshop Rescheduled"
 
 
 class Notification(models.Model):
@@ -50,3 +57,25 @@ class Notification(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user.username}: {self.type} - {self.message[:50]}"
+
+
+class FCMToken(models.Model):
+    """FCM Token for push notifications."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="fcm_tokens")
+    token = models.TextField(unique=True)
+    device_type = models.CharField(
+        max_length=20,
+        choices=[("web", "Web"), ("android", "Android"), ("ios", "iOS")],
+        default="web",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "fcm_tokens"
+        verbose_name = "FCM Token"
+        verbose_name_plural = "FCM Tokens"
+
+    def __str__(self) -> str:
+        return f"{self.user.username} - {self.device_type}"

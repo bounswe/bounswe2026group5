@@ -2,9 +2,11 @@ import { render } from "@testing-library/react-native";
 import React from "react";
 
 const mockInitializeAuth = jest.fn();
+let mockColorScheme: "light" | "dark" = "light";
 let mockAuthState = {
   isAuthenticated: false,
   isLoading: false,
+  user: { username: "testuser", app_usage_mode: "MENTOR" } as any,
   initializeAuth: mockInitializeAuth,
 };
 
@@ -14,7 +16,11 @@ jest.mock("@/lib/auth/store", () => ({
 }));
 
 jest.mock("@/hooks/use-color-scheme", () => ({
-  useColorScheme: () => "light",
+  useColorScheme: () => mockColorScheme,
+}));
+
+jest.mock("@/hooks/usePushNotifications", () => ({
+  usePushNotifications: jest.fn(),
 }));
 
 jest.mock("expo-router", () => {
@@ -47,9 +53,11 @@ import RootLayout from "@/app/_layout";
 describe("RootLayout — session restoration", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockColorScheme = "light";
     mockAuthState = {
       isAuthenticated: false,
       isLoading: false,
+      user: { username: "testuser", app_usage_mode: "MENTOR" } as any,
       initializeAuth: mockInitializeAuth,
     };
   });
@@ -84,5 +92,14 @@ describe("RootLayout — session restoration", () => {
 
     expect(getByTestId("screen-(tabs)")).toBeTruthy();
     expect(getByTestId("screen-settings")).toBeTruthy();
+  });
+
+  it("uses the dark navigation theme when dark mode is active", () => {
+    mockColorScheme = "dark";
+    mockAuthState = { ...mockAuthState, isAuthenticated: true };
+
+    const { getByTestId } = render(<RootLayout />);
+
+    expect(getByTestId("screen-(tabs)")).toBeTruthy();
   });
 });

@@ -1,6 +1,8 @@
 import React from "react";
-import { View, Text, Image, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 export interface MenteeTag {
   label: string;
@@ -35,18 +37,12 @@ export function MenteeCard({
         onPress={onPress}
         className="flex-row items-center gap-3.5 mb-3.5"
       >
-        {avatarUrl ? (
-          <Image
-            source={{ uri: avatarUrl }}
-            className="w-20 h-20 rounded-full"
-          />
-        ) : (
-          <View className="w-20 h-20 rounded-full bg-surface-active items-center justify-center">
-            <Text className="text-[22px] font-bold text-primary">
-              {name.charAt(0)}
-            </Text>
-          </View>
-        )}
+        <UserAvatar
+          imageUrl={avatarUrl}
+          name={name}
+          size="xl"
+          testIDPrefix="mentee-avatar"
+        />
         <View className="flex-1">
           <Text className="text-base font-bold text-on-surface">{name}</Text>
           <Text className="text-[13px] text-on-surface-soft mt-0.5">

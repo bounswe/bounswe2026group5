@@ -1,12 +1,16 @@
 import { SettingItem } from "@/components/settings/SettingItem";
 import { ConfirmationSheet } from "@/components/ui/ConfirmationSheet";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { SuccessCard } from "@/components/ui/SuccessCard";
+import { LegalModal } from "@/components/ui/LegalModal";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/lib/auth/store";
 import { useProfileVisibilityStore } from "@/lib/profile/preferences";
 import { useLogoutMutation } from "@/lib/queries/auth";
+import {
+  useOwnProfileSettingsQuery,
+  useUpdateOwnProfileMutation,
+} from "@/lib/queries/profile";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -17,6 +21,8 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const logoutMutation = useLogoutMutation();
+  const ownProfileSettingsQuery = useOwnProfileSettingsQuery();
+  const updateProfileMutation = useUpdateOwnProfileMutation();
   const authUser = useAuthStore((state) => state.user);
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
@@ -35,9 +41,6 @@ export default function SettingsScreen() {
   const showAvailability = useProfileVisibilityStore(
     (state) => state.showAvailability,
   );
-  const showOfferings = useProfileVisibilityStore(
-    (state) => state.showOfferings,
-  );
   const setShowExpertise = useProfileVisibilityStore(
     (state) => state.setShowExpertise,
   );
@@ -46,9 +49,6 @@ export default function SettingsScreen() {
   );
   const setShowAvailability = useProfileVisibilityStore(
     (state) => state.setShowAvailability,
-  );
-  const setShowOfferings = useProfileVisibilityStore(
-    (state) => state.setShowOfferings,
   );
 
   let roleModeLabel = "Not Set";
@@ -62,27 +62,38 @@ export default function SettingsScreen() {
     ? "Account role is fixed. Use a separate account to use the other role."
     : "Choose your account role during onboarding.";
 
-  const [prefs, setPrefs] = useState({
-    notifRequests: true,
-    notifReminders: true,
-    notifUpdates: false,
-  });
   const [actionError, setActionError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-
-  const togglePref = (key: keyof typeof prefs) => {
-    setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
+  const [legalType, setLegalType] = useState<"tos" | "privacy" | null>(null);
 
   const handleLogout = () => {
     setShowLogoutConfirmation(true);
   };
 
-  const handleAccountDeletion = () => {
-    setShowDeleteConfirmation(true);
+  const sharePreciseLocation =
+    ownProfileSettingsQuery.data?.share_precise_location ?? true;
+
+  const handleTogglePreciseLocation = async (nextValue: boolean) => {
+    try {
+      setActionError(null);
+      setInfoMessage(null);
+      await updateProfileMutation.mutateAsync({
+        share_precise_location: nextValue,
+      });
+      await ownProfileSettingsQuery.refetch();
+      setInfoMessage(
+        nextValue
+          ? "Precise location sharing is enabled."
+          : "Precise location sharing is disabled.",
+      );
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update location privacy.",
+      );
+    }
   };
 
   return (
@@ -126,12 +137,6 @@ export default function SettingsScreen() {
           </View>
         ) : null}
 
-        {successMessage ? (
-          <View className="px-4 pt-4">
-            <SuccessCard message={successMessage} />
-          </View>
-        ) : null}
-
         {/* Section: Account Role */}
         <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-6 mb-2">
           Account Role
@@ -145,9 +150,9 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {/* Section: Profile Visibility */}
+        {/* Section: Profile Display */}
         <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-8 mb-2">
-          Profile Visibility
+          Profile Display
         </Text>
         <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
           {showMentorVisibilityControls && (
@@ -179,72 +184,60 @@ export default function SettingsScreen() {
               onToggle={setShowAvailability}
             />
           )}
-
-          {showMentorVisibilityControls && (
-            <SettingItem
-              type="toggle"
-              icon="briefcase-outline"
-              label="Show Offerings"
-              isToggled={showOfferings}
-              onToggle={setShowOfferings}
-            />
-          )}
         </View>
 
-        {/* Section: Notifications */}
+        {/* Section: Location Privacy */}
         <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-8 mb-2">
-          Notifications
+          Location Privacy
         </Text>
         <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
           <SettingItem
             type="toggle"
-            icon="person-add-outline"
-            label="New Mentorship Requests"
-            isToggled={prefs.notifRequests}
-            onToggle={() => togglePref("notifRequests")}
-          />
-          <SettingItem
-            type="toggle"
-            icon="alarm-outline"
-            label="Session Reminders"
-            isToggled={prefs.notifReminders}
-            onToggle={() => togglePref("notifReminders")}
-          />
-          <SettingItem
-            type="toggle"
-            icon="megaphone-outline"
-            label="Platform Updates"
-            isToggled={prefs.notifUpdates}
-            onToggle={() => togglePref("notifUpdates")}
+            icon="location-outline"
+            label={
+              updateProfileMutation.isPending
+                ? "Updating Location..."
+                : "Share Precise Location"
+            }
+            isToggled={sharePreciseLocation}
+            onToggle={
+              ownProfileSettingsQuery.isLoading ||
+              updateProfileMutation.isPending
+                ? undefined
+                : (value) => {
+                    void handleTogglePreciseLocation(value);
+                  }
+            }
           />
         </View>
 
-        {/* Section: Account & About */}
+        {/* Section: Legal */}
+        <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-8 mb-2">
+          Legal
+        </Text>
+        <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
+          <SettingItem
+            icon="document-text-outline"
+            label="Terms of Service"
+            onPress={() => setLegalType("tos")}
+          />
+          <SettingItem
+            icon="shield-checkmark-outline"
+            label="Privacy Policy"
+            onPress={() => setLegalType("privacy")}
+          />
+        </View>
+
+        {/* Section: Account */}
         <Text className="text-xs font-bold text-on-surface-muted dark:text-on-surface-muted-dark uppercase tracking-wider ml-4 mt-8 mb-2">
           Account
         </Text>
         <View className="bg-surface-card dark:bg-surface-card-dark border-t border-divider dark:border-divider-dark">
           <SettingItem
-            icon="lock-closed-outline"
-            label="Privacy Policy"
-            onPress={() => console.log("Open Privacy")}
-          />
-          <SettingItem
-            icon="document-text-outline"
-            label="Terms of Service"
-            onPress={() => console.log("Open ToS")}
-          />
-          <SettingItem
             icon="log-out-outline"
             label={logoutMutation.isPending ? "Logging Out..." : "Log Out"}
             isDestructive={true}
             onPress={logoutMutation.isPending ? undefined : handleLogout}
-          />
-          <SettingItem
-            icon="trash-outline"
-            label="Delete Account"
-            isDestructive={true}
-            onPress={handleAccountDeletion}
           />
         </View>
 
@@ -265,7 +258,6 @@ export default function SettingsScreen() {
         onConfirm={async () => {
           try {
             setActionError(null);
-            setSuccessMessage(null);
             await logoutMutation.mutateAsync();
             setShowLogoutConfirmation(false);
             router.replace("/login");
@@ -281,19 +273,12 @@ export default function SettingsScreen() {
         }}
       />
 
-      <ConfirmationSheet
-        visible={showDeleteConfirmation}
-        title="Delete account?"
-        message="This action cannot be undone. Your account deletion flow is not implemented yet."
-        confirmLabel="Delete"
-        cancelLabel="Keep Account"
-        variant="destructive"
-        onCancel={() => setShowDeleteConfirmation(false)}
-        onConfirm={() => {
-          setShowDeleteConfirmation(false);
-          setInfoMessage("Account deletion is not implemented yet.");
-        }}
+      <LegalModal
+        type={legalType}
+        visible={legalType !== null}
+        onClose={() => setLegalType(null)}
       />
+
     </View>
   );
 }

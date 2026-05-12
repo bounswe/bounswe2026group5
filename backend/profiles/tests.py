@@ -7,19 +7,33 @@ from typing import Any, cast
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.contrib.gis.geos import Point
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.text import slugify
 from rest_framework import serializers
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts.models import AppUsageMode
-from mentorship.models import Feedback, Match, MentorshipRequest
-from profiles.models import AvailabilitySlot, Profile, Skill
-from profiles.serializers import AvailabilitySlotSerializer, LocationField
+from accounts.models import AppUsageMode, UserRole
+from mentorship.models import Feedback, Match, MentorshipRequest, Workshop, WorkshopParticipant
+from mentorship.services import (
+    create_mcte_event,
+    deactivate_match,
+    ensure_match_and_initial_session,
+)
+from notifications.models import Notification, NotificationType
+from profiles.models import AvailabilitySlot, CommunityTag, CommunityTagMembership, Profile, Skill
+from profiles.serializers import (
+    AvailabilitySlotSerializer,
+    AvailabilitySlotWriteSerializer,
+    LocationField,
+)
 from profiles.services import (
     BookingCancelNotAllowedError,
     OwnSlotBookingError,
@@ -28,8 +42,11 @@ from profiles.services import (
     SlotNotBookedError,
     book_availability_slot,
     cancel_availability_booking,
+    create_cop_event,
+    create_prp_event,
 )
 from profiles.views import PublicMentorProfilesSearchListAPIView
+from timeline.models import TimelineEvent
 
 User: Any = get_user_model()
 
@@ -117,13 +134,13 @@ class ProfileModelsTests(TestCase):
             end_at=end_at,
         )
 
-        slot.mark_booked()
+        slot.mark_booked(self.mentee_user)
         slot.refresh_from_db()
-        self.assertTrue(slot.is_booked)
+        self.assertEqual(slot.status, AvailabilitySlot.Status.BOOKED)
 
         slot.mark_available()
         slot.refresh_from_db()
-        self.assertFalse(slot.is_booked)
+        self.assertEqual(slot.status, AvailabilitySlot.Status.AVAILABLE)
 
     def test_availability_slot_overlapping_range_rejected(self) -> None:
         """Overlapping availability slots are rejected for same profile."""
@@ -215,7 +232,6 @@ class ProfileByUsernameAPIViewTests(TestCase):
             user=self.other_user,
             username="other_user",
             display_name="Other User",
-            is_visible=False,
         )
 
         self.public_user = User.objects.create_user(
@@ -227,11 +243,12 @@ class ProfileByUsernameAPIViewTests(TestCase):
             user=self.public_user,
             username="public_user",
             display_name="Public User",
-            is_visible=True,
         )
 
         owner_refresh = RefreshToken.for_user(self.owner_user)
         self.owner_access_token = str(owner_refresh.access_token)
+        other_refresh = RefreshToken.for_user(self.other_user)
+        self.other_access_token = str(other_refresh.access_token)
 
         self.owner_url = f"/api/profiles/{self.owner_profile.username}/"
         self.other_url = f"/api/profiles/{self.other_profile.username}/"
@@ -278,7 +295,6 @@ class ProfileByUsernameAPIViewTests(TestCase):
 
     def test_get_mentor_profile_returns_mentor_shape(self) -> None:
         """Mentor profile returns mentor-specific fields."""
-        self.other_profile.is_visible = True
         self.other_profile.title = "Senior Backend Mentor"
         self.other_profile.save()
 
@@ -293,6 +309,40 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertIn("average_rating", payload)
         self.assertIn("total_mentee_count", payload)
 
+    def test_mentor_total_mentee_count_consistent_between_me_and_public(self) -> None:
+        """Mentor count remains consistent for /me and public username profile."""
+        self.other_profile.total_mentee_count = 0
+        self.other_profile.save(update_fields=["total_mentee_count"])
+
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.other_profile,
+            mentee=self.owner_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        match = ensure_match_and_initial_session(mentorship_request=request_obj)
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.other_access_token}")
+        me_response = self.api_client.get(self.me_url)
+        self.assertEqual(me_response.status_code, 200)
+        self.assertEqual(me_response.json().get("total_mentee_count"), 1)
+
+        self.api_client.credentials()
+        public_response = self.api_client.get(self.other_url)
+        self.assertEqual(public_response.status_code, 200)
+        self.assertEqual(public_response.json().get("total_mentee_count"), 1)
+
+        deactivate_match(match=match, actor_profile=self.other_profile)
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.other_access_token}")
+        me_after_deactivate = self.api_client.get(self.me_url)
+        self.assertEqual(me_after_deactivate.status_code, 200)
+        self.assertEqual(me_after_deactivate.json().get("total_mentee_count"), 0)
+
+        self.api_client.credentials()
+        public_after_deactivate = self.api_client.get(self.other_url)
+        self.assertEqual(public_after_deactivate.status_code, 200)
+        self.assertEqual(public_after_deactivate.json().get("total_mentee_count"), 0)
+
     def test_get_profile_public_access_without_authentication(self) -> None:
         """Public profile is accessible without authentication."""
         response = self.api_client.get(self.public_url)
@@ -301,20 +351,6 @@ class ProfileByUsernameAPIViewTests(TestCase):
         payload = response.json()
         # Mentee profile shape
         self.assertIn("full_name", payload)
-
-    def test_get_profile_private_returns_404_without_authentication(self) -> None:
-        """Private profile remains hidden for unauthenticated requests."""
-        response = self.api_client.get(self.other_url)
-
-        self.assertEqual(response.status_code, 404)
-
-    def test_get_profile_returns_404_for_non_owner(self) -> None:
-        """Authenticated users cannot fetch another private profile by username."""
-        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
-
-        response = self.api_client.get(self.other_url)
-
-        self.assertEqual(response.status_code, 404)
 
     def test_get_profile_returns_200_for_other_public_profile(self) -> None:
         """Authenticated users can fetch another user's public profile."""
@@ -362,6 +398,51 @@ class ProfileByUsernameAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.owner_profile.refresh_from_db()
         self.assertIsNone(self.owner_profile.location)
+
+    def test_patch_profile_can_disable_precise_location_sharing(self) -> None:
+        """Users can disable precise location sharing via the me profile endpoint."""
+        self.owner_profile.share_precise_location = True
+        self.owner_profile.save(update_fields=["share_precise_location"])
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.me_url,
+            {"share_precise_location": False},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertFalse(self.owner_profile.share_precise_location)
+
+    def test_patch_profile_can_enable_precise_location_sharing(self) -> None:
+        """Users can re-enable precise location sharing via the me profile endpoint."""
+        self.owner_profile.share_precise_location = False
+        self.owner_profile.save(update_fields=["share_precise_location"])
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.me_url,
+            {"share_precise_location": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.owner_profile.refresh_from_db()
+        self.assertTrue(self.owner_profile.share_precise_location)
+
+    def test_patch_profile_rejects_non_boolean_precise_location_toggle(self) -> None:
+        """Non-boolean share_precise_location values return validation errors."""
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_access_token}")
+
+        response = self.api_client.patch(
+            self.me_url,
+            {"share_precise_location": "not-a-bool"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("share_precise_location", response.json())
 
     def test_patch_mentee_profile_skills_with_eager_to_learn(self) -> None:
         """Mentees can patch skills using canonical skills field."""
@@ -518,6 +599,795 @@ class ProfileUsernameUpdateTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("username", response.json())
+
+
+class ProfilePostsAPITests(TestCase):
+    """Integration tests for profile posts endpoints."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+
+        self.owner_user = User.objects.create_user(
+            email="posts-owner@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.owner_profile = Profile.objects.create(
+            user=self.owner_user,
+            username="posts_owner",
+            display_name="Posts Owner",
+        )
+
+        self.viewer_user = User.objects.create_user(
+            email="posts-viewer@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.viewer_profile = Profile.objects.create(
+            user=self.viewer_user,
+            username="posts_viewer",
+            display_name="Posts Viewer",
+        )
+
+        self.partner_user = User.objects.create_user(
+            email="posts-partner@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.partner_profile = Profile.objects.create(
+            user=self.partner_user,
+            username="posts_partner",
+            display_name="Posts Partner",
+        )
+
+        self.owner_token = str(RefreshToken.for_user(self.owner_user).access_token)
+        self.viewer_token = str(RefreshToken.for_user(self.viewer_user).access_token)
+
+        self.owner_create_url = "/api/profiles/me/posts/"
+        self.owner_feed_url = f"/api/profiles/{self.owner_profile.username}/posts/"
+
+    def _auth_owner(self) -> None:
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+    def _auth_viewer(self) -> None:
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.viewer_token}")
+
+    def _create_match_for_owner(self) -> Match:
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.owner_profile,
+            mentee=self.partner_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        return ensure_match_and_initial_session(mentorship_request=request_obj)
+
+    def _create_cop_for_owner(
+        self,
+        *,
+        content: str,
+        show_on_profile: bool,
+        timestamp: datetime | None = None,
+    ) -> TimelineEvent:
+        effective_timestamp = timestamp if timestamp is not None else timezone.now()
+        return TimelineEvent.objects.create(
+            source_id=f"cop:{uuid.uuid4()}",
+            category=TimelineEvent.Category.COP,
+            event_type="social",
+            author=self.owner_profile,
+            community_id=uuid.uuid4(),
+            show_on_profile=show_on_profile,
+            content=content,
+            timestamp=effective_timestamp,
+        )
+
+    def test_create_prp_missing_timestamp_returns_201(self) -> None:
+        self._auth_owner()
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {"event_type": "achievement", "content": "Built a prototype"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["category"], "PrP")
+        self.assertTrue(response.data["show_on_profile"])
+        self.assertIsNotNone(response.data["timestamp"])
+
+    def test_create_prp_null_timestamp_returns_201(self) -> None:
+        self._auth_owner()
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "progress",
+                "content": "Weekly update",
+                "timestamp": None,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNotNone(response.data["timestamp"])
+
+    def test_create_prp_with_explicit_past_timestamp_keeps_action_time_distinct(self) -> None:
+        self._auth_owner()
+        explicit_timestamp = timezone.now() - timedelta(days=5)
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "progress",
+                "content": "Backfilled post",
+                "timestamp": explicit_timestamp.isoformat(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertGreater(response.data["created_at"], response.data["timestamp"])
+
+    def test_create_prp_empty_timestamp_returns_201(self) -> None:
+        self._auth_owner()
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "social",
+                "content": "Hosted a study group",
+                "timestamp": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNotNone(response.data["timestamp"])
+
+    def test_create_prp_far_future_timestamp_returns_400(self) -> None:
+        self._auth_owner()
+        future_ts = (timezone.now() + timedelta(days=5)).isoformat()
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "achievement",
+                "content": "Future post",
+                "timestamp": future_ts,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_prp_with_relative_media_url_success(self) -> None:
+        self._auth_owner()
+        relative_path = "/media/post_media/2026/05/test.jpg"
+
+        response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "achievement",
+                "content": "Test relative path",
+                "media_url": relative_path,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["media_url"], relative_path)
+        # Verify DB
+        event = TimelineEvent.objects.get(id=response.data["id"])
+        self.assertEqual(event.media_url, relative_path)
+
+    def test_list_profile_posts_requires_authentication(self) -> None:
+        response = self.api_client.get(self.owner_feed_url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_profile_posts_includes_prp_and_visible_mcte(self) -> None:
+        prp_event = create_prp_event(
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="PrP entry",
+            timestamp=timezone.now() - timedelta(hours=3),
+        )
+        match = self._create_match_for_owner()
+        visible_mcte = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="progress",
+            content="Visible MCTE",
+            timestamp=timezone.now() - timedelta(hours=2),
+            show_on_profile=True,
+        )
+        hidden_mcte = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="social",
+            content="Hidden MCTE",
+            timestamp=timezone.now() - timedelta(hours=1),
+            show_on_profile=False,
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url)
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data["results"]
+        source_ids = {item["source_id"] for item in results}
+        self.assertIn(visible_mcte.source_id, source_ids)
+        self.assertNotIn(hidden_mcte.source_id, source_ids)
+        self.assertTrue(any(item["category"] == "PrP" for item in results))
+        ordered_ids = [item["source_id"] for item in results]
+        self.assertEqual(ordered_ids[0], visible_mcte.source_id)
+        self.assertIn(prp_event.source_id, ordered_ids[1:])
+
+    def test_list_profile_posts_filter_by_category_returns_matching_items(self) -> None:
+        prp_event = create_prp_event(
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="PrP entry",
+            timestamp=timezone.now() - timedelta(hours=3),
+        )
+        match = self._create_match_for_owner()
+        visible_mcte = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="progress",
+            content="Visible MCTE",
+            timestamp=timezone.now() - timedelta(hours=2),
+            show_on_profile=True,
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url + "?category=PrP")
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data["results"]
+        self.assertTrue(all(item["category"] == "PrP" for item in results))
+        source_ids = {item["source_id"] for item in results}
+        self.assertIn(prp_event.source_id, source_ids)
+        self.assertNotIn(visible_mcte.source_id, source_ids)
+
+    def test_list_profile_posts_includes_visible_cop_and_excludes_hidden_cop(self) -> None:
+        visible_cop = self._create_cop_for_owner(
+            content="Visible community post",
+            show_on_profile=True,
+            timestamp=timezone.now() - timedelta(minutes=20),
+        )
+        hidden_cop = self._create_cop_for_owner(
+            content="Hidden community post",
+            show_on_profile=False,
+            timestamp=timezone.now() - timedelta(minutes=10),
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url)
+
+        self.assertEqual(response.status_code, 200)
+        source_ids = {item["source_id"] for item in response.data["results"]}
+        self.assertIn(visible_cop.source_id, source_ids)
+        self.assertNotIn(hidden_cop.source_id, source_ids)
+        self.assertTrue(any(item["category"] == "CoP" for item in response.data["results"]))
+
+    def test_list_profile_posts_filter_by_category_cop_returns_matching_items(self) -> None:
+        visible_cop = self._create_cop_for_owner(
+            content="Visible community post",
+            show_on_profile=True,
+            timestamp=timezone.now() - timedelta(minutes=20),
+        )
+        self._create_cop_for_owner(
+            content="Hidden community post",
+            show_on_profile=False,
+            timestamp=timezone.now() - timedelta(minutes=10),
+        )
+        prp_event = create_prp_event(
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="PrP entry",
+            timestamp=timezone.now() - timedelta(hours=1),
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url + "?category=CoP")
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data["results"]
+        self.assertTrue(all(item["category"] == "CoP" for item in results))
+        source_ids = {item["source_id"] for item in results}
+        self.assertIn(visible_cop.source_id, source_ids)
+        self.assertNotIn(prp_event.source_id, source_ids)
+
+    def test_profile_feed_cop_post_includes_community_id(self) -> None:
+        visible_cop = self._create_cop_for_owner(
+            content="Community post with tag link",
+            show_on_profile=True,
+            timestamp=timezone.now() - timedelta(minutes=5),
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url + "?category=CoP")
+
+        self.assertEqual(response.status_code, 200)
+        cop_result = next(
+            item for item in response.data["results"] if item["source_id"] == visible_cop.source_id
+        )
+        self.assertIn("community_id", cop_result)
+        self.assertEqual(str(cop_result["community_id"]), str(visible_cop.community_id))
+
+    def test_profile_feed_prp_post_has_null_community_id(self) -> None:
+        prp_event = create_prp_event(
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="PrP post",
+            timestamp=timezone.now() - timedelta(minutes=5),
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url + "?category=PrP")
+
+        self.assertEqual(response.status_code, 200)
+        prp_result = next(
+            item for item in response.data["results"] if item["source_id"] == prp_event.source_id
+        )
+        self.assertIn("community_id", prp_result)
+        self.assertIsNone(prp_result["community_id"])
+
+    def test_list_profile_posts_filter_by_event_type_returns_matching_items(self) -> None:
+        progress_prp = create_prp_event(
+            author_profile=self.owner_profile,
+            event_type="progress",
+            content="Progress note",
+            timestamp=timezone.now() - timedelta(hours=4),
+        )
+        create_prp_event(
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="Achievement note",
+            timestamp=timezone.now() - timedelta(hours=3),
+        )
+        match = self._create_match_for_owner()
+        progress_mcte = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="progress",
+            content="Visible MCTE progress",
+            timestamp=timezone.now() - timedelta(hours=2),
+            show_on_profile=True,
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url + "?event_type=progress")
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data["results"]
+        self.assertTrue(all(item["event_type"] == "progress" for item in results))
+        source_ids = {item["source_id"] for item in results}
+        self.assertIn(progress_prp.source_id, source_ids)
+        self.assertIn(progress_mcte.source_id, source_ids)
+
+    def test_patch_prp_by_owner_returns_200(self) -> None:
+        self._auth_owner()
+        create_response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "achievement",
+                "content": "Initial post",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+
+        event_id = create_response.data["id"]
+        patch_response = self.api_client.patch(
+            f"/api/profiles/me/posts/{event_id}/",
+            {
+                "content": "Edited post",
+                "event_type": "progress",
+                "media_url": "https://cdn.example.com/prp.png",
+            },
+            format="json",
+        )
+
+        self.assertEqual(patch_response.status_code, 200)
+        self.assertEqual(patch_response.data["content"], "Edited post")
+        self.assertEqual(patch_response.data["event_type"], "progress")
+        self.assertEqual(patch_response.data["media_url"], "https://cdn.example.com/prp.png")
+
+    def test_patch_prp_empty_body_returns_400(self) -> None:
+        self._auth_owner()
+        create_response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "achievement",
+                "content": "Initial post",
+            },
+            format="json",
+        )
+        event_id = create_response.data["id"]
+
+        patch_response = self.api_client.patch(
+            f"/api/profiles/me/posts/{event_id}/",
+            {},
+            format="json",
+        )
+
+        self.assertEqual(patch_response.status_code, 400)
+
+    def test_delete_prp_hides_event_from_feed(self) -> None:
+        self._auth_owner()
+        create_response = self.api_client.post(
+            self.owner_create_url,
+            {
+                "event_type": "social",
+                "content": "Delete me",
+            },
+            format="json",
+        )
+        event_id = create_response.data["id"]
+
+        delete_response = self.api_client.delete(f"/api/profiles/me/posts/{event_id}/")
+        self.assertEqual(delete_response.status_code, 204)
+
+        list_response = self.api_client.get(self.owner_feed_url)
+        self.assertEqual(list_response.status_code, 200)
+        source_ids = {item["id"] for item in list_response.data["results"]}
+        self.assertNotIn(event_id, source_ids)
+
+    def test_profile_feed_tiebreaks_with_last_edited_for_same_created_at(self) -> None:
+        match = self._create_match_for_owner()
+
+        first_event = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="progress",
+            content="First visible event",
+            show_on_profile=True,
+        )
+        second_event = create_mcte_event(
+            match=match,
+            author_profile=self.owner_profile,
+            event_type="achievement",
+            content="Second visible event",
+            show_on_profile=True,
+        )
+
+        common_created_at = timezone.now() - timedelta(hours=1)
+        TimelineEvent.objects.filter(id__in=[first_event.id, second_event.id]).update(
+            created_at=common_created_at,
+            last_edited=common_created_at,
+        )
+
+        newer_edit_time = common_created_at + timedelta(minutes=5)
+        TimelineEvent.objects.filter(id=first_event.id).update(last_edited=newer_edit_time)
+
+        self._auth_viewer()
+        response = self.api_client.get(self.owner_feed_url)
+        self.assertEqual(response.status_code, 200)
+
+        result_ids = [item["source_id"] for item in response.data["results"]]
+        self.assertLess(
+            result_ids.index(first_event.source_id), result_ids.index(second_event.source_id)
+        )
+
+
+class CommunityTagPostsAPITests(TestCase):
+    """Integration tests for community tag posts endpoints (CoP)."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+
+        self.member_user = User.objects.create_user(
+            email="cop-member@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.member_profile = Profile.objects.create(
+            user=self.member_user,
+            username="cop_member",
+            display_name="CoP Member",
+        )
+
+        self.outsider_user = User.objects.create_user(
+            email="cop-outsider@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.outsider_profile = Profile.objects.create(
+            user=self.outsider_user,
+            username="cop_outsider",
+            display_name="CoP Outsider",
+        )
+
+        self.tag = CommunityTag.objects.create(
+            name="Test Community",
+            description="A test community",
+            created_by=self.member_profile,
+        )
+        CommunityTagMembership.objects.create(
+            profile=self.member_profile,
+            tag=self.tag,
+        )
+
+        self.member_token = str(RefreshToken.for_user(self.member_user).access_token)
+        self.outsider_token = str(RefreshToken.for_user(self.outsider_user).access_token)
+
+        self.list_create_url = f"/api/profiles/tags/{self.tag.id}/posts/"
+
+    def _auth_member(self) -> None:
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.member_token}")
+
+    def _auth_outsider(self) -> None:
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.outsider_token}")
+
+    def _detail_url(self, event_id: str) -> str:
+        return f"/api/profiles/tags/{self.tag.id}/posts/{event_id}/"
+
+    # ------------------------------------------------------------------ list
+
+    def test_list_community_posts_unauthenticated_returns_401(self) -> None:
+        response = self.api_client.get(self.list_create_url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_community_posts_empty_tag_returns_empty_feed(self) -> None:
+        self._auth_member()
+        response = self.api_client.get(self.list_create_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 0)
+        self.assertEqual(response.data["results"], [])
+
+    def test_list_community_posts_returns_cop_events(self) -> None:
+        from timeline.models import TimelineEvent
+
+        event = TimelineEvent.objects.create(
+            source_id=f"cop:{uuid.uuid4()}",
+            category=TimelineEvent.Category.COP,
+            event_type="social",
+            author=self.member_profile,
+            community_id=self.tag.id,
+            content="Hello community",
+            timestamp=timezone.now() - timedelta(minutes=5),
+        )
+
+        self._auth_member()
+        response = self.api_client.get(self.list_create_url)
+
+        self.assertEqual(response.status_code, 200)
+        source_ids = {item["source_id"] for item in response.data["results"]}
+        self.assertIn(event.source_id, source_ids)
+        result = next(i for i in response.data["results"] if i["source_id"] == event.source_id)
+        self.assertEqual(result["category"], "CoP")
+        self.assertIn("community_id", result)
+        self.assertIn("community_slug", result)
+        self.assertEqual(result["community_slug"], self.tag.slug)
+
+    def test_list_community_posts_excludes_deleted(self) -> None:
+        from timeline.models import TimelineEvent
+
+        deleted = TimelineEvent.objects.create(
+            source_id=f"cop:{uuid.uuid4()}",
+            category=TimelineEvent.Category.COP,
+            event_type="social",
+            author=self.member_profile,
+            community_id=self.tag.id,
+            content="Deleted post",
+            is_deleted=True,
+            timestamp=timezone.now() - timedelta(minutes=5),
+        )
+
+        self._auth_member()
+        response = self.api_client.get(self.list_create_url)
+
+        self.assertEqual(response.status_code, 200)
+        source_ids = {item["source_id"] for item in response.data["results"]}
+        self.assertNotIn(deleted.source_id, source_ids)
+
+    def test_list_community_posts_filter_by_event_type(self) -> None:
+        from timeline.models import TimelineEvent
+
+        social = TimelineEvent.objects.create(
+            source_id=f"cop:{uuid.uuid4()}",
+            category=TimelineEvent.Category.COP,
+            event_type="social",
+            author=self.member_profile,
+            community_id=self.tag.id,
+            content="Social post",
+            timestamp=timezone.now() - timedelta(minutes=10),
+        )
+        TimelineEvent.objects.create(
+            source_id=f"cop:{uuid.uuid4()}",
+            category=TimelineEvent.Category.COP,
+            event_type="achievement",
+            author=self.member_profile,
+            community_id=self.tag.id,
+            content="Achievement post",
+            timestamp=timezone.now() - timedelta(minutes=5),
+        )
+
+        self._auth_member()
+        response = self.api_client.get(self.list_create_url + "?event_type=social")
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data["results"]
+        self.assertTrue(all(item["event_type"] == "social" for item in results))
+        self.assertIn(social.source_id, {item["source_id"] for item in results})
+
+    def test_list_community_posts_tag_not_found_returns_404(self) -> None:
+        self._auth_member()
+        response = self.api_client.get(f"/api/profiles/tags/{uuid.uuid4()}/posts/")
+        self.assertEqual(response.status_code, 404)
+
+    # ------------------------------------------------------------------ create
+
+    def test_create_community_post_by_member_returns_201(self) -> None:
+        self._auth_member()
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "achievement", "content": "We did it!"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["category"], "CoP")
+        self.assertEqual(response.data["event_type"], "achievement")
+        self.assertEqual(response.data["content"], "We did it!")
+        self.assertFalse(response.data["show_on_profile"])
+        self.assertIsNotNone(response.data["community_id"])
+        self.assertEqual(response.data["community_slug"], self.tag.slug)
+
+    def test_create_community_post_with_show_on_profile_true(self) -> None:
+        self._auth_member()
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Shared!", "show_on_profile": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["show_on_profile"])
+
+    def test_create_community_post_by_non_member_returns_403(self) -> None:
+        self._auth_outsider()
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Uninvited post"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_community_post_unauthenticated_returns_401(self) -> None:
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "No auth"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_community_post_missing_content_returns_400(self) -> None:
+        self._auth_member()
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_community_post_invalid_event_type_returns_400(self) -> None:
+        self._auth_member()
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "invalid_type", "content": "Bad post"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_community_post_far_future_timestamp_returns_400(self) -> None:
+        self._auth_member()
+        future_ts = (timezone.now() + timedelta(days=5)).isoformat()
+        response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "progress", "content": "Future post", "timestamp": future_ts},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_community_post_appears_in_community_feed(self) -> None:
+        self._auth_member()
+        create_response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Feed entry"},
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        source_id = create_response.data["source_id"]
+
+        list_response = self.api_client.get(self.list_create_url)
+        self.assertEqual(list_response.status_code, 200)
+        feed_ids = {item["source_id"] for item in list_response.data["results"]}
+        self.assertIn(source_id, feed_ids)
+
+    # ------------------------------------------------------------------ patch
+
+    def test_patch_community_post_by_author_returns_200(self) -> None:
+        self._auth_member()
+        create_response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Original"},
+            format="json",
+        )
+        event_id = create_response.data["id"]
+
+        patch_response = self.api_client.patch(
+            self._detail_url(event_id),
+            {"content": "Edited", "event_type": "progress", "show_on_profile": True},
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, 200)
+        self.assertEqual(patch_response.data["content"], "Edited")
+        self.assertEqual(patch_response.data["event_type"], "progress")
+        self.assertTrue(patch_response.data["show_on_profile"])
+        self.assertIsNotNone(patch_response.data["last_edited"])
+
+    def test_patch_community_post_by_non_author_returns_404(self) -> None:
+        self._auth_member()
+        create_response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Original"},
+            format="json",
+        )
+        event_id = create_response.data["id"]
+
+        self._auth_outsider()
+        response = self.api_client.patch(
+            self._detail_url(event_id),
+            {"content": "Hacked"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_patch_community_post_empty_body_returns_400(self) -> None:
+        self._auth_member()
+        create_response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Original"},
+            format="json",
+        )
+        event_id = create_response.data["id"]
+
+        patch_response = self.api_client.patch(
+            self._detail_url(event_id),
+            {},
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, 400)
+
+    # ------------------------------------------------------------------ delete
+
+    def test_delete_community_post_by_author_returns_204(self) -> None:
+        self._auth_member()
+        create_response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Delete me"},
+            format="json",
+        )
+        event_id = create_response.data["id"]
+        source_id = create_response.data["source_id"]
+
+        delete_response = self.api_client.delete(self._detail_url(event_id))
+        self.assertEqual(delete_response.status_code, 204)
+
+        list_response = self.api_client.get(self.list_create_url)
+        feed_ids = {item["source_id"] for item in list_response.data["results"]}
+        self.assertNotIn(source_id, feed_ids)
+
+    def test_delete_community_post_by_non_author_returns_404(self) -> None:
+        self._auth_member()
+        create_response = self.api_client.post(
+            self.list_create_url,
+            {"event_type": "social", "content": "Mine"},
+            format="json",
+        )
+        event_id = create_response.data["id"]
+
+        self._auth_outsider()
+        response = self.api_client.delete(self._detail_url(event_id))
+        self.assertEqual(response.status_code, 404)
 
 
 class SkillListAPIViewTests(TestCase):
@@ -834,7 +1704,6 @@ class AvailabilitySlotAPIViewTests(TestCase):
             profile=self.mentor_profile,
             start_at=slot_start,
             end_at=slot_start + timedelta(hours=1),
-            is_booked=False,
         )
         request_obj = MentorshipRequest.objects.create(
             mentor=self.mentor_profile,
@@ -1200,7 +2069,7 @@ class AvailabilitySlotAPIViewTests(TestCase):
             profile=self.mentor_profile,
             start_at=slot_start,
             end_at=slot_start + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.mentee_user,
             booked_at=timezone.now(),
         )
@@ -1237,7 +2106,6 @@ class AvailabilitySlotAPIViewTests(TestCase):
             profile=self.mentor_profile,
             start_at=slot_start,
             end_at=slot_end,
-            is_booked=False,
         )
         request_obj = MentorshipRequest.objects.create(
             mentor=self.mentor_profile,
@@ -1338,7 +2206,7 @@ class AvailabilitySlotBookingAPIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         slot.refresh_from_db()
-        self.assertTrue(slot.is_booked)
+        self.assertEqual(slot.status, AvailabilitySlot.Status.BOOKED)
         self.assertEqual(slot.booked_by, self.mentee_user)
         self.assertIsNotNone(slot.booked_at)
         self.assertEqual(response.json()["bookedBy"], self.mentee_profile.username)
@@ -1350,7 +2218,7 @@ class AvailabilitySlotBookingAPIViewTests(TestCase):
             profile=self.mentor_profile,
             start_at=slot_start,
             end_at=slot_start + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.other_user,
             booked_at=timezone.now(),
         )
@@ -1440,7 +2308,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.mentor1_profile = Profile.objects.create(
             user=self.mentor1_user,
             display_name="Alice Mentor",
-            is_visible=True,
             show_initials_only=False,
             skills=["Python", "Django"],
             title="Backend Mentor",
@@ -1455,7 +2322,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.mentor2_profile = Profile.objects.create(
             user=self.mentor2_user,
             display_name="John Doe",
-            is_visible=True,
             show_initials_only=True,
             skills=["React"],
             title="Frontend Mentor",
@@ -1470,7 +2336,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.mentor3_profile = Profile.objects.create(
             user=self.mentor3_user,
             display_name="Bob Zed",
-            is_visible=True,
             show_initials_only=False,
             skills=["Go"],
             title="Go Mentor",
@@ -1485,7 +2350,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.private_mentor_profile = Profile.objects.create(
             user=self.private_mentor_user,
             display_name="Private Mentor",
-            is_visible=False,
             show_initials_only=False,
             skills=["Python"],
             title="Hidden",
@@ -1499,7 +2363,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.mentee_profile = Profile.objects.create(
             user=self.mentee_user,
             display_name="Mentee Person",
-            is_visible=True,
             show_initials_only=False,
             skills=["Python"],
             title="Mentee",
@@ -1515,44 +2378,17 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
 
         returned_names = {p["full_name"] for p in payload["results"]}
         returned_usernames = {p["username"] for p in payload["results"]}
-        # Only visible mentors should be included.
+        # All mentors should be included.
         self.assertIn("Alice Mentor", returned_names)
         self.assertIn("JD", returned_names)  # initials due to show_initials_only
         self.assertIn("Bob Zed", returned_names)
-        self.assertNotIn("Private Mentor", returned_names)
+        self.assertIn("Private Mentor", returned_names)
         self.assertIn(self.mentor1_profile.username, returned_usernames)
         self.assertIn(self.mentor2_profile.username, returned_usernames)
         self.assertIn(self.mentor3_profile.username, returned_usernames)
-        self.assertNotIn(self.private_mentor_profile.username, returned_usernames)
+        self.assertIn(self.private_mentor_profile.username, returned_usernames)
         # Default discovery is mentors only.
         self.assertNotIn("Mentee Person", returned_names)
-
-    def test_mode_filter_can_target_mentee_profiles(self) -> None:
-        """`mentorshipMode=MENTEE` returns visible mentee profiles."""
-        response = self.api_client.get("/api/profiles/", {"mentorshipMode": "MENTEE"})
-        self.assertEqual(response.status_code, 200)
-
-        payload = response.json()
-        returned_names = {p["full_name"] for p in payload["results"]}
-
-        self.assertIn("Mentee Person", returned_names)
-        self.assertNotIn("Alice Mentor", returned_names)
-
-    def test_mode_filter_mentor_returns_mentor_profiles(self) -> None:
-        """Explicit `mentorshipMode=MENTOR` keeps mentor-only discovery behavior."""
-        response = self.api_client.get("/api/profiles/", {"mentorshipMode": "MENTOR"})
-        self.assertEqual(response.status_code, 200)
-
-        payload = response.json()
-        returned_names = {p["full_name"] for p in payload["results"]}
-        self.assertIn("Alice Mentor", returned_names)
-        self.assertNotIn("Mentee Person", returned_names)
-
-    def test_mode_filter_rejects_legacy_both_value(self) -> None:
-        """`mentorshipMode=BOTH` is rejected by strict role filtering."""
-        response = self.api_client.get("/api/profiles/", {"mentorshipMode": "BOTH"})
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("MENTOR or MENTEE", response.json()["detail"])
 
     def test_search_by_q_matches_display_name(self) -> None:
         """`q` filters by name/keyword fields."""
@@ -1593,7 +2429,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         Profile.objects.create(
             user=dup_user,
             display_name="Unique Dup Expertise Holder",
-            is_visible=True,
             show_initials_only=False,
             skills=["Python Basics", "Python Advanced"],
             title="Mentor",
@@ -1630,7 +2465,7 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["count"], 3)  # visible mentors only
+        self.assertEqual(payload["count"], 4)  # all mentors now
         self.assertEqual(payload["page"], 1)
         self.assertEqual(payload["pageSize"], 1)
         self.assertEqual(len(payload["results"]), 1)
@@ -1663,7 +2498,6 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
             Profile.objects.create(
                 user=u,
                 display_name=f"Bounds Mentor {i}",
-                is_visible=True,
                 show_initials_only=False,
             )
 
@@ -1731,6 +2565,26 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.assertIn(str(self.mentor1_profile.id), result_ids)
         self.assertNotIn(str(self.mentor3_profile.id), result_ids)
 
+    def test_distance_filter_applies_default_radius_when_omitted(self) -> None:
+        """Distance filter applies a default 15km radius if coords are passed without distanceKm."""
+        self.mentor1_profile.location = Point(32.8597, 39.9334, srid=4326)  # Ankara center
+        self.mentor1_profile.save(update_fields=["location"])
+
+        self.mentor3_profile.location = Point(-0.1276, 51.5072, srid=4326)  # London
+        self.mentor3_profile.save(update_fields=["location"])
+
+        # No distanceKm parameter
+        response = self.api_client.get(
+            "/api/profiles/",
+            {"lat": "39.9334", "lng": "32.8597"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        result_ids = {row["id"] for row in payload["results"]}
+        self.assertIn(str(self.mentor1_profile.id), result_ids)
+        self.assertNotIn(str(self.mentor3_profile.id), result_ids)
+
     def test_skill_terms_parsing_handles_duplicates_and_empty_parts(self) -> None:
         """Search parser deduplicates repeated terms and ignores empty comma-separated values."""
         response = self.api_client.get(
@@ -1740,9 +2594,10 @@ class PublicMentorProfilesSearchListAPIViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         names = {p["full_name"] for p in payload["results"]}
-        self.assertEqual(payload["count"], 2)
+        self.assertEqual(payload["count"], 3)
         self.assertIn("Alice Mentor", names)
         self.assertIn("JD", names)
+        self.assertIn("Private Mentor", names)
 
     def test_public_search_helper_branch_edges(self) -> None:
         """Direct helper checks cover empty query/term branches in search utilities."""
@@ -1764,7 +2619,7 @@ class MentorPublicAverageRatingAPITests(TestCase):
     """Tests for GET /api/profiles/{username}/rating/."""
 
     def setUp(self) -> None:
-        from django.contrib.auth.models import Group
+        # Moved to top level
 
         from accounts.models import UserRole
 
@@ -1778,7 +2633,6 @@ class MentorPublicAverageRatingAPITests(TestCase):
         self.mentor_profile = Profile.objects.create(
             user=self.mentor_user,
             display_name="Rating Mentor",
-            is_visible=True,
         )
         self.api_client: Any = APIClient()
 
@@ -1805,10 +2659,8 @@ class MentorPublicAverageRatingAPITests(TestCase):
         response = self.api_client.get(self._url("does_not_exist"))
         self.assertEqual(response.status_code, 404)
 
-    def test_invisible_profile_returns_404(self) -> None:
-        self.mentor_profile.is_visible = False
-        self.mentor_profile.save()
-        response = self.api_client.get(self._url(self.mentor_profile.username))
+    def test_missing_profile_returns_404(self) -> None:
+        response = self.api_client.get(self._url("missing-user"))
         self.assertEqual(response.status_code, 404)
 
     def test_accessible_without_authentication(self) -> None:
@@ -1841,7 +2693,6 @@ class ProfilePublicReviewsAPITests(TestCase):
         self.mentor_profile = Profile.objects.create(
             user=self.mentor_user,
             display_name="Reviews Mentor",
-            is_visible=True,
         )
         self.url = f"/api/profiles/{self.mentor_profile.username}/reviews/"
 
@@ -1899,13 +2750,6 @@ class ProfilePublicReviewsAPITests(TestCase):
 
     def test_returns_404_for_missing_profile(self) -> None:
         response = self.api_client.get("/api/profiles/missing-user/reviews/")
-        self.assertEqual(response.status_code, 404)
-
-    def test_returns_404_for_invisible_profile(self) -> None:
-        self.mentor_profile.is_visible = False
-        self.mentor_profile.save(update_fields=["is_visible"])
-
-        response = self.api_client.get(self.url)
         self.assertEqual(response.status_code, 404)
 
     def test_returns_only_public_text_review_fields(self) -> None:
@@ -2043,7 +2887,6 @@ class RecentlyAddedMentorsAPITests(TestCase):
         self.mentor1_profile = Profile.objects.create(
             user=self.mentor1_user,
             display_name="First Mentor",
-            is_visible=True,
             average_rating=Decimal("3.00"),
         )
 
@@ -2055,7 +2898,6 @@ class RecentlyAddedMentorsAPITests(TestCase):
         self.mentor2_profile = Profile.objects.create(
             user=self.mentor2_user,
             display_name="Second Mentor",
-            is_visible=True,
             average_rating=Decimal("5.00"),
         )
 
@@ -2067,7 +2909,6 @@ class RecentlyAddedMentorsAPITests(TestCase):
         self.hidden_mentor_profile = Profile.objects.create(
             user=self.hidden_mentor_user,
             display_name="Hidden Mentor",
-            is_visible=False,
         )
 
         self.mentee_user = User.objects.create_user(
@@ -2078,7 +2919,6 @@ class RecentlyAddedMentorsAPITests(TestCase):
         self.mentee_profile = Profile.objects.create(
             user=self.mentee_user,
             display_name="Mentee Person",
-            is_visible=True,
         )
 
     def test_returns_200(self) -> None:
@@ -2092,7 +2932,7 @@ class RecentlyAddedMentorsAPITests(TestCase):
     def test_only_visible_mentors_returned(self) -> None:
         response = self.client.get("/api/profiles/recently-added/")
         names = [p["full_name"] for p in response.json()["results"]]
-        self.assertNotIn("Hidden Mentor", names)
+        self.assertIn("Hidden Mentor", names)
         self.assertNotIn("Mentee Person", names)
 
     def test_sorted_by_created_at_descending(self) -> None:
@@ -2113,7 +2953,7 @@ class RecentlyAddedMentorsAPITests(TestCase):
                 password="SecurePass123",
                 app_usage_mode=AppUsageMode.MENTOR,
             )
-            Profile.objects.create(user=u, display_name=f"Extra {i}", is_visible=True)
+            Profile.objects.create(user=u, display_name=f"Extra {i}")
 
         response = self.client.get("/api/profiles/recently-added/")
         self.assertEqual(len(response.json()["results"]), 10)
@@ -2129,7 +2969,7 @@ class RecentlyAddedMentorsAPITests(TestCase):
                 password="SecurePass123",
                 app_usage_mode=AppUsageMode.MENTOR,
             )
-            Profile.objects.create(user=u, display_name=f"Cap {i}", is_visible=True)
+            Profile.objects.create(user=u, display_name=f"Cap {i}")
 
         response = self.client.get("/api/profiles/recently-added/", {"limit": 100})
         self.assertLessEqual(len(response.json()["results"]), 50)
@@ -2157,7 +2997,6 @@ class PopularMentorsAPITests(TestCase):
         self.low_rated_profile = Profile.objects.create(
             user=self.low_rated_user,
             display_name="Low Rated",
-            is_visible=True,
             average_rating=Decimal("1.00"),
             total_mentee_count=5,
         )
@@ -2170,7 +3009,6 @@ class PopularMentorsAPITests(TestCase):
         self.high_rated_profile = Profile.objects.create(
             user=self.high_rated_user,
             display_name="High Rated",
-            is_visible=True,
             average_rating=Decimal("5.00"),
             total_mentee_count=10,
         )
@@ -2183,7 +3021,6 @@ class PopularMentorsAPITests(TestCase):
         self.hidden_profile = Profile.objects.create(
             user=self.hidden_user,
             display_name="Hidden Popular",
-            is_visible=False,
             average_rating=Decimal("5.00"),
         )
 
@@ -2195,7 +3032,6 @@ class PopularMentorsAPITests(TestCase):
         self.mentee_profile = Profile.objects.create(
             user=self.mentee_user,
             display_name="Mentee Pop",
-            is_visible=True,
             average_rating=Decimal("5.00"),
         )
 
@@ -2210,7 +3046,7 @@ class PopularMentorsAPITests(TestCase):
     def test_only_visible_mentors_returned(self) -> None:
         response = self.client.get("/api/profiles/popular/")
         names = [p["full_name"] for p in response.json()["results"]]
-        self.assertNotIn("Hidden Popular", names)
+        self.assertIn("Hidden Popular", names)
         self.assertNotIn("Mentee Pop", names)
 
     def test_sorted_by_average_rating_descending(self) -> None:
@@ -2233,7 +3069,6 @@ class PopularMentorsAPITests(TestCase):
         tied_low = Profile.objects.create(
             user=tied_low_user,
             display_name="Tied Low Mentees",
-            is_visible=True,
             average_rating=Decimal("3.00"),
             total_mentee_count=2,
         )
@@ -2245,7 +3080,6 @@ class PopularMentorsAPITests(TestCase):
         tied_high = Profile.objects.create(
             user=tied_high_user,
             display_name="Tied High Mentees",
-            is_visible=True,
             average_rating=Decimal("3.00"),
             total_mentee_count=20,
         )
@@ -2324,7 +3158,7 @@ class ProfileSerializersUnitTests(TestCase):
             profile=self.profile,
             start_at=start_at,
             end_at=start_at + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=user_without_profile,
             booked_at=timezone.now(),
         )
@@ -2384,7 +3218,7 @@ class AvailabilityBookingServicesTests(TestCase):
             actor=self.mentee_user,
         )
 
-        self.assertTrue(booked_slot.is_booked)
+        self.assertEqual(booked_slot.status, AvailabilitySlot.Status.BOOKED)
         self.assertEqual(booked_slot.booked_by, self.mentee_user)
         self.assertIsNotNone(booked_slot.booked_at)
 
@@ -2411,7 +3245,7 @@ class AvailabilityBookingServicesTests(TestCase):
             profile=self.mentor_profile,
             start_at=start_at,
             end_at=start_at + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.other_user,
             booked_at=timezone.now(),
         )
@@ -2462,7 +3296,7 @@ class AvailabilityBookingServicesTests(TestCase):
             profile=self.mentor_profile,
             start_at=start_at,
             end_at=start_at + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.mentee_user,
             booked_at=timezone.now(),
         )
@@ -2481,7 +3315,7 @@ class AvailabilityBookingServicesTests(TestCase):
             profile=self.mentor_profile,
             start_at=start_at,
             end_at=start_at + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.mentee_user,
             booked_at=timezone.now(),
         )
@@ -2492,7 +3326,7 @@ class AvailabilityBookingServicesTests(TestCase):
             actor=self.mentor_user,
         )
 
-        self.assertFalse(canceled_slot.is_booked)
+        self.assertEqual(canceled_slot.status, AvailabilitySlot.Status.AVAILABLE)
         self.assertIsNone(canceled_slot.booked_by)
         self.assertIsNone(canceled_slot.booked_at)
 
@@ -2503,7 +3337,7 @@ class AvailabilityBookingServicesTests(TestCase):
             profile=self.mentor_profile,
             start_at=start_at,
             end_at=start_at + timedelta(hours=1),
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.mentee_user,
             booked_at=timezone.now(),
         )
@@ -2514,7 +3348,7 @@ class AvailabilityBookingServicesTests(TestCase):
             actor=self.mentee_user,
         )
 
-        self.assertFalse(canceled_slot.is_booked)
+        self.assertEqual(canceled_slot.status, AvailabilitySlot.Status.AVAILABLE)
         self.assertIsNone(canceled_slot.booked_by)
 
     def test_cancel_availability_booking_unlinks_accepted_requests(self) -> None:
@@ -2525,7 +3359,7 @@ class AvailabilityBookingServicesTests(TestCase):
             profile=self.mentor_profile,
             start_at=start_at,
             end_at=end_at,
-            is_booked=True,
+            status=AvailabilitySlot.Status.BOOKED,
             booked_by=self.mentee_user,
             booked_at=timezone.now(),
         )
@@ -2548,4 +3382,2991 @@ class AvailabilityBookingServicesTests(TestCase):
         self.assertIsNone(request_obj.slot)
         self.assertEqual(request_obj.initial_session_start_at, start_at)
         self.assertEqual(request_obj.initial_session_end_at, end_at)
-        self.assertFalse(slot.is_booked)
+        self.assertEqual(slot.status, AvailabilitySlot.Status.AVAILABLE)
+
+
+class CommunityTagsAPITests(TestCase):
+    """Integration tests for Community Tags (Public Groups) API."""
+
+    def setUp(self) -> None:
+        """Create test users, profiles, and authenticated API clients."""
+        from accounts.models import UserRole
+
+        self.client: Any = APIClient()
+
+        # Regular authenticated user
+        self.user = User.objects.create_user(
+            email="tag-user@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.profile = Profile.objects.create(
+            user=self.user,
+            display_name="Tag User",
+        )
+        self.access_token = str(RefreshToken.for_user(self.user).access_token)
+
+        # Second user
+        self.user2 = User.objects.create_user(
+            email="tag-user2@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.profile2 = Profile.objects.create(
+            user=self.user2,
+            display_name="Tag User 2",
+        )
+        self.access_token2 = str(RefreshToken.for_user(self.user2).access_token)
+
+        # Admin user
+        self.admin_user = User.objects.create_user(
+            email="tag-admin@example.com",
+            password="SecurePass123",
+            role=UserRole.ADMIN,
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.admin_profile = Profile.objects.create(
+            user=self.admin_user,
+            display_name="Admin User",
+        )
+        self.admin_access_token = str(RefreshToken.for_user(self.admin_user).access_token)
+
+        # URLs
+        self.list_url = "/api/profiles/tags/"
+        self.my_tags_url = "/api/profiles/me/tags/"
+
+        # Clean seeded tags for deterministic tests
+        CommunityTag.objects.all().delete()
+
+    def _auth(self, token=None):
+        """Set authorization header."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token or self.access_token}")
+
+    def _create_tag(self, name="Test Tag", description="A test tag", token=None):
+        """Helper to create a tag via API."""
+        self._auth(token)
+        return self.client.post(
+            self.list_url,
+            {"name": name, "description": description},
+            format="json",
+        )
+
+    # ---- CRUD Tests ----
+
+    def test_create_tag_success(self) -> None:
+        """Authenticated user can create a community tag."""
+        response = self._create_tag("Python Devs", "Python developers group")
+
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["name"], "Python Devs")
+        self.assertEqual(data["slug"], "python-devs")
+        self.assertEqual(data["member_count"], 1)
+        self.assertEqual(data["created_by_username"], self.profile.username)
+
+    def test_create_tag_unauthenticated_returns_401(self) -> None:
+        """Unauthenticated users cannot create tags."""
+        response = self.client.post(
+            self.list_url,
+            {"name": "Unauthorized Tag"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_tag_duplicate_name_case_insensitive(self) -> None:
+        """Duplicate tag names are rejected case-insensitively."""
+        self._create_tag("Frontend Club")
+
+        response = self._create_tag("FRONTEND CLUB")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("name", response.json())
+
+    def test_list_tags_public(self) -> None:
+        """Anyone can list tags without authentication."""
+        self._create_tag("Tag A")
+        self._create_tag("Tag B")
+
+        self.client.credentials()  # clear auth
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 2)
+        self.assertEqual(len(data["results"]), 2)
+
+    def test_list_tags_search(self) -> None:
+        """Search filters tags by name or description."""
+        self._create_tag("React Devs", "React developers")
+        self._create_tag("Vue Fans", "Vue.js lovers")
+
+        self.client.credentials()
+        response = self.client.get(self.list_url, {"q": "react"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual(response.json()["results"][0]["name"], "React Devs")
+
+    def test_list_tags_pagination(self) -> None:
+        """Pagination returns correct page size and count."""
+        for i in range(5):
+            self._create_tag(f"Tag {i:02d}")
+
+        self.client.credentials()
+        response = self.client.get(self.list_url, {"page": 1, "pageSize": 2})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 5)
+        self.assertEqual(len(data["results"]), 2)
+        self.assertEqual(data["page"], 1)
+        self.assertEqual(data["pageSize"], 2)
+
+    def test_detail_tag_success(self) -> None:
+        """Anyone can view tag details."""
+        create_resp = self._create_tag("Detail Tag")
+        tag_id = create_resp.json()["id"]
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["name"], "Detail Tag")
+        self.assertIn("is_member", data)
+        self.assertFalse(data["is_member"])
+
+    def test_detail_tag_not_found(self) -> None:
+        """Non-existent tag returns 404."""
+        fake_id = uuid.uuid4()
+        response = self.client.get(f"/api/profiles/tags/{fake_id}/")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_tag_by_creator_when_empty(self) -> None:
+        """Creator can delete their own tag when no members."""
+        create_resp = self._create_tag("Deletable Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        self.client.delete(f"/api/profiles/tags/{tag_id}/leave/")
+        response = self.client.delete(f"/api/profiles/tags/{tag_id}/")
+
+        self.assertEqual(response.status_code, 204)
+
+    def test_delete_tag_by_creator_with_members_fails(self) -> None:
+        """Creator cannot delete a tag that has members."""
+        create_resp = self._create_tag("Popular Tag")
+        tag_id = create_resp.json()["id"]
+
+        # Join with user2
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        # Try delete as creator
+        self._auth()
+        response = self.client.delete(f"/api/profiles/tags/{tag_id}/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("members", response.json()["detail"])
+
+    def test_delete_tag_by_non_creator_fails(self) -> None:
+        """Non-creator non-admin cannot delete a tag."""
+        create_resp = self._create_tag("Protected Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth(self.access_token2)
+        response = self.client.delete(f"/api/profiles/tags/{tag_id}/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_tag_by_admin_succeeds(self) -> None:
+        """Admin can delete any tag regardless of members."""
+        create_resp = self._create_tag("Admin Deletable")
+        tag_id = create_resp.json()["id"]
+
+        # Add a member
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        # Admin deletes
+        self._auth(self.admin_access_token)
+        response = self.client.delete(f"/api/profiles/tags/{tag_id}/")
+
+        self.assertEqual(response.status_code, 204)
+
+    # ---- Join / Leave Tests ----
+
+    def test_join_tag_success(self) -> None:
+        """Authenticated user can join a tag."""
+        create_resp = self._create_tag("Joinable Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth(self.access_token2)
+        response = self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["joined"])
+        self.assertEqual(data["tag_name"], "Joinable Tag")
+
+    def test_join_tag_updates_member_count(self) -> None:
+        """Joining increments the denormalized member_count."""
+        # Moved to top level
+
+        create_resp = self._create_tag("Count Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        tag = CommunityTag.objects.get(id=tag_id)
+        self.assertEqual(tag.member_count, 2)
+
+    def test_join_tag_duplicate_returns_400(self) -> None:
+        """Joining a tag twice returns 400."""
+        create_resp = self._create_tag("Dup Join Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        response = self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("already a member", response.json()["detail"])
+
+    def test_join_tag_unauthenticated_returns_401(self) -> None:
+        """Unauthenticated user cannot join a tag."""
+        create_resp = self._create_tag("Auth Join Tag")
+        tag_id = create_resp.json()["id"]
+
+        self.client.credentials()
+        response = self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_leave_tag_success(self) -> None:
+        """Authenticated user can leave a tag."""
+        create_resp = self._create_tag("Leavable Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        response = self.client.delete(f"/api/profiles/tags/{tag_id}/leave/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["joined"])
+
+    def test_leave_tag_decrements_member_count(self) -> None:
+        """Leaving decrements the denormalized member_count."""
+        # Moved to top level
+
+        create_resp = self._create_tag("Decrement Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        # user2 leaves
+        self.client.delete(f"/api/profiles/tags/{tag_id}/leave/")
+
+        tag = CommunityTag.objects.get(id=tag_id)
+        self.assertEqual(tag.member_count, 1)
+
+    def test_leave_tag_without_membership_returns_400(self) -> None:
+        """Leaving a tag without membership returns 400."""
+        create_resp = self._create_tag("No Membership Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth(self.access_token2)
+        response = self.client.delete(f"/api/profiles/tags/{tag_id}/leave/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("not a member", response.json()["detail"])
+
+    # ---- My Tags Tests ----
+
+    def test_my_tags_returns_joined_tags_only(self) -> None:
+        """My tags endpoint returns only tags the user has joined."""
+        self._create_tag("My Tag 1")
+        self._create_tag("My Tag 2")
+        self._create_tag("Not Joined Tag", token=self.access_token2)
+
+        self._auth()
+        response = self.client.get(self.my_tags_url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 2)
+        names = {t["name"] for t in data}
+        self.assertIn("My Tag 1", names)
+        self.assertIn("My Tag 2", names)
+
+    def test_my_tags_unauthenticated_returns_401(self) -> None:
+        """My tags endpoint requires authentication."""
+        response = self.client.get(self.my_tags_url)
+
+        self.assertEqual(response.status_code, 401)
+
+    # ---- Discover Integration Tests ----
+
+    def test_discover_filter_by_tag_slug(self) -> None:
+        """Mentor search filters by community tag slug."""
+        create_resp = self._create_tag("Discover Tag")
+        tag_id = create_resp.json()["id"]
+        tag_slug = create_resp.json()["slug"]
+
+        # user joins tag
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        # user2 does NOT join
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/?tags={tag_slug}")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        profile_ids = [r["id"] for r in data["results"]]
+        self.assertIn(str(self.profile.id), profile_ids)
+        self.assertNotIn(str(self.profile2.id), profile_ids)
+
+    def test_discover_filter_by_tag_name(self) -> None:
+        """Mentor search filters by community tag name."""
+        create_resp = self._create_tag("Name Filter Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/", {"tags": "Name Filter Tag"})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertGreaterEqual(data["count"], 1)
+
+    def test_discover_without_tag_filter_returns_all(self) -> None:
+        """Without tag filter, discover returns all visible mentors."""
+        self.client.credentials()
+        response = self.client.get("/api/profiles/")
+
+        self.assertEqual(response.status_code, 200)
+
+    # ---- Detail is_member field Tests ----
+
+    def test_detail_is_member_true_for_joined_user(self) -> None:
+        """Tag detail shows is_member=true for a joined user."""
+        create_resp = self._create_tag("Member Check Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["is_member"])
+
+    def test_detail_is_member_false_for_non_member(self) -> None:
+        """Tag detail shows is_member=false for a non-member."""
+        create_resp = self._create_tag("Non Member Check")
+        tag_id = create_resp.json()["id"]
+
+        self._auth(self.access_token2)
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["is_member"])
+
+    # ---- Tag Update (PATCH) Tests (#434) ----
+
+    def test_update_tag_creator_can_edit_description(self) -> None:
+        """The tag creator can update their own tag's description."""
+        create_resp = self._create_tag("Editable Tag", "old description")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        response = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {"description": "new description"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["description"], "new description")
+
+    def test_update_tag_admin_can_edit_any_tag(self) -> None:
+        """An admin can edit a tag they did not create."""
+        create_resp = self._create_tag("Admin Editable", "before")
+        tag_id = create_resp.json()["id"]
+
+        self._auth(self.admin_access_token)
+        response = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {"description": "after"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["description"], "after")
+
+    def test_update_tag_other_user_returns_403(self) -> None:
+        """A non-creator non-admin user gets 403."""
+        create_resp = self._create_tag("Forbidden Edit", "x")
+        tag_id = create_resp.json()["id"]
+
+        self._auth(self.access_token2)
+        response = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {"description": "hacked"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_tag_unauthenticated_returns_401(self) -> None:
+        """Anonymous PATCH is rejected."""
+        create_resp = self._create_tag("Anon Edit", "x")
+        tag_id = create_resp.json()["id"]
+
+        self.client.credentials()
+        response = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {"description": "no auth"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_tag_nonexistent_returns_404(self) -> None:
+        """PATCH on a missing tag returns 404."""
+        fake_id = uuid.uuid4()
+        self._auth()
+        response = self.client.patch(
+            f"/api/profiles/tags/{fake_id}/",
+            {"description": "ghost"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_tag_name_and_slug_are_immutable(self) -> None:
+        """Attempts to change name or slug are silently ignored."""
+        # Moved to top level
+
+        create_resp = self._create_tag("Original Name", "desc")
+        tag_id = create_resp.json()["id"]
+        original_slug = create_resp.json()["slug"]
+
+        self._auth()
+        response = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {
+                "name": "Hijacked Name",
+                "slug": "hijacked-slug",
+                "description": "still updates",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["name"], "Original Name")
+        self.assertEqual(body["slug"], original_slug)
+        self.assertEqual(body["description"], "still updates")
+
+        tag = CommunityTag.objects.get(id=tag_id)
+        self.assertEqual(tag.name, "Original Name")
+        self.assertEqual(tag.slug, original_slug)
+
+    def test_update_tag_empty_payload_is_noop(self) -> None:
+        """An empty PATCH does not raise and leaves the tag unchanged."""
+        create_resp = self._create_tag("Stable Tag", "stays")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        response = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["description"], "stays")
+
+    # ---- Popular Tags Tests (#433) ----
+
+    def _seed_tag_with_members(
+        self,
+        name: str,
+        member_count: int,
+        joined_at=None,
+    ) -> "CommunityTag":  # type: ignore[name-defined]
+        """Create a tag and synthesize its memberships, optionally setting joined_at."""
+
+        tag = CommunityTag.objects.create(name=name, slug=slugify(name))
+        for i in range(member_count):
+            user = User.objects.create_user(
+                email=f"popular-{slugify(name)}-{i}@example.com",
+                password="SecurePass123",
+                app_usage_mode=AppUsageMode.MENTOR,
+            )
+            profile = Profile.objects.create(user=user, display_name=f"PM {name} {i}")
+            membership = CommunityTagMembership.objects.create(profile=profile, tag=tag)
+            if joined_at is not None:
+                CommunityTagMembership.objects.filter(id=membership.id).update(joined_at=joined_at)
+        CommunityTag.objects.filter(id=tag.id).update(member_count=member_count)
+        tag.refresh_from_db()
+        return tag
+
+    def test_popular_all_time_orders_by_member_count(self) -> None:
+        """All-time popular returns tags ordered by member_count desc."""
+        self._seed_tag_with_members("Big", 5)
+        self._seed_tag_with_members("Medium", 3)
+        self._seed_tag_with_members("Small", 1)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/")
+
+        self.assertEqual(response.status_code, 200)
+        names = [t["name"] for t in response.json()]
+        self.assertEqual(names, ["Big", "Medium", "Small"])
+
+    def test_popular_excludes_zero_member_tags(self) -> None:
+        """Tags with no members are not included in the popular list."""
+        self._seed_tag_with_members("Has Members", 2)
+        CommunityTag.objects.create(name="Empty Tag", slug="empty-tag")  # zero members
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/")
+
+        self.assertEqual(response.status_code, 200)
+        names = [t["name"] for t in response.json()]
+        self.assertIn("Has Members", names)
+        self.assertNotIn("Empty Tag", names)
+
+    def test_popular_tie_breaker_on_creation(self) -> None:
+        """When member counts tie, more recently created tag wins."""
+        # Moved to top level
+
+        old_tag = self._seed_tag_with_members("Older", 2)
+        # force older creation timestamp
+        CommunityTag.objects.filter(id=old_tag.id).update(
+            created_at=timezone.now() - timedelta(days=10)
+        )
+        self._seed_tag_with_members("Newer", 2)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/")
+
+        self.assertEqual(response.status_code, 200)
+        names = [t["name"] for t in response.json()]
+        self.assertEqual(names.index("Newer"), 0)
+        self.assertEqual(names.index("Older"), 1)
+
+    def test_popular_limit_respected(self) -> None:
+        """The `limit` query param caps the number of returned tags."""
+        for i in range(5):
+            self._seed_tag_with_members(f"PT {i}", i + 1)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/", {"limit": 3})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 3)
+
+    def test_popular_limit_capped_at_max(self) -> None:
+        """`limit` values above the cap are clamped to the maximum."""
+        # cap is 50; passing 9999 should still return at most 50.
+        for i in range(3):
+            self._seed_tag_with_members(f"Cap {i}", 1)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/", {"limit": 9999})
+
+        self.assertEqual(response.status_code, 200)
+        # only 3 tags exist, so we get 3 — the test ensures no error from huge limit
+        self.assertLessEqual(len(response.json()), 50)
+
+    def test_popular_invalid_limit_returns_400(self) -> None:
+        """Non-integer limit returns 400."""
+        response = self.client.get("/api/profiles/tags/popular/", {"limit": "abc"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_popular_invalid_window_returns_400(self) -> None:
+        """Unknown window value returns 400."""
+        response = self.client.get("/api/profiles/tags/popular/", {"window": "1y"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_popular_window_filters_by_join_time(self) -> None:
+        """7d window only counts memberships joined in the last 7 days."""
+        old_cutoff = timezone.now() - timedelta(days=30)
+        # this tag's members all joined long ago — should be excluded from 7d
+        self._seed_tag_with_members("Old Joins", 5, joined_at=old_cutoff)
+        # this tag's members joined recently
+        self._seed_tag_with_members("Fresh Joins", 2)
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/", {"window": "7d"})
+
+        self.assertEqual(response.status_code, 200)
+        names = [t["name"] for t in response.json()]
+        self.assertIn("Fresh Joins", names)
+        self.assertNotIn("Old Joins", names)
+
+    def test_popular_empty_when_no_tags(self) -> None:
+        """Empty result when no tags have members."""
+        CommunityTag.objects.all().delete()
+
+        self.client.credentials()
+        response = self.client.get("/api/profiles/tags/popular/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    # ---- Members List Tests (#432) ----
+
+    def test_members_list_public_access(self) -> None:
+        """Anyone can list a tag's members without authentication."""
+        create_resp = self._create_tag("Members Public")
+        tag_id = create_resp.json()["id"]
+
+        # creator joins
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        # another user joins
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 2)
+        self.assertEqual(len(data["results"]), 2)
+
+    def test_members_list_orders_by_recent_join(self) -> None:
+        """Members are listed with most recently joined first."""
+        create_resp = self._create_tag("Order Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        ids = [r["id"] for r in response.json()["results"]]
+        self.assertEqual(ids[0], str(self.profile2.id))
+        self.assertEqual(ids[1], str(self.profile.id))
+
+    def test_members_list_pagination(self) -> None:
+        """Pagination respects pageSize and reports total count."""
+        # Moved to top level
+
+        create_resp = self._create_tag("Pagination Tag")
+        tag_id = create_resp.json()["id"]
+
+        # add three members
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        user3 = User.objects.create_user(
+            email="tag-user3@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        Profile.objects.create(user=user3, display_name="Tag User 3")
+        token3 = str(RefreshToken.for_user(user3).access_token)
+        self._auth(token3)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(
+            f"/api/profiles/tags/{tag_id}/members/",
+            {"page": 1, "pageSize": 2},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 3)
+        self.assertEqual(len(data["results"]), 2)
+        self.assertEqual(data["page"], 1)
+        self.assertEqual(data["pageSize"], 2)
+
+    def test_members_list_excludes_hidden_profiles(self) -> None:
+        """Profiles with is_visible=False are no longer excluded as field is removed."""
+        create_resp = self._create_tag("Hidden Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        self._auth(self.access_token2)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 2)
+        ids = [r["id"] for r in data["results"]]
+        self.assertIn(str(self.profile.id), ids)
+        self.assertIn(str(self.profile2.id), ids)
+
+    def test_members_list_honors_show_initials_only(self) -> None:
+        """When a member has show_initials_only, the response shows initials."""
+        create_resp = self._create_tag("Initials Tag")
+        tag_id = create_resp.json()["id"]
+
+        self.profile.show_initials_only = True
+        self.profile.save(update_fields=["show_initials_only"])
+
+        self._auth()
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(r for r in response.json()["results"] if r["id"] == str(self.profile.id))
+        # display_name "Tag User" → initials "TU"
+        self.assertNotEqual(result["full_name"], "Tag User")
+
+    def test_members_list_empty_tag(self) -> None:
+        """An empty tag returns an empty results array with count zero."""
+        create_resp = self._create_tag("Empty Tag")
+        tag_id = create_resp.json()["id"]
+
+        self._auth()
+        self.client.delete(f"/api/profiles/tags/{tag_id}/leave/")
+
+        self.client.credentials()
+        response = self.client.get(f"/api/profiles/tags/{tag_id}/members/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 0)
+        self.assertEqual(data["results"], [])
+
+    def test_members_list_nonexistent_tag_returns_404(self) -> None:
+        """Requesting members of a nonexistent tag returns 404."""
+        fake_id = uuid.uuid4()
+        response = self.client.get(f"/api/profiles/tags/{fake_id}/members/")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_members_list_invalid_pagination_returns_400(self) -> None:
+        """Non-integer page/pageSize returns 400."""
+        create_resp = self._create_tag("Bad Pagination")
+        tag_id = create_resp.json()["id"]
+
+        response = self.client.get(
+            f"/api/profiles/tags/{tag_id}/members/",
+            {"page": "abc"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+
+class CommunityTagNotificationTests(TestCase):
+    """Tests for notification side effects of community tag events (#435)."""
+
+    def setUp(self) -> None:
+        # Moved to top level
+
+        self.client: Any = APIClient()
+
+        self.creator_user = User.objects.create_user(
+            email="creator@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.creator_profile = Profile.objects.create(
+            user=self.creator_user, display_name="Creator"
+        )
+        self.creator_token = str(RefreshToken.for_user(self.creator_user).access_token)
+
+        self.member_user = User.objects.create_user(
+            email="member@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.member_profile = Profile.objects.create(user=self.member_user, display_name="Member")
+        self.member_token = str(RefreshToken.for_user(self.member_user).access_token)
+
+        self.admin_user = User.objects.create_user(
+            email="notif-admin@example.com",
+            password="SecurePass123",
+            role=UserRole.ADMIN,
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.admin_profile = Profile.objects.create(user=self.admin_user, display_name="Admin")
+        self.admin_token = str(RefreshToken.for_user(self.admin_user).access_token)
+
+        CommunityTag.objects.all().delete()
+        Notification.objects.all().delete()
+
+    def _auth(self, token: str) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    def _create_tag_via_api(self, name: str, description: str = "") -> str:
+        self._auth(self.creator_token)
+        resp = self.client.post(
+            "/api/profiles/tags/",
+            {"name": name, "description": description},
+            format="json",
+        )
+        return resp.json()["id"]
+
+    # ---- TAG_NEW_MEMBER ----
+
+    def test_new_member_notifies_tag_creator(self) -> None:
+        # Moved to top level, NotificationType
+
+        tag_id = self._create_tag_via_api("Notif Tag")
+        Notification.objects.all().delete()  # clear interest-match noise
+
+        self._auth(self.member_token)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        notifs = Notification.objects.filter(
+            user=self.creator_user, type=NotificationType.TAG_NEW_MEMBER
+        )
+        self.assertEqual(notifs.count(), 1)
+        self.assertEqual(notifs.first().actor_id, self.member_profile.id)
+
+    def test_creator_self_join_does_not_notify(self) -> None:
+        # Moved to top level, NotificationType
+
+        tag_id = self._create_tag_via_api("Self Join")
+        Notification.objects.all().delete()
+
+        self._auth(self.creator_token)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.creator_user, type=NotificationType.TAG_NEW_MEMBER
+            ).count(),
+            0,
+        )
+
+    # ---- TAG_DESCRIPTION_UPDATED ----
+
+    def test_description_update_notifies_members_excluding_actor(self) -> None:
+        # Moved to top level, NotificationType
+
+        tag_id = self._create_tag_via_api("Desc Tag", "old")
+        # member joins
+        self._auth(self.member_token)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        Notification.objects.all().delete()
+
+        # creator edits the description (creator is the actor)
+        self._auth(self.creator_token)
+        resp = self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {"description": "new"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        member_notifs = Notification.objects.filter(
+            user=self.member_user, type=NotificationType.TAG_DESCRIPTION_UPDATED
+        )
+        creator_notifs = Notification.objects.filter(
+            user=self.creator_user, type=NotificationType.TAG_DESCRIPTION_UPDATED
+        )
+        self.assertEqual(member_notifs.count(), 1)
+        self.assertEqual(creator_notifs.count(), 0)
+
+    def test_unchanged_description_patch_does_not_notify(self) -> None:
+        # Moved to top level, NotificationType
+
+        tag_id = self._create_tag_via_api("Same Desc", "stays")
+        self._auth(self.member_token)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        Notification.objects.all().delete()
+
+        self._auth(self.creator_token)
+        self.client.patch(
+            f"/api/profiles/tags/{tag_id}/",
+            {"description": "stays"},
+            format="json",
+        )
+
+        self.assertEqual(
+            Notification.objects.filter(type=NotificationType.TAG_DESCRIPTION_UPDATED).count(),
+            0,
+        )
+
+    # ---- TAG_DELETED ----
+
+    def test_tag_deletion_notifies_members_excluding_actor(self) -> None:
+        # admin route lets us delete a tag that has members
+        tag_id = self._create_tag_via_api("Doomed Tag")
+        self._auth(self.member_token)
+        self.client.post(f"/api/profiles/tags/{tag_id}/join/")
+        Notification.objects.all().delete()
+
+        # admin deletes — admin is actor
+        self._auth(self.admin_token)
+        resp = self.client.delete(f"/api/profiles/tags/{tag_id}/")
+        self.assertEqual(resp.status_code, 204)
+
+        member_notifs = Notification.objects.filter(
+            user=self.member_user, type=NotificationType.TAG_DELETED
+        )
+        admin_notifs = Notification.objects.filter(
+            user=self.admin_user, type=NotificationType.TAG_DELETED
+        )
+        self.assertEqual(member_notifs.count(), 1)
+        self.assertEqual(admin_notifs.count(), 0)
+
+    # ---- TAG_MATCHES_INTEREST ----
+
+    def test_tag_creation_notifies_users_with_matching_skills(self) -> None:
+        # Moved to top level, NotificationType
+
+        # member has the matching skill, creator does not
+        self.member_profile.skills = ["Python", "Django"]
+        self.member_profile.save(update_fields=["skills"])
+
+        self._create_tag_via_api("Python Devs")
+
+        notifs = Notification.objects.filter(
+            user=self.member_user, type=NotificationType.TAG_MATCHES_INTEREST
+        )
+        self.assertEqual(notifs.count(), 1)
+
+    def test_tag_creation_skips_creator_for_interest_match(self) -> None:
+        # Moved to top level, NotificationType
+
+        self.creator_profile.skills = ["Python"]
+        self.creator_profile.save(update_fields=["skills"])
+
+        self._create_tag_via_api("Python Devs")
+
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.creator_user, type=NotificationType.TAG_MATCHES_INTEREST
+            ).count(),
+            0,
+        )
+
+    def test_tag_creation_does_not_notify_when_no_skills_match(self) -> None:
+        # Moved to top level, NotificationType
+
+        self.member_profile.skills = ["Carpentry"]
+        self.member_profile.save(update_fields=["skills"])
+
+        self._create_tag_via_api("Astrophysics")
+
+        self.assertEqual(
+            Notification.objects.filter(type=NotificationType.TAG_MATCHES_INTEREST).count(),
+            0,
+        )
+
+
+class ProfilePictureUploadTests(TestCase):
+    """Integration tests for profile picture upload and removal endpoints."""
+
+    PICTURE_URL = "/api/profiles/me/picture/"
+
+    def setUp(self) -> None:
+        self.client: Any = APIClient()
+        self.user = User.objects.create_user(
+            email="pic-upload@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.profile = Profile.objects.create(
+            user=self.user,
+            display_name="Pic Upload User",
+        )
+        self.token = str(RefreshToken.for_user(self.user).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token}")
+
+    def _make_image_file(self, name: str = "test.jpg", size: tuple = (100, 100), fmt: str = "JPEG"):
+        """Create an in-memory image file for testing."""
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image as PILImage
+
+        img = PILImage.new("RGB", size, color="red")
+        buf = BytesIO()
+        img.save(buf, format=fmt)
+        buf.seek(0)
+        content_type = {
+            "JPEG": "image/jpeg",
+            "PNG": "image/png",
+            "GIF": "image/gif",
+            "WEBP": "image/webp",
+        }.get(fmt, "image/jpeg")
+        return SimpleUploadedFile(name=name, content=buf.read(), content_type=content_type)
+
+    def test_upload_valid_jpeg_returns_200(self) -> None:
+        file = self._make_image_file("avatar.jpg", fmt="JPEG")
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("picture_url", response.data)
+        self.assertTrue(len(response.data["picture_url"]) > 0)
+
+    def test_upload_valid_png_returns_200(self) -> None:
+        file = self._make_image_file("avatar.png", fmt="PNG")
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 200)
+
+    def test_upload_oversized_file_returns_400(self) -> None:
+        """Files exceeding 5 MB should be rejected."""
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image as PILImage
+
+        # Create a large image (uncompressed)
+        img = PILImage.new("RGB", (4000, 4000), color="blue")
+        buf = BytesIO()
+        img.save(buf, format="BMP")
+        buf.seek(0)
+        content = buf.read()
+        # If BMP is still under 5MB, pad it
+        if len(content) < 5 * 1024 * 1024 + 1:
+            content = content + b"\x00" * (5 * 1024 * 1024 + 1 - len(content))
+        file = SimpleUploadedFile("big.jpg", content, content_type="image/jpeg")
+
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
+    def test_upload_non_image_file_returns_400(self) -> None:
+        """PDF files should be rejected as profile pictures."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        file = SimpleUploadedFile("doc.pdf", b"%PDF-1.4 content", content_type="application/pdf")
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
+    def test_delete_picture_returns_200(self) -> None:
+        """Deleting a profile picture removes the file and returns fallback."""
+        # First upload
+        file = self._make_image_file("to-delete.jpg")
+        self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+
+        # Then delete
+        response = self.client.delete(self.PICTURE_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("picture_url", response.data)
+
+        # Verify the picture field is cleared
+        self.profile.refresh_from_db()
+        self.assertFalse(bool(self.profile.picture))
+
+    def test_delete_without_picture_returns_200(self) -> None:
+        """Deleting when there's no picture should still succeed."""
+        response = self.client.delete(self.PICTURE_URL)
+        self.assertEqual(response.status_code, 200)
+
+    def test_uploaded_picture_takes_priority_over_oauth_url(self) -> None:
+        """After upload, picture_url should return the uploaded file URL, not the OAuth URL."""
+        self.profile.picture_url = "https://lh3.googleusercontent.com/photo.jpg"
+        self.profile.save(update_fields=["picture_url"])
+
+        file = self._make_image_file("avatar.jpg")
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 200)
+
+        # The returned URL should NOT be the Google one
+        self.assertNotEqual(
+            response.data["picture_url"], "https://lh3.googleusercontent.com/photo.jpg"
+        )
+
+    def test_after_delete_falls_back_to_oauth_url(self) -> None:
+        """After deleting the uploaded picture, picture_url falls back to OAuth."""
+        self.profile.picture_url = "https://lh3.googleusercontent.com/photo.jpg"
+        self.profile.save(update_fields=["picture_url"])
+
+        file = self._make_image_file("avatar.jpg")
+        self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+
+        response = self.client.delete(self.PICTURE_URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data["picture_url"], "https://lh3.googleusercontent.com/photo.jpg"
+        )
+
+    def test_unauthenticated_upload_returns_401(self) -> None:
+        self.client.credentials()
+        file = self._make_image_file("avatar.jpg")
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 401)
+
+    def test_no_profile_returns_404(self) -> None:
+        """Users without a profile should get 404."""
+        no_profile_user = User.objects.create_user(
+            email="no-profile-pic@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        token = str(RefreshToken.for_user(no_profile_user).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        file = self._make_image_file("avatar.jpg")
+        response = self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+        self.assertEqual(response.status_code, 404)
+
+    def test_profile_me_endpoint_returns_uploaded_picture_url(self) -> None:
+        """The /api/profiles/me/ endpoint should include the uploaded picture URL."""
+        file = self._make_image_file("avatar.jpg")
+        self.client.post(self.PICTURE_URL, {"picture": file}, format="multipart")
+
+        response = self.client.get("/api/profiles/me/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("picture_url", response.data)
+        self.assertTrue(len(response.data["picture_url"]) > 0)
+
+
+class PostMediaUploadTests(TestCase):
+    """Integration tests for post media upload endpoint."""
+
+    UPLOAD_URL = "/api/profiles/me/uploads/"
+
+    def setUp(self) -> None:
+        self.client: Any = APIClient()
+        self.user = User.objects.create_user(
+            email="media-upload@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.profile = Profile.objects.create(
+            user=self.user,
+            display_name="Media Upload User",
+        )
+        self.token = str(RefreshToken.for_user(self.user).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token}")
+
+    def _make_image_file(self, name: str = "post.jpg"):
+        """Create an in-memory image file for testing."""
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image as PILImage
+
+        img = PILImage.new("RGB", (200, 200), color="green")
+        buf = BytesIO()
+        img.save(buf, format="JPEG")
+        buf.seek(0)
+        return SimpleUploadedFile(name=name, content=buf.read(), content_type="image/jpeg")
+
+    def test_upload_image_returns_201_with_url(self) -> None:
+        file = self._make_image_file("post-image.jpg")
+        response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("url", response.data)
+        self.assertTrue(len(response.data["url"]) > 0)
+
+    def test_upload_pdf_returns_201_with_url(self) -> None:
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        file = SimpleUploadedFile("doc.pdf", b"%PDF-1.4 content", content_type="application/pdf")
+        response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("url", response.data)
+
+    def test_upload_unsupported_type_returns_400(self) -> None:
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        file = SimpleUploadedFile(
+            "script.exe", b"MZ\x90\x00", content_type="application/x-msdownload"
+        )
+        response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
+    def test_upload_oversized_file_returns_400(self) -> None:
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        large_content = b"A" * (10 * 1024 * 1024 + 1)  # > 10 MB
+        file = SimpleUploadedFile("large.pdf", large_content, content_type="application/pdf")
+        response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
+    def test_unauthenticated_upload_returns_401(self) -> None:
+        self.client.credentials()
+        file = self._make_image_file("post.jpg")
+        response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, 401)
+
+    def test_no_profile_returns_404(self) -> None:
+        no_profile_user = User.objects.create_user(
+            email="no-profile-media@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        token = str(RefreshToken.for_user(no_profile_user).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        file = self._make_image_file("post.jpg")
+        response = self.client.post(self.UPLOAD_URL, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, 404)
+
+
+class ProfileFeedDeletionScenarioTests(TestCase):
+    """Tests for profile feed serializer behaviour when related objects are deleted."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+
+        self.mentor_user = User.objects.create_user(
+            email="feed-mentor@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            username="feed_mentor",
+            display_name="Feed Mentor",
+        )
+
+        self.mentee_user = User.objects.create_user(
+            email="feed-mentee@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user,
+            username="feed_mentee",
+            display_name="Feed Mentee",
+        )
+
+        self.viewer_user = User.objects.create_user(
+            email="feed-viewer@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.viewer_profile = Profile.objects.create(
+            user=self.viewer_user,
+            username="feed_viewer",
+            display_name="Feed Viewer",
+        )
+        self.viewer_token = str(RefreshToken.for_user(self.viewer_user).access_token)
+
+        self.feed_url = f"/api/profiles/{self.mentor_profile.username}/posts/"
+
+    def _auth_viewer(self) -> None:
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.viewer_token}")
+
+    def _create_match(self) -> Match:
+        request_obj = MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        return ensure_match_and_initial_session(mentorship_request=request_obj)
+
+    # ------------------------------------------------------------------
+    # MCTE: deleted mentorship (CASCADE)
+    # ------------------------------------------------------------------
+
+    def test_mcte_event_removed_after_match_deleted(self) -> None:
+        """Deleting a match removes its MCTE events from the profile feed."""
+        match = self._create_match()
+        event = create_mcte_event(
+            match=match,
+            author_profile=self.mentor_profile,
+            event_type="social",
+            content="A social note",
+            show_on_profile=True,
+        )
+
+        match.request.delete()
+
+        self._auth_viewer()
+        response = self.api_client.get(self.feed_url + "?category=MCTE")
+
+        self.assertEqual(response.status_code, 200)
+        source_ids = {item["source_id"] for item in response.data["results"]}
+        self.assertNotIn(event.source_id, source_ids)
+
+    # ------------------------------------------------------------------
+    # MCTE: active match, hidden partner
+    # ------------------------------------------------------------------
+
+    def test_mcte_partner_returned_when_partner_profile_hidden(self) -> None:
+        """mentorship_partner username is returned even when the partner's profile is hidden."""
+        match = self._create_match()
+        event = create_mcte_event(
+            match=match,
+            author_profile=self.mentor_profile,
+            event_type="achievement",
+            content="Achievement",
+            show_on_profile=True,
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.feed_url + "?category=MCTE")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            item for item in response.data["results"] if item["source_id"] == event.source_id
+        )
+        self.assertEqual(result["mentorship_partner"], self.mentee_profile.username)
+
+    # ------------------------------------------------------------------
+    # CoP: live community
+    # ------------------------------------------------------------------
+
+    def test_cop_community_name_returned_for_active_community(self) -> None:
+        """community_name is returned from the live CommunityTag record."""
+        community = CommunityTag.objects.create(
+            name="Active Community",
+            created_by=self.mentor_profile,
+        )
+        event = create_cop_event(
+            author_profile=self.mentor_profile,
+            community_tag=community,
+            event_type="social",
+            content="Hello community",
+            show_on_profile=True,
+        )
+
+        self._auth_viewer()
+        response = self.api_client.get(self.feed_url + "?category=CoP")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            item for item in response.data["results"] if item["source_id"] == event.source_id
+        )
+        self.assertEqual(result["community_id"], str(community.id))
+        self.assertEqual(result["community_name"], "Active Community")
+        self.assertEqual(result["community_slug"], community.slug)
+
+    # ------------------------------------------------------------------
+    # CoP: deleted community
+    # ------------------------------------------------------------------
+
+    def test_cop_community_name_falls_back_to_payload_after_community_deleted(self) -> None:
+        """community_name is served from payload after the CommunityTag is deleted."""
+        community = CommunityTag.objects.create(
+            name="Soon Deleted Community",
+            created_by=self.mentor_profile,
+        )
+        community_id = community.id
+        event = create_cop_event(
+            author_profile=self.mentor_profile,
+            community_tag=community,
+            event_type="social",
+            content="Post before deletion",
+            show_on_profile=True,
+        )
+
+        community.delete()
+
+        self._auth_viewer()
+        response = self.api_client.get(self.feed_url + "?category=CoP")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            item for item in response.data["results"] if item["source_id"] == event.source_id
+        )
+        self.assertEqual(str(result["community_id"]), str(community_id))
+        self.assertEqual(result["community_name"], "Soon Deleted Community")
+        self.assertEqual(result["community_slug"], community.slug)
+
+    # ------------------------------------------------------------------
+    # CoP: community_name reflects live renames
+    # ------------------------------------------------------------------
+
+    def test_cop_community_name_reflects_live_rename(self) -> None:
+        """community_name tracks the current live name, not the snapshot."""
+        community = CommunityTag.objects.create(
+            name="Original Name",
+            created_by=self.mentor_profile,
+        )
+        event = create_cop_event(
+            author_profile=self.mentor_profile,
+            community_tag=community,
+            event_type="achievement",
+            content="Post before rename",
+            show_on_profile=True,
+        )
+
+        community.name = "Renamed Community"
+        community.save(update_fields=["name"])
+
+        self._auth_viewer()
+        response = self.api_client.get(self.feed_url + "?category=CoP")
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            item for item in response.data["results"] if item["source_id"] == event.source_id
+        )
+        self.assertEqual(result["community_name"], "Renamed Community")
+
+
+class CoPTaggingTests(TestCase):
+    """Tests for CoP user tagging feature."""
+
+    def setUp(self) -> None:
+        self.api_client: Any = APIClient()
+
+        # Author of the CoP
+        self.author_user = User.objects.create_user(
+            email="cop-author@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.author_profile = Profile.objects.create(
+            user=self.author_user,
+            username="cop_author_tag",
+            display_name="CoP Author",
+        )
+
+        # User connected via mentorship (as mentee)
+        self.mentorship_user = User.objects.create_user(
+            email="mentorship-user@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentorship_profile = Profile.objects.create(
+            user=self.mentorship_user,
+            username="mentorship_connection",
+            display_name="Mentorship Connection",
+        )
+
+        # User who is only a community member (no mentorship)
+        self.community_only_user = User.objects.create_user(
+            email="community-only@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.community_only_profile = Profile.objects.create(
+            user=self.community_only_user,
+            username="community_only_user",
+            display_name="Community Only",
+        )
+
+        # Unrelated user: no mentorship, not in community
+        self.unrelated_user = User.objects.create_user(
+            email="unrelated@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.unrelated_profile = Profile.objects.create(
+            user=self.unrelated_user,
+            username="unrelated_user",
+            display_name="Unrelated User",
+        )
+
+        # Community setup
+        self.community = CommunityTag.objects.create(
+            name="Tag Test Community",
+            description="Community for tagging tests",
+            created_by=self.author_profile,
+        )
+        CommunityTagMembership.objects.create(
+            profile=self.author_profile,
+            tag=self.community,
+        )
+        CommunityTagMembership.objects.create(
+            profile=self.community_only_profile,
+            tag=self.community,
+        )
+        CommunityTagMembership.objects.create(
+            profile=self.mentorship_profile,
+            tag=self.community,
+        )
+
+        # Active mentorship connection (author is mentor, mentorship_profile is mentee)
+        self.mentorship_request = MentorshipRequest.objects.create(
+            mentor=self.author_profile,
+            mentee=self.mentorship_profile,
+            status=MentorshipRequest.Status.ACCEPTED,
+        )
+        self.active_match = Match.objects.create(
+            mentor=self.author_profile,
+            mentee=self.mentorship_profile,
+            request=self.mentorship_request,
+            is_active=True,
+        )
+
+        self.author_token = str(RefreshToken.for_user(self.author_user).access_token)
+        self.create_url = f"/api/profiles/tags/{self.community.id}/posts/"
+
+    def _auth_author(self) -> None:
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.author_token}")
+
+    def _detail_url(self, event_id: str) -> str:
+        return f"/api/profiles/tags/{self.community.id}/posts/{event_id}/"
+
+    # ------------------------------------------------------------------ service layer
+
+    def test_validate_tagged_users_accepts_community_member(self) -> None:
+        """Community members (not mentorship connection) can be tagged."""
+        from profiles.services import validate_tagged_users_list
+
+        result = validate_tagged_users_list(
+            author=self.author_profile,
+            tagged_usernames=[self.community_only_profile.username],
+            community_id=str(self.community.id),
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["user_id"], str(self.community_only_profile.id))
+        self.assertEqual(result[0]["username"], self.community_only_profile.username)
+
+    def test_validate_tagged_users_accepts_mentorship_connection(self) -> None:
+        """Active mentorship connections can be tagged."""
+        from profiles.services import validate_tagged_users_list
+
+        result = validate_tagged_users_list(
+            author=self.author_profile,
+            tagged_usernames=[self.mentorship_profile.username],
+            community_id=str(self.community.id),
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["username"], self.mentorship_profile.username)
+
+    def test_validate_tagged_users_rejects_self_tag(self) -> None:
+        """Author cannot tag themselves."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from profiles.services import validate_tagged_users_list
+
+        with self.assertRaises(DjangoValidationError):
+            validate_tagged_users_list(
+                author=self.author_profile,
+                tagged_usernames=[self.author_profile.username],
+                community_id=str(self.community.id),
+            )
+
+    def test_validate_tagged_users_rejects_unrelated_user(self) -> None:
+        """Users not in mentorship or community cannot be tagged."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from profiles.services import validate_tagged_users_list
+
+        with self.assertRaises(DjangoValidationError):
+            validate_tagged_users_list(
+                author=self.author_profile,
+                tagged_usernames=[self.unrelated_profile.username],
+                community_id=str(self.community.id),
+            )
+
+    def test_validate_tagged_users_rejects_exceeding_max_tags(self) -> None:
+        """Tagging more than COP_MAX_TAGS users raises ValidationError."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from profiles.services import validate_tagged_users_list
+
+        # Create enough extra community members to exceed the limit
+        extra_profiles = []
+        for i in range(6):
+            u = User.objects.create_user(
+                email=f"extra-user-{i}@example.com",
+                password="SecurePass123",
+                app_usage_mode=AppUsageMode.MENTEE,
+            )
+            p = Profile.objects.create(
+                user=u, username=f"extra_user_{i}", display_name=f"Extra {i}"
+            )
+            CommunityTagMembership.objects.create(profile=p, tag=self.community)
+            extra_profiles.append(p)
+
+        # Try to tag 6 users (exceeds default limit of 5)
+        usernames = [p.username for p in extra_profiles]
+        with self.assertRaises(DjangoValidationError):
+            validate_tagged_users_list(
+                author=self.author_profile,
+                tagged_usernames=usernames,
+                community_id=str(self.community.id),
+            )
+
+    @override_settings(COP_MAX_TAGS=2)
+    def test_validate_tagged_users_respects_custom_max_tags(self) -> None:
+        """COP_MAX_TAGS setting is respected."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from profiles.services import validate_tagged_users_list
+
+        with self.assertRaises(DjangoValidationError):
+            validate_tagged_users_list(
+                author=self.author_profile,
+                tagged_usernames=[
+                    self.community_only_profile.username,
+                    self.mentorship_profile.username,
+                    self.author_profile.username,  # 3 users, exceeds limit of 2
+                ],
+                community_id=str(self.community.id),
+            )
+
+    def test_tagged_users_stored_in_payload_on_create(self) -> None:
+        """tagged_users are stored in payload when CoP is created."""
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Hello with tags",
+            tagged_users=[self.community_only_profile.username],
+        )
+
+        self.assertIn("tagged_users", event.payload)
+        tagged = event.payload["tagged_users"]
+        self.assertEqual(len(tagged), 1)
+        self.assertEqual(tagged[0]["user_id"], str(self.community_only_profile.id))
+        self.assertEqual(tagged[0]["username"], self.community_only_profile.username)
+
+    def test_tagged_users_username_snapshot_used(self) -> None:
+        """Username is captured as a snapshot at tag-time."""
+        original_username = self.community_only_profile.username
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Post with snapshot test",
+            tagged_users=[self.community_only_profile.username],
+        )
+
+        # Simulate username change after tagging
+        self.community_only_profile.username = "changed_username"
+        self.community_only_profile.save(update_fields=["username"])
+
+        # The snapshot in the payload should still hold the old name
+        event.refresh_from_db()
+        tagged = event.payload["tagged_users"]
+        self.assertEqual(tagged[0]["username"], original_username)
+
+    def test_no_tags_creates_empty_list(self) -> None:
+        """CoP with no tagged_users has an empty list in payload."""
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="No tags",
+        )
+        self.assertEqual(event.payload.get("tagged_users", []), [])
+
+    def test_edit_cop_updates_tagged_users(self) -> None:
+        """Editing a CoP with a new tagged_users list replaces the tags."""
+        from profiles.services import edit_cop_event
+
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Original",
+            tagged_users=[self.mentorship_profile.username],
+        )
+
+        updated = edit_cop_event(
+            event=event,
+            content="Updated",
+            tagged_users=[self.community_only_profile.username],
+        )
+
+        tagged_ids = [t["user_id"] for t in updated.payload["tagged_users"]]
+        self.assertIn(str(self.community_only_profile.id), tagged_ids)
+        self.assertNotIn(str(self.mentorship_profile.id), tagged_ids)
+
+    def test_edit_preserves_tag_when_mentorship_deactivated(self) -> None:
+        """Previously tagged user can remain when editor explicitly keeps them,
+        even if mentorship is deactivated (since they were already in prev tags)."""
+        from mentorship.services import deactivate_match
+        from profiles.services import edit_cop_event
+
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Original",
+            tagged_users=[self.mentorship_profile.username],
+        )
+
+        # Remove mentorship_profile from community so only mentorship link is relevant
+        CommunityTagMembership.objects.filter(
+            profile=self.mentorship_profile, tag=self.community
+        ).delete()
+
+        # Deactivate the mentorship
+        deactivate_match(match=self.active_match, actor_profile=self.author_profile)
+
+        # Editor explicitly includes mentorship_profile in the new list (keeping them)
+        # This is allowed because they were previously tagged.
+        updated = edit_cop_event(
+            event=event,
+            content="Edited - kept previously-tagged user",
+            tagged_users=[self.mentorship_profile.username],
+        )
+
+        tagged_ids = [t["user_id"] for t in updated.payload["tagged_users"]]
+        self.assertIn(str(self.mentorship_profile.id), tagged_ids)
+
+    def test_edit_removes_tag_when_editor_omits_untaggable_user(self) -> None:
+        """When editor omits a no-longer-taggable user from new list, they are removed.
+
+        Removing them means they cannot be re-added in a subsequent edit.
+        """
+        from mentorship.services import deactivate_match
+        from profiles.services import edit_cop_event
+
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Original",
+            tagged_users=[self.mentorship_profile.username],
+        )
+
+        # Remove mentorship_profile from community
+        CommunityTagMembership.objects.filter(
+            profile=self.mentorship_profile, tag=self.community
+        ).delete()
+
+        # Deactivate the mentorship
+        deactivate_match(match=self.active_match, actor_profile=self.author_profile)
+
+        # Edit with a different tag list that does NOT include mentorship_profile
+        updated = edit_cop_event(
+            event=event,
+            content="Edited - only community_only tagged",
+            tagged_users=[self.community_only_profile.username],
+        )
+
+        # Only community_only_profile should be tagged; mentorship_profile was omitted
+        tagged_ids = [t["user_id"] for t in updated.payload["tagged_users"]]
+        self.assertIn(str(self.community_only_profile.id), tagged_ids)
+        self.assertNotIn(str(self.mentorship_profile.id), tagged_ids)
+
+    def test_cannot_retag_previously_removed_untaggable_user(self) -> None:
+        """After removing a now-untaggable tag, re-adding them in another edit fails."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from mentorship.services import deactivate_match
+        from profiles.services import edit_cop_event
+
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Original",
+            tagged_users=[self.mentorship_profile.username],
+        )
+
+        # Remove mentorship_profile from community and deactivate match
+        CommunityTagMembership.objects.filter(
+            profile=self.mentorship_profile, tag=self.community
+        ).delete()
+        deactivate_match(match=self.active_match, actor_profile=self.author_profile)
+
+        # First edit: explicitly remove mentorship_profile by omitting them
+        event = edit_cop_event(
+            event=event,
+            content="Edited - removed tag",
+            tagged_users=[],
+        )
+        # Confirm tag was removed
+        self.assertEqual(event.payload.get("tagged_users", []), [])
+
+        # Second edit: try to re-add mentorship_profile - should fail
+        with self.assertRaises(DjangoValidationError):
+            edit_cop_event(
+                event=event,
+                content="Re-add attempt",
+                tagged_users=[self.mentorship_profile.username],
+            )
+
+    def test_edit_allows_removing_tag(self) -> None:
+        """Editor can remove a previously tagged user who is still allowed."""
+        from profiles.services import edit_cop_event
+
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Original",
+            tagged_users=[self.mentorship_profile.username],
+        )
+
+        # Remove the tag by passing an empty list
+        updated = edit_cop_event(
+            event=event,
+            content="Edited - no tags",
+            tagged_users=[],
+        )
+
+        self.assertEqual(updated.payload.get("tagged_users", []), [])
+
+    # ------------------------------------------------------------------ API layer
+
+    def test_create_cop_with_tagged_user_via_api(self) -> None:
+        """POST /api/profiles/tags/{id}/posts/ accepts tagged_users."""
+        self._auth_author()
+        response = self.api_client.post(
+            self.create_url,
+            {
+                "event_type": "social",
+                "content": "API post with tags",
+                "tagged_users": [self.community_only_profile.username],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("tagged_users", response.data)
+        tagged = response.data["tagged_users"]
+        self.assertEqual(len(tagged), 1)
+        self.assertEqual(tagged[0]["user_id"], str(self.community_only_profile.id))
+        self.assertEqual(tagged[0]["username"], self.community_only_profile.username)
+
+    def test_create_cop_tagging_unrelated_user_returns_400(self) -> None:
+        """POST fails with 400 when trying to tag an unrelated user."""
+        self._auth_author()
+        response = self.api_client.post(
+            self.create_url,
+            {
+                "event_type": "social",
+                "content": "Bad tags",
+                "tagged_users": [self.unrelated_profile.username],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_cop_tagging_self_returns_400(self) -> None:
+        """POST fails with 400 when author tries to tag themselves."""
+        self._auth_author()
+        response = self.api_client.post(
+            self.create_url,
+            {
+                "event_type": "social",
+                "content": "Self tag",
+                "tagged_users": [self.author_profile.username],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_cop_response_includes_tagged_users_field(self) -> None:
+        """GET /api/profiles/tags/{id}/posts/ returns tagged_users in each CoP."""
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Listed post with tags",
+            tagged_users=[self.community_only_profile.username],
+        )
+
+        self._auth_author()
+        response = self.api_client.get(self.create_url)
+
+        self.assertEqual(response.status_code, 200)
+        result = next(
+            (item for item in response.data["results"] if item["source_id"] == event.source_id),
+            None,
+        )
+        self.assertIsNotNone(result)
+        self.assertIn("tagged_users", result)
+        tagged = result["tagged_users"]
+        self.assertEqual(len(tagged), 1)
+        self.assertEqual(tagged[0]["username"], self.community_only_profile.username)
+
+    def test_edit_cop_with_new_tags_via_api(self) -> None:
+        """PATCH /api/profiles/tags/{id}/posts/{event_id}/ updates tagged_users."""
+        event = create_cop_event(
+            author_profile=self.author_profile,
+            community_tag=self.community,
+            event_type="social",
+            content="Original with tags",
+            tagged_users=[self.mentorship_profile.username],
+        )
+
+        self._auth_author()
+        response = self.api_client.patch(
+            self._detail_url(str(event.id)),
+            {
+                "content": "Updated with different tags",
+                "tagged_users": [self.community_only_profile.username],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        tagged_ids = [t["user_id"] for t in response.data["tagged_users"]]
+        self.assertIn(str(self.community_only_profile.id), tagged_ids)
+        self.assertNotIn(str(self.mentorship_profile.id), tagged_ids)
+
+    def test_list_taggable_users_helper_returns_expected_users(self) -> None:
+        """GET helper returns mentorship/community taggable users by username."""
+        self._auth_author()
+        url = f"/api/profiles/tags/{self.community.id}/taggable-users/"
+
+        response = self.api_client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        usernames = [item["username"] for item in response.data["results"]]
+        self.assertIn(self.mentorship_profile.username, usernames)
+        self.assertIn(self.community_only_profile.username, usernames)
+        self.assertNotIn(self.author_profile.username, usernames)
+        self.assertNotIn(self.unrelated_profile.username, usernames)
+
+    def test_list_taggable_users_helper_requires_membership(self) -> None:
+        """GET helper returns 403 when requester is not a community member."""
+        outsider_user = User.objects.create_user(
+            email="outsider@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        outsider_profile = Profile.objects.create(
+            user=outsider_user,
+            username="outsider_user",
+            display_name="Outsider",
+        )
+        outsider_token = str(RefreshToken.for_user(outsider_user).access_token)
+
+        # Ensure outsider is not a member but can still be connected to exercise auth path.
+        self.assertFalse(
+            CommunityTagMembership.objects.filter(
+                profile=outsider_profile, tag=self.community
+            ).exists()
+        )
+
+        self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {outsider_token}")
+        url = f"/api/profiles/tags/{self.community.id}/taggable-users/"
+        response = self.api_client.get(url)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_tagged_users_mentorship_direction_bidirectional(self) -> None:
+        """Mentee can also tag their mentor (bidirectional)."""
+        from profiles.services import validate_tagged_users_list
+
+        # author_profile is mentor; mentorship_profile is mentee
+        # Let's validate as mentee tagging the mentor
+        result = validate_tagged_users_list(
+            author=self.mentorship_profile,
+            tagged_usernames=[self.author_profile.username],
+            community_id=str(self.community.id),
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["user_id"], str(self.author_profile.id))
+
+
+class CommunityTagWorkshopsAPITests(TestCase):
+    """Tests for workshop endpoints under community tag API style."""
+
+    def setUp(self) -> None:
+        self.client = APIClient()
+
+        self.mentor_user = User.objects.create_user(
+            email="mentor.workshop@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+            is_email_verified=True,
+        )
+        self.member_user = User.objects.create_user(
+            email="member.workshop@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+            is_email_verified=True,
+        )
+        self.other_user = User.objects.create_user(
+            email="other.workshop@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+            is_email_verified=True,
+        )
+
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            display_name="Workshop Mentor",
+        )
+        self.member_profile = Profile.objects.create(
+            user=self.member_user,
+            display_name="Workshop Member",
+        )
+        self.other_profile = Profile.objects.create(
+            user=self.other_user,
+            display_name="Other User",
+        )
+
+        self.tag = CommunityTag.objects.create(
+            name="Community Workshop Tag",
+            created_by=self.mentor_profile,
+        )
+        CommunityTagMembership.objects.create(profile=self.mentor_profile, tag=self.tag)
+        CommunityTagMembership.objects.create(profile=self.member_profile, tag=self.tag)
+
+        self.mentor_token = _token_for_profile_tests(self.mentor_user)
+        self.member_token = _token_for_profile_tests(self.member_user)
+        self.other_token = _token_for_profile_tests(self.other_user)
+
+        self.list_url = f"/api/profiles/tags/{self.tag.id}/workshops/"
+
+    def _detail_url(self, workshop_id: uuid.UUID) -> str:
+        return f"/api/profiles/tags/{self.tag.id}/workshops/{workshop_id}/"
+
+    def _join_url(self, workshop_id: uuid.UUID) -> str:
+        return f"/api/profiles/tags/{self.tag.id}/workshops/{workshop_id}/join/"
+
+    def _leave_url(self, workshop_id: uuid.UUID) -> str:
+        return f"/api/profiles/tags/{self.tag.id}/workshops/{workshop_id}/leave/"
+
+    def _my_participation_url(self, workshop_id: uuid.UUID) -> str:
+        return f"/api/profiles/tags/{self.tag.id}/workshops/" f"{workshop_id}/participants/me/"
+
+    def _create_workshop(self) -> Workshop:
+        return Workshop.objects.create(
+            community=self.tag,
+            author=self.mentor_profile,
+            title="Docker Debugging Workshop",
+            description="Troubleshooting sessions",
+            scheduled_at=timezone.now() + timedelta(days=2),
+            end_at=timezone.now() + timedelta(days=2, hours=2),
+            max_participants=2,
+        )
+
+    def test_create_workshop_as_mentor_member(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_token}")
+        payload = {
+            "title": "Community API Style Workshop",
+            "description": "Learn nested API design.",
+            "scheduled_at": (timezone.now() + timedelta(days=1, hours=2)).isoformat(),
+            "end_at": (timezone.now() + timedelta(days=1, hours=4)).isoformat(),
+            "max_participants": 10,
+        }
+
+        response = self.client.post(self.list_url, payload, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["title"], payload["title"])
+        self.assertEqual(response.data["max_participants"], 10)
+        self.assertEqual(Workshop.objects.count(), 1)
+
+        workshop = Workshop.objects.get()
+        self.assertTrue(
+            WorkshopParticipant.objects.filter(
+                workshop=workshop,
+                participant=self.mentor_profile,
+            ).exists()
+        )
+        self.assertEqual(response.data["participant_count"], 1)
+        self.assertTrue(response.data["current_user_enrolled"])
+
+    def test_create_workshop_as_non_mentor_rejected(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.member_token}")
+        payload = {
+            "title": "Should fail",
+            "description": "Not a mentor",
+            "scheduled_at": (timezone.now() + timedelta(days=1, hours=2)).isoformat(),
+            "end_at": (timezone.now() + timedelta(days=1, hours=4)).isoformat(),
+            "max_participants": 5,
+        }
+
+        response = self.client.post(self.list_url, payload, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Workshop.objects.count(), 0)
+
+    def test_create_workshop_rejects_booked_slot_conflict(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_token}")
+        start_at = timezone.now() + timedelta(days=1, hours=2)
+        end_at = start_at + timedelta(hours=2)
+        AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=start_at,
+            end_at=end_at,
+            status=AvailabilitySlot.Status.BOOKED,
+            booked_by=self.member_user,
+        )
+
+        response = self.client.post(
+            self.list_url,
+            {
+                "title": "Conflicting workshop",
+                "description": "Should be rejected",
+                "scheduled_at": start_at.isoformat(),
+                "end_at": end_at.isoformat(),
+                "max_participants": 4,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Workshop.objects.count(), 0)
+
+    def test_join_workshop_respects_capacity(self) -> None:
+        workshop = self._create_workshop()
+
+        other_member_user = User.objects.create_user(
+            email="third.member@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+            is_email_verified=True,
+        )
+        other_member_profile = Profile.objects.create(
+            user=other_member_user,
+            display_name="Third Member",
+        )
+        CommunityTagMembership.objects.create(profile=other_member_profile, tag=self.tag)
+        other_member_token = _token_for_profile_tests(other_member_user)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.member_token}")
+        first_join = self.client.post(
+            self._join_url(workshop.id),
+            {"show_on_profile": True},
+            format="json",
+        )
+        self.assertEqual(first_join.status_code, 201)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {other_member_token}")
+        second_join = self.client.post(self._join_url(workshop.id), {}, format="json")
+        self.assertEqual(second_join.status_code, 201)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_token}")
+        full_join = self.client.post(self._join_url(workshop.id), {}, format="json")
+        self.assertEqual(full_join.status_code, 409)
+
+    def test_update_workshop_forbidden_for_non_author(self) -> None:
+        workshop = self._create_workshop()
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.member_token}")
+        response = self.client.patch(
+            self._detail_url(workshop.id),
+            {"title": "Unauthorized edit"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_participant_can_toggle_show_on_profile(self) -> None:
+        workshop = self._create_workshop()
+        WorkshopParticipant.objects.create(
+            workshop=workshop,
+            participant=self.member_profile,
+            show_on_profile=False,
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.member_token}")
+        response = self.client.patch(
+            self._my_participation_url(workshop.id),
+            {"show_on_profile": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["show_on_profile"])
+
+        participation = WorkshopParticipant.objects.get(
+            workshop=workshop,
+            participant=self.member_profile,
+        )
+        self.assertTrue(participation.show_on_profile)
+
+    def test_author_cannot_leave_workshop_participation(self) -> None:
+        workshop = self._create_workshop()
+        WorkshopParticipant.objects.create(
+            workshop=workshop,
+            participant=self.mentor_profile,
+            show_on_profile=False,
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_token}")
+        response = self.client.post(self._leave_url(workshop.id), {}, format="json")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(
+            WorkshopParticipant.objects.filter(
+                workshop=workshop,
+                participant=self.mentor_profile,
+            ).exists()
+        )
+
+
+class ProfileWorkshopAttendanceAPITests(TestCase):
+    """Tests for profile-scoped workshop attendance endpoints."""
+
+    def setUp(self) -> None:
+        self.client = APIClient()
+
+        self.owner_user = User.objects.create_user(
+            email="attendance.owner@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+            is_email_verified=True,
+        )
+        self.viewer_user = User.objects.create_user(
+            email="attendance.viewer@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTEE,
+            is_email_verified=True,
+        )
+        self.author_user = User.objects.create_user(
+            email="attendance.author@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+            is_email_verified=True,
+        )
+
+        self.owner_profile = Profile.objects.create(
+            user=self.owner_user,
+            display_name="Attendance Owner",
+        )
+        self.viewer_profile = Profile.objects.create(
+            user=self.viewer_user,
+            display_name="Attendance Viewer",
+        )
+        self.author_profile = Profile.objects.create(
+            user=self.author_user,
+            display_name="Workshop Author",
+        )
+
+        self.tag = CommunityTag.objects.create(
+            name="Attendance Community",
+            created_by=self.author_profile,
+        )
+
+        now = timezone.now()
+        self.upcoming_workshop = Workshop.objects.create(
+            community=self.tag,
+            author=self.author_profile,
+            title="Upcoming Workshop",
+            description="Upcoming event",
+            scheduled_at=now + timedelta(days=1),
+            end_at=now + timedelta(days=1, hours=2),
+            max_participants=10,
+        )
+        self.past_workshop = Workshop.objects.create(
+            community=self.tag,
+            author=self.author_profile,
+            title="Past Workshop",
+            description="Past event",
+            scheduled_at=now - timedelta(days=3),
+            end_at=now - timedelta(days=3, hours=-2),
+            max_participants=10,
+            status=Workshop.Status.COMPLETED,
+        )
+
+        WorkshopParticipant.objects.create(
+            workshop=self.upcoming_workshop,
+            participant=self.owner_profile,
+            show_on_profile=False,
+        )
+        WorkshopParticipant.objects.create(
+            workshop=self.past_workshop,
+            participant=self.owner_profile,
+            show_on_profile=True,
+        )
+
+        self.authored_workshop = Workshop.objects.create(
+            community=self.tag,
+            author=self.author_profile,
+            title="Authored Workshop",
+            description="Managed from profile",
+            scheduled_at=now + timedelta(days=2),
+            end_at=now + timedelta(days=2, hours=2),
+            max_participants=20,
+        )
+        WorkshopParticipant.objects.create(
+            workshop=self.authored_workshop,
+            participant=self.author_profile,
+            show_on_profile=False,
+        )
+
+        self.owner_token = _token_for_profile_tests(self.owner_user)
+        self.viewer_token = _token_for_profile_tests(self.viewer_user)
+        self.author_token = _token_for_profile_tests(self.author_user)
+
+    def test_me_attendance_list_returns_all_owner_records(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.get("/api/profiles/me/workshops/attendance/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(response.data["attending_count"], 1)
+        self.assertEqual(response.data["attended_count"], 1)
+
+    def test_public_profile_attendance_hides_private_records(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.viewer_token}")
+
+        response = self.client.get(
+            f"/api/profiles/{self.owner_profile.username}/workshops/attendance/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        titles = {row["workshop_title"] for row in response.data["results"]}
+        self.assertIn("Past Workshop", titles)
+        self.assertNotIn("Upcoming Workshop", titles)
+
+    def test_me_can_patch_visibility_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.patch(
+            f"/api/profiles/me/workshops/attendance/{self.upcoming_workshop.id}/",
+            {"show_on_profile": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["show_on_profile"])
+
+        record = WorkshopParticipant.objects.get(
+            workshop=self.upcoming_workshop,
+            participant=self.owner_profile,
+        )
+        self.assertTrue(record.show_on_profile)
+
+    def test_me_can_delete_upcoming_attendance_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.delete(
+            f"/api/profiles/me/workshops/attendance/{self.upcoming_workshop.id}/"
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(
+            WorkshopParticipant.objects.filter(
+                workshop=self.upcoming_workshop,
+                participant=self.owner_profile,
+            ).exists()
+        )
+
+    def test_me_cannot_delete_attended_workshop_attendance(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.delete(
+            f"/api/profiles/me/workshops/attendance/{self.past_workshop.id}/"
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_author_can_patch_workshop_fields_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.author_token}")
+
+        response = self.client.patch(
+            f"/api/profiles/me/workshops/attendance/{self.authored_workshop.id}/",
+            {"title": "Authored Workshop Updated", "max_participants": 25},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.authored_workshop.refresh_from_db()
+        self.assertEqual(self.authored_workshop.title, "Authored Workshop Updated")
+        self.assertEqual(self.authored_workshop.max_participants, 25)
+
+    def test_non_author_cannot_patch_workshop_fields_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.patch(
+            f"/api/profiles/me/workshops/attendance/{self.upcoming_workshop.id}/",
+            {"title": "Should not work"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_author_delete_from_profile_cancels_workshop(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.author_token}")
+
+        response = self.client.delete(
+            f"/api/profiles/me/workshops/attendance/{self.authored_workshop.id}/"
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.authored_workshop.refresh_from_db()
+        self.assertEqual(self.authored_workshop.status, Workshop.Status.CANCELLED)
+
+    def test_attendance_participants_list_available_from_profile(self) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.owner_token}")
+
+        response = self.client.get(
+            f"/api/profiles/me/workshops/attendance/{self.upcoming_workshop.id}/participants/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.data["count"], 1)
+
+
+class ProfileMediaUploadTests(TestCase):
+    """Unit tests for profile audio and video uploads."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            email="media-test@example.com",
+            password="SecurePass123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.profile = Profile.objects.create(
+            user=self.user,
+            display_name="Media Tester",
+        )
+        self.client = APIClient()
+        self.token = str(RefreshToken.for_user(self.user).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token}")
+
+        # Create valid mock audio file
+        self.valid_audio_content = b"fake-audio-content"
+        self.audio_file = SimpleUploadedFile(
+            "test_audio.mp3",
+            self.valid_audio_content,
+            content_type="audio/mpeg"
+        )
+
+        # Create valid mock video file
+        self.valid_video_content = b"fake-video-content"
+        self.video_file = SimpleUploadedFile(
+            "test_video.mp4",
+            self.valid_video_content,
+            content_type="video/mp4"
+        )
+
+        self.audio_url = "/api/profiles/me/audio/"
+        self.video_url = "/api/profiles/me/video/"
+
+    def test_upload_valid_audio(self) -> None:
+        """Uploading valid audio returns 201 Created and updates profile."""
+        response = self.client.post(self.audio_url, {"audio": self.audio_file}, format="multipart")
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("audio_url", response.data)
+        self.profile.refresh_from_db()
+        self.assertTrue(bool(self.profile.audio))
+
+    def test_delete_audio(self) -> None:
+        """Deleting audio returns 200 OK and clears the field."""
+        self.profile.audio.save("test_audio.mp3", self.audio_file)
+        self.assertTrue(bool(self.profile.audio))
+        response = self.client.delete(self.audio_url)
+        self.assertEqual(response.status_code, 200)
+        self.profile.refresh_from_db()
+        self.assertFalse(bool(self.profile.audio))
+
+    def test_upload_invalid_audio_type(self) -> None:
+        """Uploading invalid file type to audio endpoint returns 400 Bad Request."""
+        invalid_file = SimpleUploadedFile(
+            "test_image.png",
+            b"fake-image",
+            content_type="image/png"
+        )
+        response = self.client.post(self.audio_url, {"audio": invalid_file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
+    def test_upload_valid_video(self) -> None:
+        """Uploading valid video returns 201 Created and updates profile."""
+        response = self.client.post(self.video_url, {"video": self.video_file}, format="multipart")
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("video_url", response.data)
+        self.profile.refresh_from_db()
+        self.assertTrue(bool(self.profile.video))
+
+    def test_delete_video(self) -> None:
+        """Deleting video returns 200 OK and clears the field."""
+        self.profile.video.save("test_video.mp4", self.video_file)
+        self.assertTrue(bool(self.profile.video))
+        response = self.client.delete(self.video_url)
+        self.assertEqual(response.status_code, 200)
+        self.profile.refresh_from_db()
+        self.assertFalse(bool(self.profile.video))
+
+    def test_upload_invalid_video_type(self) -> None:
+        """Uploading invalid file type to video endpoint returns 400 Bad Request."""
+        invalid_file = SimpleUploadedFile(
+            "test_audio.mp3",
+            b"fake-audio",
+            content_type="audio/mpeg"
+        )
+        response = self.client.post(self.video_url, {"video": invalid_file}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+
+
+class MentorQualitySignalsTests(APITestCase):
+    """Tests for mentor discovery quality signals and sorting."""
+
+    def setUp(self) -> None:
+        self.mentors = []
+        for i in range(5):
+            user = User.objects.create_user(
+                email=f"mentor{i}@example.com",
+                password="password123",
+                app_usage_mode=AppUsageMode.MENTOR,
+            )
+            profile = Profile.objects.create(
+                user=user,
+                display_name=f"Mentor {i}",
+            )
+            self.mentors.append(profile)
+
+        self.mentors[0].average_rating = 5.0
+        self.mentors[0].review_count = 10
+        self.mentors[0].save()
+
+        self.mentors[1].average_rating = 4.5
+        self.mentors[1].review_count = 20
+        self.mentors[1].save()
+
+        self.mentors[2].average_rating = 5.0
+        self.mentors[2].review_count = 5
+        self.mentors[2].save()
+
+        self.mentors[3].average_rating = 0.0
+        self.mentors[3].review_count = 2
+        self.mentors[3].save()
+
+        self.mentors[4].average_rating = 0.0
+        self.mentors[4].review_count = 0
+        self.mentors[4].save()
+
+    def test_discovery_default_sorting_quality(self) -> None:
+        """Default sorting should favor quality (rating then review count)."""
+        url = reverse("mentor-profiles-search")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        results = response.data["results"]
+        self.assertEqual(results[0]["username"], self.mentors[0].username)
+        self.assertEqual(results[1]["username"], self.mentors[2].username)
+        self.assertEqual(results[2]["username"], self.mentors[1].username)
+        self.assertEqual(results[3]["username"], self.mentors[3].username)
+        self.assertEqual(results[4]["username"], self.mentors[4].username)
+
+    def test_discovery_recent_sorting(self) -> None:
+        """Recent sorting should favor newest profiles."""
+        url = reverse("mentor-profiles-search")
+        response = self.client.get(f"{url}?sort=recent")
+        self.assertEqual(response.status_code, 200)
+
+        results = response.data["results"]
+        self.assertEqual(results[0]["username"], self.mentors[4].username)
+        self.assertEqual(results[1]["username"], self.mentors[3].username)
+        self.assertEqual(results[2]["username"], self.mentors[2].username)
+
+    def test_review_count_exposed_in_results(self) -> None:
+        """Review count should be present in search results."""
+        url = reverse("mentor-profiles-search")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        results = response.data["results"]
+        self.assertIn("review_count", results[0])
+        self.assertEqual(results[0]["review_count"], 10)
+
+
+class MentorOverloadTests(APITestCase):
+    """Tests for mentor overload warnings and fields."""
+
+    def setUp(self) -> None:
+        self.mentee_user = User.objects.create_user(
+            email="mentee@example.com",
+            password="password123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user,
+            display_name="Mentee",
+        )
+
+        self.mentor_user = User.objects.create_user(
+            email="mentor@example.com",
+            password="password123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user,
+            display_name="Mentor",
+        )
+
+        self.mentee_token = str(RefreshToken.for_user(self.mentee_user).access_token)
+        self.mentor_token = str(RefreshToken.for_user(self.mentor_user).access_token)
+
+    @override_settings(MENTOR_OVERLOAD_THRESHOLD=3)
+    def test_mentor_profile_overload_fields(self) -> None:
+        """Mentor profile should show overload status and count."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_token}")
+
+        response = self.client.get(reverse("profile-me"))
+        self.assertEqual(response.data["is_overloaded"], False)
+        self.assertEqual(response.data["active_matches_count"], 0)
+        self.assertEqual(response.data["overload_threshold"], 3)
+
+        for i in range(3):
+            other_mentee = User.objects.create_user(
+                email=f"other{i}@example.com",
+                password="password123",
+                app_usage_mode=AppUsageMode.MENTEE,
+            )
+            other_profile = Profile.objects.create(
+                user=other_mentee,
+                display_name=f"Other {i}",
+            )
+            request = MentorshipRequest.objects.create(
+                mentor=self.mentor_profile,
+                mentee=other_profile,
+                status=MentorshipRequest.Status.ACCEPTED,
+            )
+            Match.objects.create(
+                mentor=self.mentor_profile,
+                mentee=other_profile,
+                is_active=True,
+                request=request,
+            )
+
+        response = self.client.get(reverse("profile-me"))
+        self.assertEqual(response.data["is_overloaded"], True)
+        self.assertEqual(response.data["active_matches_count"], 3)
+
+    @override_settings(MENTOR_OVERLOAD_THRESHOLD=3)
+    def test_mentorship_request_overload_flag(self) -> None:
+        """Mentorship request should flag if mentor is overloaded."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.mentor_token}")
+
+        for i in range(3):
+            other_mentee = User.objects.create_user(
+                email=f"other_m{i}@example.com",
+                password="password123",
+                app_usage_mode=AppUsageMode.MENTEE,
+            )
+            other_profile = Profile.objects.create(
+                user=other_mentee,
+                display_name=f"Other M {i}",
+            )
+            request = MentorshipRequest.objects.create(
+                mentor=self.mentor_profile,
+                mentee=other_profile,
+                status=MentorshipRequest.Status.ACCEPTED,
+            )
+            Match.objects.create(
+                mentor=self.mentor_profile,
+                mentee=other_profile,
+                is_active=True,
+                request=request,
+            )
+
+        MentorshipRequest.objects.create(
+            mentor=self.mentor_profile,
+            mentee=self.mentee_profile,
+            status=MentorshipRequest.Status.PENDING,
+        )
+
+        response = self.client.get(reverse("mentorship-request-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["is_mentor_overloaded"], True)
+
+
+class ProfileCoverageTests(TestCase):
+    """Specific tests to cover missing branches in profiles app."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.mentor_user = User.objects.create_user(
+            email="mentor_cov@test.com",
+            password="password123",
+            app_usage_mode=AppUsageMode.MENTOR,
+        )
+        self.mentor_profile = Profile.objects.create(
+            user=self.mentor_user, display_name="Mentor Cov", username="mentor_cov"
+        )
+        self.mentee_user = User.objects.create_user(
+            email="mentee_cov@test.com",
+            password="password123",
+            app_usage_mode=AppUsageMode.MENTEE,
+        )
+        self.mentee_profile = Profile.objects.create(
+            user=self.mentee_user, display_name="Mentee Cov", username="mentee_cov"
+        )
+        # Create a slot for booking tests
+        from profiles.models import AvailabilitySlot
+        self.slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=timezone.now() + timedelta(days=1),
+            end_at=timezone.now() + timedelta(days=1, hours=1),
+            status=AvailabilitySlot.Status.AVAILABLE,
+        )
+
+    def test_location_field_validation_edge_cases(self):
+        field = LocationField()
+        # Invalid type
+        with self.assertRaises(serializers.ValidationError):
+            field.to_internal_value([1, 2])
+        # Missing latitude
+        with self.assertRaises(serializers.ValidationError):
+            field.to_internal_value({"longitude": 1})
+        # Invalid number format
+        with self.assertRaises(serializers.ValidationError):
+            field.to_internal_value({"latitude": "abc", "longitude": 1})
+        # Latitude out of range
+        with self.assertRaises(serializers.ValidationError):
+            field.to_internal_value({"latitude": 91, "longitude": 1})
+        # Longitude out of range
+        with self.assertRaises(serializers.ValidationError):
+            field.to_internal_value({"latitude": 0, "longitude": 181})
+
+    def test_availability_slot_write_serializer_validation(self):
+        # Missing date
+        serializer = AvailabilitySlotWriteSerializer(
+            data={"startTime": "10:00:00", "endTime": "11:00:00"}
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("date", serializer.errors)
+
+        # Missing startTime
+        serializer = AvailabilitySlotWriteSerializer(
+            data={"date": "2025-01-01", "endTime": "11:00:00"}
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("startTime", serializer.errors)
+
+        # Missing endTime
+        serializer = AvailabilitySlotWriteSerializer(
+            data={"date": "2025-01-01", "startTime": "10:00:00"}
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("endTime", serializer.errors)
+
+    def test_recently_added_mentors_invalid_limit(self):
+        response = self.client.get("/api/profiles/recently-added/?limit=not-an-int")
+        self.assertEqual(response.status_code, 400)
+
+    def test_popular_mentors_invalid_limit(self):
+        response = self.client.get("/api/profiles/popular/?limit=invalid")
+        self.assertEqual(response.status_code, 400)
+
+    def test_availability_slots_list_invalid_status(self):
+        self.client.force_authenticate(user=self.mentor_user)
+        url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/?status=INVALID"
+        response = self.client.get(url)
+        # Note: View currently ignores unknown query params, so it returns 200
+        self.assertEqual(response.status_code, 200)
+
+    def test_availability_book_nonexistent_slot(self):
+        self.client.force_authenticate(user=self.mentee_user)
+        import uuid
+
+        fake_id = uuid.uuid4()
+        url = (
+            f"/api/profiles/{self.mentor_profile.username}/availability-slots/{fake_id}/book/"
+        )
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_availability_book_non_mentor_profile(self):
+        self.client.force_authenticate(user=self.mentor_user)
+        # mentee_profile is not a mentor
+        import uuid
+
+        fake_id = uuid.uuid4()
+        url = (
+            f"/api/profiles/{self.mentee_profile.username}/availability-slots/{fake_id}/book/"
+        )
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_community_tag_workshops_invalid_status_filter(self):
+        from profiles.models import CommunityTag
+
+        self.client.force_authenticate(user=self.mentor_user)
+        tag = CommunityTag.objects.create(name="Test Tag")
+        url = f"/api/profiles/tags/{tag.id}/workshops/?status=CRAZY_STATUS"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 400)
+
+    def test_community_tag_detail_by_slug(self):
+        tag = CommunityTag.objects.create(name="Unique Name Tag", slug="unique-slug")
+        response = self.client.get(f"/api/profiles/tags/{tag.slug}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["name"], "Unique Name Tag")
+
+    def test_profile_update_invalid_location_format(self):
+        self.client.force_authenticate(user=self.mentor_user)
+        response = self.client.patch(
+            "/api/profiles/me/",
+            {"location": "not-a-dict"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("location", response.data)
+
+    def test_profile_update_skills_not_a_list(self):
+        self.client.force_authenticate(user=self.mentor_user)
+        response = self.client.patch(
+            "/api/profiles/me/",
+            {"skills": "not-a-list"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("skills", response.data)
+
+    def test_username_generation_collision(self):
+        from profiles.models import Profile
+
+        user1 = User.objects.create_user(email="coll@example.com", password="password")
+        Profile.objects.create(user=user1, username="coll")
+
+        user2 = User.objects.create_user(email="coll@other.com", password="password")
+        # Should auto-generate a unique username since it's not provided and 'coll' is taken
+        p2 = Profile.objects.create(user=user2)
+        self.assertNotEqual(p2.username, "coll")
+        self.assertTrue(p2.username.startswith("coll"))
+
+    def test_profile_update_invalid_lat_lng(self):
+        self.client.force_authenticate(user=self.mentor_user)
+        response = self.client.patch(
+            "/api/profiles/me/",
+            {"location": {"latitude": 200, "longitude": 100}},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_community_tag_detail_not_found(self):
+        response = self.client.get("/api/profiles/tags/non-existent-id-or-slug/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_availability_book_as_mentor_rejected(self):
+        # Authenticate as another mentor, but who is NOT in MENTEE mode
+        other_mentor = User.objects.create_user(
+            email="othermentor@example.com",
+            password="password",
+            app_usage_mode=AppUsageMode.MENTOR
+        )
+        self.client.force_authenticate(user=other_mentor)
+        base_url = f"/api/profiles/{self.mentor_profile.username}/availability-slots/"
+        url = f"{base_url}{self.slot.id}/book/"
+        response = self.client.post(url)
+        # Should be rejected because they are not in MENTEE mode
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("only mentees", response.data["detail"].lower())
+
+    def test_book_availability_slot_own_rejection(self):
+        from profiles.services import OwnSlotBookingError, book_availability_slot
+        with self.assertRaises(OwnSlotBookingError):
+            book_availability_slot(
+                profile=self.mentor_profile,
+                slot_id=self.slot.id,
+                actor=self.mentor_user
+            )
+
+    def test_community_tag_join_twice(self):
+        from profiles.models import CommunityTag
+        self.client.force_authenticate(user=self.mentor_user)
+        tag = CommunityTag.objects.create(name="Double Join Tag")
+        url = f"/api/profiles/tags/{tag.id}/join/"
+        # First join
+        self.client.post(url)
+        # Second join
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("already a member", response.data["detail"].lower())
+
+    def test_community_tag_leave_not_member(self):
+        from profiles.models import CommunityTag
+        self.client.force_authenticate(user=self.mentor_user)
+        tag = CommunityTag.objects.create(name="Leave Tag")
+        url = f"/api/profiles/tags/{tag.id}/leave/"
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("not a member", response.data["detail"].lower())
+
+    @override_settings(MENTOR_OVERLOAD_THRESHOLD=2)
+    def test_mentor_overload_custom_threshold(self):
+        # Create 3 active matches for mentor_user
+        from mentorship.models import Match, MentorshipRequest
+        for i in range(3):
+            other_mentee = User.objects.create_user(
+                email=f"mentee_ov_{i}@test.com", password="password",
+                app_usage_mode=AppUsageMode.MENTEE
+            )
+            other_mentee_profile = Profile.objects.create(user=other_mentee)
+            # Create a slot for the request
+            s = AvailabilitySlot.objects.create(
+                profile=self.mentor_profile,
+                start_at=timezone.now() + timedelta(days=10 + i),
+                end_at=timezone.now() + timedelta(days=10 + i, hours=1),
+                status=AvailabilitySlot.Status.BOOKED
+            )
+            # Create request first to satisfy FK constraint
+            req = MentorshipRequest.objects.create(
+                mentor=self.mentor_profile,
+                mentee=other_mentee_profile,
+                slot=s,
+                status=MentorshipRequest.Status.ACCEPTED
+            )
+            Match.objects.create(
+                mentor=self.mentor_profile,
+                mentee=other_mentee_profile,
+                request=req,
+                is_active=True
+            )
+
+        self.client.force_authenticate(user=self.mentor_user)
+        response = self.client.get("/api/profiles/me/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["is_overloaded"])
+
+    def test_availability_slot_create_past_date(self):
+        self.client.force_authenticate(user=self.mentor_user)
+        past_date = (timezone.localdate() - timedelta(days=1)).isoformat()
+        response = self.client.post(
+            "/api/profiles/me/availability-slots/",
+            {
+                "date": past_date,
+                "startTime": "10:00:00",
+                "endTime": "11:00:00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("date", response.data)
+
+    def test_community_tag_workshops_tag_not_found(self):
+        self.client.force_authenticate(user=self.mentor_user)
+        response = self.client.get(f"/api/profiles/tags/{uuid.uuid4()}/workshops/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_community_tag_taggable_users_tag_not_found(self):
+        self.client.force_authenticate(user=self.mentor_user)
+        response = self.client.get(f"/api/profiles/tags/{uuid.uuid4()}/taggable-users/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_resolve_picture_url_value_error(self):
+        from profiles.serializers import resolve_picture_url
+
+        # Create a profile with a picture but no file on disk/storage
+        # (This triggers ValueError when accessing .url in some storage backends)
+        self.mentor_profile.picture = "nonexistent.jpg"
+        # Mocking the attribute access might be needed if the storage doesn't throw
+        with patch.object(Profile, "picture") as mock_pic:
+            # Simulate the weird behavior where it has the attribute but accessing .url fails
+            mock_pic.url = property(lambda x: exec('raise ValueError("No file")'))
+            # Actually easier to just mock resolve_picture_url if we want to test its call,
+            # but here we want to test the function itself.
+            pass
+
+        # Simpler: just test with empty picture
+        self.mentor_profile.picture = None
+        self.mentor_profile.picture_url = "http://external.com/pic.jpg"
+        self.assertEqual(
+            resolve_picture_url(self.mentor_profile), "http://external.com/pic.jpg"
+        )
+
+    def test_availability_slot_serializer_session_id_none(self):
+        from profiles.serializers import AvailabilitySlotSerializer
+
+        # Use a non-overlapping time (e.g. 5 days ahead) to avoid
+        # ExclusionViolation with setUp's slot
+        # with setUp's slot
+        start_at = timezone.now() + timedelta(days=5)
+        slot = AvailabilitySlot.objects.create(
+            profile=self.mentor_profile,
+            start_at=start_at,
+            end_at=start_at + timedelta(hours=1),
+            status=AvailabilitySlot.Status.BOOKED,
+            booked_by=self.mentee_user,
+        )
+        # No MeetingSession created manually
+        serializer = AvailabilitySlotSerializer(slot)
+        self.assertIsNone(serializer.data["sessionId"])

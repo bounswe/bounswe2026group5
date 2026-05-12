@@ -14,8 +14,20 @@ const renderDiscoverIcon = ({ color }: { color: string }) => (
   <IconSymbol size={28} name="magnifyingglass" color={color} />
 );
 
-const renderScheduleIcon = ({ color }: { color: string }) => (
-  <IconSymbol size={28} name="calendar" color={color} />
+const renderCommunityIcon = ({ color }: { color: string }) => (
+  <IconSymbol
+    size={30}
+    name="person.3.fill"
+    color={color}
+  />
+);
+
+const renderConnectionsIcon = ({ color }: { color: string }) => (
+  <IconSymbol
+    size={28}
+    name="point.3.connected.trianglepath.dotted"
+    color={color}
+  />
 );
 
 const renderProfileIcon = ({ color }: { color: string }) => (
@@ -36,6 +48,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          headerShown: false,
           title: "Home",
           tabBarIcon: renderHomeIcon,
         }}
@@ -44,31 +57,80 @@ export default function TabLayout() {
       <Tabs.Screen
         name="connections"
         options={{
+          headerShown: false,
           title: "Connections",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="person.2.fill" color={color} />
-          ),
+          tabBarIcon: renderConnectionsIcon,
+        }}
+      />
+
+      <Tabs.Screen
+        name="connections/timeline/[matchId]"
+        options={{
+          href: null,
+          headerShown: false,
         }}
       />
 
       <Tabs.Screen
         name="schedule"
         options={{
-          title: "Schedule",
-          tabBarIcon: renderScheduleIcon,
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="community"
+        options={{
+          headerShown: false,
+          title: "Community",
+          tabBarIcon: renderCommunityIcon,
+        }}
+      />
+
+      <Tabs.Screen
+        name="community/[tagId]/index"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="community/create"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="community/[tagId]/members"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="community/[tagId]/workshops/[workshopId]"
+        options={{
+          href: null,
+          headerShown: false,
         }}
       />
 
       <Tabs.Screen
         name="discover"
         options={{
+          headerShown: false,
           title: "Discover",
           tabBarIcon: renderDiscoverIcon,
         }}
       />
 
       <Tabs.Screen
-        name="profile"
+        name="profile/index"
         options={{
           title: "Profile",
           headerShown: false,
@@ -77,7 +139,23 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="user/[username]"
+        name="profile/posts"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="user/[username]/index"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="user/[username]/posts"
         options={{
           href: null,
           headerShown: false,

@@ -53,10 +53,11 @@
 
 :root {
   --ink:             #1c1c18;
-  --ink-soft:        #6b6456;
+  --ink-soft:        #545048;
   --accent:          #4a7c6f;
   --accent-light:    #5e9488;
   --accent-muted:    #e8f2f0;
+  --accent-aa:       #3d6b5f;
   --iris:            #8bb8b0;
 
   --bg-base:         #faf8f4;
@@ -66,7 +67,7 @@
   --surface-strong:  rgba(255, 254, 251, 0.96);
   --line:            rgba(28, 28, 24, 0.09);
   --inset-glint:     rgba(255, 255, 255, 0.88);
-  --kicker:          #4a7c6f;
+  --kicker:          #3d6b5f;
 
   --hero-a:          rgba(74, 124, 111, 0.09);
   --hero-b:          rgba(210, 195, 168, 0.18);
@@ -76,18 +77,18 @@
   --chip-line:       rgba(74, 124, 111, 0.14);
 
   /* ── shadcn semantic tokens ──────────────────────────────────────────────── */
-  --background:           oklch(0.985 0.006  82);
-  --foreground:           oklch(0.20  0.015  80);
+  --background:           #faf8f4;
+  --foreground:           #1c1c18;
   --card:                 oklch(1     0       0);
   --card-foreground:      oklch(0.20  0.015  80);
   --popover:              oklch(1     0       0);
   --popover-foreground:   oklch(0.20  0.015  80);
-  --primary:              oklch(0.50  0.07  175);
-  --primary-foreground:   oklch(0.99  0.005  80);
+  --primary:              #3d6b5f;
+  --primary-foreground:   #ffffff;
   --secondary:            oklch(0.96  0.010  85);
   --secondary-foreground: oklch(0.28  0.015  80);
-  --muted:                oklch(0.962 0.008  85);
-  --muted-foreground:     oklch(0.50  0.015  80);
+  --muted:                #f3f1ed;
+  --muted-foreground:     #545048;
   --shade:                oklch(0.955 0.012  85);
   --shade-foreground:     oklch(0.26  0.015  80);
   --destructive:          oklch(0.58  0.22   27);
@@ -107,6 +108,7 @@
     --accent:         #6db0a2;
     --accent-light:   #88c4b8;
     --accent-muted:   #0f201e;
+    --accent-aa:      #6db0a2;
     --iris:           #a8cec8;
 
     --bg-base:        #14120e;
@@ -162,6 +164,7 @@
   --color-accent:         var(--accent);
   --color-accent-light:   var(--accent-light);
   --color-accent-muted:   var(--accent-muted);
+  --color-accent-aa:      var(--accent-aa);
   --color-iris:           var(--iris);
   --color-petal:          var(--petal);
   --color-mist:           var(--mist);
@@ -219,7 +222,7 @@ body {
           radial-gradient(1200px 700px at  -5%  -8%, var(--hero-a), transparent 55%),
           radial-gradient(1100px 700px at 108% -10%, var(--hero-b), transparent 58%),
           radial-gradient( 800px 500px at  50% 110%, rgba(74, 124, 111, 0.04), transparent 65%),
-          linear-gradient(180deg, #ffffff 0%, #fefcf9 30%, var(--bg-base) 100%);
+          linear-gradient(180deg, var(--mist) 0%, var(--bg-base) 100%);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,19 +9,19 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useColorScheme } from "@/hooks/use-color-scheme";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type Role = "mentor" | "mentee";
 
 interface RegistrationProfileSetupSheetProps {
   visible: boolean;
-  role: Role;
+  initialRole?: Role;
   username: string;
+  prefillDisplayName?: string;
   skills: string[];
   isLoadingSkills: boolean;
   isSubmitting: boolean;
@@ -29,6 +30,7 @@ interface RegistrationProfileSetupSheetProps {
   onUsernameChange?: () => void;
   onClose: () => void;
   onSubmit: (values: {
+    role: Role;
     username: string;
     displayName: string;
     bio: string;
@@ -56,6 +58,7 @@ function buildDisplayNameSuggestion(username: string): string {
   }
 
   return username
+    .replaceAll(/\d+/g, " ")
     .replaceAll(".", " ")
     .replaceAll("_", " ")
     .replaceAll("-", " ")
@@ -63,6 +66,20 @@ function buildDisplayNameSuggestion(username: string): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function validateDisplayName(value: string): string {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "Display name is required.";
+  }
+
+  if (/\d/.test(trimmedValue)) {
+    return "Display name cannot contain numbers.";
+  }
+
+  return "";
 }
 
 function formatUsername(username: string): string {
@@ -75,8 +92,9 @@ function formatUsername(username: string): string {
 
 export function RegistrationProfileSetupSheet({
   visible,
-  role,
+  initialRole,
   username,
+  prefillDisplayName,
   skills,
   isLoadingSkills,
   isSubmitting,
@@ -88,6 +106,8 @@ export function RegistrationProfileSetupSheet({
 }: Readonly<RegistrationProfileSetupSheetProps>) {
   const colorScheme = useColorScheme() ?? "light";
   const theme = Colors[colorScheme];
+
+  const [role, setRole] = useState<Role>(initialRole ?? "mentor");
 
   const roleCopy = role === "mentor" ? "mentor" : "mentee";
   const skillLabel = role === "mentor" ? "Teach skills" : "Learn skills";
@@ -115,15 +135,23 @@ export function RegistrationProfileSetupSheet({
       return;
     }
 
+    setRole(initialRole ?? "mentor");
     setEditableUsername(username);
-    setDisplayName(suggestedDisplayName);
+    const nextPrefill = prefillDisplayName?.trim() ?? "";
+    setDisplayName(nextPrefill || suggestedDisplayName);
     setBio("");
     setSearch("");
     setSelectedSkills([]);
     setLocalUsernameError("");
     setDisplayNameError("");
     setSkillsError("");
-  }, [username, visible, suggestedDisplayName]);
+  }, [
+    username,
+    visible,
+    suggestedDisplayName,
+    prefillDisplayName,
+    initialRole,
+  ]);
 
   const toggleSkill = (skill: string) => {
     setSelectedSkills((current) =>
@@ -189,9 +217,7 @@ export function RegistrationProfileSetupSheet({
     const trimmedBio = bio.trim();
 
     const nextUsernameError = validateUsername(trimmedUsername);
-    const nextDisplayNameError = trimmedDisplayName
-      ? ""
-      : "Display name is required.";
+    const nextDisplayNameError = validateDisplayName(trimmedDisplayName);
     const nextSkillsError =
       selectedSkills.length === 0 ? "Please select at least one skill." : "";
 
@@ -204,6 +230,7 @@ export function RegistrationProfileSetupSheet({
     }
 
     onSubmit({
+      role,
       username: trimmedUsername,
       displayName: trimmedDisplayName,
       bio: trimmedBio,
@@ -256,16 +283,64 @@ export function RegistrationProfileSetupSheet({
           ) : null}
 
           <View className="gap-5">
+            {/* Role Segmented Control */}
+            <View className="gap-1.5">
+              <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
+                My Role
+              </Text>
+              <View className="flex-row items-center p-1.5 rounded-xl h-14 bg-surface-input dark:bg-surface-input-dark">
+                <Pressable
+                  onPress={() => setRole("mentor")}
+                  className="flex-1 h-full rounded-lg items-center justify-center"
+                  style={
+                    role === "mentor"
+                      ? { backgroundColor: theme.cardBackground }
+                      : undefined
+                  }
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: role === "mentor" }}
+                  accessibilityLabel="I want to be a Mentor"
+                >
+                  <Text
+                    className="text-sm font-semibold"
+                    style={{
+                      color: role === "mentor" ? theme.primary : theme.textSoft,
+                    }}
+                  >
+                    Mentor
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setRole("mentee")}
+                  className="flex-1 h-full rounded-lg items-center justify-center"
+                  style={
+                    role === "mentee"
+                      ? { backgroundColor: theme.cardBackground }
+                      : undefined
+                  }
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: role === "mentee" }}
+                  accessibilityLabel="I want to be a Mentee"
+                >
+                  <Text
+                    className="text-sm font-semibold"
+                    style={{
+                      color: role === "mentee" ? theme.primary : theme.textSoft,
+                    }}
+                  >
+                    Mentee
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
             <View className="gap-1.5">
               <Text className="text-xs font-bold tracking-widest uppercase ml-1 text-on-surface-soft dark:text-on-surface-soft-dark">
                 Username
               </Text>
               <View className="flex-row items-center h-14 rounded-xl px-4 gap-2 bg-surface-input dark:bg-surface-input-dark">
-                <Ionicons
-                  name="at-outline"
-                  size={18}
-                  color={theme.textMuted}
-                />
+                <Ionicons name="at-outline" size={18} color={theme.textMuted} />
                 <TextInput
                   className="flex-1 text-base font-medium text-on-surface dark:text-on-surface-dark"
                   placeholder="your_username"
@@ -297,7 +372,9 @@ export function RegistrationProfileSetupSheet({
                   )}`}
               </Text>
               {usernameError ? (
-                <Text className="text-xs text-red-500 mt-1">{usernameError}</Text>
+                <Text className="text-xs text-red-500 mt-1">
+                  {usernameError}
+                </Text>
               ) : null}
             </View>
 

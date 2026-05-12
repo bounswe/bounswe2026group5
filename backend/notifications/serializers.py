@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from mentorship.serializers import ProfileSummarySerializer
 
-from .models import Notification
+from .models import FCMToken, Notification
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -25,3 +25,25 @@ class NotificationSerializer(serializers.ModelSerializer):
             "is_read",
             "created_at",
         ]
+
+
+class FCMTokenSerializer(serializers.ModelSerializer):
+    """Serializer for FCMToken model."""
+
+    class Meta:
+        model = FCMToken
+        fields = ["token", "device_type"]
+        extra_kwargs = {
+            "token": {"validators": []},  # Remove UniqueValidator to allow update_or_create
+        }
+
+    def create(self, validated_data):
+        user = self.context["request"].user
+        token = validated_data["token"]
+        device_type = validated_data.get("device_type", "web")
+
+        fcm_token, _ = FCMToken.objects.update_or_create(
+            token=token,
+            defaults={"user": user, "device_type": device_type},
+        )
+        return fcm_token

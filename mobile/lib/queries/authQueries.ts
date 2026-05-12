@@ -1,5 +1,6 @@
 import { ApiValidationError } from "../api/client";
 import { API_BASE_URL } from "../api/config";
+import { fetchWithTimeout } from "../api/fetchWithTimeout";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -11,6 +12,7 @@ export interface User {
   auth_provider: string;
   app_usage_mode: "MENTOR" | "MENTEE" | null;
   is_active: boolean;
+  is_email_verified?: boolean;
   created_at: string;
 }
 
@@ -23,6 +25,11 @@ export interface AuthResponse {
 export interface Skill {
   id: string;
   name: string;
+}
+
+interface LocationPayload {
+  latitude: number;
+  longitude: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -88,10 +95,14 @@ export async function registerFn(credentials: {
   email: string;
   password: string;
   confirm_password: string;
+  location?: LocationPayload;
 }): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/register/`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/register/`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(credentials),
   });
 
@@ -117,7 +128,10 @@ export async function registerFn(credentials: {
 }
 
 export async function fetchSkillsFn(): Promise<Skill[]> {
-  const res = await fetch(`${API_BASE_URL}/api/profiles/skills/`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/profiles/skills/`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
   if (!res.ok) throw new Error("Failed to fetch skills.");
   return res.json() as Promise<Skill[]>;
 }
@@ -126,9 +140,10 @@ export async function updateUsageModeFn(params: {
   app_usage_mode: "MENTOR" | "MENTEE";
   accessToken: string;
 }): Promise<User> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/me/role/`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/me/role/`, {
     method: "PATCH",
     headers: {
+      Accept: "application/json",
       "Content-Type": "application/json",
       Authorization: `Bearer ${params.accessToken}`,
     },
@@ -149,12 +164,14 @@ export async function updateProfileFn(params: {
   display_name: string;
   bio?: string;
   skills?: string[];
+  linkedin_url?: string;
 }): Promise<unknown> {
   const { accessToken, ...payload } = params;
 
-  const res = await fetch(`${API_BASE_URL}/api/profiles/me/`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/profiles/me/`, {
     method: "PATCH",
     headers: {
+      Accept: "application/json",
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     },
@@ -174,9 +191,10 @@ export async function updateUsernameFn(params: {
   accessToken: string;
   username: string;
 }): Promise<{ username?: string }> {
-  const res = await fetch(`${API_BASE_URL}/api/profiles/me/username/`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/profiles/me/username/`, {
     method: "PATCH",
     headers: {
+      Accept: "application/json",
       "Content-Type": "application/json",
       Authorization: `Bearer ${params.accessToken}`,
     },

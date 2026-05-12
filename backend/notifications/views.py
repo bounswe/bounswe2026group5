@@ -8,7 +8,33 @@ from rest_framework.views import APIView
 from accounts.permissions import IsUser
 
 from .models import Notification
-from .serializers import NotificationSerializer
+from .serializers import FCMTokenSerializer, NotificationSerializer
+
+
+class FCMTokenRegisterAPIView(APIView):
+    """Register or update an FCM token for the authenticated user."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=FCMTokenSerializer,
+        responses={
+            201: OpenApiResponse(description="Token registered successfully."),
+            401: OpenApiResponse(description="Authentication required."),
+        },
+        description="Register or update an FCM token for the current user.",
+        tags=["Notifications"],
+    )
+    def post(self, request: Request) -> Response:
+        """Register the FCM token."""
+        serializer = FCMTokenSerializer(data=request.data, context={"request": request})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(
+            {"detail": "Token registered successfully."},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class NotificationListAPIView(APIView):
@@ -58,6 +84,7 @@ class MarkNotificationReadAPIView(APIView):
     permission_classes = [IsUser]
 
     @extend_schema(
+        request=None,
         responses={
             200: OpenApiResponse(description="Notification marked as read."),
             401: OpenApiResponse(description="Authentication required."),
@@ -82,5 +109,29 @@ class MarkNotificationReadAPIView(APIView):
 
         return Response(
             {"detail": "Notification marked as read."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class MarkAllNotificationsReadAPIView(APIView):
+    """Mark all unread notifications for the current user as read."""
+
+    permission_classes = [IsUser]
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: OpenApiResponse(description="All notifications marked as read."),
+            401: OpenApiResponse(description="Authentication required."),
+        },
+        description="Mark all unread notifications for the authenticated user as read.",
+        tags=["Notifications"],
+    )
+    def post(self, request: Request) -> Response:
+        """Mark all unread notifications for the current user as read."""
+        Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+
+        return Response(
+            {"detail": "All notifications marked as read."},
             status=status.HTTP_200_OK,
         )

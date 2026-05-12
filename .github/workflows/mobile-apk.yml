@@ -47,9 +47,32 @@ jobs:
         run: npm ci
 
       - name: Write mobile env file
+        env:
+          MOBILE_ENV: ${{ secrets.MOBILE_ENV }}
         run: |
-          echo "EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL" > .env
-          echo "Using EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL"
+          # Start with the secret if it exists
+          if [ -n "$MOBILE_ENV" ]; then
+            echo "$MOBILE_ENV" > .env
+          else
+            touch .env
+          fi
+          
+          # Force the production API URL for this build
+          # This ensures that even if MOBILE_ENV contains a local IP or localhost,
+          # the final APK points to the live app.
+          sed -i '/EXPO_PUBLIC_API_BASE_URL/d' .env
+          echo "EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL" >> .env
+          
+          echo "Final .env content (obfuscated):"
+          sed 's/=.*/=*** /' .env
+
+      - name: Decode Google Services JSON
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf "%s" "$GOOGLE_SERVICES_JSON" | tr -cd 'A-Za-z0-9+/=' | base64 --decode > google-services.json
+          fi
 
       - name: Generate native Android project
         run: npx expo prebuild --platform android --non-interactive

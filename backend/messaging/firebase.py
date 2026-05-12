@@ -1,0 +1,95 @@
+"""Firebase and Firestore integration for real-time messaging."""
+
+import firebase_admin
+from django.conf import settings
+from firebase_admin import credentials, firestore
+
+_app, _db = None, None
+
+
+def get_firebase_app():
+    """Initialize and return the Firebase messaging app."""
+    global _app
+    if not _app:
+        p = settings.BASE_DIR / settings.FIREBASE_SERVICE_ACCOUNT_PATH
+        if not p.exists():
+            return None
+        for a in firebase_admin._apps.values():
+            if a.name == "messaging":
+                _app = a
+                return _app
+        _app = firebase_admin.initialize_app(credentials.Certificate(str(p)), name="messaging")
+    return _app
+
+
+def get_firestore_client():
+    """Return a Firestore client using the initialized app."""
+    global _db
+    if not _db:
+        a = get_firebase_app()
+        if not a:
+            return None
+        i = getattr(settings, "FIRESTORE_DATABASE_ID", "neighborship-messaging")
+        _db = firestore.client(a, database_id=i)
+    return _db
+
+
+def is_firebase_available():
+    """Return True if Firestore client is available."""
+    return get_firestore_client() is not None
+
+
+def sync_message_to_firestore(m):
+    """Mirror a Message object to Firestore for real-time delivery."""
+    try:
+        c = get_firestore_client()
+        if not c:
+            return False
+
+        d = {
+            "id": str(m.id),
+            "sender_id": str(m.sender_id),
+            "sender_username": m.sender.username,
+            "sender_display_name": m.sender.display_name,
+            "sender_picture_url": m.sender.picture_url,
+            "body": m.body,
+            "attachment_url": m.attachment.url if m.attachment else None,
+            "original_filename": m.original_filename,
+            "created_at": m.created_at.isoformat(),
+            "read_receipts": {},
+        }
+        c.collection("conversations").document(str(m.conversation_id)).collection(
+            "messages"
+        ).document(str(m.id)).set(d, merge=True)
+        return True
+    except Exception:
+        return False
+
+
+def update_message_read_status_in_firestore(message_id, conversation_id, user_id, status):
+    """Update the read status of a message in Firestore."""
+    try:
+        c = get_firestore_client()
+        if not c:
+            return False
+        c.collection("conversations").document(str(conversation_id)).collection(
+            "messages"
+        ).document(str(message_id)).update({f"read_receipts.{user_id}": status})
+        return True
+    except Exception:
+        return False
+
+
+def delete_conversation_from_firestore(conversation_id):
+    """Remove a conversation and all its messages from Firestore."""
+    try:
+        c = get_firestore_client()
+        if not c:
+            return False
+        r = c.collection("conversations").document(str(conversation_id))
+        for m in r.collection("messages").stream():
+            m.reference.delete()
+        r.delete()
+        return True
+    except Exception:
+        return False

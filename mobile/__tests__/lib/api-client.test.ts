@@ -1,13 +1,26 @@
-import { ApiError, apiGet, apiPatch, apiPost } from "@/lib/api/client";
+import { Alert } from "react-native";
+
 import { API_BASE_URL } from "@/lib/api/config";
 
 const mockGetState = jest.fn();
+const mockLogout = jest.fn();
+const mockReplace = jest.fn();
 
 jest.mock("@/lib/auth/store", () => ({
   useAuthStore: {
     getState: () => mockGetState(),
   },
 }));
+
+jest.mock("expo-router", () => ({
+  router: {
+    replace: mockReplace,
+  },
+}));
+
+const { ApiError, apiGet, apiPatch, apiPost, apiPostMultipart } = jest.requireActual(
+  "@/lib/api/client",
+) as typeof import("@/lib/api/client");
 
 describe("api client", () => {
   const fetchMock: jest.Mock = jest.fn();
@@ -19,7 +32,16 @@ describe("api client", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
-    mockGetState.mockReturnValue({ accessToken: "token-123" });
+    mockLogout.mockResolvedValue(undefined);
+    jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
+    mockGetState.mockReturnValue({
+      accessToken: "token-123",
+      logout: mockLogout,
+    });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it("sends GET request with auth header and returns parsed JSON", async () => {
@@ -117,6 +139,41 @@ describe("api client", () => {
     );
   });
 
+  it("clears auth, alerts, and redirects to login on ban-related 403 responses", async () => {
+    mockFetchResponse({
+      ok: false,
+      status: 403,
+      json: async () => ({ detail: "This account has been banned." }),
+    });
+
+    await expect(apiGet("/api/protected/")).rejects.toEqual(
+      new ApiError(403, "This account has been banned."),
+    );
+
+    expect(mockLogout).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      "Your account is banned",
+      "This account has been banned.",
+    );
+    expect(mockReplace).toHaveBeenCalledWith("/login");
+  });
+
+  it("does not treat ordinary 403 responses as bans", async () => {
+    mockFetchResponse({
+      ok: false,
+      status: 403,
+      json: async () => ({ detail: "Please verify your email address." }),
+    });
+
+    await expect(apiGet("/api/protected/")).rejects.toEqual(
+      new ApiError(403, "Please verify your email address."),
+    );
+
+    expect(mockLogout).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
   it("handles POST success and 204 responses", async () => {
     mockFetchResponse({
       ok: true,
@@ -152,6 +209,38 @@ describe("api client", () => {
     });
     const noContent = await apiPost<void>("/api/items/1/archive/");
     expect(noContent).toBeUndefined();
+  });
+
+  it("sends multipart POST without a JSON content type", async () => {
+    mockFetchResponse({
+      ok: true,
+      status: 201,
+      json: async () => ({ url: "https://cdn.example.com/file.jpg" }),
+    });
+    const formData = new FormData();
+    formData.append("file", {
+      uri: "file:///tmp/photo.jpg",
+      name: "photo.jpg",
+      type: "image/jpeg",
+    } as unknown as Blob);
+
+    const result = await apiPostMultipart<{ url: string }>(
+      "/api/profiles/me/uploads/",
+      formData,
+    );
+
+    expect(result).toEqual({ url: "https://cdn.example.com/file.jpg" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE_URL}/api/profiles/me/uploads/`,
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: "Bearer token-123",
+        },
+        body: formData,
+      }),
+    );
   });
 
   it("supports PATCH and bubbles parsed API error", async () => {

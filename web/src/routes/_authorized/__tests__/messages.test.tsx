@@ -4,17 +4,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MessagesPage } from '../messages'
 
 globalThis.HTMLElement.prototype.scrollIntoView = vi.fn()
+globalThis.HTMLElement.prototype.scrollTo = vi.fn()
 
-const { mockUseConversations, mockUseMessages, mockUseSendMessage } = vi.hoisted(() => ({
+const { mockUseConversations, mockUseMessages, mockUseSendMessage, mockUseMarkRead } = vi.hoisted(() => ({
   mockUseConversations: vi.fn(),
   mockUseMessages: vi.fn(),
   mockUseSendMessage: vi.fn(),
+  mockUseMarkRead: vi.fn(),
 }))
 
 vi.mock('#/lib/queries/MessagingQueries.ts', () => ({
   useConversations: () => mockUseConversations(),
   useMessages: (id: string) => mockUseMessages(id),
   useSendMessage: (id: string) => mockUseSendMessage(id),
+  useMarkRead: (id: string) => mockUseMarkRead(id),
 }))
 
 vi.mock('#/lib/queries/AuthQueries.ts', () => ({
@@ -24,7 +27,11 @@ vi.mock('#/lib/queries/AuthQueries.ts', () => ({
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => () => ({
     useSearch: () => ({ conversationId: '' }),
+    useNavigate: () => vi.fn(),
   }),
+  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
+    <a href={to}>{children}</a>
+  ),
 }))
 
 vi.mock('#/lib/queries/NotificationQueries.ts', () => ({
@@ -67,6 +74,7 @@ describe('MessagesPage', () => {
     mockUseConversations.mockReturnValue({ data: MOCK_CONVERSATIONS, isLoading: false })
     mockUseMessages.mockReturnValue({ data: MOCK_MESSAGES, isLoading: false })
     mockUseSendMessage.mockReturnValue({ mutateAsync: vi.fn(), isPending: false })
+    mockUseMarkRead.mockReturnValue({ mutate: vi.fn() })
   })
 
   it('renders the conversation list', () => {
@@ -104,6 +112,6 @@ describe('MessagesPage', () => {
     const sendButton = screen.getByRole('button', { name: /send message/i })
     fireEvent.click(sendButton)
     
-    expect(mockMutate).toHaveBeenCalledWith('New message')
+    expect(mockMutate).toHaveBeenCalledWith({ body: 'New message', attachment: undefined })
   })
 })

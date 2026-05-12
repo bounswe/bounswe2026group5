@@ -62,25 +62,34 @@ function PublicProfileRoute() {
             isMentor: true as const,
             full_name: profile.full_name,
             bio: profile.bio,
-            hidden: profile.hidden,
+            show_initials_only: profile.show_initials_only,
+            share_precise_location: profile.share_precise_location,
             picture_url: profile.picture_url,
             title: profile.title,
             skills: profile.skills ?? [],
             average_rating: Number(profile.average_rating),
+            review_count: profile.review_count,
             total_mentee_count: profile.total_mentee_count,
             username: username,
+            app_usage_mode: profile.app_usage_mode,
+            linkedin_url: profile.linkedin_url,
+            audio_url: profile.audio_url,
+            video_url: profile.video_url,
         }
-        : {
+    : {
             isMentor: false as const,
             full_name: profile.full_name,
             bio: profile.bio,
-            hidden: profile.hidden,
+            show_initials_only: profile.show_initials_only,
+            share_precise_location: profile.share_precise_location,
             picture_url: profile.picture_url,
             skills: profile.skills ?? [],
-            username: username
+            username: username,
+            app_usage_mode: profile.app_usage_mode,
+            linkedin_url: profile.linkedin_url,
+            audio_url: profile.audio_url,
+            video_url: profile.video_url,
         }
-
-    console.log('profile from cache:', profile)
 
     return (
         <div className="flex min-h-screen flex-col">

@@ -1,14 +1,17 @@
 """Domain services for mentorship lifecycle operations."""
 
+import logging
+import uuid
 from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, F
+from django.db.models import Avg, Count, F
+from django.db.models.functions import Coalesce
 from django.utils import timezone
-from core.utils.timezone import to_local_time
 
+from core.utils.timezone import to_local_time
 from notifications.models import Notification, NotificationType
 from profiles.models import AvailabilitySlot, Profile
 from profiles.services import (
@@ -20,8 +23,160 @@ from profiles.services import (
     book_availability_slot,
     cancel_availability_booking,
 )
+from timeline.models import TimelineEvent
 
 from .models import Feedback, Match, MeetingSession, MentorshipRequest
+
+logger = logging.getLogger(__name__)
+
+
+def list_match_journey_events(*, match: Match, offset: int, limit: int) -> dict[str, Any]:
+    """Return a paginated journey timeline from stored AGTE and MCTE timeline events."""
+    queryset = (
+        TimelineEvent.objects.filter(
+            mentorship=match,
+            category__in=[TimelineEvent.Category.AGTE, TimelineEvent.Category.MCTE],
+            is_deleted=False,
+        )
+        .annotate(effective_last_update=Coalesce("last_edited", "created_at"))
+        .order_by("-created_at", "-effective_last_update", "-source_id")
+    )
+
+    total_count = queryset.count()
+    event_rows = list(
+        queryset[offset : offset + limit].values(
+            "id",
+            "source_id",
+            "event_type",
+            "category",
+            "timestamp",
+            "created_at",
+            "last_edited",
+            "actor_role",
+            "payload",
+            "content",
+            "media_url",
+            "show_on_profile",
+            "author_id",
+        )
+    )
+
+    results = [
+        {
+            "id": row["id"],
+            "source_id": row["source_id"],
+            "type": row["event_type"],
+            "category": row["category"],
+            "timestamp": row["timestamp"],
+            "created_at": row["created_at"],
+            "last_edited": row["last_edited"],
+            "actor_role": row["actor_role"],
+            "payload": row["payload"] or {},
+            "content": row["content"],
+            "media_url": row["media_url"],
+            "show_on_profile": row["show_on_profile"],
+            "author_id": row["author_id"],
+        }
+        for row in event_rows
+    ]
+
+    return {
+        "ordering": "desc",
+        "count": total_count,
+        "offset": offset,
+        "limit": limit,
+        "results": results,
+    }
+
+
+class InvalidMCTEEventTypeError(Exception):
+    """Raised when an unsupported event_type is supplied for an MCTE record."""
+
+
+def create_mcte_event(
+    *,
+    match: Match,
+    author_profile: Profile,
+    event_type: str,
+    content: str = "",
+    media_url: str | None = None,
+    timestamp: Any | None = None,
+    show_on_profile: bool = False,
+) -> TimelineEvent:
+    """Create and persist a manually-created timeline event for a match.
+
+    The author must be a participant (mentor or mentee) of the match.
+    ``timestamp`` must be a timezone-aware datetime; far-future dates
+    (more than 1 day ahead of now) are rejected at the serializer layer.
+    """
+    if event_type not in TimelineEvent.MCTEEventType.values:
+        raise InvalidMCTEEventTypeError(
+            f"Invalid MCTE event_type: '{event_type}'. "
+            f"Must be one of {TimelineEvent.MCTEEventType.values}."
+        )
+
+    actor_role = "mentor" if author_profile == match.mentor else "mentee"
+    source_id = f"mcte:{uuid.uuid4()}"
+
+    effective_timestamp = timestamp if timestamp is not None else timezone.now()
+
+    event = TimelineEvent.objects.create(
+        source_id=source_id,
+        category=TimelineEvent.Category.MCTE,
+        event_type=event_type,
+        author=author_profile,
+        mentorship=match,
+        content=content,
+        media_url=media_url,
+        actor_role=actor_role,
+        timestamp=effective_timestamp,
+        show_on_profile=show_on_profile,
+    )
+
+    # Keep fallback semantics explicit: omitted timestamp should match created_at.
+    if timestamp is None:
+        event.timestamp = event.created_at
+        event.save(update_fields=["timestamp"])
+
+    return event
+
+
+def edit_mcte_event(
+    *,
+    event: TimelineEvent,
+    content: str | None = None,
+    media_url: str | None = None,
+    show_on_profile: bool | None = None,
+    update_media_url: bool = False,
+) -> TimelineEvent:
+    """Partially update a manually-created timeline event.
+
+    Only ``content`` and ``show_on_profile`` may be edited.
+    ``last_edited`` is set to the current UTC time on every successful update.
+    """
+    update_fields: list[str] = ["last_edited"]
+
+    if content is not None:
+        event.content = content
+        update_fields.append("content")
+
+    if update_media_url:
+        event.media_url = media_url
+        update_fields.append("media_url")
+
+    if show_on_profile is not None:
+        event.show_on_profile = show_on_profile
+        update_fields.append("show_on_profile")
+
+    event.last_edited = timezone.now()
+    event.save(update_fields=update_fields)
+    return event
+
+
+def soft_delete_mcte_event(*, event: TimelineEvent) -> None:
+    """Soft-delete a manually-created timeline event by setting is_deleted=True."""
+    event.is_deleted = True
+    event.save(update_fields=["is_deleted"])
 
 
 class MentorshipServiceError(Exception):
@@ -57,10 +212,6 @@ def _create_notification(
     persistence (e.g. IntegrityError) are logged but do not roll back the
     primary business transaction.
     """
-    import logging
-
-    logger = logging.getLogger(__name__)
-
     try:
         Notification.objects.create(
             user=user,
@@ -184,44 +335,59 @@ def _resolve_session_window(*, mentorship_request: MentorshipRequest) -> tuple[A
     return mentorship_request.initial_session_start_at, mentorship_request.initial_session_end_at
 
 
+def _refresh_mentor_total_mentee_count(*, mentor: Profile) -> None:
+    """Refresh denormalized active mentee count for a mentor profile."""
+    active_mentee_count = (
+        Match.objects.filter(mentor=mentor, is_active=True).aggregate(
+            count=Count("mentee", distinct=True)
+        )["count"]
+        or 0
+    )
+    Profile.objects.filter(pk=mentor.pk).update(total_mentee_count=active_mentee_count)
+
+
 def ensure_match_and_initial_session(*, mentorship_request: MentorshipRequest) -> Match:
     """Ensure accepted requests have a canonical match and initial meeting session."""
     if mentorship_request.status != MentorshipRequest.Status.ACCEPTED:
         raise ValueError("Match/session materialization requires an accepted request.")
 
-    match, _ = Match.objects.get_or_create(
-        request=mentorship_request,
-        defaults={
-            "mentor": mentorship_request.mentor,
-            "mentee": mentorship_request.mentee,
-            "is_active": True,
-        },
-    )
+    with transaction.atomic():
+        match, created = Match.objects.get_or_create(
+            request=mentorship_request,
+            defaults={
+                "mentor": mentorship_request.mentor,
+                "mentee": mentorship_request.mentee,
+                "is_active": True,
+            },
+        )
 
-    if MeetingSession.objects.filter(match=match).exists():
+        if created:
+            _refresh_mentor_total_mentee_count(mentor=mentorship_request.mentor)
+
+        if MeetingSession.objects.filter(match=match).exists():
+            return match
+
+        session_start_at, session_end_at = _resolve_session_window(
+            mentorship_request=mentorship_request
+        )
+        if session_start_at is None or session_end_at is None:
+            return match
+
+        session_status = (
+            MeetingSession.Status.COMPLETED
+            if session_end_at <= timezone.now()
+            else MeetingSession.Status.SCHEDULED
+        )
+        MeetingSession.objects.create(
+            match=match,
+            mentor=mentorship_request.mentor,
+            mentee=mentorship_request.mentee,
+            source_slot=mentorship_request.slot,
+            scheduled_start_at_utc=session_start_at,
+            scheduled_end_at_utc=session_end_at,
+            status=session_status,
+        )
         return match
-
-    session_start_at, session_end_at = _resolve_session_window(
-        mentorship_request=mentorship_request
-    )
-    if session_start_at is None or session_end_at is None:
-        return match
-
-    session_status = (
-        MeetingSession.Status.COMPLETED
-        if session_end_at <= timezone.now()
-        else MeetingSession.Status.SCHEDULED
-    )
-    MeetingSession.objects.create(
-        match=match,
-        mentor=mentorship_request.mentor,
-        mentee=mentorship_request.mentee,
-        source_slot=mentorship_request.slot,
-        scheduled_start_at_utc=session_start_at,
-        scheduled_end_at_utc=session_end_at,
-        status=session_status,
-    )
-    return match
 
 
 def book_match_session(*, mentor_profile: Profile, slot_id: Any, actor: Any) -> AvailabilitySlot:
@@ -252,15 +418,16 @@ def book_match_session(*, mentor_profile: Profile, slot_id: Any, actor: Any) -> 
                         "status": MeetingSession.Status.SCHEDULED,
                     },
                 )
+                local_start = to_local_time(slot.start_at)
+                local_end = to_local_time(slot.end_at)
+                start_str = local_start.strftime("%B %d, %Y at %H:%M") if local_start else "Unknown"
+                end_str = local_end.strftime("%H:%M") if local_end else "Unknown"
+
                 _create_notification(
                     user=mentor_profile.user,
                     notification_type=NotificationType.SLOT_BOOKED,
                     title="Slot Booked",
-                    message=(
-                        f"{mentee_profile.display_name} booked a slot on "
-                        f"{to_local_time(slot.start_at).strftime('%B %d, %Y at %H:%M')} - "
-                        f"{to_local_time(slot.end_at).strftime('%H:%M')}."
-                    ),
+                    message=f"{mentee_profile.display_name} booked a slot: {start_str} - {end_str}.",
                     actor=mentee_profile,
                     resource_type="availability_slot",
                     resource_id=slot.id,
@@ -321,7 +488,7 @@ def cancel_match_session(
         # If slot booking is still active, cancel it first.
         # If booking was already released but session remained scheduled/rescheduled,
         # proceed to cancel the session to repair consistency.
-        if slot is not None and slot.is_booked:
+        if slot is not None and slot.status == AvailabilitySlot.Status.BOOKED:
             cancel_availability_booking(
                 profile=match.mentor,
                 slot_id=slot.id,
@@ -405,7 +572,7 @@ def reschedule_match_session(
         raise SameSlotSelectionError("New slot is the same as the current slot.")
 
     with transaction.atomic():
-        if old_slot is not None and old_slot.is_booked:
+        if old_slot is not None and old_slot.status == AvailabilitySlot.Status.BOOKED:
             cancel_availability_booking(
                 profile=match.mentor,
                 slot_id=old_slot.id,
@@ -453,8 +620,10 @@ def deactivate_match(*, match: Match, actor_profile: Profile) -> Match:
     if not match.is_active:
         return match
 
-    Match.objects.filter(pk=match.pk).update(is_active=False)
-    match.is_active = False
+    with transaction.atomic():
+        Match.objects.filter(pk=match.pk).update(is_active=False)
+        match.is_active = False
+        _refresh_mentor_total_mentee_count(mentor=match.mentor)
 
     for recipient in (match.mentor, match.mentee):
         _create_notification(
@@ -473,6 +642,13 @@ def deactivate_match(*, match: Match, actor_profile: Profile) -> Match:
                 "mentee_display_name": match.mentee.display_name,
             },
         )
+
+    # Cancel all upcoming sessions related to this match
+    active_sessions = match.meeting_sessions.filter(
+        status__in=[MeetingSession.Status.SCHEDULED, MeetingSession.Status.RESCHEDULED]
+    )
+    for session in active_sessions:
+        cancel_match_session(session=session, actor=actor_profile.user, actor_profile=actor_profile)
 
     return match
 
@@ -549,7 +725,9 @@ def delete_match_feedback(*, feedback: Feedback) -> None:
 
     # Determine whether this feedback was already in a visible threshold batch.
     mentee_feedback_ids = list(
-        Feedback.objects.filter(match__mentor=mentor).exclude(submitted_by=mentor).order_by("id")
+        Feedback.objects.filter(match__mentor=mentor)
+        .exclude(submitted_by=mentor)
+        .order_by("created_at", "id")
     )
     visible_limit = (mentor.review_count // threshold) * threshold
     feedback_index = next(
@@ -581,6 +759,7 @@ __all__ = [
     "create_match_feedback",
     "delete_match_feedback",
     "book_match_session",
+    "list_match_journey_events",
     "BookingCancelNotAllowedError",
     "SlotNotBookedError",
     "SlotAlreadyBookedError",

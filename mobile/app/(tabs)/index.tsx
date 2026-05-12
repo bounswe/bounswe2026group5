@@ -1,24 +1,42 @@
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import {
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Import the components for the dashboard
-import { RequestCard } from "@/components/dashboard/RequestCard";
-import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
+import {
+  PendingRequestCard,
+  PendingRequestCardProps,
+} from "@/components/connections/PendingRequestCard";
+import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
 import { RescheduleBottomSheet } from "@/components/dashboard/RescheduleBottomSheet";
 import { SessionCard } from "@/components/dashboard/SessionCard";
 import { SessionDetailsModal } from "@/components/dashboard/SessionDetailsModal";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { SuccessCard } from "@/components/ui/SuccessCard";
+import { useToast } from "@/components/ui/ToastProvider";
 
 import { useAuthStore } from "@/lib/auth/store";
+import { useRefreshControl } from "@/hooks/use-refresh-control";
+import {
+  MENTOR_AT_CAPACITY_NOTICE,
+  MENTOR_OVERLOAD_WARNING,
+  MENTOR_MENTEE_CAPACITY_WARNING,
+  shouldWarnBeforeAcceptingMentee,
+} from "@/lib/mentorship/capacity";
+import { useResendEmailVerificationMutation } from "@/lib/queries/auth";
 import {
   mapMeetingSessionsToDashboard,
   mapRequestsToDashboard,
   useAvailabilitySlotsQuery,
   useCancelSessionMutation,
+  useMentorshipMatchesQuery,
   useMentorshipMeetingSessionsQuery,
   useMentorshipRequestsQuery,
   useRescheduleSessionMutation,
@@ -26,22 +44,59 @@ import {
   type DashboardRequestItem,
   type DashboardSessionItem,
 } from "@/lib/queries/mentorship";
+import {
+  mapWorkshopAttendanceToDashboard,
+  useMyWorkshopAttendanceQuery,
+  type WorkshopDashboardItem,
+} from "@/lib/queries/workshops";
+import { useOwnProfileSettingsQuery } from "@/lib/queries/profile";
+
+function mapDashboardRequestToCardProps(
+  request: DashboardRequestItem,
+): PendingRequestCardProps {
+  return {
+    id: request.requestId,
+    username:
+      request.type === "incoming"
+        ? request.menteeUsername
+        : request.mentorUsername,
+    name: request.user,
+    cover_letter: request.message ?? "",
+    slot_date: null,
+    slot_start_time: request.proposedDate ?? null,
+    slot_end_time: null,
+    requestType: request.type,
+    isReschedule: request.isReschedule,
+    isMentorOverloaded: request.isMentorOverloaded,
+  };
+}
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const toast = useToast();
 
   const currentUsername = useAuthStore((state) => state.user?.username);
+  const appUsageMode = useAuthStore((state) => state.user?.app_usage_mode);
+  const isEmailVerified = useAuthStore(
+    (state) => state.user?.is_email_verified,
+  );
 
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const meetingSessionsQuery = useMentorshipMeetingSessionsQuery(
     currentUsername,
     { status: "upcoming" },
   );
+  const workshopAttendanceQuery = useMyWorkshopAttendanceQuery(currentUsername, {
+    status: "attending",
+  });
+  const matchesQuery = useMentorshipMatchesQuery(currentUsername);
+  const ownProfileQuery = useOwnProfileSettingsQuery();
   const respondMutation = useRespondToMentorshipRequestMutation();
   const cancelSessionMutation = useCancelSessionMutation(currentUsername);
   const rescheduleSessionMutation =
     useRescheduleSessionMutation(currentUsername);
+  const resendVerificationMutation = useResendEmailVerificationMutation();
 
   // Debug logging
   const requests = useMemo<DashboardRequestItem[]>(() => {
@@ -55,19 +110,62 @@ export default function DashboardScreen() {
     () => mapMeetingSessionsToDashboard(meetingSessionsQuery.data ?? []),
     [meetingSessionsQuery.data],
   );
+  const workshops = useMemo(
+    () =>
+      mapWorkshopAttendanceToDashboard(
+        workshopAttendanceQuery.data?.results ?? [],
+        currentUsername,
+      ).filter(
+        (workshop) =>
+          workshop.workshopStatus === "SCHEDULED" &&
+          workshop.status === "Upcoming",
+      ),
+    [currentUsername, workshopAttendanceQuery.data?.results],
+  );
+  const sessionItems = useMemo(
+    () =>
+      [
+        ...sessions.map((session) => ({
+          kind: "session" as const,
+          ...session,
+        })),
+        ...workshops.map((workshop) => ({
+          kind: "workshop" as const,
+          ...workshop,
+        })),
+      ].sort(
+        (left, right) =>
+          new Date(left.rawDate).getTime() - new Date(right.rawDate).getTime(),
+      ),
+    [sessions, workshops],
+  );
+  const activeMenteeCount = useMemo(() => {
+    if (appUsageMode !== "MENTOR") {
+      return 0;
+    }
+
+    return new Set(
+      (matchesQuery.data ?? [])
+        .filter((match) => match.is_active !== false)
+        .map((match) => match.mentee.username),
+    ).size;
+  }, [appUsageMode, matchesQuery.data]);
+  const shouldShowCapacityWarning =
+    shouldWarnBeforeAcceptingMentee(activeMenteeCount);
   const queryError =
     (requestsQuery.isError && "Failed to load mentorship requests.") ||
     (meetingSessionsQuery.isError && "Failed to load upcoming sessions.") ||
+    (workshopAttendanceQuery.isError &&
+      "Failed to load your upcoming workshops.") ||
     null;
 
   // State for Modals
   const [selectedRequest, setSelectedRequest] =
-    useState<DashboardRequestItem | null>(null);
+    useState<PendingRequestCardProps | null>(null);
   const [selectedSession, setSelectedSession] =
     useState<DashboardSessionItem | null>(null);
   const [showRescheduleSheet, setShowRescheduleSheet] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(
     null,
   );
@@ -82,22 +180,24 @@ export default function DashboardScreen() {
     rescheduleSessionMentorUsername || "",
   );
 
-  const handleRespond = async (action: "accept" | "reject") => {
-    if (!selectedRequest) {
+  const handleRespond = async (
+    action: "accept" | "reject",
+    requestId = selectedRequest?.id,
+  ) => {
+    if (!requestId) {
       return;
     }
 
     try {
       setActionError(null);
-      setSuccessMessage(null);
       await respondMutation.mutateAsync({
-        requestId: selectedRequest.requestId,
+        requestId,
         action,
       });
       setSelectedRequest(null);
       requestsQuery.refetch();
       meetingSessionsQuery.refetch();
-      setSuccessMessage(
+      toast.success(
         action === "accept"
           ? "Request accepted successfully."
           : "Request rejected successfully.",
@@ -111,17 +211,45 @@ export default function DashboardScreen() {
     }
   };
 
-  const handleOpenRequestProfile = (request: DashboardRequestItem) => {
-    const targetUsername =
-      request.type === "incoming"
-        ? request.menteeUsername
-        : request.mentorUsername;
-
+  const handleOpenRequestProfile = (targetUsername?: string) => {
     if (!targetUsername) {
       return;
     }
 
     router.push(`/user/${encodeURIComponent(targetUsername)}`);
+  };
+
+  const openWorkshop = (workshop: WorkshopDashboardItem) => {
+    router.push(
+      `/(tabs)/community/${encodeURIComponent(workshop.communityId)}/workshops/${encodeURIComponent(workshop.workshopId)}?from=dashboard`,
+    );
+  };
+
+  const handleRequestCardAccept = (cardProps: PendingRequestCardProps) => {
+    if (
+      cardProps.requestType !== "outgoing" &&
+      appUsageMode === "MENTOR" &&
+      shouldShowCapacityWarning
+    ) {
+      setSelectedRequest(cardProps);
+      return;
+    }
+
+    void handleRespond("accept", cardProps.id);
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      setActionError(null);
+      const response = await resendVerificationMutation.mutateAsync();
+      toast.success(response.detail);
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Could not send verification email.",
+      );
+    }
   };
 
   const handleCancelSession = async () => {
@@ -131,10 +259,9 @@ export default function DashboardScreen() {
 
     try {
       setActionError(null);
-      setSuccessMessage(null);
       await cancelSessionMutation.mutateAsync(selectedSession.sessionId);
       setSelectedSession(null);
-      setSuccessMessage("The session was cancelled.");
+      toast.success("The session was cancelled.");
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -160,9 +287,19 @@ export default function DashboardScreen() {
     setRescheduleSessionId(selectedSession.sessionId);
     setRescheduleSessionMentorUsername(selectedMentorUsername);
     setRescheduleCurrentSlotId(selectedSession.id);
-    setSuccessMessage(null);
     setShowRescheduleSheet(true);
   };
+
+  const refreshDashboard = useCallback(async () => {
+    await Promise.all([
+      requestsQuery.refetch(),
+      meetingSessionsQuery.refetch(),
+      workshopAttendanceQuery.refetch(),
+      matchesQuery.refetch(),
+    ]);
+  }, [matchesQuery, meetingSessionsQuery, requestsQuery, workshopAttendanceQuery]);
+
+  const { refreshing, onRefresh } = useRefreshControl(refreshDashboard);
 
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
@@ -184,6 +321,9 @@ export default function DashboardScreen() {
         className="flex-1 px-4 pt-4"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 160 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {queryError ? (
           <View className="mb-4">
@@ -191,9 +331,28 @@ export default function DashboardScreen() {
           </View>
         ) : null}
 
-        {successMessage ? (
-          <View className="mb-4">
-            <SuccessCard message={successMessage} />
+        {isEmailVerified === false ? (
+          <View className="mb-4" testID="email-verification-warning">
+            <ErrorBanner
+              variant="warning"
+              title="Verify your email"
+              message="Verify your email to access mentorship requests and all account features."
+            />
+            <TouchableOpacity
+              testID="resend-verification-button"
+              activeOpacity={0.85}
+              disabled={resendVerificationMutation.isPending}
+              onPress={() => {
+                void handleResendVerification();
+              }}
+              className="self-start mt-2 px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-900/60"
+            >
+              <Text className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                {resendVerificationMutation.isPending
+                  ? "Sending..."
+                  : "Resend Verification Email"}
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : null}
 
@@ -202,6 +361,16 @@ export default function DashboardScreen() {
             <ErrorBanner message={actionError} />
           </View>
         ) : null}
+        
+        {appUsageMode === "MENTOR" && ownProfileQuery.data?.is_overloaded && (
+          <View className="mb-4">
+            <ErrorBanner
+              variant="warning"
+              title={MENTOR_OVERLOAD_WARNING.title}
+              message={MENTOR_OVERLOAD_WARNING.message}
+            />
+          </View>
+        )}
 
         {/* Requests Section */}
         <View className="mb-6">
@@ -228,16 +397,22 @@ export default function DashboardScreen() {
           </View>
 
           {/* Show the first 2 requests on the dashboard */}
-          {requests.slice(0, 2).map((req) => (
-            <RequestCard
-              key={req.id}
-              user={req.user}
-              topic={req.topic}
-              type={req.type}
-              onPress={() => setSelectedRequest(req)}
-              onShowProfile={() => handleOpenRequestProfile(req)}
-            />
-          ))}
+          {requests.slice(0, 2).map((request) => {
+            const cardProps = mapDashboardRequestToCardProps(request);
+            return (
+              <PendingRequestCard
+                key={request.id}
+                {...cardProps}
+                onPress={() => setSelectedRequest(cardProps)}
+                onShowProfile={() => handleOpenRequestProfile(cardProps.username)}
+                onAccept={() => handleRequestCardAccept(cardProps)}
+                onDecline={() => {
+                  void handleRespond("reject", cardProps.id);
+                }}
+                disabled={respondMutation.isPending}
+              />
+            );
+          })}
         </View>
 
         {/* Sessions Section */}
@@ -246,28 +421,42 @@ export default function DashboardScreen() {
             <Text className="text-lg font-bold text-on-surface dark:text-on-surface-dark">
               Your Sessions
             </Text>
-            <TouchableOpacity onPress={() => router.push("/schedule")}>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/schedule")}>
               <Text className="text-primary dark:text-primary-dim font-semibold text-sm">
-                View All {sessions.length > 0 ? `(${sessions.length})` : ""}
+                View All {sessionItems.length > 0 ? `(${sessionItems.length})` : ""}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {sessions.length === 0 ? (
+          {sessionItems.length === 0 ? (
             <View className="bg-surface-card dark:bg-surface-card-dark p-4 rounded-xl border border-divider dark:border-divider-dark">
               <Text className="text-on-surface-soft dark:text-on-surface-soft-dark font-medium">
-                No upcoming sessions yet.
+                No upcoming sessions or workshops yet.
               </Text>
             </View>
           ) : (
-            sessions.map((session) => (
+            sessionItems.map((session) => (
               <SessionCard
                 key={session.id}
                 user={session.user}
                 date={session.date}
                 time={session.time}
                 status={session.status}
-                onPress={() => setSelectedSession(session)}
+                title={
+                  session.kind === "workshop" ? session.topic : undefined
+                }
+                subtitle={
+                  session.kind === "workshop" ? session.communityName : undefined
+                }
+                kindLabel={session.kind === "workshop" ? "Workshop" : undefined}
+                onPress={() => {
+                  if (session.kind === "workshop") {
+                    openWorkshop(session);
+                    return;
+                  }
+
+                  setSelectedSession(session);
+                }}
               />
             ))
           )}
@@ -275,18 +464,24 @@ export default function DashboardScreen() {
       </ScrollView>
 
       {/* 3. MODALS */}
-      <RequestDetailsModal
-        visible={!!selectedRequest}
+      <RequestDetailSheet
+        visible={selectedRequest !== null}
         request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
-        onAccept={() => handleRespond("accept")}
-        onReject={() => handleRespond("reject")}
-        onCancelOutgoing={() => {
-          setActionError(
-            "Outgoing request cancellation is not available on the current API.",
-          );
-        }}
-        isSubmitting={respondMutation.isPending}
+        onAccept={() => void handleRespond("accept")}
+        onDecline={() => void handleRespond("reject")}
+        onShowProfile={handleOpenRequestProfile}
+        disabled={respondMutation.isPending}
+        acceptanceWarning={
+          selectedRequest?.requestType !== "outgoing" &&
+          appUsageMode === "MENTOR"
+            ? selectedRequest?.isMentorOverloaded
+              ? MENTOR_AT_CAPACITY_NOTICE
+              : shouldShowCapacityWarning
+                ? MENTOR_MENTEE_CAPACITY_WARNING
+                : undefined
+            : undefined
+        }
       />
 
       <SessionDetailsModal
@@ -315,10 +510,11 @@ export default function DashboardScreen() {
               .mutateAsync({
                 sessionId: rescheduleSessionId,
                 newSlotId,
+                mentorUsername: rescheduleSessionMentorUsername ?? undefined,
               })
               .then(() => {
                 setActionError(null);
-                setSuccessMessage("Your session was updated.");
+                toast.success("Your session was updated.");
                 setSelectedSession(null);
                 setShowRescheduleSheet(false);
               })

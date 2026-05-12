@@ -23,7 +23,7 @@ interface BackendAvailabilitySlot {
   date: string;
   startTime: string;
   endTime: string;
-  is_booked: boolean;
+  status: "AVAILABLE" | "PENDING" | "BOOKED";
 }
 
 interface EditAvailabilityModalProps {
@@ -233,7 +233,7 @@ export function EditAvailabilityModal({
         (request) => request.status === "ACCEPTED",
       );
 
-      if (existing.is_booked || acceptedRequests.length > 0) {
+      if (existing.status === "BOOKED" || acceptedRequests.length > 0) {
         setActionError(
           `This slot has ${acceptedRequests.length} planned session(s). Cancelling accepted sessions from availability editing is not supported by the current backend.`,
         );
@@ -420,7 +420,7 @@ export function EditAvailabilityModal({
                 (request) => request.status === "ACCEPTED",
               ).length;
               const isToggling = togglingKey === key;
-              const isBooked = Boolean(slot?.is_booked);
+              const isBooked = slot?.status === "BOOKED";
               const isPast = isPastHourSlot(selectedDate, hour);
               const isActive = Boolean(slot) && !isBooked;
               let impactLabel: string | null = null;

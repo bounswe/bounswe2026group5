@@ -8,14 +8,15 @@ export interface PublicMentorProfile {
     username: string
     full_name: string
     bio: string
-    hidden: boolean
     picture_url: string | null
     title: string
     location: string | null
     show_initials_only: boolean
     skills: string[]
     rating: number
+    review_count: number
     total_mentee_count: number
+    is_overloaded: boolean
 }
 
 export interface MentorSearchResponse {
@@ -28,6 +29,9 @@ export interface MentorSearchResponse {
 export interface MentorSearchParams {
     q?: string
     skills?: string[]
+    lat?: number
+    lng?: number
+    distanceKm?: number
     pageSize?: number
 }
 
@@ -45,6 +49,9 @@ export async function fetchMentors(
     if (params.page)           url.searchParams.set('page', String(params.page))
     if (params.pageSize)       url.searchParams.set('pageSize', String(params.pageSize))
     if (params.skills?.length) params.skills.forEach(s => url.searchParams.append('skill', s))
+    if (params.lat != null)    url.searchParams.set('lat', String(params.lat))
+    if (params.lng != null)    url.searchParams.set('lng', String(params.lng))
+    if (params.distanceKm != null) url.searchParams.set('distanceKm', String(params.distanceKm))
 
     const res = await fetch(url.toString())
     if (!res.ok) await throwApiError(res)

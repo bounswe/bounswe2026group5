@@ -1,17 +1,18 @@
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
+from unittest.mock import MagicMock, patch
 
+import firebase_admin
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient, APITestCase
 
-if TYPE_CHECKING:
-    from rest_framework.response import Response
-
+import notifications.fcm
 from accounts.models import User
 from profiles.models import Profile
 
-from .models import Notification
+from .fcm import get_firebase_app, send_push_notification
+from .models import FCMToken, Notification
 
 
 class NotificationModelTest(TestCase):
@@ -56,7 +57,6 @@ class NotificationAPITest(APITestCase):
         self.profile = Profile.objects.create(user=self.user, display_name="Test User")
         self.actor_user = User.objects.create_user(email="actor@example.com", password="password")
         self.actor_profile = Profile.objects.create(user=self.actor_user, display_name="Actor User")
-        from rest_framework.test import APIClient
 
         cast(APIClient, self.client).force_authenticate(user=self.user)
 
@@ -76,7 +76,7 @@ class NotificationAPITest(APITestCase):
         )
 
         url = reverse("notification-list")
-        response = cast("Response", self.client.get(url))
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = cast(list[Any], response.data)
         self.assertEqual(len(data), 2)
@@ -87,7 +87,6 @@ class NotificationAPITest(APITestCase):
 
     def test_list_notifications_requires_auth(self) -> None:
         """Test unauthenticated access is rejected for notification list."""
-        from rest_framework.test import APIClient
 
         cast(APIClient, self.client).force_authenticate(user=None)
 
@@ -98,7 +97,7 @@ class NotificationAPITest(APITestCase):
     def test_list_unread_notifications_empty(self) -> None:
         """Test unread list returns empty array when user has no unread notifications."""
         url = reverse("notification-list")
-        response = cast("Response", self.client.get(url))
+        response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = cast(list[Any], response.data)
@@ -121,7 +120,7 @@ class NotificationAPITest(APITestCase):
         )
 
         url = reverse("notification-list")
-        response = cast("Response", self.client.get(url))
+        response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = cast(list[Any], response.data)
@@ -144,7 +143,7 @@ class NotificationAPITest(APITestCase):
         )
 
         url = reverse("notification-list")
-        response = cast("Response", self.client.get(url))
+        response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = cast(list[Any], response.data)
@@ -200,7 +199,6 @@ class NotificationAPITest(APITestCase):
 
     def test_mark_notification_read_requires_auth(self) -> None:
         """Test unauthenticated access is rejected for mark-as-read endpoint."""
-        from rest_framework.test import APIClient
 
         cast(APIClient, self.client).force_authenticate(user=None)
         notification = Notification.objects.create(
@@ -214,7 +212,7 @@ class NotificationAPITest(APITestCase):
         response = self.client.put(url)
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-    
+
     def test_list_unread_notifications_includes_structured_fields(self) -> None:
         """Notification list includes actor/resource metadata for client routing."""
         Notification.objects.create(
@@ -230,7 +228,7 @@ class NotificationAPITest(APITestCase):
         )
 
         url = reverse("notification-list")
-        response = cast("Response", self.client.get(url))
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         data = cast(list[Any], response.data)
@@ -272,10 +270,119 @@ class NotificationAPITest(APITestCase):
         )
 
         url = reverse("notification-list")
-        response = cast("Response", self.client.get(url))
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         data = cast(list[Any], response.data)
         self.assertEqual(len(data), 2)
         self.assertEqual(data[0]["message"], "Newest unread")
         self.assertEqual(data[1]["message"], "Oldest unread")
+
+
+class FCMUnitTests(TestCase):
+    """Direct unit tests for notifications.fcm."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="fcm@example.com", password="password123")
+        # Ensure the singleton is reset
+        notifications.fcm._firebase_app = None
+
+    def tearDown(self):
+        notifications.fcm._firebase_app = None
+
+    @patch("notifications.fcm.credentials.Certificate")
+    @patch("notifications.fcm.firebase_admin.initialize_app")
+    @patch("notifications.fcm.firebase_admin.get_app")
+    @patch("notifications.fcm.settings")
+    def test_get_firebase_app_initializes_new(
+        self, mock_settings, mock_get_app, mock_init, mock_cert
+    ):
+        # Setup mocks
+        mock_settings.BASE_DIR = MagicMock()
+        mock_settings.FIREBASE_SERVICE_ACCOUNT_PATH = "secret.json"
+
+        # Simulate path.exists() returning True
+        mock_path = MagicMock()
+        mock_path.exists.return_value = True
+        mock_settings.BASE_DIR.__truediv__.return_value = mock_path
+
+        mock_get_app.side_effect = ValueError("App not found")
+        mock_init.return_value = MagicMock(name="new-app")
+
+        # Mock firebase_admin._apps
+        with patch.object(firebase_admin, "_apps", {}):
+            app = get_firebase_app()
+            self.assertIsNotNone(app)
+            mock_init.assert_called_once()
+
+    @patch("notifications.fcm.settings")
+    def test_get_firebase_app_fails_if_file_missing(self, mock_settings):
+        mock_path = MagicMock()
+        mock_path.exists.return_value = False
+        mock_settings.BASE_DIR.__truediv__.return_value = mock_path
+
+        app = get_firebase_app()
+        self.assertIsNone(app)
+
+    @patch("notifications.fcm.get_firebase_app")
+    @patch("notifications.fcm.messaging.send_each")
+    def test_send_push_notification_success(self, mock_send, mock_get_app):
+        mock_app = MagicMock()
+        mock_get_app.return_value = mock_app
+        FCMToken.objects.create(user=self.user, token="token-1")
+
+        # Mock response
+        mock_response = MagicMock()
+        mock_response.success_count = 1
+        mock_response.failure_count = 0
+        mock_response.responses = [MagicMock(success=True)]
+        mock_send.return_value = mock_response
+
+        send_push_notification(self.user.id, "Hello", "World")
+
+        mock_send.assert_called_once()
+        self.assertEqual(FCMToken.objects.count(), 1)
+
+    @patch("notifications.fcm.get_firebase_app")
+    @patch("notifications.fcm.messaging.send_each")
+    def test_send_push_notification_cleanup_invalid_tokens(self, mock_send, mock_get_app):
+        mock_app = MagicMock()
+        mock_get_app.return_value = mock_app
+        FCMToken.objects.create(user=self.user, token="valid-token")
+        FCMToken.objects.create(user=self.user, token="invalid-token")
+
+        # Mock response with one failure
+        mock_resp_valid = MagicMock(success=True)
+
+        mock_resp_invalid = MagicMock(success=False)
+        mock_resp_invalid.exception = MagicMock()
+        mock_resp_invalid.exception.code = "registration-token-not-registered"
+
+        mock_response = MagicMock()
+        mock_response.success_count = 1
+        mock_response.failure_count = 1
+        mock_response.responses = [mock_resp_valid, mock_resp_invalid]
+        mock_send.return_value = mock_response
+
+        send_push_notification(self.user.id, "Hello", "World")
+
+        # The invalid token should be deleted
+        self.assertEqual(FCMToken.objects.count(), 1)
+        self.assertTrue(FCMToken.objects.filter(token="valid-token").exists())
+        self.assertFalse(FCMToken.objects.filter(token="invalid-token").exists())
+
+    @patch("notifications.fcm.get_firebase_app")
+    def test_send_push_notification_no_app(self, mock_get_app):
+        mock_get_app.return_value = None
+        send_push_notification(self.user.id, "Hello", "World")
+        # Should return silently
+
+    @patch("notifications.fcm.get_firebase_app")
+    @patch("notifications.fcm.messaging.send_each")
+    def test_send_push_notification_exception_handling(self, mock_send, mock_get_app):
+        mock_get_app.return_value = MagicMock()
+        FCMToken.objects.create(user=self.user, token="token-1")
+        mock_send.side_effect = Exception("FCM Down")
+
+        # Should not raise exception
+        send_push_notification(self.user.id, "Hello", "World")

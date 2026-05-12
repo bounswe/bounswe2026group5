@@ -33,6 +33,44 @@ describe("PendingRequestCard — rendering", () => {
     expect(getByTestId("pending-decline-button")).toBeTruthy();
     expect(getByTestId("pending-accept-button")).toBeTruthy();
   });
+
+  it("renders pending state without action buttons for outgoing requests", () => {
+    const { getByTestId, queryByTestId } = render(
+      <PendingRequestCard {...baseProps} requestType="outgoing" />,
+    );
+    expect(getByTestId("pending-outgoing-badge")).toBeTruthy();
+    expect(queryByTestId("pending-decline-button")).toBeNull();
+    expect(queryByTestId("pending-accept-button")).toBeNull();
+  });
+
+  it("renders reschedule badge when request is a reschedule", () => {
+    const { getByTestId } = render(
+      <PendingRequestCard {...baseProps} isReschedule />,
+    );
+    expect(getByTestId("pending-reschedule-badge")).toBeTruthy();
+  });
+
+  it("renders avatar image when avatarUrl is provided", () => {
+    const { getByTestId, queryByTestId } = render(
+      <PendingRequestCard
+        {...baseProps}
+        avatarUrl="https://cdn.example.com/alice.jpg"
+      />,
+    );
+
+    expect(getByTestId("pending-avatar-image")).toBeTruthy();
+    expect(queryByTestId("pending-avatar-fallback")).toBeNull();
+  });
+
+  it("falls back to initials when avatarUrl is missing", () => {
+    const { getByTestId, queryByTestId, getByText } = render(
+      <PendingRequestCard {...baseProps} />,
+    );
+
+    expect(getByTestId("pending-avatar-fallback")).toBeTruthy();
+    expect(queryByTestId("pending-avatar-image")).toBeNull();
+    expect(getByText("AS")).toBeTruthy();
+  });
 });
 
 describe("PendingRequestCard — interactions", () => {
@@ -55,6 +93,15 @@ describe("PendingRequestCard — interactions", () => {
     const { getByTestId } = render(<PendingRequestCard {...baseProps} onAccept={onAccept} />);
     fireEvent.press(getByTestId("pending-accept-button"));
     expect(onAccept).toHaveBeenCalled();
+  });
+
+  it("calls onShowProfile when avatar is pressed", () => {
+    const onShowProfile = jest.fn();
+    const { getByTestId } = render(
+      <PendingRequestCard {...baseProps} onShowProfile={onShowProfile} />,
+    );
+    fireEvent.press(getByTestId("pending-profile-button"));
+    expect(onShowProfile).toHaveBeenCalled();
   });
 });
 

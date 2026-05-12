@@ -7,6 +7,9 @@ from .views import (
     CreateRequestAPIView,
     DeactivateMatchAPIView,
     MatchFeedbackListCreateAPIView,
+    MatchJourneyAPIView,
+    MCTECollectionAPIView,
+    MCTEEventDetailAPIView,
     MyMatchesListAPIView,
     MyMeetingSessionsListAPIView,
     MyRequestsListAPIView,
@@ -34,11 +37,25 @@ urlpatterns = [
         name="mentorship-match-deactivate",
     ),
     path(
+        "matches/<uuid:match_id>/journey/",
+        MatchJourneyAPIView.as_view(),
+        name="mentorship-match-journey",
+    ),
+    path(
+        "matches/<uuid:match_id>/journey/events/",
+        MCTECollectionAPIView.as_view(),
+        name="mentorship-mcte-list-create",
+    ),
+    path(
+        "matches/<uuid:match_id>/journey/events/<uuid:event_id>/",
+        MCTEEventDetailAPIView.as_view(),
+        name="mentorship-mcte-detail",
+    ),
+    path(
         "matches/<uuid:match_id>/feedback/",
         MatchFeedbackListCreateAPIView.as_view(),
         name="mentorship-match-feedback",
     ),
-
     path(
         "sessions/<uuid:session_id>/cancel/",
         CancelSessionAPIView.as_view(),

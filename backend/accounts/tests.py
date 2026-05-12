@@ -1,18 +1,34 @@
+import uuid
+from datetime import timedelta
 from typing import Any, cast
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, Group
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, override_settings
+from django.utils import timezone
 from drf_spectacular.openapi import AutoSchema
+from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory
-from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from profiles.models import Profile
 
-from .models import AppUsageMode, AuthProvider, User, UserRole
-from .permissions import IsRegularUser
+from .models import (
+    AppUsageMode,
+    AuthProvider,
+    EmailVerificationToken,
+    PasswordResetToken,
+    Report,
+    ReportReason,
+    ReportStatus,
+    User,
+    UserRole,
+)
+from .oauth import OAuthVerificationError, verify_google_id_token
+from .permissions import IsEmailVerified, IsRegularUser
 from .schema import CookieOrHeaderJWTAuthenticationScheme
 from .views import build_auth_response
 
@@ -755,9 +771,7 @@ class AccountsHelpersAndPermissionsTests(TestCase):
         """OpenAPI extension returns expected bearer security definition."""
         auto_schema = cast(AutoSchema, object())
         schema_extension = CookieOrHeaderJWTAuthenticationScheme(object())
-        security_definition = schema_extension.get_security_definition(
-            auto_schema
-        )
+        security_definition = schema_extension.get_security_definition(auto_schema)
 
         self.assertEqual(
             security_definition,
@@ -879,3 +893,1034 @@ class RBACPermissionTests(TestCase):
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._get_token(self.user)}")
         response = self.api_client.patch(url, payload)
         self.assertEqual(response.status_code, 200)
+
+
+class PasswordResetTokenModelTests(TestCase):
+    """Unit tests for the PasswordResetToken model helpers."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            email="reset_model@example.com",
+            password="OldPass123!",
+        )
+
+    def test_hash_token_is_deterministic_and_hex(self) -> None:
+        h1 = PasswordResetToken.hash_token("abc")
+        h2 = PasswordResetToken.hash_token("abc")
+        self.assertEqual(h1, h2)
+        self.assertEqual(len(h1), 64)
+        self.assertNotEqual(h1, PasswordResetToken.hash_token("abcd"))
+
+    def test_issue_for_user_stores_hash_not_raw_token(self) -> None:
+        raw_token, instance = PasswordResetToken.issue_for_user(self.user)
+
+        self.assertNotEqual(raw_token, instance.token_hash)
+        self.assertEqual(instance.token_hash, PasswordResetToken.hash_token(raw_token))
+        self.assertEqual(instance.user, self.user)
+        self.assertIsNone(instance.used_at)
+        self.assertGreater(instance.expires_at, timezone.now())
+
+    def test_issue_for_user_invalidates_previous_active_tokens(self) -> None:
+        _, first = PasswordResetToken.issue_for_user(self.user)
+        self.assertIsNone(first.used_at)
+
+        _, second = PasswordResetToken.issue_for_user(self.user)
+
+        first.refresh_from_db()
+        self.assertIsNotNone(first.used_at)
+        self.assertIsNone(second.used_at)
+
+    def test_is_valid_false_when_expired(self) -> None:
+        _, instance = PasswordResetToken.issue_for_user(self.user)
+        instance.expires_at = timezone.now() - timedelta(seconds=1)
+        instance.save(update_fields=["expires_at"])
+
+        self.assertFalse(instance.is_valid())
+
+    def test_is_valid_false_when_used(self) -> None:
+        _, instance = PasswordResetToken.issue_for_user(self.user)
+        instance.mark_used()
+
+        self.assertFalse(instance.is_valid())
+        self.assertIsNotNone(instance.used_at)
+
+    def test_token_uses_configured_lifetime(self) -> None:
+        with override_settings(PASSWORD_RESET_TOKEN_LIFETIME_MINUTES=5):
+            before = timezone.now()
+            _, instance = PasswordResetToken.issue_for_user(self.user)
+            delta = instance.expires_at - before
+            # Allow small drift; the lifetime should be ~5 minutes.
+            self.assertGreaterEqual(delta, timedelta(minutes=4, seconds=59))
+            self.assertLessEqual(delta, timedelta(minutes=5, seconds=5))
+
+
+class ForgotPasswordAPIViewTests(TestCase):
+    """API tests for POST /api/auth/forgot-password/."""
+
+    URL = "/api/auth/forgot-password/"
+
+    def setUp(self) -> None:
+        self.api_client = APIClient()
+        self.user = User.objects.create_user(
+            email="forgot@example.com",
+            password="OldPass123!",
+        )
+        mail.outbox = []
+
+    def test_forgot_password_sends_email_for_existing_user(self) -> None:
+        response = self.api_client.post(self.URL, {"email": "forgot@example.com"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("detail", response.data)
+
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertIn(self.user.email, sent.to)
+        self.assertIn("reset-password?token=", sent.body)
+
+        # Token stored as hash only, exactly one active token.
+        tokens = PasswordResetToken.objects.filter(user=self.user, used_at__isnull=True)
+        self.assertEqual(tokens.count(), 1)
+        stored = tokens.first()
+        assert stored is not None
+        self.assertNotIn(stored.token_hash, sent.body)
+
+    def test_forgot_password_normalizes_email_case(self) -> None:
+        response = self.api_client.post(self.URL, {"email": "Forgot@Example.COM"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            PasswordResetToken.objects.filter(user=self.user).count(),
+            1,
+        )
+
+    def test_forgot_password_returns_generic_response_for_unknown_email(self) -> None:
+        response = self.api_client.post(self.URL, {"email": "ghost@example.com"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(PasswordResetToken.objects.count(), 0)
+
+    def test_forgot_password_skips_banned_users(self) -> None:
+        self.user.is_banned = True
+        self.user.save(update_fields=["is_banned"])
+
+        response = self.api_client.post(self.URL, {"email": self.user.email})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(PasswordResetToken.objects.count(), 0)
+
+    def test_forgot_password_skips_inactive_users(self) -> None:
+        self.user.is_active = False
+        self.user.save(update_fields=["is_active"])
+
+        response = self.api_client.post(self.URL, {"email": self.user.email})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_forgot_password_requires_valid_email_format(self) -> None:
+        response = self.api_client.post(self.URL, {"email": "not-an-email"})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("email", response.data)
+
+    def test_forgot_password_invalidates_previous_token_when_reissued(self) -> None:
+        self.api_client.post(self.URL, {"email": self.user.email})
+        first_token = PasswordResetToken.objects.get(user=self.user, used_at__isnull=True)
+
+        self.api_client.post(self.URL, {"email": self.user.email})
+
+        first_token.refresh_from_db()
+        self.assertIsNotNone(first_token.used_at)
+        self.assertEqual(
+            PasswordResetToken.objects.filter(user=self.user, used_at__isnull=True).count(),
+            1,
+        )
+
+
+class ResetPasswordAPIViewTests(TestCase):
+    """API tests for POST /api/auth/reset-password/."""
+
+    URL = "/api/auth/reset-password/"
+    NEW_PASSWORD = "BrandNewPass!234"
+
+    def setUp(self) -> None:
+        self.api_client = APIClient()
+        self.user = User.objects.create_user(
+            email="resetter@example.com",
+            password="OldPass123!",
+        )
+        self.raw_token, self.reset_token = PasswordResetToken.issue_for_user(self.user)
+
+    def _payload(self, **overrides: Any) -> dict[str, Any]:
+        payload = {
+            "token": self.raw_token,
+            "new_password": self.NEW_PASSWORD,
+            "confirm_password": self.NEW_PASSWORD,
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_reset_password_succeeds_with_valid_token(self) -> None:
+        response = self.api_client.post(self.URL, self._payload())
+
+        self.assertEqual(response.status_code, 200)
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(self.NEW_PASSWORD))
+        self.assertFalse(self.user.check_password("OldPass123!"))
+
+        self.reset_token.refresh_from_db()
+        self.assertIsNotNone(self.reset_token.used_at)
+
+    def test_reset_password_token_cannot_be_reused(self) -> None:
+        first = self.api_client.post(self.URL, self._payload())
+        self.assertEqual(first.status_code, 200)
+
+        second = self.api_client.post(
+            self.URL,
+            self._payload(new_password="YetAnother!234", confirm_password="YetAnother!234"),
+        )
+
+        self.assertEqual(second.status_code, 400)
+        self.assertIn("token", second.data)
+
+    def test_reset_password_rejects_expired_token(self) -> None:
+        self.reset_token.expires_at = timezone.now() - timedelta(minutes=1)
+        self.reset_token.save(update_fields=["expires_at"])
+
+        response = self.api_client.post(self.URL, self._payload())
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("token", response.data)
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("OldPass123!"))
+
+    def test_reset_password_rejects_invalid_token(self) -> None:
+        response = self.api_client.post(self.URL, self._payload(token="does-not-exist"))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("token", response.data)
+
+    def test_reset_password_rejects_mismatched_confirmation(self) -> None:
+        response = self.api_client.post(
+            self.URL,
+            self._payload(confirm_password="DoesNotMatch!234"),
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("confirm_password", response.data)
+
+    def test_reset_password_enforces_password_validation(self) -> None:
+        response = self.api_client.post(
+            self.URL,
+            self._payload(new_password="short", confirm_password="short"),
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("OldPass123!"))
+
+    def test_reset_password_rejects_token_for_banned_user(self) -> None:
+        self.user.is_banned = True
+        self.user.save(update_fields=["is_banned"])
+
+        response = self.api_client.post(self.URL, self._payload())
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("token", response.data)
+
+    def test_reset_password_blacklists_existing_refresh_tokens(self) -> None:
+        refresh = RefreshToken.for_user(self.user)
+        self.assertTrue(OutstandingToken.objects.filter(user=self.user).exists())
+        self.assertFalse(BlacklistedToken.objects.filter(token__jti=refresh["jti"]).exists())
+
+        response = self.api_client.post(self.URL, self._payload())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(BlacklistedToken.objects.filter(token__jti=refresh["jti"]).exists())
+
+
+class EmailVerificationTokenModelTests(TestCase):
+    """Unit tests for the EmailVerificationToken model helpers."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            email="verify_model@example.com",
+            password="SomePass123!",
+        )
+
+    def test_hash_token_is_deterministic_and_hex(self) -> None:
+        h1 = EmailVerificationToken.hash_token("abc")
+        h2 = EmailVerificationToken.hash_token("abc")
+        self.assertEqual(h1, h2)
+        self.assertEqual(len(h1), 64)
+        self.assertNotEqual(h1, EmailVerificationToken.hash_token("abcd"))
+
+    def test_issue_for_user_stores_hash_not_raw_token(self) -> None:
+        raw_token, instance = EmailVerificationToken.issue_for_user(self.user)
+
+        self.assertNotEqual(raw_token, instance.token_hash)
+        self.assertEqual(instance.token_hash, EmailVerificationToken.hash_token(raw_token))
+        self.assertEqual(instance.user, self.user)
+        self.assertIsNone(instance.used_at)
+        self.assertGreater(instance.expires_at, timezone.now())
+
+    def test_issue_for_user_invalidates_previous_active_tokens(self) -> None:
+        _, first = EmailVerificationToken.issue_for_user(self.user)
+        self.assertIsNone(first.used_at)
+
+        _, second = EmailVerificationToken.issue_for_user(self.user)
+
+        first.refresh_from_db()
+        self.assertIsNotNone(first.used_at)
+        self.assertIsNone(second.used_at)
+
+    def test_is_valid_false_when_expired(self) -> None:
+        _, instance = EmailVerificationToken.issue_for_user(self.user)
+        instance.expires_at = timezone.now() - timedelta(seconds=1)
+        instance.save(update_fields=["expires_at"])
+
+        self.assertFalse(instance.is_valid())
+
+    def test_is_valid_false_when_used(self) -> None:
+        _, instance = EmailVerificationToken.issue_for_user(self.user)
+        instance.mark_used()
+
+        self.assertFalse(instance.is_valid())
+
+    def test_token_uses_configured_lifetime(self) -> None:
+        with override_settings(EMAIL_VERIFICATION_TOKEN_LIFETIME_HOURS=2):
+            before = timezone.now()
+            _, instance = EmailVerificationToken.issue_for_user(self.user)
+            delta = instance.expires_at - before
+            self.assertGreaterEqual(delta, timedelta(hours=1, minutes=59))
+            self.assertLessEqual(delta, timedelta(hours=2, minutes=1))
+
+
+@override_settings(REQUIRE_EMAIL_VERIFICATION=True)
+class RegistrationIssuesVerificationTokenTests(TestCase):
+    """Ensures registration auto-issues an email verification token + sends email."""
+
+    def setUp(self) -> None:
+        self.api_client = APIClient()
+        Group.objects.get_or_create(name=UserRole.USER)
+        mail.outbox = []
+
+    def test_new_user_starts_unverified(self) -> None:
+        response = self.api_client.post(
+            "/api/auth/register/",
+            {
+                "email": "fresh@example.com",
+                "password": "SecurePass123",
+                "confirm_password": "SecurePass123",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(response.data["user"]["is_email_verified"])
+
+        user = User.objects.get(email="fresh@example.com")
+        self.assertFalse(user.is_email_verified)
+        self.assertIsNone(user.email_verified_at)
+
+    def test_registration_issues_verification_token_and_sends_email(self) -> None:
+        response = self.api_client.post(
+            "/api/auth/register/",
+            {
+                "email": "welcome@example.com",
+                "password": "SecurePass123",
+                "confirm_password": "SecurePass123",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+
+        user = User.objects.get(email="welcome@example.com")
+        tokens = EmailVerificationToken.objects.filter(user=user, used_at__isnull=True)
+        self.assertEqual(tokens.count(), 1)
+
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertIn("welcome@example.com", sent.to)
+        self.assertIn("verify-email?token=", sent.body)
+
+        stored = tokens.first()
+        assert stored is not None
+        self.assertNotIn(stored.token_hash, sent.body)
+
+
+class VerifyEmailAPIViewTests(TestCase):
+    """API tests for GET /api/auth/verify-email/."""
+
+    URL = "/api/auth/verify-email/"
+
+    def setUp(self) -> None:
+        self.api_client = APIClient()
+        self.user = User.objects.create_user(
+            email="unverified@example.com",
+            password="SomePass123!",
+        )
+        # Override the grandfathered default (set in create_user only for existing rows at migrate
+        # time). New users in tests are created after migration, so they start with the declared
+        # field default: False.
+        self.user.is_email_verified = False
+        self.user.email_verified_at = None
+        self.user.save(update_fields=["is_email_verified", "email_verified_at"])
+        self.raw_token, self.token_instance = EmailVerificationToken.issue_for_user(self.user)
+
+    def test_verify_with_valid_token_marks_user_verified(self) -> None:
+        response = self.api_client.get(self.URL, {"token": self.raw_token})
+
+        self.assertEqual(response.status_code, 200)
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_email_verified)
+        self.assertIsNotNone(self.user.email_verified_at)
+
+        self.token_instance.refresh_from_db()
+        self.assertIsNotNone(self.token_instance.used_at)
+
+    def test_verify_missing_token_returns_400(self) -> None:
+        response = self.api_client.get(self.URL)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("token", response.data)
+
+    def test_verify_invalid_token_returns_400(self) -> None:
+        response = self.api_client.get(self.URL, {"token": "nope"})
+        self.assertEqual(response.status_code, 400)
+
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_email_verified)
+
+    def test_verify_expired_token_returns_400(self) -> None:
+        self.token_instance.expires_at = timezone.now() - timedelta(minutes=1)
+        self.token_instance.save(update_fields=["expires_at"])
+
+        response = self.api_client.get(self.URL, {"token": self.raw_token})
+
+        self.assertEqual(response.status_code, 400)
+
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_email_verified)
+
+    def test_verify_token_cannot_be_reused(self) -> None:
+        first = self.api_client.get(self.URL, {"token": self.raw_token})
+        self.assertEqual(first.status_code, 200)
+
+        second = self.api_client.get(self.URL, {"token": self.raw_token})
+        self.assertEqual(second.status_code, 400)
+
+    def test_verify_rejected_for_banned_user(self) -> None:
+        self.user.is_banned = True
+        self.user.save(update_fields=["is_banned"])
+
+        response = self.api_client.get(self.URL, {"token": self.raw_token})
+        self.assertEqual(response.status_code, 400)
+
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_email_verified)
+
+
+class ResendVerificationAPIViewTests(TestCase):
+    """API tests for POST /api/auth/resend-verification/."""
+
+    URL = "/api/auth/resend-verification/"
+
+    def setUp(self) -> None:
+        self.api_client = APIClient()
+        self.user = User.objects.create_user(
+            email="resend@example.com",
+            password="SomePass123!",
+        )
+        self.user.is_email_verified = False
+        self.user.email_verified_at = None
+        self.user.save(update_fields=["is_email_verified", "email_verified_at"])
+        self.api_client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {RefreshToken.for_user(self.user).access_token}"
+        )
+        mail.outbox = []
+
+    def test_resend_sends_new_token_email_for_unverified_user(self) -> None:
+        response = self.api_client.post(self.URL)
+        self.assertEqual(response.status_code, 200)
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.user.email, mail.outbox[0].to)
+
+        self.assertEqual(
+            EmailVerificationToken.objects.filter(user=self.user, used_at__isnull=True).count(),
+            1,
+        )
+
+    def test_resend_invalidates_previous_token(self) -> None:
+        _, old = EmailVerificationToken.issue_for_user(self.user)
+
+        self.api_client.post(self.URL)
+
+        old.refresh_from_db()
+        self.assertIsNotNone(old.used_at)
+
+    def test_resend_is_noop_when_user_already_verified(self) -> None:
+        self.user.is_email_verified = True
+        self.user.save(update_fields=["is_email_verified"])
+
+        response = self.api_client.post(self.URL)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(
+            EmailVerificationToken.objects.filter(user=self.user).count(),
+            0,
+        )
+
+    def test_resend_requires_authentication(self) -> None:
+        self.api_client.credentials()
+        response = self.api_client.post(self.URL)
+        self.assertEqual(response.status_code, 401)
+
+    def test_resend_blocks_banned_user(self) -> None:
+        self.user.is_banned = True
+        self.user.save(update_fields=["is_banned"])
+
+        response = self.api_client.post(self.URL)
+        self.assertEqual(response.status_code, 403)
+
+
+@override_settings(REQUIRE_EMAIL_VERIFICATION=True)
+class IsEmailVerifiedPermissionTests(TestCase):
+    """Direct unit tests for the IsEmailVerified permission class."""
+
+    def setUp(self) -> None:
+        self.factory = APIRequestFactory()
+        self.permission = IsEmailVerified()
+
+    def test_denies_anonymous_user(self) -> None:
+        request = self.factory.get("/")
+        request.user = AnonymousUser()  # type: ignore[attr-defined]
+        self.assertFalse(self.permission.has_permission(request, Mock()))
+
+    @override_settings(REQUIRE_EMAIL_VERIFICATION=True)
+    def test_denies_unverified_authenticated_user(self) -> None:
+        user = User.objects.create_user(email="u@example.com", password="P!aaabbbb")
+        user.is_email_verified = False
+        user.save(update_fields=["is_email_verified"])
+        request = self.factory.get("/")
+        request.user = user  # type: ignore[attr-defined]
+        self.assertFalse(self.permission.has_permission(request, Mock()))
+
+    def test_allows_verified_authenticated_user(self) -> None:
+        user = User.objects.create_user(email="v@example.com", password="P!aaabbbb")
+        user.is_email_verified = True
+        user.save(update_fields=["is_email_verified"])
+        request = self.factory.get("/")
+        request.user = user  # type: ignore[attr-defined]
+        self.assertTrue(self.permission.has_permission(request, Mock()))
+
+    @override_settings(REQUIRE_EMAIL_VERIFICATION=False)
+    def test_allows_unverified_user_when_flag_disabled(self) -> None:
+        """Bypass flag lets unverified users through so devs can test gated flows."""
+        user = User.objects.create_user(email="bypass@example.com", password="P!aaabbbb")
+        user.is_email_verified = False
+        user.save(update_fields=["is_email_verified"])
+        request = self.factory.get("/")
+        request.user = user  # type: ignore[attr-defined]
+        self.assertTrue(self.permission.has_permission(request, Mock()))
+
+    @override_settings(REQUIRE_EMAIL_VERIFICATION=False)
+    def test_still_denies_anonymous_when_flag_disabled(self) -> None:
+        """Bypass flag must not weaken authentication; anonymous is still rejected."""
+        request = self.factory.get("/")
+        request.user = AnonymousUser()  # type: ignore[attr-defined]
+        self.assertFalse(self.permission.has_permission(request, Mock()))
+
+
+# ---------------------------------------------------------------------------
+# OAuth2 Login Tests
+# ---------------------------------------------------------------------------
+
+_GOOGLE_MOCK_PAYLOAD = {
+    "email": "oauth.google@example.com",
+    "given_name": "John",
+    "family_name": "Doe",
+    "name": "John Doe",
+    "picture": "https://lh3.googleusercontent.com/photo.jpg",
+}
+
+
+class GoogleOAuthLoginTests(TestCase):
+    """Integration tests for POST /api/auth/google/."""
+
+    def setUp(self) -> None:
+        self.client: Any = APIClient()
+        self.url = "/api/auth/google/"
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch("accounts.views.verify_google_id_token")
+    def test_google_login_creates_new_user(self, mock_verify: Mock) -> None:
+        """Valid Google token creates a new user with GOOGLE provider."""
+        mock_verify.return_value = _GOOGLE_MOCK_PAYLOAD.copy()
+
+        response = self.client.post(self.url, {"id_token": "valid-token"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("access_token", data)
+        self.assertIn("refresh_token", data)
+        self.assertIn("user", data)
+        self.assertEqual(data["user"]["email"], "oauth.google@example.com")
+        self.assertTrue(data["user"]["is_email_verified"])
+        self.assertEqual(data["user"]["auth_provider"], "GOOGLE")
+
+        # Verify Profile was created with Google-derived display name
+        user = User.objects.get(email="oauth.google@example.com")
+        self.assertTrue(hasattr(user, "profile"))
+        self.assertEqual(user.profile.display_name, "John Doe")
+        self.assertEqual(user.profile.picture_url, "https://lh3.googleusercontent.com/photo.jpg")
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch("accounts.views.verify_google_id_token")
+    def test_google_login_existing_local_user_logs_in(self, mock_verify: Mock) -> None:
+        """Existing LOCAL user logs in via Google without changing auth_provider."""
+        existing_user = User.objects.create_user(
+            email="oauth.google@example.com",
+            password="SecurePass123",
+            auth_provider=AuthProvider.LOCAL,
+        )
+        Profile.objects.create(
+            user=existing_user,
+            display_name="Existing User",
+        )
+
+        mock_verify.return_value = _GOOGLE_MOCK_PAYLOAD.copy()
+
+        response = self.client.post(self.url, {"id_token": "valid-token"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["user"]["email"], "oauth.google@example.com")
+        # auth_provider should NOT change — user keeps LOCAL credentials
+        self.assertEqual(data["user"]["auth_provider"], "LOCAL")
+
+        existing_user.refresh_from_db()
+        self.assertEqual(existing_user.auth_provider, AuthProvider.LOCAL)
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch("accounts.views.verify_google_id_token")
+    def test_google_login_existing_google_user_returns_tokens(self, mock_verify: Mock) -> None:
+        """Existing GOOGLE user returns tokens without creating a duplicate."""
+        existing_user = User.objects.create_user(
+            email="oauth.google@example.com",
+            auth_provider=AuthProvider.GOOGLE,
+            is_email_verified=True,
+        )
+        Profile.objects.create(
+            user=existing_user,
+            display_name="Google User",
+        )
+
+        mock_verify.return_value = _GOOGLE_MOCK_PAYLOAD.copy()
+
+        response = self.client.post(self.url, {"id_token": "valid-token"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["user"]["email"], "oauth.google@example.com")
+
+        # Should not create a second user
+        self.assertEqual(User.objects.filter(email="oauth.google@example.com").count(), 1)
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch("accounts.views.verify_google_id_token")
+    def test_google_login_banned_user_rejected(self, mock_verify: Mock) -> None:
+        """Banned user is rejected during OAuth login."""
+        banned_user = User.objects.create_user(
+            email="oauth.google@example.com",
+            auth_provider=AuthProvider.GOOGLE,
+            is_banned=True,
+        )
+        Profile.objects.create(user=banned_user, display_name="Banned")
+
+        mock_verify.return_value = _GOOGLE_MOCK_PAYLOAD.copy()
+
+        response = self.client.post(self.url, {"id_token": "valid-token"}, format="json")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("banned", response.json()["detail"].lower())
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch("accounts.views.verify_google_id_token")
+    def test_google_login_inactive_user_rejected(self, mock_verify: Mock) -> None:
+        """Inactive user is rejected during OAuth login."""
+        inactive_user = User.objects.create_user(
+            email="oauth.google@example.com",
+            auth_provider=AuthProvider.GOOGLE,
+            is_active=False,
+        )
+        Profile.objects.create(user=inactive_user, display_name="Inactive")
+
+        mock_verify.return_value = _GOOGLE_MOCK_PAYLOAD.copy()
+
+        response = self.client.post(self.url, {"id_token": "valid-token"}, format="json")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("inactive", response.json()["detail"].lower())
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch(
+        "accounts.views.verify_google_id_token",
+        side_effect=__import__(
+            "accounts.oauth", fromlist=["OAuthVerificationError"]
+        ).OAuthVerificationError("Invalid or expired Google token."),
+    )
+    def test_google_login_invalid_token_rejected(self, mock_verify: Mock) -> None:
+        """Invalid Google token returns 400."""
+        response = self.client.post(self.url, {"id_token": "bad-token"}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("detail", response.json())
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-google-client-id")
+    @patch("accounts.views.verify_google_id_token")
+    def test_google_login_sets_auth_cookies(self, mock_verify: Mock) -> None:
+        """Successful Google login sets HttpOnly auth cookies."""
+        mock_verify.return_value = _GOOGLE_MOCK_PAYLOAD.copy()
+
+        response = self.client.post(self.url, {"id_token": "valid-token"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(settings.AUTH_ACCESS_COOKIE_NAME, response.cookies)
+        self.assertIn(settings.AUTH_REFRESH_COOKIE_NAME, response.cookies)
+
+    def test_google_login_missing_id_token_rejected(self) -> None:
+        """Missing id_token field returns 400."""
+        response = self.client.post(self.url, {}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+
+
+class AdminUserUpdateAPIViewTests(TestCase):
+    def setUp(self):
+        self.api_client = APIClient()
+        self.admin_user = User.objects.create_user(
+            email="admin_unique@test.com", password="Pass123!", role=UserRole.ADMIN
+        )
+        self.target_user = User.objects.create_user(email="target@test.com", password="Pass123!")
+
+    def test_admin_can_ban_user(self):
+        self.api_client.force_authenticate(user=self.admin_user)
+        response = self.api_client.patch(
+            f"/api/auth/admin/users/{self.target_user.id}/",
+            {"is_banned": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.target_user.refresh_from_db()
+        self.assertTrue(self.target_user.is_banned)
+
+    def test_admin_cannot_ban_self(self):
+        self.api_client.force_authenticate(user=self.admin_user)
+        response = self.api_client.patch(
+            f"/api/auth/admin/users/{self.admin_user.id}/",
+            {"is_banned": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_non_admin_cannot_ban(self):
+        self.api_client.force_authenticate(user=self.target_user)
+        response = self.api_client.patch(
+            f"/api/auth/admin/users/{self.admin_user.id}/",
+            {"is_banned": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ReportAPITests(TestCase):
+    def setUp(self):
+        self.api_client = APIClient()
+        self.admin = User.objects.create_user(
+            email="admin2@test.com", password="Pass123!", role=UserRole.ADMIN
+        )
+        self.reporter = User.objects.create_user(email="reporter@test.com", password="Pass123!")
+        self.other_reporter = User.objects.create_user(
+            email="other_reporter@test.com", password="Pass123!"
+        )
+        self.reported = User.objects.create_user(
+            email="reported@test.com", password="Pass123!", username="baduser"
+        )
+        self.report = Report.objects.create(
+            submitted_by=self.reporter,
+            reported_user=self.reported,
+            reason=ReportReason.SPAM,
+            description="Spamming the feed",
+            status=ReportStatus.OPEN,
+        )
+
+    def test_user_can_submit_report_by_id(self):
+        self.api_client.force_authenticate(user=self.other_reporter)
+        response = self.api_client.post(
+            "/api/auth/reports/",
+            {
+                "reported_user_id": str(self.reported.id),
+                "reason": "HARASSMENT",
+                "description": "Being rude",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Report.objects.count(), 2)
+
+    def test_user_can_submit_report_by_username(self):
+        self.api_client.force_authenticate(user=self.other_reporter)
+        response = self.api_client.post(
+            "/api/auth/reports/",
+            {
+                "reported_username": self.reported.username,
+                "reason": "SPAM",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_user_cannot_report_same_user_twice(self):
+        """One user can report another user at most once."""
+        self.api_client.force_authenticate(user=self.reporter)
+        response = self.api_client.post(
+            "/api/auth/reports/",
+            {
+                "reported_user_id": str(self.reported.id),
+                "reason": "HARASSMENT",
+            },
+            format="json",
+        )
+        # self.reporter already reported self.reported in setUp
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("already reported this user", response.data["detail"].lower())
+
+    def test_user_cannot_report_self(self):
+        self.api_client.force_authenticate(user=self.reporter)
+        response = self.api_client.post(
+            "/api/auth/reports/",
+            {
+                "reported_user_id": str(self.reporter.id),
+                "reason": "SPAM",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_admin_can_list_reports(self):
+        self.api_client.force_authenticate(user=self.admin)
+        response = self.api_client.get("/api/auth/admin/reports/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 1)
+
+    def test_non_admin_cannot_list_reports(self):
+        self.api_client.force_authenticate(user=self.reporter)
+        response = self.api_client.get("/api/auth/admin/reports/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_can_resolve_report(self):
+        self.api_client.force_authenticate(user=self.admin)
+        response = self.api_client.patch(
+            f"/api/auth/admin/reports/{self.report.id}/",
+            {
+                "status": "RESOLVED",
+                "resolution_note": "Banned user",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, ReportStatus.RESOLVED)
+        self.assertEqual(self.report.resolved_by, self.admin)
+        self.assertEqual(self.report.resolution_note, "Banned user")
+
+
+class GoogleOAuthUnitTests(TestCase):
+    """Direct unit tests for accounts.oauth.verify_google_id_token."""
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="")
+    def test_fails_when_client_id_missing(self):
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("some-token")
+        self.assertIn("not configured", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.google_id_token.verify_oauth2_token")
+    def test_verify_jwt_success(self, mock_verify):
+        mock_verify.return_value = {
+            "email": "test@example.com",
+            "email_verified": True,
+            "given_name": "Test",
+            "family_name": "User",
+            "picture": "http://example.com/pic.jpg",
+        }
+        # JWT must have 2 dots
+        result = verify_google_id_token("a.b.c")
+        self.assertEqual(result["email"], "test@example.com")
+        self.assertEqual(result["given_name"], "Test")
+        mock_verify.assert_called_once()
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.google_id_token.verify_oauth2_token")
+    def test_verify_jwt_unverified_email(self, mock_verify):
+        mock_verify.return_value = {
+            "email": "test@example.com",
+            "email_verified": False,
+        }
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("a.b.c")
+        self.assertIn("not verified", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.google_id_token.verify_oauth2_token")
+    def test_verify_jwt_missing_email(self, mock_verify):
+        mock_verify.return_value = {
+            "email_verified": True,
+        }
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("a.b.c")
+        self.assertIn("does not contain an email", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.google_id_token.verify_oauth2_token")
+    def test_verify_jwt_value_error(self, mock_verify):
+        mock_verify.side_effect = ValueError("Invalid token")
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("a.b.c")
+        self.assertIn("Invalid or expired Google token", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.requests.get")
+    def test_verify_access_token_success(self, mock_get):
+        # First call: tokeninfo
+        mock_token_info = MagicMock()
+        mock_token_info.status_code = 200
+        mock_token_info.json.return_value = {"aud": "test-client-id"}
+
+        # Second call: userinfo
+        mock_user_info = MagicMock()
+        mock_user_info.status_code = 200
+        mock_user_info.json.return_value = {
+            "email": "access@example.com",
+            "email_verified": "true",
+            "name": "Access User",
+        }
+
+        mock_get.side_effect = [mock_token_info, mock_user_info]
+
+        # No dots -> Access Token flow
+        result = verify_google_id_token("some_access_token")
+        self.assertEqual(result["email"], "access@example.com")
+        self.assertEqual(result["name"], "Access User")
+        self.assertEqual(mock_get.call_count, 2)
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.requests.get")
+    def test_verify_access_token_invalid(self, mock_get):
+        mock_res = MagicMock()
+        mock_res.status_code = 401
+        mock_get.return_value = mock_res
+
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("bad_token")
+        self.assertIn("Invalid or expired Google access token", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.requests.get")
+    def test_verify_access_token_audience_mismatch(self, mock_get):
+        mock_res = MagicMock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {"aud": "wrong-client-id"}
+        mock_get.return_value = mock_res
+
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("token")
+        self.assertIn("audience mismatch", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.requests.get")
+    def test_verify_access_token_userinfo_fail(self, mock_get):
+        mock_token_info = MagicMock()
+        mock_token_info.status_code = 200
+        mock_token_info.json.return_value = {"aud": "test-client-id"}
+
+        mock_user_info = MagicMock()
+        mock_user_info.status_code = 404
+        mock_get.side_effect = [mock_token_info, mock_user_info]
+
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("token")
+        self.assertIn("UserInfo fetch failed", str(cm.exception))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="test-client-id")
+    @patch("accounts.oauth.google_id_token.verify_oauth2_token")
+    def test_unexpected_error_mapping(self, mock_verify):
+        mock_verify.side_effect = Exception("System crash")
+        with self.assertRaises(OAuthVerificationError) as cm:
+            verify_google_id_token("a.b.c")
+        self.assertIn("verification failed", str(cm.exception))
+
+
+class EmailEdgeCaseTests(TestCase):
+    """Tests for email delivery failure scenarios."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.get_or_create(
+            email="edge@example.com",
+            defaults={"password": "password123", "is_active": True},
+        )[0]
+
+    @patch("accounts.views.send_mail")
+    def test_forgot_password_email_failure_graceful(self, mock_send):
+        """ForgotPasswordAPIView should return 200 even if email delivery fails."""
+        mock_send.side_effect = Exception("SMTP Timeout")
+        with self.assertLogs("accounts.views", level="ERROR") as cm:
+            response = self.client.post("/api/auth/forgot-password/", {"email": "edge@example.com"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("detail", response.data)
+        self.assertTrue(any("Failed to issue password reset email" in log for log in cm.output))
+        mock_send.assert_called_once()
+
+    @patch("accounts.views.send_mail")
+    @override_settings(REQUIRE_EMAIL_VERIFICATION=True)
+    def test_register_email_failure_graceful(self, mock_send):
+        """RegisterAPIView should return 201 even if verification email fails."""
+        mock_send.side_effect = Exception("SMTP Error")
+        # Use a unique email to avoid IntegrityError in case of re-runs
+        email = f"newuser_{uuid.uuid4().hex[:8]}@example.com"
+        with self.assertLogs("accounts.views", level="ERROR") as cm:
+            response = self.client.post(
+                "/api/auth/register/",
+                {
+                    "email": email,
+                    "password": "Password123!",
+                    "confirm_password": "Password123!",
+                },
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("access_token", response.data)
+        self.assertTrue(any("Failed to issue verification email" in log for log in cm.output))
+        mock_send.assert_called_once()
+
+    @patch("accounts.views.send_mail")
+    def test_resend_verification_email_failure_graceful(self, mock_send):
+        """ResendVerificationAPIView should return 200 even if email delivery fails."""
+        self.client.force_authenticate(user=self.user)
+        self.user.is_email_verified = False
+        self.user.save()
+
+        mock_send.side_effect = Exception("Connection Refused")
+        with self.assertLogs("accounts.views", level="ERROR") as cm:
+            response = self.client.post("/api/auth/resend-verification/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any("Failed to resend verification email" in log for log in cm.output))
+        mock_send.assert_called_once()

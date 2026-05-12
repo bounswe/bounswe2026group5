@@ -3,9 +3,10 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { navigateMock, loginFnMock, handleAuthSuccessMock } = vi.hoisted(() => ({
+const { navigateMock, loginFnMock, googleLoginFnMock, handleAuthSuccessMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   loginFnMock: vi.fn(),
+  googleLoginFnMock: vi.fn(),
   handleAuthSuccessMock: vi.fn(),
 }))
 
@@ -25,8 +26,18 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   }
 })
 
+vi.mock('#/hooks/useGoogleLoginSafe', () => ({
+  useGoogleLoginSafe: vi.fn((config) => {
+    // Return a function that triggers the onSuccess callback with a fake token
+    return () => {
+      config.onSuccess({ access_token: 'fake-google-token' })
+    }
+  }),
+}))
+
 vi.mock('#/lib/queries/AuthQueries.ts', () => ({
   loginFn: loginFnMock,
+  googleLoginFn: googleLoginFnMock,
   handleAuthSuccess: handleAuthSuccessMock,
 }))
 
@@ -70,7 +81,7 @@ describe('LoginPage', () => {
     renderLoginPage()
 
     await user.type(screen.getByLabelText(/Email/i), 'alex@example.com')
-    await user.type(screen.getByLabelText(/Password/i), 'pass123456')
+    await user.type(screen.getByLabelText(/^Password$/i), 'pass123456')
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
     await waitFor(() => {
@@ -92,7 +103,7 @@ describe('LoginPage', () => {
     renderLoginPage()
 
     await user.type(screen.getByLabelText(/Email/i), 'alex@example.com')
-    await user.type(screen.getByLabelText(/Password/i), 'wrong-password')
+    await user.type(screen.getByLabelText(/^Password$/i), 'wrong-password')
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
     expect(await screen.findByText('Invalid credentials')).toBeInTheDocument()
@@ -114,7 +125,7 @@ describe('LoginPage', () => {
     renderLoginPage()
 
     await user.type(screen.getByLabelText(/Email/i), 'alex@example.com')
-    await user.type(screen.getByLabelText(/Password/i), 'pass123456')
+    await user.type(screen.getByLabelText(/^Password$/i), 'pass123456')
     await user.click(screen.getByRole('button', { name: /Sign in/i }))
 
     expect(screen.getByRole('button', { name: /Signing in/i })).toBeDisabled()
@@ -128,5 +139,33 @@ describe('LoginPage', () => {
     await waitFor(() => {
       expect(handleAuthSuccessMock).toHaveBeenCalled()
     })
+  })
+
+  it('logs in successfully with Google', async () => {
+    const user = userEvent.setup()
+
+    const authResponse = {
+      access_token: 'access-1',
+      refresh_token: 'refresh-1',
+      user: {
+        id: 'user-1',
+        username: 'google.user',
+        email: 'google@example.com',
+      },
+    }
+
+    googleLoginFnMock.mockResolvedValue(authResponse)
+
+    renderLoginPage()
+
+    const googleBtn = screen.getByRole('button', { name: /Continue with Google/i })
+    await user.click(googleBtn)
+
+    await waitFor(() => {
+      expect(googleLoginFnMock).toHaveBeenCalledWith('fake-google-token', expect.anything())
+    })
+
+    expect(handleAuthSuccessMock).toHaveBeenCalledWith(authResponse)
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/dashboard' })
   })
 })

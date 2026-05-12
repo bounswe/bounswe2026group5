@@ -1,13 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, type Href } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
+  Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ConnectionActionsSheet } from "@/components/connections/ConnectionActionsSheet";
@@ -15,21 +19,20 @@ import { DeclineConfirmModal } from "@/components/connections/DeclineConfirmModa
 import { FeedbackBottomSheet } from "@/components/connections/FeedbackBottomSheet";
 import { MenteeCard } from "@/components/connections/MenteeCard";
 import {
-  MessageCard,
-  MessageCardProps,
-} from "@/components/connections/MessageCard";
-import {
   PendingRequestCard,
   PendingRequestCardProps,
 } from "@/components/connections/PendingRequestCard";
 import { RequestDetailSheet } from "@/components/connections/RequestDetailSheet";
-import { RequestCard } from "@/components/dashboard/RequestCard";
-import { RequestDetailsModal } from "@/components/dashboard/RequestDetailsModal";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { SuccessCard } from "@/components/ui/SuccessCard";
+import { useToast } from "@/components/ui/ToastProvider";
+import { useRefreshControl } from "@/hooks/use-refresh-control";
 
 import { useAuthStore } from "@/lib/auth/store";
+import {
+  MENTOR_MENTEE_CAPACITY_WARNING,
+  shouldWarnBeforeAcceptingMentee,
+} from "@/lib/mentorship/capacity";
 import { useConversations } from "@/lib/queries/MessagingQueries";
 import {
   mapRequestsToDashboard,
@@ -42,6 +45,7 @@ import {
   type DashboardRequestItem,
   type MentorshipRequest,
 } from "@/lib/queries/mentorship";
+import { useMessaging } from "@/hooks/useMessaging";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -64,6 +68,25 @@ function mapRequestToCardProps(
     slot_end_time: req.slot_end_time,
     avatarUrl: req.mentee.picture_url || undefined,
     isNew: isWithin24h(req.created_at),
+  };
+}
+
+function mapDashboardRequestToCardProps(
+  request: DashboardRequestItem,
+): PendingRequestCardProps {
+  return {
+    id: request.requestId,
+    username:
+      request.type === "incoming"
+        ? request.menteeUsername
+        : request.mentorUsername,
+    name: request.user,
+    cover_letter: request.message ?? "",
+    slot_date: null,
+    slot_start_time: request.proposedDate ?? null,
+    slot_end_time: null,
+    requestType: request.type,
+    isReschedule: request.isReschedule,
   };
 }
 
@@ -100,7 +123,7 @@ type ConnectionViewProps = Readonly<{
   onOpenFeedback: (
     matchId: string,
     name: string,
-    myRole: "Mentor" | "Mentee",
+    myRole: "Mentee",
   ) => void;
   onError: (message: string) => void;
   onSuccess: (message: string) => void;
@@ -113,12 +136,79 @@ function pushUserProfile(
   router.push(`/user/${encodeURIComponent(username)}` as Href);
 }
 
+function pushMatchJourney(
+  router: ReturnType<typeof useRouter>,
+  matchId: string,
+): void {
+  router.push(
+    `/(tabs)/connections/timeline/${encodeURIComponent(matchId)}` as Href,
+  );
+}
+
+function getQueryErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function MatchJourneyPickerSheet({
+  visible,
+  name,
+  matchIds,
+  onClose,
+  onSelect,
+}: Readonly<{
+  visible: boolean;
+  name: string;
+  matchIds: string[];
+  onClose: () => void;
+  onSelect: (matchId: string) => void;
+}>) {
+  return (
+    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
+      <View className="flex-1 justify-end">
+        <Pressable className="absolute inset-0 bg-black/40" onPress={onClose} />
+        <View className="bg-surface dark:bg-surface-dark rounded-t-3xl px-5 pt-3 pb-8 border-t border-divider/20">
+          <View className="items-center pb-3">
+            <View className="w-12 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600" />
+          </View>
+          <Text className="text-xs font-bold uppercase tracking-wider text-on-surface-muted mb-1">
+            Select Journey
+          </Text>
+          <Text className="text-[22px] font-extrabold text-on-surface dark:text-white mb-2">
+            {name}
+          </Text>
+          <Text className="text-[13px] text-on-surface-soft mb-4">
+            This connection has multiple mentorship records. Choose which journey to view.
+          </Text>
+          {matchIds.map((matchId, index) => (
+            <TouchableOpacity
+              key={matchId}
+              testID={`journey-match-${matchId}`}
+              activeOpacity={0.85}
+              onPress={() => onSelect(matchId)}
+              className="flex-row items-center justify-between px-4 py-3.5 rounded-lg bg-gray-100 dark:bg-gray-800 mb-3"
+            >
+              <Text className="text-base font-semibold text-gray-700 dark:text-gray-300">
+                Journey {index + 1}
+              </Text>
+              <Text className="text-xs font-semibold text-on-surface-muted">
+                {matchId.slice(0, 8)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity activeOpacity={0.8} onPress={onClose} className="items-center justify-center py-4">
+            <Text className="text-on-surface-soft dark:text-gray-400 font-bold">Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Mentor View
 // ---------------------------------------------------------------------------
 
 function MentorConnections({
-  onOpenFeedback,
   onError,
   onSuccess,
 }: ConnectionViewProps) {
@@ -133,22 +223,17 @@ function MentorConnections({
     username: string;
     matchIds: string[];
   } | null>(null);
+  const [journeyPicker, setJourneyPicker] = useState<{
+    name: string;
+    matchIds: string[];
+  } | null>(null);
 
+  const { sendMessageTo } = useMessaging();
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const respondMutation = useRespondToMentorshipRequestMutation();
   const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
   const { data: conversations = [] } = useConversations();
-
-  // CHECK FEEDBACK FOR SELECTED MENTEE
-  const activeMatchId = managedMentee?.matchIds[0];
-  const matchFeedbackQuery = useMatchFeedbackQuery(activeMatchId);
-  const hasReviewed = useMemo(() => {
-    if (!matchFeedbackQuery.data || !currentUsername) return false;
-    return matchFeedbackQuery.data.some(
-      (feedback: any) => feedback.submitted_by.username === currentUsername,
-    );
-  }, [matchFeedbackQuery.data, currentUsername]);
 
   const requests = requestsQuery.data ?? [];
   const matches = matchesQuery.data ?? [];
@@ -194,14 +279,7 @@ function MentorConnections({
       .values(),
   );
 
-  const handleMessage = (username: string) => {
-    const conv = conversations.find(
-      (c) => c.mentor.username === username || c.mentee.username === username,
-    );
-    if (conv) {
-      router.push(`/messages/${conv.id}` as Href);
-    }
-  };
+  const handleMessage = (username: string) => sendMessageTo(username);
 
   const handleMenteeMore = ({
     name,
@@ -213,6 +291,21 @@ function MentorConnections({
     matchIds: string[];
   }) => {
     setManagedMentee({ name, username, matchIds });
+  };
+
+  const handleViewJourney = () => {
+    if (!managedMentee) {
+      return;
+    }
+
+    const target = managedMentee;
+    setManagedMentee(null);
+    if (target.matchIds.length === 1) {
+      pushMatchJourney(router, target.matchIds[0]);
+      return;
+    }
+
+    setJourneyPicker({ name: target.name, matchIds: target.matchIds });
   };
 
   const handleAccept = async (id: string) => {
@@ -249,6 +342,18 @@ function MentorConnections({
   const displayedMentees = showAllMentees
     ? mentees
     : mentees.slice(0, MENTEES_PREVIEW_COUNT);
+  const shouldShowCapacityWarning = shouldWarnBeforeAcceptingMentee(
+    mentees.length,
+  );
+
+  const handleRequestCardAccept = (cardProps: PendingRequestCardProps) => {
+    if (shouldShowCapacityWarning) {
+      setSelectedRequest(cardProps);
+      return;
+    }
+
+    void handleAccept(cardProps.id);
+  };
 
   return (
     <>
@@ -266,20 +371,15 @@ function MentorConnections({
         onAccept={handleAccept}
         onDecline={(id) => setDeclineTargetId(id)}
         disabled={respondMutation.isPending}
+        acceptanceWarning={
+          shouldShowCapacityWarning ? MENTOR_MENTEE_CAPACITY_WARNING : undefined
+        }
       />
 
       <ConnectionActionsSheet
         visible={managedMentee !== null}
         name={managedMentee?.name ?? ""}
         onClose={() => setManagedMentee(null)}
-        isCheckingReview={matchFeedbackQuery.isLoading}
-        hasReviewed={hasReviewed}
-        onLeaveReview={() => {
-          if (activeMatchId && managedMentee) {
-            onOpenFeedback(activeMatchId, managedMentee.name, "Mentor");
-            setManagedMentee(null);
-          }
-        }}
         onViewProfile={() => {
           if (!managedMentee) {
             return;
@@ -288,6 +388,7 @@ function MentorConnections({
           setManagedMentee(null);
           pushUserProfile(router, target.username);
         }}
+        onViewJourney={handleViewJourney}
         onRemoveConnection={() => {
           if (!managedMentee) {
             return;
@@ -301,6 +402,17 @@ function MentorConnections({
             onError,
             onSuccess,
           });
+        }}
+      />
+
+      <MatchJourneyPickerSheet
+        visible={journeyPicker !== null}
+        name={journeyPicker?.name ?? ""}
+        matchIds={journeyPicker?.matchIds ?? []}
+        onClose={() => setJourneyPicker(null)}
+        onSelect={(matchId) => {
+          setJourneyPicker(null);
+          pushMatchJourney(router, matchId);
         }}
       />
 
@@ -318,7 +430,12 @@ function MentorConnections({
 
         {requestsLoading && <ActivityIndicator className="mt-4" />}
         {requestsError && (
-          <ErrorBanner message="Failed to load requests." />
+          <ErrorBanner
+            message={getQueryErrorMessage(
+              requestsQuery.error,
+              "Failed to load requests.",
+            )}
+          />
         )}
         {pendingRequests.length > 0 && (
           <ScrollView
@@ -333,7 +450,7 @@ function MentorConnections({
                   <PendingRequestCard
                     {...cardProps}
                     onPress={() => setSelectedRequest(cardProps)}
-                    onAccept={() => handleAccept(req.id)}
+                    onAccept={() => handleRequestCardAccept(cardProps)}
                     onDecline={() => setDeclineTargetId(req.id)}
                     disabled={respondMutation.isPending}
                   />
@@ -374,7 +491,12 @@ function MentorConnections({
 
         {matchesLoading && <ActivityIndicator className="mt-4" />}
         {matchesError && (
-          <ErrorBanner message="Failed to load mentees." />
+          <ErrorBanner
+            message={getQueryErrorMessage(
+              matchesQuery.error,
+              "Failed to load mentees.",
+            )}
+          />
         )}
         {displayedMentees.map((mentee) => (
           <MenteeCard
@@ -417,13 +539,18 @@ function MenteeConnections({
   const currentUsername = useAuthStore((state) => state.user?.username);
   const [showAllMentors, setShowAllMentors] = useState(false);
   const [selectedRequest, setSelectedRequest] =
-    useState<DashboardRequestItem | null>(null);
+    useState<PendingRequestCardProps | null>(null);
   const [managedMentor, setManagedMentor] = useState<{
     name: string;
     username: string;
     matchIds: string[];
   } | null>(null);
+  const [journeyPicker, setJourneyPicker] = useState<{
+    name: string;
+    matchIds: string[];
+  } | null>(null);
 
+  const { sendMessageTo } = useMessaging();
   const requestsQuery = useMentorshipRequestsQuery(currentUsername);
   const matchesQuery = useMentorshipMatchesQuery(currentUsername);
   const deactivateMatchMutation = useDeactivateMatchMutation(currentUsername);
@@ -499,14 +626,7 @@ function MenteeConnections({
       .values(),
   );
 
-  const handleMessage = (username: string) => {
-    const conv = conversations.find(
-      (c) => c.mentor.username === username || c.mentee.username === username,
-    );
-    if (conv) {
-      router.push(`/messages/${conv.id}` as Href);
-    }
-  };
+  const handleMessage = (username: string) => sendMessageTo(username);
 
   const handleMore = ({
     name,
@@ -520,17 +640,37 @@ function MenteeConnections({
     setManagedMentor({ name, username, matchIds });
   };
 
+  const handleViewJourney = () => {
+    if (!managedMentor) {
+      return;
+    }
+
+    const target = managedMentor;
+    setManagedMentor(null);
+    if (target.matchIds.length === 1) {
+      pushMatchJourney(router, target.matchIds[0]);
+      return;
+    }
+
+    setJourneyPicker({ name: target.name, matchIds: target.matchIds });
+  };
+
   const displayedMentors = showAllMentors
     ? mentors
     : mentors.slice(0, MENTORS_PREVIEW_COUNT);
 
   return (
     <>
-      <RequestDetailsModal
-        visible={!!selectedRequest}
+      <RequestDetailSheet
+        visible={selectedRequest !== null}
         request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
-        onCancelOutgoing={() => setSelectedRequest(null)}
+        onShowProfile={(targetUsername) => {
+          if (targetUsername) {
+            setSelectedRequest(null);
+            pushUserProfile(router, targetUsername);
+          }
+        }}
       />
 
       <ConnectionActionsSheet
@@ -553,6 +693,7 @@ function MenteeConnections({
           setManagedMentor(null);
           pushUserProfile(router, target.username);
         }}
+        onViewJourney={handleViewJourney}
         onRemoveConnection={() => {
           if (!managedMentor) {
             return;
@@ -566,6 +707,17 @@ function MenteeConnections({
             onError,
             onSuccess,
           });
+        }}
+      />
+
+      <MatchJourneyPickerSheet
+        visible={journeyPicker !== null}
+        name={journeyPicker?.name ?? ""}
+        matchIds={journeyPicker?.matchIds ?? []}
+        onClose={() => setJourneyPicker(null)}
+        onSelect={(matchId) => {
+          setJourneyPicker(null);
+          pushMatchJourney(router, matchId);
         }}
       />
 
@@ -583,7 +735,12 @@ function MenteeConnections({
 
         {requestsLoading && <ActivityIndicator className="mt-4" />}
         {requestsError && (
-          <ErrorBanner message="Failed to load requests." />
+          <ErrorBanner
+            message={getQueryErrorMessage(
+              requestsQuery.error,
+              "Failed to load requests.",
+            )}
+          />
         )}
         {pendingRequests.length > 0 && (
           <ScrollView
@@ -591,24 +748,22 @@ function MenteeConnections({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingRight: 16 }}
           >
-            {pendingRequests.map((request) => (
-              <View key={request.id} style={{ width: 320, marginRight: 12 }}>
-                <RequestCard
-                  user={request.user}
-                  topic={request.topic}
-                  type={request.type}
-                  isReschedule={request.isReschedule}
-                  onPress={() => setSelectedRequest(request)}
-                  onShowProfile={() => {
-                    const targetUsername =
-                      request.type === "incoming"
-                        ? request.menteeUsername
-                        : request.mentorUsername;
-                    pushUserProfile(router, targetUsername);
-                  }}
-                />
-              </View>
-            ))}
+            {pendingRequests.map((request) => {
+              const cardProps = mapDashboardRequestToCardProps(request);
+              return (
+                <View key={request.id} style={{ width: 320, marginRight: 12 }}>
+                  <PendingRequestCard
+                    {...cardProps}
+                    onPress={() => setSelectedRequest(cardProps)}
+                    onShowProfile={() => {
+                      if (cardProps.username) {
+                        pushUserProfile(router, cardProps.username);
+                      }
+                    }}
+                  />
+                </View>
+              );
+            })}
           </ScrollView>
         )}
         {!requestsLoading && !requestsError && pendingRequests.length === 0 && (
@@ -643,7 +798,12 @@ function MenteeConnections({
 
         {matchesLoading && <ActivityIndicator className="mt-4" />}
         {matchesError && (
-          <ErrorBanner message="Failed to load mentors." />
+          <ErrorBanner
+            message={getQueryErrorMessage(
+              matchesQuery.error,
+              "Failed to load mentors.",
+            )}
+          />
         )}
         {displayedMentors.map((mentor) => (
           <MenteeCard
@@ -680,30 +840,30 @@ function MenteeConnections({
 export default function ConnectionsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const { user } = useAuthStore();
 
   const submitFeedbackMutation = useSubmitMatchFeedbackMutation();
   const [feedbackConnection, setFeedbackConnection] = useState<{
     matchId: string;
     userName: string;
-    role: "Mentor" | "Mentee";
+    role: "Mentee";
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleFeedbackSubmit = async (rating: number, text?: string) => {
     if (!feedbackConnection?.matchId) return;
 
     try {
       setActionError(null);
-      setSuccessMessage(null);
       await submitFeedbackMutation.mutateAsync({
         matchId: feedbackConnection.matchId,
         rating,
         text,
       });
       setFeedbackConnection(null);
-      setSuccessMessage("Thank you for your feedback!");
+      toast.success("Thank you for your feedback!");
     } catch (error) {
       setActionError(
         error instanceof Error ? error.message : "Could not submit feedback.",
@@ -712,6 +872,14 @@ export default function ConnectionsScreen() {
   };
 
   const isMentor = user?.app_usage_mode !== "MENTEE";
+  const refreshConnections = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["mentorship", "requests", "me"] }),
+      queryClient.invalidateQueries({ queryKey: ["mentorship", "matches", "me"] }),
+      queryClient.invalidateQueries({ queryKey: ["messaging", "conversations"] }),
+    ]);
+  }, [queryClient]);
+  const { refreshing, onRefresh } = useRefreshControl(refreshConnections);
 
   return (
     <View className="flex-1 bg-surface dark:bg-surface-dark">
@@ -720,18 +888,20 @@ export default function ConnectionsScreen() {
         className="bg-surface-card dark:bg-surface-card-dark z-10 shadow-sm border-b border-divider dark:border-divider-dark"
         style={{ paddingTop: insets.top }}
       >
-        <View className="flex-row justify-between items-center px-4 pb-3 pt-2">
+        <View className="flex-row items-center justify-between px-4 pb-3 pt-2">
           <Text className="text-2xl font-extrabold text-on-surface dark:text-on-surface-dark">
             Connections
           </Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push("/messages" as Href)}
-            className="w-10 h-10 items-center justify-center rounded-full bg-surface-active dark:bg-surface-active-dark"
-          >
-            <Ionicons name="chatbubble-outline" size={20} color="#4a7c6f" />
-          </TouchableOpacity>
-          <NotificationBell />
+          <View className="flex-row items-center gap-3">
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.push("/messages" as Href)}
+              className="w-10 h-10 items-center justify-center rounded-full bg-surface-active dark:bg-surface-active-dark"
+            >
+              <Ionicons name="chatbubble-outline" size={20} color="#4a7c6f" />
+            </TouchableOpacity>
+            <NotificationBell />
+          </View>
         </View>
       </View>
 
@@ -744,6 +914,9 @@ export default function ConnectionsScreen() {
           paddingBottom: 120,
         }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {actionError ? (
           <View className="mb-4">
@@ -751,16 +924,10 @@ export default function ConnectionsScreen() {
           </View>
         ) : null}
 
-        {successMessage ? (
-          <View className="mb-4">
-            <SuccessCard message={successMessage} />
-          </View>
-        ) : null}
-
         {isMentor ? (
           <MentorConnections
             onError={setActionError}
-            onSuccess={setSuccessMessage}
+            onSuccess={toast.success}
             onOpenFeedback={(matchId, name, role) =>
               setFeedbackConnection({ matchId, userName: name, role })
             }
@@ -768,7 +935,7 @@ export default function ConnectionsScreen() {
         ) : (
           <MenteeConnections
             onError={setActionError}
-            onSuccess={setSuccessMessage}
+            onSuccess={toast.success}
             onOpenFeedback={(matchId, name, role) =>
               setFeedbackConnection({ matchId, userName: name, role })
             }

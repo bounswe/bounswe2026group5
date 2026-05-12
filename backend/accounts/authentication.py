@@ -2,23 +2,39 @@
 
 from django.conf import settings
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import TokenError
 
 
 class CookieOrHeaderJWTAuthentication(JWTAuthentication):
     """Authenticate requests using Authorization header first, then JWT cookie."""
 
     def authenticate(self, request):
-        """Authenticate from bearer header or HttpOnly cookie."""
+        """Authenticate from bearer header or HttpOnly cookie.
+
+        Returns:
+            A tuple of (User, Token) if authentication succeeds, or None.
+        """
         header = self.get_header(request)
         if header is not None:
             raw_token = self.get_raw_token(header)
             if raw_token is not None:
-                validated_token = self.get_validated_token(raw_token)
-                return self.get_user(validated_token), validated_token
+                try:
+                    validated_token = self.get_validated_token(raw_token)
+                    return self.get_user(validated_token), validated_token
+                except TokenError:
+                    # If token is invalid in header, don't fail yet, maybe cookie is valid or it's a
+                    # public endpoint
+                    pass
+                except Exception:
+                    # Fallback for unexpected errors during token validation
+                    pass
 
         raw_cookie_token = request.COOKIES.get(settings.AUTH_ACCESS_COOKIE_NAME)
         if not raw_cookie_token:
             return None
 
-        validated_token = self.get_validated_token(raw_cookie_token)
-        return self.get_user(validated_token), validated_token
+        try:
+            validated_token = self.get_validated_token(raw_cookie_token)
+            return self.get_user(validated_token), validated_token
+        except (TokenError, Exception):
+            return None

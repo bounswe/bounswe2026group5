@@ -1,0 +1,225 @@
+import * as ImagePicker from "expo-image-picker";
+import { Alert } from "react-native";
+
+import type { LocalUploadFile } from "@/lib/queries/uploads";
+
+const MB = 1024 * 1024;
+const LIMITS = {
+  PROFILE: 5 * MB,
+  PROFILE_AUDIO: 20 * MB,
+  PROFILE_VIDEO: 150 * MB,
+  POST: 10 * MB,
+  CHAT: 20 * MB,
+};
+
+function extensionFromMimeType(mimeType?: string | null): string {
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/gif") return "gif";
+  if (mimeType === "image/webp") return "webp";
+  if (mimeType === "application/pdf") return "pdf";
+  return "jpg";
+}
+
+function validateFileSize(size: number | undefined, limit: number): boolean {
+  if (size && size > limit) {
+    const limitMB = limit / MB;
+    Alert.alert(
+      "File Too Large",
+      `The selected file is ${Math.round(size / MB)}MB. Maximum allowed size is ${limitMB}MB.`,
+    );
+    return false;
+  }
+  return true;
+}
+
+export async function pickProfilePictureFile(): Promise<LocalUploadFile | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    allowsMultipleSelection: false,
+    mediaTypes: ["images"],
+    quality: 0.8,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.fileSize, LIMITS.PROFILE)) return null;
+
+  const type = asset.mimeType ?? "image/jpeg";
+  const extension = extensionFromMimeType(type);
+
+  return {
+    uri: asset.uri,
+    name: asset.fileName ?? `profile-picture.${extension}`,
+    type,
+  };
+}
+
+export async function pickProfileAudioFile(): Promise<LocalUploadFile | null> {
+  const DocumentPicker = await import("expo-document-picker");
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ["audio/*"],
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.size, LIMITS.PROFILE_AUDIO)) return null;
+
+  return {
+    uri: asset.uri,
+    name: asset.name || "profile-audio.mp3",
+    type: asset.mimeType || "audio/mpeg",
+  };
+}
+
+export async function pickProfileVideoFile(): Promise<LocalUploadFile | null> {
+  const DocumentPicker = await import("expo-document-picker");
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ["video/*"],
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.size, LIMITS.PROFILE_VIDEO)) return null;
+
+  return {
+    uri: asset.uri,
+    name: asset.name || "profile-video.mp4",
+    type: asset.mimeType || "video/mp4",
+  };
+}
+
+export async function pickPostImageFile(): Promise<LocalUploadFile | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    allowsMultipleSelection: false,
+    mediaTypes: ["images"],
+    quality: 0.8,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.fileSize, LIMITS.POST)) return null;
+
+  const type = asset.mimeType ?? "image/jpeg";
+  const extension = extensionFromMimeType(type);
+
+  return {
+    uri: asset.uri,
+    name: asset.fileName ?? `post-image.${extension}`,
+    type,
+  };
+}
+
+export async function pickPostDocumentFile(): Promise<LocalUploadFile | null> {
+  const DocumentPicker = await import("expo-document-picker");
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ["application/pdf", "image/*"],
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.size, LIMITS.POST)) return null;
+
+  return {
+    uri: asset.uri,
+    name: asset.name || "post-attachment",
+    type: asset.mimeType || "application/octet-stream",
+  };
+}
+
+// Keep pickPostMediaFile as an alias for backward compatibility
+export const pickPostMediaFile = pickPostDocumentFile;
+
+export async function pickMessageImageFile(): Promise<LocalUploadFile | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    allowsMultipleSelection: false,
+    mediaTypes: ["images"],
+    quality: 0.8,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.fileSize, LIMITS.CHAT)) return null;
+
+  const type = asset.mimeType ?? "image/jpeg";
+  const extension = extensionFromMimeType(type);
+
+  return {
+    uri: asset.uri,
+    name: asset.fileName ?? `chat-image.${extension}`,
+    type,
+  };
+}
+
+export async function pickMessagePdfFile(): Promise<LocalUploadFile | null> {
+  const DocumentPicker = await import("expo-document-picker");
+  const result = await DocumentPicker.getDocumentAsync({
+    type: "application/pdf",
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.size, LIMITS.CHAT)) return null;
+
+  return {
+    uri: asset.uri,
+    name: asset.name || "attachment.pdf",
+    type: asset.mimeType || "application/pdf",
+  };
+}
+
+export async function pickMessageAudioFile(): Promise<LocalUploadFile | null> {
+  const DocumentPicker = await import("expo-document-picker");
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ["audio/*"],
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.size, LIMITS.CHAT)) return null;
+
+  return {
+    uri: asset.uri,
+    name: asset.name || "audio-attachment.mp3",
+    type: asset.mimeType || "audio/mpeg",
+  };
+}
+
+export async function pickMessageDeviceFile(): Promise<LocalUploadFile | null> {
+  const DocumentPicker = await import("expo-document-picker");
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ["image/*", "application/pdf", "audio/*"],
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  if (!validateFileSize(asset.size, LIMITS.CHAT)) return null;
+
+  return {
+    uri: asset.uri,
+    name: asset.name || "file-attachment",
+    type: asset.mimeType || "application/octet-stream",
+  };
+}
+
+// Deprecated alias for backward compatibility
+export const pickImageFile = pickProfilePictureFile;

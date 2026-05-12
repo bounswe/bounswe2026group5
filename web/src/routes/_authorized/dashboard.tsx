@@ -1,21 +1,23 @@
 // web/src/routes/_authorized/dashboard.tsx
 import { meQueryOptions } from "#/lib/queries/AuthQueries.ts"
 import { useMeetingSessions, useMyRequests, useRespondToRequest, matchFeedbackQueryOptions } from "#/lib/queries/MentorshipQueries.ts"
+import { useOwnProfile } from "#/lib/queries/ProfileQueries.ts"
 import { useNotifications, useMarkAllNotificationsRead, NOTIFICATION_INVALIDATION_MAP } from "#/lib/queries/NotificationQueries.ts"
-import { getInitials } from "#/lib/utils.ts"
+import { getAbsoluteMediaUrl, getInitials } from "#/lib/utils.ts"
 import { Body, Heading, Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { NotificationItem } from '@/components/notifications/NotificationItem'
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowRight, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, Star, XCircle, X as XIcon } from 'lucide-react'
+import { ArrowRight, BookOpen, Bell, CalendarDays, Check, CheckCircle2, Clock, Loader2, Star, XCircle, X as XIcon, ShieldCheck, Users, AlertTriangle, Info } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo } from "react"
 import type { Notification } from "#/lib/queries/NotificationQueries.ts"
 import { RatingModal } from '#/components/RatingModal.tsx'
 import { SessionManagementModal } from '#/components/dashboard/SessionManagementModal.tsx'
 import { toast } from "sonner"
 import type { MeetingSession } from '#/lib/queries/MentorshipQueries.ts'
+import { myWorkshopAttendanceQueryOptions } from '#/lib/queries/WorkshopQueries.ts'
 
 function toSessionManagementData(session: MeetingSession) {
   return {
@@ -108,10 +110,22 @@ export function DashboardHome() {
   const { mutate: markAllRead } = useMarkAllNotificationsRead()
   const queryClient = useQueryClient()
 
-  // Accumulate non-message notifications as they arrive via polling.
-  // Each poll only adds genuinely new ones; already-seen IDs are skipped.
-  // Marking as read happens immediately on arrival, separate from visibility.
-  const [visibleNotifications, setVisibleNotifications] = useState<Notification[]>([])
+  const sessionUnreadIds = useRef<Set<string>>(new Set())
+
+  // Track notifications that were unread at any point during this component's lifecycle.
+  // This allows them to stay visible even after they are marked as read in the backend.
+  notifications.forEach(n => {
+    if (!n.is_read) {
+      sessionUnreadIds.current.add(n.id)
+    }
+  })
+
+  const displayNotifications = useMemo(() => {
+    return notifications
+      .filter(n => !n.is_read || sessionUnreadIds.current.has(n.id))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }, [notifications])
+
   const seenIds = useRef<Set<string>>(new Set())
   const isFirstRun = useRef(true)
 
@@ -122,9 +136,8 @@ export function DashboardHome() {
     if (incoming.length === 0) return
 
     incoming.forEach(n => seenIds.current.add(n.id))
-    const toShow = incoming.filter(n => !n.is_read)
-    if (toShow.length > 0) setVisibleNotifications(prev => [...prev, ...toShow])
-
+    
+    // Mark genuinely new unread notifications as read
     const unreadIds = incoming.filter(n => n.type !== 'new_message' && !n.is_read).map(n => n.id)
     if (unreadIds.length > 0) markAllRead(unreadIds)
 
@@ -134,23 +147,29 @@ export function DashboardHome() {
     }
 
     const keysToInvalidate = new Set<string>()
-    for (const n of toShow) {
-      for (const key of NOTIFICATION_INVALIDATION_MAP[n.type]) {
-        keysToInvalidate.add(JSON.stringify(key))
+    for (const n of incoming) {
+      if (NOTIFICATION_INVALIDATION_MAP[n.type]) {
+        for (const key of NOTIFICATION_INVALIDATION_MAP[n.type]) {
+          keysToInvalidate.add(JSON.stringify(key))
+        }
       }
     }
     keysToInvalidate.forEach(k => queryClient.invalidateQueries({ queryKey: JSON.parse(k) }))
   }, [notifications, markAllRead, queryClient])
 
-  const mode = (data?.app_usage_mode?.toLowerCase() as 'mentor' | 'mentee') ?? 'mentee'
+  const mode = (data?.app_usage_mode?.toLowerCase() as 'mentor' | 'mentee' | 'admin') ?? 'mentee'
   return (
     <div className="page-wrap py-10 rise-in flex flex-col gap-10">
       <div className="flex items-start justify-between gap-6">
         <div className="flex flex-col gap-2">
-          <Heading as="h2">{mode === 'mentor' ? 'Mentor Dashboard' : 'Mentee Dashboard'}</Heading>
+          <Heading as="h2">
+            {mode === 'mentor' ? 'Mentor Dashboard' : mode === 'admin' ? 'Administrator Dashboard' : 'Mentee Dashboard'}
+          </Heading>
           <Body className="text-ink-soft max-w-xl">
             {mode === 'mentor'
               ? 'Review incoming mentorship requests and manage your upcoming teaching sessions.'
+              : mode === 'admin'
+              ? 'Manage platform users, review reports, and ensure the community stays safe.'
               : 'Track your learning goals, view the status of your requests, and prepare for upcoming sessions.'}
           </Body>
         </div>
@@ -161,21 +180,68 @@ export function DashboardHome() {
         )}
       </div>
 
-      {visibleNotifications.length > 0 && (
+      {displayNotifications.length > 0 && (
         <section className="flex flex-col gap-3">
           <Heading as="h3" className="text-xl flex items-center gap-2">
-            <Bell className="w-5 h-5 text-accent" />
+            <Bell className="w-5 h-5 text-accent" aria-hidden="true" />
             Notifications
           </Heading>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {visibleNotifications.map(n => (
+            {displayNotifications.map(n => (
               <NotificationItem key={n.id} notification={n} />
             ))}
           </div>
         </section>
       )}
 
-      {mode === 'mentor' ? <MentorDashboardView /> : <MenteeDashboardView />}
+      {mode === 'mentor' ? (
+        <MentorDashboardView />
+      ) : mode === 'admin' ? (
+        <AdminDashboardView />
+      ) : (
+        <MenteeDashboardView />
+      )}
+    </div>
+  )
+}
+
+function AdminDashboardView() {
+  return (
+    <div className="flex flex-col gap-10">
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="island-shell border-line bg-white shadow-sm overflow-hidden flex flex-col">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-accent" />
+              Platform Controls
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1">
+            <Body className="text-ink-soft mb-6">
+              Access the moderation panel to manage users, handle reports, and oversee platform activity.
+            </Body>
+            <Link to="/admin-moderation">
+              <Button className="w-full bg-accent hover:bg-accent-dark text-white shadow-sm transition-all active:scale-[0.98]">
+                Open Admin Panel
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="island-shell border-line bg-white shadow-sm overflow-hidden flex flex-col">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Users className="w-5 h-5 text-accent" />
+              Quick Stats
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 flex flex-col justify-center">
+            <Body className="text-ink-soft italic text-center">
+              Stats overview coming soon in the next update.
+            </Body>
+          </CardContent>
+        </Card>
+      </section>
     </div>
   )
 }
@@ -186,6 +252,7 @@ export function DashboardHome() {
 
 function MenteeDashboardView() {
   const { data: me } = useQuery(meQueryOptions)
+  const { data: ownProfile } = useOwnProfile()
   const { data: upcomingSessions = [], isLoading: sessionsLoading } = useMeetingSessions({
     role: 'mentee',
     status: 'upcoming',
@@ -245,14 +312,15 @@ function MenteeDashboardView() {
       <>
       <div className="grid grid-cols-1 lg:grid-cols-[5fr_4fr] gap-8 items-start">
 
-        {/* LEFT COLUMN: Sessions */}
+        {/* LEFT COLUMN: Sessions + Workshops */}
         <div className="flex flex-col gap-8">
+          <UpcomingWorkshopsSection />
           <section className="space-y-5">
             <Heading as="h3" className="text-xl flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
               {!sessionsLoading && upcomingSessions.length > 0 && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent-aa text-xs font-bold">
                   {upcomingSessions.length}
                 </span>
               )}
@@ -285,7 +353,7 @@ function MenteeDashboardView() {
                       <div className="flex items-center gap-3">
                         {session.mentor.picture_url ? (
                             <img
-                                src={session.mentor.picture_url}
+                                src={getAbsoluteMediaUrl(session.mentor.picture_url)}
                                 alt={session.mentor.display_name}
                                 className="h-11 w-11 rounded-full object-cover border border-white/50 shadow-sm"
                             />
@@ -311,7 +379,7 @@ function MenteeDashboardView() {
                         <Link
                             to="/profiles/$username"
                             params={{ username: session.mentor.username }}
-                            className="text-xs text-accent hover:underline underline-offset-4"
+                            className="text-xs text-accent-aa hover:underline underline-offset-4"
                         >
                           View profile
                         </Link>
@@ -321,7 +389,7 @@ function MenteeDashboardView() {
                   </Card>
               ))}
               <Link to="/schedule" className="block mt-2">
-                <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
+                <Button variant="ghost" className="w-full text-accent-aa hover:bg-accent/10">
                   {upcomingSessions.length > 3
                       ? `View all ${upcomingSessions.length} sessions`
                       : 'View Full Schedule'
@@ -355,7 +423,7 @@ function MenteeDashboardView() {
                       <div className="flex items-center gap-3">
                         {session.mentor.picture_url ? (
                           <img
-                            src={session.mentor.picture_url}
+                            src={getAbsoluteMediaUrl(session.mentor.picture_url)}
                             alt={session.mentor.display_name}
                             className="h-10 w-10 rounded-full object-cover border border-white/50 shadow-sm"
                           />
@@ -398,7 +466,7 @@ function MenteeDashboardView() {
             <Heading as="h3" className="text-xl flex items-center gap-2">
               Sent Requests
               {!requestsLoading && sentRequests.length > 0 && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent-aa text-xs font-bold">
                   {sentRequests.length}
                 </span>
               )}
@@ -421,14 +489,20 @@ function MenteeDashboardView() {
                   </Card>
               )}
 
-              {sentRequests.map(req => (
-                  <Card key={req.id} className="island-shell border-line shadow-sm hover:shadow-md transition-shadow bg-white">
+               {sentRequests.map(req => (
+                  <Card key={req.id} className="island-shell border-line shadow-sm hover:shadow-md transition-shadow bg-white overflow-hidden">
+                    {req.is_mentor_overloaded && (
+                      <div className="bg-amber-50/50 border-b border-amber-100 px-4 py-2 flex items-center gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="text-[10px] font-bold text-amber-700 uppercase tracking-tight">Mentor at Capacity</span>
+                      </div>
+                    )}
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           {req.mentor.picture_url ? (
                               <img
-                                  src={req.mentor.picture_url}
+                                  src={getAbsoluteMediaUrl(req.mentor.picture_url)}
                                   alt={req.mentor.display_name}
                                   className="h-11 w-11 rounded-full object-cover border border-white/50 shadow-sm"
                               />
@@ -449,7 +523,7 @@ function MenteeDashboardView() {
                           <Link
                               to="/profiles/$username"
                               params={{ username: req.mentor.username }}
-                              className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
+                              className="text-xs text-accent-aa hover:underline underline-offset-4 shrink-0"
                           >
                             View profile
                           </Link>
@@ -502,6 +576,7 @@ function MenteeDashboardView() {
 function MentorDashboardView() {
   const queryClient = useQueryClient()
   const { data: me } = useQuery(meQueryOptions)
+  const { data: ownProfile } = useOwnProfile()
   const { data: allRequests = [], isLoading: requestsLoading } = useMyRequests()
   const respondToRequest = useRespondToRequest()
   const { data: upcomingSessions = [], isLoading: sessionsLoading } = useMeetingSessions({
@@ -546,15 +621,27 @@ function MentorDashboardView() {
 
   return (
       <div className="grid grid-cols-1 lg:grid-cols-[5fr_4fr] gap-8 items-start">
-
-        {/* LEFT COLUMN: Upcoming Sessions */}
+        {/* LEFT COLUMN: Upcoming Sessions + Workshops */}
         <div className="flex flex-col gap-10">
+          {ownProfile?.is_overloaded && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <Body className="font-bold text-amber-900 text-sm">Capacity Warning</Body>
+                <Body className="text-amber-800 text-sm leading-relaxed">
+                  You currently have <strong>{ownProfile.active_matches_count}</strong> active mentorships. 
+                  Make sure you have enough time for new learners before accepting more requests.
+                </Body>
+              </div>
+            </div>
+          )}
+          <UpcomingWorkshopsSection />
           <section className="space-y-5">
             <Heading as="h3" className="text-xl flex items-center gap-2">
               <CalendarDays className="w-5 h-5 text-accent" />
               Upcoming Sessions
               {!sessionsLoading && upcomingSessions.length > 0 && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent-aa text-xs font-bold">
                   {upcomingSessions.length}
                 </span>
               )}
@@ -592,7 +679,7 @@ function MentorDashboardView() {
                         <div className="flex items-center gap-3">
                           {session.mentee.picture_url ? (
                               <img
-                                  src={session.mentee.picture_url}
+                                  src={getAbsoluteMediaUrl(session.mentee.picture_url)}
                                   alt={displayName}
                                   className="h-11 w-11 rounded-full object-cover border border-white/50 shadow-sm"
                               />
@@ -616,7 +703,7 @@ function MentorDashboardView() {
                               <Link
                                   to="/profiles/$username"
                                   params={{ username: session.mentee.username }}
-                                  className="text-xs text-accent hover:underline underline-offset-4"
+                                  className="text-xs text-accent-aa hover:underline underline-offset-4"
                               >
                                 View profile
                               </Link>
@@ -629,7 +716,7 @@ function MentorDashboardView() {
               })}
 
               <Link to="/schedule" className="block mt-2">
-                <Button variant="ghost" className="w-full text-accent hover:bg-accent/10">
+                <Button variant="ghost" className="w-full text-accent-aa hover:bg-accent/10">
                   {upcomingSessions.length > 3
                       ? `View all ${upcomingSessions.length} sessions`
                       : 'View Full Schedule'
@@ -646,7 +733,7 @@ function MentorDashboardView() {
             <Heading as="h3" className="text-xl flex items-center gap-2">
               Incoming Requests
               {!requestsLoading && displayRequests.length > 0 && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent-aa text-xs font-bold">
                   {pendingRequests.length}
                 </span>
               )}
@@ -669,6 +756,13 @@ function MentorDashboardView() {
                 const responded = respondedIds[req.id]
                 return (
                     <Card key={req.id} className="island-shell border-line border-l-4 border-l-accent shadow-sm hover:shadow-md transition-shadow bg-white">
+                      {req.is_mentor_overloaded && (
+                        <div className="bg-amber-50/50 border-b border-amber-100 px-4 py-2 flex items-center gap-2">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                          <span className="text-[11px] font-bold text-amber-700 uppercase tracking-tight">At Capacity</span>
+                          <span className="text-[11px] text-amber-600 font-medium">— You already have many active sessions.</span>
+                        </div>
+                      )}
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
@@ -684,7 +778,7 @@ function MentorDashboardView() {
                           <Link
                               to="/profiles/$username"
                               params={{ username: req.mentee.username }}
-                              className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
+                              className="text-xs text-accent-aa hover:underline underline-offset-4 shrink-0"
                           >
                             View profile
                           </Link>
@@ -745,7 +839,7 @@ function MentorDashboardView() {
                 )
               })}
               {pendingRequests.length > 3 && (
-                  <Button variant="ghost" className="w-full text-accent hover:bg-accent/10 mt-2">
+                  <Button variant="ghost" className="w-full text-accent-aa hover:bg-accent/10 mt-2">
                     View all {pendingRequests.length} requests <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
               )}
@@ -753,6 +847,80 @@ function MentorDashboardView() {
           </section>
         </div>
       </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Upcoming Workshops Section (shared between mentor and mentee views)
+// ---------------------------------------------------------------------------
+
+function UpcomingWorkshopsSection() {
+  const { data, isLoading } = useQuery(myWorkshopAttendanceQueryOptions('attending'))
+  const now = Date.now()
+  const upcoming = (data?.results ?? []).filter(
+    w => w.workshop_status === 'SCHEDULED' && new Date(w.workshop_scheduled_at).getTime() > now
+  ).slice(0, 3)
+
+  if (!isLoading && upcoming.length === 0) return null
+
+  return (
+    <section className="space-y-5">
+      <Heading as="h3" className="text-xl flex items-center gap-2">
+        <BookOpen className="w-5 h-5 text-accent" />
+        Upcoming Workshops
+        {!isLoading && upcoming.length > 0 && (
+          <span className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
+            {upcoming.length}
+          </span>
+        )}
+      </Heading>
+      <div className="flex flex-col gap-4">
+        {isLoading && (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-ink-soft" />
+          </div>
+        )}
+        {upcoming.map(w => (
+          <Card key={w.id} className="island-shell border-line overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
+            <div className="bg-violet-400 h-1.5 w-full" />
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-start gap-4">
+                <CardTitle className="text-base leading-tight">{w.workshop_title}</CardTitle>
+                <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200">
+                  Upcoming
+                </span>
+              </div>
+              <Muted className="text-xs">{w.community_name}</Muted>
+            </CardHeader>
+            <CardContent className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-0.5">
+                  <Muted className="text-sm flex items-center gap-1.5">
+                    <CalendarDays className="w-3.5 h-3.5" />
+                    {new Date(w.workshop_scheduled_at).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {' · '}
+                    {new Date(w.workshop_scheduled_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    {' – '}
+                    {new Date(w.workshop_end_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                  </Muted>
+                  <Muted className="text-xs flex items-center gap-1">
+                    <Users className="w-3 h-3" />
+                    Hosted by {w.author.display_name}
+                  </Muted>
+                </div>
+              </div>
+              <Link
+                to="/profiles/$username"
+                params={{ username: w.author.username }}
+                className="text-xs text-accent hover:underline underline-offset-4 shrink-0"
+              >
+                View host
+              </Link>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </section>
   )
 }
 

@@ -1,4 +1,4 @@
-﻿asgiref==3.11.1
+asgiref==3.11.1
 attrs==25.4.0
 Django==6.0.3
 django-environ==0.13.0
@@ -17,3 +17,10 @@ sqlparse==0.5.5
 typing_extensions==4.15.0
 tzdata==2025.3
 uritemplate==4.2.0
+google-auth>=2.38.0
+requests>=2.32.0
+Pillow>=11.0.0
+django-storages[google]>=1.14.0
+google-cloud-storage>=2.18.0
+firebase-admin>=6.5.0
+gunicorn==23.0.0

@@ -1,8 +1,7 @@
-// web/src/routes/_authorized/route.tsx
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
 import { AuthorizedHeader } from '@/components/layout/AuthorizedHeader'
-import {getStoredUser, meQueryOptions} from "#/lib/queries/AuthQueries.ts";
-import {Toaster} from "#/components/ui/sonner.tsx";
+import { getStoredUser, meQueryOptions } from "#/lib/queries/AuthQueries.ts"
+import { EmailVerificationBanner } from '@/components/layout/EmailVerificationBanner'
 
 export const Route = createFileRoute('/_authorized')({
     beforeLoad: () => {
@@ -11,22 +10,28 @@ export const Route = createFileRoute('/_authorized')({
     },
     loader: async ({ context }) => {
         const me = await context.queryClient.ensureQueryData(meQueryOptions)
-        if (me && !me.app_usage_mode) {
+        if (me && !me.app_usage_mode && me.role !== 'ADMIN') {
             throw redirect({ to: '/gettingToKnowYou' })
         }
         return me
     },
-  component: AuthorizedLayout,
+    component: AuthorizedLayout,
 })
 
 function AuthorizedLayout() {
-  return (
-    <div className="flex min-h-screen flex-col bg-black/[0.02] dark:bg-background">
-      <AuthorizedHeader />
-      <main className="flex-1">
-        <Outlet />
-      </main>
-        <Toaster position="bottom-right" toastOptions={{ classNames: { toast: 'cn-toast' } }} style={{ zIndex: 9999 }} />
-    </div>
-  )
+    return (
+        <div className="flex min-h-screen flex-col bg-bg dark:bg-background">
+            <a
+                href="#main-content"
+                className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white focus:shadow-lg"
+            >
+                Skip to main content
+            </a>
+            <AuthorizedHeader />
+            <EmailVerificationBanner />
+            <main id="main-content" className="flex-1">
+                <Outlet />
+            </main>
+        </div>
+    )
 }

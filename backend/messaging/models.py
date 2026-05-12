@@ -47,6 +47,7 @@ class Message(models.Model):
         null=True,
         blank=True,
     )
+    original_filename = models.CharField(max_length=255, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -54,37 +55,58 @@ class Message(models.Model):
         ordering = ["created_at"]
 
     def __str__(self) -> str:
-        return f"Message {self.id} from {getattr(self, 'sender_id')}"
+        return f"Message {self.id} from {self.sender_id}"
+
+    def get_read_receipts(self) -> dict[str, str]:
+        """Get read receipt statuses for all users in this conversation."""
+        receipts = {}
+        for receipt in self.read_receipts.all():
+            receipts[str(receipt.user_id)] = receipt.status
+        return receipts
+
+    def get_status_for_user(self, user_id: str) -> str:
+        """Get the status of this message for a specific user."""
+        try:
+            receipt = self.read_receipts.get(user_id=user_id)
+            return receipt.status
+        except ReadReceipt.DoesNotExist:
+            # If sender, default to 'sent'; if recipient, default to 'delivered'
+            if str(self.sender_id) == user_id:
+                return "sent"
+            return "delivered"
 
 
-class MessageReport(models.Model):
-    """A report created by a participant for a problematic message."""
+class ReadReceipt(models.Model):
+    """Tracks message delivery and read status for recipients."""
+
+    class Status(models.TextChoices):
+        SENT = "sent", "Sent"
+        DELIVERED = "delivered", "Delivered"
+        READ = "read", "Read"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     message = models.ForeignKey(
         Message,
         on_delete=models.CASCADE,
-        related_name="reports",
+        related_name="read_receipts",
     )
-    reported_by = models.ForeignKey(
+    user = models.ForeignKey(
         Profile,
         on_delete=models.CASCADE,
-        related_name="submitted_message_reports",
+        related_name="message_read_receipts",
     )
-    reason = models.CharField(max_length=512)
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.SENT,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "message_reports"
-        ordering = ["-created_at"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["message", "reported_by"],
-                name="uniq_message_report_per_reporter",
-            )
-        ]
+        db_table = "message_read_receipts"
+        unique_together = ("message", "user")
+        ordering = ["-updated_at"]
 
     def __str__(self) -> str:
-        return (
-            f"Report for message {getattr(self, 'message_id')} by {getattr(self, 'reported_by_id')}"
-        )
+        return f"ReadReceipt: {self.message_id} → {self.user_id} ({self.status})"

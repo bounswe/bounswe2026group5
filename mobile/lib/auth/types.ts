@@ -10,10 +10,16 @@ export interface AuthUser {
   id: string;
   email: string;
   username: string;
+  display_name?: string;
+  picture_url?: string;
+  audio_url?: string;
+  video_url?: string;
+  linkedin_url?: string;
   role: string;
   app_usage_mode?: "MENTOR" | "MENTEE" | "";
   auth_provider: string;
   is_active: boolean;
+  is_email_verified?: boolean;
   created_at: string;
 }
 
@@ -61,4 +67,8 @@ export interface RegisterCredentials {
   email: string;
   password: string;
   confirm_password: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
 }

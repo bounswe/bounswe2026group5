@@ -52,6 +52,7 @@ vi.mock('lucide-react', async (importOriginal) => {
     ...actual,
     Search: () => <div data-testid="icon-search" />,
     SlidersHorizontal: () => <div data-testid="icon-sliders" />,
+    MapPin: () => <div data-testid="icon-map-pin" />,
     X: () => <div data-testid="icon-x" />,
   }
 })
@@ -83,11 +84,18 @@ const makeMentor = (n: number) => ({
 // 8 mentors so Load More tests work (> PAGE_SIZE of 6)
 const MOCK_MENTORS = Array.from({ length: 8 }, (_, i) => makeMentor(i + 1))
 
+vi.mock('@/lib/queries/MessagingQueries.ts', () => ({
+  useMessaging: () => ({
+    matchedUsernames: new Set<string>(),
+    sendMessageTo: vi.fn(),
+  }),
+}))
+
 vi.mock('@/lib/queries/DiscoverQueries.ts', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
-    mentorSearchInfiniteQueryOptions: (params: { pageSize?: number; q?: string; skills?: string[] }) =>
+    mentorSearchInfiniteQueryOptions: (params: { pageSize?: number; q?: string; skills?: string[]; lat?: number; lng?: number; distanceKm?: number }) =>
         infiniteQueryOptions({
           queryKey: ['mentors', 'search', params],
           queryFn: async ({ pageParam }) => mockMentorSearchLogic(MOCK_MENTORS, params, pageParam),
@@ -106,7 +114,7 @@ vi.mock('@/lib/queries/DiscoverQueries.ts', async (importOriginal) => {
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
-import { DiscoverPage } from '../discover'
+import { DiscoverPage } from '../../_public/discover'
 
 function renderDiscover() {
   const queryClient = new QueryClient({
@@ -135,12 +143,12 @@ describe('DiscoverPage', () => {
 
   it('renders the search bar', () => {
     renderDiscover()
-    expect(screen.getByPlaceholderText(/Search profiles, skills, or projects/i)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/Search profiles or skills/i)).toBeInTheDocument()
   })
 
   it('renders the filter button', () => {
     renderDiscover()
-    expect(screen.getByRole('button', { name: /Filter by skill/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Filter mentors/i })).toBeInTheDocument()
   })
 
   it('renders at least one ProfileCard on initial load', async () => {
@@ -163,7 +171,7 @@ describe('DiscoverPage', () => {
 
   it('shows the empty state when no profiles match the search query', async () => {
     renderDiscover()
-    const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
+    const input = screen.getByPlaceholderText(/Search profiles or skills/i)
     fireEvent.change(input, { target: { value: 'xyznonexistent' } })
     await waitFor(() => {
       expect(screen.getByText(/No mentors found matching/i)).toBeInTheDocument()
@@ -172,7 +180,7 @@ describe('DiscoverPage', () => {
 
   it('filters profiles by skill name via search', async () => {
     renderDiscover()
-    const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
+    const input = screen.getByPlaceholderText(/Search profiles or skills/i)
     fireEvent.change(input, { target: { value: 'Kubernetes' } })
     await waitFor(() => {
       expect(screen.getByText('Mentor 1')).toBeInTheDocument()
@@ -182,7 +190,7 @@ describe('DiscoverPage', () => {
 
   it('restores profiles when search query is cleared', async () => {
     renderDiscover()
-    const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
+    const input = screen.getByPlaceholderText(/Search profiles or skills/i)
 
     fireEvent.change(input, { target: { value: 'Kubernetes' } })
     await waitFor(() => expect(screen.getByText('Mentor 1')).toBeInTheDocument())
@@ -201,26 +209,26 @@ describe('DiscoverPage', () => {
     // Wait for skills to load first
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
-    expect(screen.getByText(/Filter by Skill/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Filter mentors/i }))
+    expect(screen.getByText(/Filter Mentors/i)).toBeInTheDocument()
   })
 
   it('closes the filter panel when clicked outside', async () => {
     renderDiscover()
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
-    expect(screen.getByText(/Filter by Skill/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Filter mentors/i }))
+    expect(screen.getByText(/Filter Mentors/i)).toBeInTheDocument()
 
     fireEvent.mouseDown(document.body)
-    expect(screen.queryByText(/Filter by Skill/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Filter Mentors/i)).not.toBeInTheDocument()
   })
 
   it('filters profiles when a skill chip is selected', async () => {
     renderDiscover()
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Filter mentors/i }))
 
     const pythonChip = await screen.findByRole('button', { name: /^Python$/i })
     fireEvent.click(pythonChip)
@@ -235,7 +243,7 @@ describe('DiscoverPage', () => {
     renderDiscover()
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Filter mentors/i }))
     const goChip = await screen.findByRole('button', { name: /^Go$/i })
     fireEvent.click(goChip)
 
@@ -246,7 +254,7 @@ describe('DiscoverPage', () => {
     renderDiscover()
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: /Filter by skill/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Filter mentors/i }))
     const goChip = await screen.findByRole('button', { name: /^Go$/i })
     fireEvent.click(goChip)
 
@@ -287,7 +295,7 @@ describe('DiscoverPage', () => {
       expect(screen.getAllByRole('button', { name: /View Profile/i }).length).toBeGreaterThan(6)
     })
 
-    const input = screen.getByPlaceholderText(/Search profiles, skills, or projects/i)
+    const input = screen.getByPlaceholderText(/Search profiles or skills/i)
     fireEvent.change(input, { target: { value: 'python' } })
 
     await waitFor(() => {
