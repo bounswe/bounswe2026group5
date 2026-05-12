@@ -1,24 +1,24 @@
-import { useState } from 'react'
-import { Link } from '@tanstack/react-router'
-import { Calendar, Clock, Users, Loader2, AlertTriangle } from 'lucide-react'
+import { Muted } from '@/components/Typography'
 import { Button } from '@/components/ui/button'
 import {
     Dialog,
     DialogContent,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogFooter,
 } from '@/components/ui/dialog'
-import { Muted } from '@/components/Typography'
-import { toast } from 'sonner'
-import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
 import {
     useCommunityWorkshopDetail,
+    useDeleteWorkshopMutation,
     useJoinWorkshopMutation,
     useLeaveWorkshopMutation,
-    useDeleteWorkshopMutation,
     type CommunityWorkshop,
 } from '@/lib/queries/WorkshopQueries.ts'
+import { cn, getAbsoluteMediaUrl } from '@/lib/utils'
+import { Link } from '@tanstack/react-router'
+import { AlertTriangle, Calendar, Clock, Loader2, Users } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
 import { CreateWorkshopDialog } from './CreateWorkshopDialog'
 
 const AVATAR_COLORS = [
@@ -141,7 +141,7 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
                             {resolved.max_participants > 0 && (
                                 <div className={cn('flex items-center gap-2 text-sm font-medium', resolved.is_full ? 'text-amber-600' : 'text-ink-soft')}>
                                     <Users className="w-4 h-4 shrink-0" />
-                                    {resolved.participant_count-1}/{resolved.max_participants} Enrolled
+                                        {resolved.participant_count - 1}/{resolved.max_participants} Enrolled
                                 </div>
                             )}
                         </div>
