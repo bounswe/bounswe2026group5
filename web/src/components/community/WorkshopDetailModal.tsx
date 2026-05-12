@@ -141,7 +141,7 @@ export function WorkshopDetailModal({ workshop, tagId, open, onClose, currentUse
                             {resolved.max_participants > 0 && (
                                 <div className={cn('flex items-center gap-2 text-sm font-medium', resolved.is_full ? 'text-amber-600' : 'text-ink-soft')}>
                                     <Users className="w-4 h-4 shrink-0" />
-                                    {resolved.participant_count}/{resolved.max_participants} Enrolled
+                                    {resolved.participant_count-1}/{resolved.max_participants} Enrolled
                                 </div>
                             )}
                         </div>
