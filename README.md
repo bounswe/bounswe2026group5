@@ -117,6 +117,8 @@ Access the web UI at `http://localhost:3000` or the Django admin panel at `http:
 
 ## Run with Docker Compose (Web + API + DB)
 
+### Development
+
 From repository root:
 
 ```bash
@@ -140,6 +142,36 @@ docker compose logs -f
 
 # stop services
 docker compose down
+```
+
+### Production
+
+Uses `docker-compose.prod.yml` on top of the base config. This builds production-optimized images and starts Nginx on ports 80/443.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+```
+
+| Services | URL              |
+| -------- | ---------------- |
+| Frontend | http://localhost |
+| API      | http://localhost |
+| Database | localhost:5432   |
+
+Useful commands:
+
+```bash
+# show container status
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+
+# stream logs
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
+
+# run migrations
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python manage.py migrate
+
+# stop services
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
 ```
 
 ## Run Mobile App Separately
