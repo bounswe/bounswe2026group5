@@ -42,7 +42,6 @@ from .serializers import (
     RespondToRequestSerializer,
 )
 from .services import (
-    InvalidMCTEEventTypeError,
     MissingSelectedSlotError,
     NoActiveBookingError,
     SameSlotSelectionError,

@@ -3,8 +3,6 @@ from datetime import timedelta
 from typing import Any, cast
 from unittest.mock import MagicMock, Mock, patch
 
-import requests
-
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, Group
 from django.core import mail
@@ -29,10 +27,10 @@ from .models import (
     User,
     UserRole,
 )
+from .oauth import OAuthVerificationError, verify_google_id_token
 from .permissions import IsEmailVerified, IsRegularUser
 from .schema import CookieOrHeaderJWTAuthenticationScheme
 from .views import build_auth_response
-from .oauth import OAuthVerificationError, verify_google_id_token
 
 
 class UserModelTests(TestCase):
@@ -1647,7 +1645,9 @@ class ReportAPITests(TestCase):
             email="admin2@test.com", password="Pass123!", role=UserRole.ADMIN
         )
         self.reporter = User.objects.create_user(email="reporter@test.com", password="Pass123!")
-        self.other_reporter = User.objects.create_user(email="other_reporter@test.com", password="Pass123!")
+        self.other_reporter = User.objects.create_user(
+            email="other_reporter@test.com", password="Pass123!"
+        )
         self.reported = User.objects.create_user(
             email="reported@test.com", password="Pass123!", username="baduser"
         )
@@ -1882,7 +1882,7 @@ class EmailEdgeCaseTests(TestCase):
         mock_send.side_effect = Exception("SMTP Timeout")
         with self.assertLogs("accounts.views", level="ERROR") as cm:
             response = self.client.post("/api/auth/forgot-password/", {"email": "edge@example.com"})
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertIn("detail", response.data)
         self.assertTrue(any("Failed to issue password reset email" in log for log in cm.output))
@@ -1903,7 +1903,7 @@ class EmailEdgeCaseTests(TestCase):
                     "confirm_password": "Password123!",
                 },
             )
-        
+
         self.assertEqual(response.status_code, 201)
         self.assertIn("access_token", response.data)
         self.assertTrue(any("Failed to issue verification email" in log for log in cm.output))
@@ -1915,11 +1915,11 @@ class EmailEdgeCaseTests(TestCase):
         self.client.force_authenticate(user=self.user)
         self.user.is_email_verified = False
         self.user.save()
-        
+
         mock_send.side_effect = Exception("Connection Refused")
         with self.assertLogs("accounts.views", level="ERROR") as cm:
             response = self.client.post("/api/auth/resend-verification/")
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertTrue(any("Failed to resend verification email" in log for log in cm.output))
         mock_send.assert_called_once()

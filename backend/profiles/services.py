@@ -164,7 +164,7 @@ def get_tagged_user_info(user_id: str, username_snapshot: str | None = None) -> 
     try:
         user = Profile.objects.only("id", "username").get(id=user_id)
         return {
-            "user_id": str(user_id),
+            "user_id": user_id,
             "username": user.username,
         }
     except Profile.DoesNotExist:
@@ -172,7 +172,7 @@ def get_tagged_user_info(user_id: str, username_snapshot: str | None = None) -> 
             raise
         # Fallback to snapshot if user was deleted
         return {
-            "user_id": str(user_id),
+            "user_id": user_id,
             "username": username_snapshot,
         }
 
@@ -185,8 +185,8 @@ def _build_previous_tag_maps(
     prev_tagged_ids: set[uuid.UUID] = set()
 
     for tag in previous_tagged_users:
-        username = str(tag.get("username", "")).strip().lower()
-        user_id = str(tag.get("user_id", "")).strip()
+        username = tag.get("username", "").strip().lower()
+        user_id = tag.get("user_id", "").strip()
         if not username or not user_id:
             continue
 
@@ -197,7 +197,7 @@ def _build_previous_tag_maps(
 
         prev_tagged_by_username[username] = {
             "user_id": str(parsed_id),
-            "username": str(tag.get("username", "")),
+            "username": tag.get("username", ""),
         }
         prev_tagged_ids.add(parsed_id)
 
@@ -792,7 +792,8 @@ def check_availability_conflicts(
     """
     Return list of booked availability slots that conflict with the given timeframe.
 
-    Only checks BOOKED slots (not PENDING or AVAILABLE), to allow flexibility for uncertain bookings.
+    Only checks BOOKED slots (not PENDING or AVAILABLE),
+    to allow flexibility for uncertain bookings.
     """
     overlapping = AvailabilitySlot.objects.filter(
         profile=profile,
@@ -804,7 +805,7 @@ def check_availability_conflicts(
 
 
 def validate_workshop_scheduling(
-    author: Profile, start: datetime, end: datetime, exclude_workshop_id: uuid.UUID | None = None
+    author: Profile, start: datetime, end: datetime, **_kwargs: Any
 ) -> None:
     """
     Validate that workshop scheduling doesn't conflict with author's booked availability.

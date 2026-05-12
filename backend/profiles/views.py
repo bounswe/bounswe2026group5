@@ -2,6 +2,7 @@
 
 import logging
 from datetime import timedelta
+from typing import Any
 
 from django.conf import settings
 from django.contrib.gis.db.models.functions import Distance
@@ -153,10 +154,10 @@ class ProfileLookupMixin:
         except Profile.DoesNotExist:
             return None
 
-    def _serialize_profile_by_mode(self, profile: Profile) -> dict[str, object]:
+    def _serialize_profile_by_mode(self, profile: Profile, request: Request) -> dict[str, object]:
         """Serialize profile response using role-appropriate schema shape."""
         app_usage_mode = profile.user.app_usage_mode
-        context = {"request": self.request}
+        context = {"request": request}
         if app_usage_mode == AppUsageMode.MENTEE:
             serializer = MenteeProfileResponseSerializer(profile, context=context)
         elif app_usage_mode == AppUsageMode.MENTOR:
@@ -208,7 +209,7 @@ class ProfileByUsernameAPIView(ProfileLookupMixin, APIView):
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
-        return Response(self._serialize_profile_by_mode(profile), status=status.HTTP_200_OK)
+        return Response(self._serialize_profile_by_mode(profile, request), status=status.HTTP_200_OK)
 
 
 class ProfileMeAPIView(ProfileLookupMixin, APIView):
@@ -232,7 +233,7 @@ class ProfileMeAPIView(ProfileLookupMixin, APIView):
         if profile is None:
             return Response(NOT_FOUND_DETAIL, status=status.HTTP_404_NOT_FOUND)
 
-        data = self._serialize_profile_by_mode(profile)
+        data = self._serialize_profile_by_mode(profile, request)
         data["available_catalog_skills"] = list(Skill.objects.values_list("name", flat=True))
 
         return Response(data, status=status.HTTP_200_OK)
@@ -259,7 +260,7 @@ class ProfileMeAPIView(ProfileLookupMixin, APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return Response(self._serialize_profile_by_mode(profile), status=status.HTTP_200_OK)
+        return Response(self._serialize_profile_by_mode(profile, request), status=status.HTTP_200_OK)
 
 
 class ProfilePostsListAPIView(ProfileLookupMixin, APIView):
@@ -502,7 +503,7 @@ class ProfileUsernameUpdateAPIView(ProfileLookupMixin, APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return Response(self._serialize_profile_by_mode(profile), status=status.HTTP_200_OK)
+        return Response(self._serialize_profile_by_mode(profile, request), status=status.HTTP_200_OK)
 
 
 class AvailabilitySlotListCreateAPIView(ProfileLookupMixin, APIView):
@@ -999,6 +1000,25 @@ class PublicMentorProfilesSearchListAPIView(ProfileLookupMixin, APIView):
                 raise ValueError(f"`{key}` must be a valid number.")
         return None
 
+    def _parse_location_params(self, request: Request) -> tuple[Any | None, float | None]:
+        """Extract user location and search radius from request."""
+        coords = self._maybe_parse_coordinates(request)
+        distance_km = self._maybe_parse_distance_km(request)
+
+        user_location = None
+        if coords is None and request.user.is_authenticated:
+            profile = getattr(request.user, "profile", None)
+            if profile and profile.location:
+                coords = (profile.location.y, profile.location.x)
+
+        if coords is not None:
+            lat, lng = coords
+            user_location = Point(lng, lat, srid=4326)
+            if distance_km is None:
+                distance_km = 15.0
+
+        return user_location, distance_km
+
     @extend_schema(
         operation_id="profiles_public_mentor_search",
         parameters=[
@@ -1055,19 +1075,54 @@ class PublicMentorProfilesSearchListAPIView(ProfileLookupMixin, APIView):
                 OpenApiTypes.STR,
                 OpenApiParameter.QUERY,
                 enum=["quality", "recent"],
-                description="Sort order (default: quality). 'quality' favors well-reviewed mentors; 'recent' shows newest profiles first.",
+                description=(
+                    "Sort order (default: quality). 'quality' favors well-reviewed "
+                    "mentors; 'recent' shows newest profiles first."
+                ),
             ),
         ],
         responses={200: PublicMentorProfileSearchListResponseSerializer},
         description=(
             "Public listing of visible mentor profiles with optional search and filters. "
             "Supports pagination via `page` and `pageSize` query params. "
-            "If `lat` and `lng` are provided without `distanceKm`, a default radius of 15km is applied."
+            "If `lat` and `lng` are provided without `distanceKm`, a default "
+            "radius of 15km is applied."
         ),
         tags=["Profiles"],
     )
     def get(self, request: Request) -> Response:
+        """Handle mentor discovery search with pagination and spatial filtering."""
+        try:
+            params = self._parse_discovery_params(request)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except TypeError:
+            return Response(PAGE_SIZE_NOT_INT_DETAIL, status=status.HTTP_400_BAD_REQUEST)
 
+        qs = self._build_discovery_queryset(params)
+        total_count = qs.count()
+
+        offset = (params["page"] - 1) * params["page_size"]
+        results = list(qs[offset : offset + params["page_size"]])
+
+        serializer = PublicMentorProfileSearchResultSerializer(
+            results,
+            many=True,
+            context={"request": request, "user_location": params.get("user_location")},
+        )
+
+        return Response(
+            {
+                "count": total_count,
+                "page": params["page"],
+                "pageSize": params["page_size"],
+                "results": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def _parse_discovery_params(self, request: Request) -> dict[str, Any]:
+        """Extract and normalize discovery search parameters from request."""
         q = (
             request.query_params.get("q")
             or request.query_params.get("name")
@@ -1075,112 +1130,73 @@ class PublicMentorProfilesSearchListAPIView(ProfileLookupMixin, APIView):
         )
         q = q.strip() if isinstance(q, str) else ""
 
-        # Skills/topics are matched through Profile.skills using case-insensitive checks.
-        skill_terms = self._parse_terms(
-            request,
-            keys=["skill", "skills", "expertise", "topic"],
-        )
+        skill_terms = self._parse_terms(request, keys=["skill", "skills", "expertise", "topic"])
+        community_terms = self._parse_terms(request, keys=["tag", "tags", "community", "group"])
 
         try:
             page = int(request.query_params.get("page", 1))
             page_size = int(request.query_params.get("pageSize", 6))
         except (TypeError, ValueError):
-            return Response(
-                PAGE_SIZE_NOT_INT_DETAIL,
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            raise ValueError("`page` and `pageSize` must be integers.")
 
-        page = max(page, 1)
-        page_size = max(page_size, 1)
-        page_size = min(page_size, 50)
+        user_location, distance_km = self._parse_location_params(request)
 
-        sort = request.query_params.get("sort", "quality").strip().lower()
+        return {
+            "q": q,
+            "skill_terms": skill_terms,
+            "community_terms": community_terms,
+            "page": max(page, 1),
+            "page_size": min(max(page_size, 1), 50),
+            "sort": request.query_params.get("sort", "quality").strip().lower(),
+            "user_location": user_location,
+            "distance_km": distance_km,
+        }
 
+    def _build_discovery_queryset(self, params: dict[str, Any]) -> Any:
+        """Construct the filtered and ordered discovery queryset."""
         qs = self._with_active_match_counts(Profile.objects.select_related("user")).filter(
             user__app_usage_mode=AppUsageMode.MENTOR
         )
 
-        if q:
-            base_qs = qs
-            text_match_ids = set(
-                base_qs.filter(
-                    Q(display_name__icontains=q) | Q(title__icontains=q) | Q(bio__icontains=q)
-                ).values_list("id", flat=True)
-            )
-            skill_match_ids = {
-                profile_id
-                for profile_id, profile_skills in base_qs.values_list("id", "skills")
-                if self._skills_match_query(profile_skills or [], q)
-            }
-            qs = qs.filter(id__in=text_match_ids | skill_match_ids)
+        if params["q"]:
+            qs = qs.filter(
+                Q(display_name__icontains=params["q"])
+                | Q(username__icontains=params["q"])
+                | Q(title__icontains=params["q"])
+                | Q(bio__icontains=params["q"])
+                | Q(skills__icontains=params["q"])
+            ).distinct()
 
-        if skill_terms:
-            skill_match_ids = {
-                profile_id
-                for profile_id, profile_skills in qs.values_list("id", "skills")
-                if self._has_any_skill(profile_skills or [], skill_terms)
-            }
-            qs = qs.filter(id__in=skill_match_ids)
+        if params["skill_terms"]:
+            skill_q = Q()
+            for term in params["skill_terms"]:
+                skill_q |= Q(skills__icontains=term)
+            qs = qs.filter(skill_q)
 
-        # Optional: geographical distance filtering (lat/lng + distanceKm)
-        try:
-            coords = self._maybe_parse_coordinates(request)
-        except ValueError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        if params["community_terms"]:
+            tag_q = Q()
+            for term in params["community_terms"]:
+                tag_q |= Q(community_tags__name__icontains=term) | Q(community_tags__slug__icontains=term)
+            qs = qs.filter(tag_q)
 
-        distance_km = None
-        try:
-            distance_km = self._maybe_parse_distance_km(request)
-        except ValueError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        if params["user_location"] and params["distance_km"]:
+            qs = qs.filter(
+                location__distance_lte=(params["user_location"], D(km=params["distance_km"]))
+            ).annotate(distance=Distance("location", params["user_location"]))
 
-        if coords is None and request.user.is_authenticated:
-            profile = getattr(request.user, "profile", None)
-            if profile and profile.location:
-                coords = (profile.location.y, profile.location.x)
+        return self._apply_discovery_sorting(qs.distinct(), params["sort"], params["user_location"])
 
-        if coords is not None:
-            lat, lng = coords
-            point = Point(lng, lat, srid=4326)
-            radius = distance_km if distance_km is not None else 15.0
-            qs = qs.annotate(distance=Distance("location", point))
-            qs = qs.filter(location__distance_lte=(point, D(km=radius)))
-
-        # Community tag filtering (matches profiles in ANY of the given tags)
-        tag_terms = self._parse_terms(request, keys=["tag", "tags"])
-        if tag_terms:
-            tagged_profile_ids = CommunityTagMembership.objects.filter(
-                Q(tag__slug__in=tag_terms) | Q(tag__name__in=tag_terms)
-            ).values_list("profile_id", flat=True)
-            qs = qs.filter(id__in=tagged_profile_ids)
-
-        # Apply deterministic sorting
+    def _apply_discovery_sorting(self, qs: Any, sort: str, user_location: Any) -> Any:
+        """Apply sorting logic to the discovery queryset."""
         if sort == "recent":
-            qs = qs.order_by("-created_at", "id")
-        else:
-            # Default: Quality-based ordering (tiebreakers: ratings > reviews > mentees > distance > name > id)
-            order_fields = ["-average_rating", "-review_count", "-total_mentee_count"]
-            if coords is not None:
-                order_fields.append("distance")
-            order_fields.extend(["display_name", "id"])
-            qs = qs.order_by(*order_fields)
+            return qs.order_by("-created_at", "-id")
 
-        total = qs.count()
-        offset = (page - 1) * page_size
-        items = qs[offset : offset + page_size]
+        if user_location:
+            return qs.order_by(
+                "distance", "-average_rating", "-review_count", "-total_mentee_count", "-id"
+            )
 
-        serializer = PublicMentorProfileSearchResultSerializer(
-            items, many=True, context={"request": request}
-        )
-        return Response(
-            {
-                "count": total,
-                "page": page,
-                "pageSize": page_size,
-                "results": serializer.data,
-            },
-            status=status.HTTP_200_OK,
-        )
+        return qs.order_by("-average_rating", "-review_count", "-total_mentee_count", "-id")
 
 
 class MentorPublicAverageRatingAPIView(ProfileLookupMixin, APIView):

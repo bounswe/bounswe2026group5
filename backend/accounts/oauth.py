@@ -29,46 +29,10 @@ def verify_google_id_token(raw_token: str) -> dict:
     try:
         # 1. Try to verify as an ID Token (JWT)
         if raw_token.count(".") == 2:
-            try:
-                payload = google_id_token.verify_oauth2_token(
-                    raw_token,
-                    GoogleAuthRequest(),
-                    audience=client_id,
-                )
-            except ValueError as exc:
-                logger.warning("Google JWT verification failed: %s", exc)
-                raise OAuthVerificationError("Invalid or expired Google token.") from exc
+            payload = _verify_jwt_token(raw_token, client_id)
         else:
             # 2. Fallback: Verify as an Access Token using Google's tokeninfo endpoint
-            response = requests.get(
-                f"https://oauth2.googleapis.com/tokeninfo?access_token={raw_token}",
-                timeout=10,
-            )
-
-            if response.status_code != 200:
-                raise OAuthVerificationError("Invalid or expired Google access token.")
-
-            token_info = response.json()
-
-            # Verify the audience (client_id) matches
-            aud = token_info.get("aud")
-            if aud != client_id:
-                raise OAuthVerificationError("Google Access Token audience mismatch.")
-
-            # Access tokens don't contain user details, so we must fetch them from the userinfo endpoint
-            user_info_res = requests.get(
-                "https://openidconnect.googleapis.com/v1/userinfo",
-                headers={"Authorization": f"Bearer {raw_token}"},
-                timeout=10,
-            )
-
-            if user_info_res.status_code != 200:
-                raise OAuthVerificationError("Google UserInfo fetch failed.")
-
-            payload = user_info_res.json()
-            # Normalize field
-            verified = payload.get("email_verified", True)
-            payload["email_verified"] = str(verified).lower() == "true"
+            payload = _verify_access_token(raw_token, client_id)
 
         email = payload.get("email")
         if not email:
@@ -91,3 +55,48 @@ def verify_google_id_token(raw_token: str) -> dict:
         "name": payload.get("name", ""),
         "picture": payload.get("picture", ""),
     }
+
+
+def _verify_jwt_token(raw_token: str, client_id: str) -> dict:
+    """Verify raw_token as a Google JWT ID token."""
+    try:
+        return google_id_token.verify_oauth2_token(
+            raw_token,
+            GoogleAuthRequest(),
+            audience=client_id,
+        )
+    except ValueError as exc:
+        logger.warning("Google JWT verification failed: %s", exc)
+        raise OAuthVerificationError("Invalid or expired Google token.") from exc
+
+
+def _verify_access_token(raw_token: str, client_id: str) -> dict:
+    """Verify raw_token as a Google OAuth2 access token and fetch user info."""
+    # Verify the access token using Google's tokeninfo endpoint
+    info_url = f"https://oauth2.googleapis.com/tokeninfo?access_token={raw_token}"
+    response = requests.get(info_url, timeout=10)
+
+    if response.status_code != 200:
+        raise OAuthVerificationError("Invalid or expired Google access token.")
+
+    token_info = response.json()
+
+    # Verify the audience (client_id) matches
+    if token_info.get("aud") != client_id:
+        raise OAuthVerificationError("Google Access Token audience mismatch.")
+
+    # Fetch user details from the userinfo endpoint
+    user_info_res = requests.get(
+        "https://openidconnect.googleapis.com/v1/userinfo",
+        headers={"Authorization": f"Bearer {raw_token}"},
+        timeout=10,
+    )
+
+    if user_info_res.status_code != 200:
+        raise OAuthVerificationError("Google UserInfo fetch failed.")
+
+    payload = user_info_res.json()
+    # Normalize email_verified field
+    verified = payload.get("email_verified", True)
+    payload["email_verified"] = str(verified).lower() == "true"
+    return payload

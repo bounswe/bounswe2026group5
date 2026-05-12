@@ -1,4 +1,4 @@
-from typing import Any, cast
+from typing import Any
 
 from django.conf import settings
 from django.contrib.auth import password_validation
@@ -7,6 +7,7 @@ from django.db import transaction
 from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers
+from rest_framework.request import Request
 from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
@@ -126,16 +127,13 @@ class RegisterSerializer(serializers.Serializer):
 
         is_email_verified = not getattr(settings, "REQUIRE_EMAIL_VERIFICATION", True)
 
-        user: User = cast(
-            User,
-            User.objects.create_user(
-                email=email,
-                password=password,
-                role=UserRole.USER,
-                auth_provider=AuthProvider.LOCAL,
-                is_active=True,
-                is_email_verified=is_email_verified,
-            ),
+        user = User.objects.create_user(
+            email=email,
+            password=password,
+            role=UserRole.USER,
+            auth_provider=AuthProvider.LOCAL,
+            is_active=True,
+            is_email_verified=is_email_verified,
         )
 
         display_name = email.split("@", 1)[0].replace(".", " ").replace("_", " ").title()
@@ -240,10 +238,7 @@ class BannedAwareTokenRefreshSerializer(TokenRefreshSerializer):
     """Refresh serializer that blocks token refresh for banned users."""
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        try:
-            refresh_token = RefreshToken(attrs["refresh"])
-        except TokenError as exc:
-            raise exc
+        refresh_token = RefreshToken(attrs["refresh"])
 
         user_id = refresh_token.payload.get("user_id")
 
@@ -277,12 +272,26 @@ class ReportCreateSerializer(serializers.Serializer):
 
     reported_user_id = serializers.UUIDField(required=False)
     reported_username = serializers.CharField(required=False)
-    reason = serializers.ChoiceField(choices=["SPAM", "HARASSMENT", "INAPPROPRIATE_CONTENT", "OTHER"])
+    reason = serializers.ChoiceField(
+        choices=["SPAM", "HARASSMENT", "INAPPROPRIATE_CONTENT", "OTHER"]
+    )
     description = serializers.CharField(required=False, allow_blank=True, default="")
     related_message_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
-    def validate(self, attrs):
-        # Step 1: Resolve reported user from either id or username
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Validate reported user and optional related message."""
+        reported_user = self._resolve_reported_user(attrs)
+        attrs["reported_user_id"] = reported_user.id
+
+        request = self.context.get("request")
+        if request and str(request.user.id) == str(reported_user.id):
+            raise serializers.ValidationError({"reported_user_id": "You cannot report yourself."})
+
+        self._validate_related_message(attrs, request)
+        return attrs
+
+    def _resolve_reported_user(self, attrs: dict[str, Any]) -> User:
+        """Resolve the user being reported by ID or username."""
         user_id = attrs.get("reported_user_id")
         username = attrs.get("reported_username")
 
@@ -291,58 +300,42 @@ class ReportCreateSerializer(serializers.Serializer):
                 "Either 'reported_user_id' or 'reported_username' must be provided."
             )
 
-        if user_id:
-            try:
-                reported_user = User.objects.get(id=user_id)
-            except User.DoesNotExist:
-                raise serializers.ValidationError(
-                    {"reported_user_id": "User not found."}
-                )
-        else:
-            try:
-                reported_user = User.objects.get(username=username)
-            except User.DoesNotExist:
-                raise serializers.ValidationError(
-                    {"reported_username": "User not found."}
-                )
+        try:
+            if user_id:
+                return User.objects.get(id=user_id)
+            return User.objects.get(username=username)
+        except User.DoesNotExist:
+            field = "reported_user_id" if user_id else "reported_username"
+            raise serializers.ValidationError({field: "User not found."})
 
-        attrs["reported_user_id"] = reported_user.id
-
-        request = self.context.get("request")
-        if request and str(request.user.id) == str(reported_user.id):
-            raise serializers.ValidationError(
-                {"reported_user_id": "You cannot report yourself."}
-            )
-
-        # Step 2: Validate related_message_id if provided
+    def _validate_related_message(self, attrs: dict[str, Any], request: Request | None) -> None:
+        """Ensure the related message exists and the reporter has access to it."""
         related_message_id = attrs.get("related_message_id")
-        if related_message_id:
-            from messaging.models import Message
-            try:
-                # Select related conversation and match to minimize queries
-                message = Message.objects.select_related("conversation__match").get(id=related_message_id)
-            except Message.DoesNotExist:
-                raise serializers.ValidationError(
-                    {"related_message_id": "Message not found."}
-                )
+        if not related_message_id:
+            return
 
-            # Check if the reporting user is allowed to reference this message
-            if request and request.user:
-                profile = getattr(request.user, "profile", None)
-                if not profile:
-                    raise serializers.ValidationError(
-                        {"related_message_id": "User profile not found."}
-                    )
-                
-                # Admins can report any message; regular users are restricted to their own conversations.
-                is_admin = getattr(request.user, "role", None) == "ADMIN"
-                match = message.conversation.match
-                if not is_admin and profile.id not in [match.mentor_id, match.mentee_id]:
-                    raise serializers.ValidationError(
-                        {"related_message_id": "You can only report messages from your own conversations."}
-                    )
+        from messaging.models import Message
+        try:
+            message = Message.objects.select_related("conversation__match").get(
+                id=related_message_id
+            )
+        except Message.DoesNotExist:
+            raise serializers.ValidationError({"related_message_id": "Message not found."})
 
-        return attrs
+        if not request or not request.user:
+            return
+
+        profile = getattr(request.user, "profile", None)
+        if not profile:
+            raise serializers.ValidationError({"related_message_id": "User profile not found."})
+
+        # Admins can report any message; regular users are restricted to their own conversations.
+        is_admin = getattr(request.user, "role", None) == UserRole.ADMIN
+        match = message.conversation.match
+        if not is_admin and profile.id not in [match.mentor_id, match.mentee_id]:
+            raise serializers.ValidationError(
+                {"related_message_id": "You can only report messages from your own conversations."}
+            )
 
 
 class ReportListSerializer(serializers.Serializer):
@@ -360,7 +353,7 @@ class ReportListSerializer(serializers.Serializer):
     resolved_at = serializers.DateTimeField()
 
     @extend_schema_field(OpenApiTypes.OBJECT)
-    def get_submitted_by(self, obj):
+    def get_submitted_by(self, obj: Any) -> dict[str, str]:
         return {
             "id": str(obj.submitted_by.id),
             "email": obj.submitted_by.email,
@@ -368,7 +361,7 @@ class ReportListSerializer(serializers.Serializer):
         }
 
     @extend_schema_field(OpenApiTypes.OBJECT)
-    def get_reported_user(self, obj):
+    def get_reported_user(self, obj: Any) -> dict[str, str]:
         return {
             "id": str(obj.reported_user.id),
             "email": obj.reported_user.email,
@@ -376,7 +369,7 @@ class ReportListSerializer(serializers.Serializer):
         }
 
     @extend_schema_field(OpenApiTypes.OBJECT)
-    def get_resolved_by(self, obj):
+    def get_resolved_by(self, obj: Any) -> dict[str, str] | None:
         if obj.resolved_by is None:
             return None
         return {

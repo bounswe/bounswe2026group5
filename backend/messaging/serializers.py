@@ -5,7 +5,6 @@ from rest_framework import serializers
 
 from mentorship.serializers import ProfileSummarySerializer
 
-from accounts.models import Report
 from .models import Conversation, Message
 
 
@@ -35,17 +34,19 @@ class ConversationSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return 0
-        
-        # We MUST use the Profile ID, not the User ID, because messages and receipts 
+
+        # We MUST use the Profile ID, not the User ID, because messages and receipts
         # are linked to Profiles.
         profile = getattr(request.user, 'profile', None)
         if not profile:
             return 0
-            
-        return obj.messages.exclude(sender_id=profile.id).exclude(
-            read_receipts__user_id=profile.id, 
-            read_receipts__status="read"
-        ).count()
+
+        # Exclude own messages and those already marked as 'read'
+        return (
+            obj.messages.exclude(sender_id=profile.id)
+            .exclude(read_receipts__user_id=profile.id, read_receipts__status="read")
+            .count()
+        )
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -100,12 +101,12 @@ class MessageSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return "sent"
-        
+
         # Use Profile ID because ReadReceipts are linked to Profiles
         profile = getattr(request.user, 'profile', None)
         if not profile:
             return "sent"
-            
+
         return obj.get_status_for_user(str(profile.id))
 
 
@@ -145,8 +146,9 @@ class MessageCreateSerializer(serializers.Serializer):
             )
 
         if attachment.size > max_size_bytes:
+            limit_mb = settings.MAX_MESSAGE_ATTACHMENT_SIZE_MB
             raise serializers.ValidationError(
-                f"Attachment size must be at most {settings.MAX_MESSAGE_ATTACHMENT_SIZE_MB} MB."
+                f"Attachment size must be at most {limit_mb} MB."
             )
 
         return attachment

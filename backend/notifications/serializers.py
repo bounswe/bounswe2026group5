@@ -42,7 +42,7 @@ class FCMTokenSerializer(serializers.ModelSerializer):
         token = validated_data["token"]
         device_type = validated_data.get("device_type", "web")
 
-        fcm_token, created = FCMToken.objects.update_or_create(
+        fcm_token, _ = FCMToken.objects.update_or_create(
             token=token,
             defaults={"user": user, "device_type": device_type},
         )

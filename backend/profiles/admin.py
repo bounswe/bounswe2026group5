@@ -24,8 +24,6 @@ class SkillAdmin(admin.ModelAdmin):
     ordering = ("name",)
 
 
-
-
 @admin.register(AvailabilitySlot)
 class AvailabilitySlotAdmin(admin.ModelAdmin):
     list_display = ("profile", "start_at", "end_at", "status", "created_at")

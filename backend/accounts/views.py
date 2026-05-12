@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 _GENERIC_FORGOT_PASSWORD_RESPONSE = {
     "detail": "If an account exists for that email, a password reset link has been sent."
 }
+_INVALID_TOKEN_RESPONSE = {"token": "Invalid or expired token."}
 
 
 def build_auth_response(user: User, refresh: RefreshToken | None = None) -> dict[str, object]:
@@ -59,6 +60,8 @@ def build_auth_response(user: User, refresh: RefreshToken | None = None) -> dict
         app = get_firebase_app()
         if app:
             firebase_token = auth.create_custom_token(str(user.id), app=app).decode("utf-8")
+    except ImportError:
+        logger.warning("Firebase messaging module not available for user %s", user.id)
     except Exception:
         logger.exception("Failed to generate Firebase custom token for user %s", user.id)
 
@@ -123,6 +126,7 @@ class RegisterAPIView(APIView):
             raw_token, _ = EmailVerificationToken.issue_for_user(user)
             _send_email_verification_email(user, raw_token)
         except Exception:
+            # We log and continue so the user is still logged in even if email fails
             logger.exception("Failed to issue verification email for user %s", user.id)
 
         response = Response(
@@ -315,13 +319,17 @@ def _send_email_verification_email(user: User, raw_token: str) -> None:
         f"If you did not create a Neighborship account, you can safely ignore this email.\n"
     )
 
-    send_mail(
-        subject=subject,
-        message=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
-    )
+    try:
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception("SMTP failure while sending verification email to %s", user.email)
+        raise
 
 
 def _send_password_reset_email(user: User, raw_token: str) -> None:
@@ -340,13 +348,17 @@ def _send_password_reset_email(user: User, raw_token: str) -> None:
         f"If you did not request a password reset, you can safely ignore this email.\n"
     )
 
-    send_mail(
-        subject=subject,
-        message=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
-    )
+    try:
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception("SMTP failure while sending password reset email to %s", user.email)
+        raise
 
 
 def _blacklist_user_refresh_tokens(user: User) -> None:
@@ -458,23 +470,14 @@ class VerifyEmailAPIView(APIView):
                 token_hash=token_hash
             )
         except EmailVerificationToken.DoesNotExist:
-            return Response(
-                {"token": "Invalid or expired token."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response(_INVALID_TOKEN_RESPONSE, status=status.HTTP_400_BAD_REQUEST)
 
         if not verification.is_valid():
-            return Response(
-                {"token": "Invalid or expired token."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response(_INVALID_TOKEN_RESPONSE, status=status.HTTP_400_BAD_REQUEST)
 
         user = verification.user
         if not user.is_active or user.is_banned:
-            return Response(
-                {"token": "Invalid or expired token."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response(_INVALID_TOKEN_RESPONSE, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             if not user.is_email_verified:
@@ -537,7 +540,7 @@ class AdminUsersListAPIView(APIView):
     )
     def get(self, request: Request) -> Response:
         users_qs = User.objects.all().order_by("-created_at")
-        
+
         # Manual pagination
         try:
             page = max(int(request.query_params.get("page", 1)), 1)
@@ -545,7 +548,7 @@ class AdminUsersListAPIView(APIView):
         except ValueError:
             page = 1
             page_size = 50
-            
+
         offset = (page - 1) * page_size
         users = users_qs[offset : offset + page_size].values(
             "id",
@@ -579,33 +582,39 @@ def _get_or_create_oauth_user(
     display_name: str = "",
     picture_url: str = "",
 ) -> User:
-    """Find an existing user by email or create a new OAuth user with Profile.
+    """Find an existing user by email or create a new OAuth user with Profile."""
+    existing_user = User.objects.filter(email=email).first()
+    if existing_user is not None:
+        return _handle_existing_oauth_user(existing_user)
 
-    Account-linking policy:
-    - If a user with this email already exists (regardless of auth_provider),
-      log them in. We do NOT overwrite auth_provider so local-password
-      users keep their credentials intact.
-    - If no user exists, create one with ``set_unusable_password()``,
-      ``is_email_verified=True``, and a matching ``Profile``.
-    """
+    return _create_new_oauth_user(email, provider, display_name, picture_url)
+
+
+def _handle_existing_oauth_user(user: User) -> User:
+    """Validate status of an existing user trying to login via OAuth."""
+    if not user.is_active:
+        raise OAuthVerificationError("This account is inactive.")
+    if user.is_banned:
+        raise OAuthVerificationError("This account has been banned.")
+    return user
+
+
+def _create_new_oauth_user(
+    email: str,
+    provider: AuthProvider,
+    display_name: str,
+    picture_url: str,
+) -> User:
+    """Create a new user and associated profile for OAuth registration."""
     from django.contrib.auth.models import Group
 
     from profiles.models import Profile
 
     from .models import UserRole
 
-    existing_user = User.objects.filter(email=email).first()
-    if existing_user is not None:
-        if not existing_user.is_active:
-            raise OAuthVerificationError("This account is inactive.")
-        if existing_user.is_banned:
-            raise OAuthVerificationError("This account has been banned.")
-        return existing_user
-
-    # --- New user ---
     user = User.objects.create_user(
         email=email,
-        password=None,  # set_unusable_password
+        password=None,
         role=UserRole.USER,
         auth_provider=provider,
         is_active=True,
@@ -614,13 +623,11 @@ def _get_or_create_oauth_user(
     user.email_verified_at = timezone.now()
     user.save(update_fields=["email_verified_at"])
 
-    profile_display_name = display_name or (
-        email.split("@", 1)[0].replace(".", " ").replace("_", " ").title()
-    )
+    profile_name = display_name or email.split("@", 1)[0].replace(".", " ").title()
     Profile.objects.create(
         user=user,
         username=user.username,
-        display_name=profile_display_name,
+        display_name=profile_name,
         picture_url=picture_url or "",
     )
 
@@ -835,7 +842,7 @@ class AdminReportListAPIView(APIView):
         except ValueError:
             page = 1
             page_size = 50
-            
+
         offset = (page - 1) * page_size
         paginated_reports = queryset[offset : offset + page_size]
 
@@ -885,7 +892,7 @@ class AdminReportUpdateAPIView(APIView):
         if new_status in ("RESOLVED", "DISMISSED"):
             report.resolved_by = cast(User, request.user)
             report.resolved_at = timezone.now()
-            
+
             if new_status == "RESOLVED":
                 Notification.objects.create(
                     user=report.submitted_by,
@@ -906,4 +913,3 @@ class AdminReportUpdateAPIView(APIView):
             ReportListSerializer(report).data,
             status=status.HTTP_200_OK,
         )
-
