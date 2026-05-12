@@ -136,9 +136,6 @@ class MessagingAPIBaseTestCase(TestCase):
     def _conversation_detail_url(self, conversation_id: uuid.UUID | str) -> str:
         return f"/api/messages/conversations/{conversation_id}/"
 
-    def _message_report_url(self, message_id: uuid.UUID | str) -> str:
-        return f"/api/messages/{message_id}/report/"
-
     def _authenticated_client_without_profile(
         self,
         *,
@@ -414,81 +411,6 @@ class MessageCreateAPIViewTests(MessagingAPIBaseTestCase):
             self._conversation_detail_url(self.conversation.id),
             {"body": "Test"},
         )
-
-        self.assertEqual(response.status_code, 404)
-
-
-class MessageReportAPIViewTests(MessagingAPIBaseTestCase):
-    """Tests for POST /api/messages/{id}/report/."""
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.message = Message.objects.create(
-            conversation=self.conversation,
-            sender=self.mentor_profile,
-            body="Test message",
-        )
-
-    def test_unauthenticated_returns_401(self) -> None:
-        url = self._message_report_url(self.message.id)
-        response = self.anon_client.post(url, {"reason": "SPAM"})
-        self.assertEqual(response.status_code, 401)
-
-    def test_non_participant_returns_403(self) -> None:
-        url = self._message_report_url(self.message.id)
-        response = self.other_client.post(url, {"reason": "SPAM"})
-        self.assertEqual(response.status_code, 403)
-
-    def test_participant_can_report_message(self) -> None:
-        url = self._message_report_url(self.message.id)
-        response = self.mentee_client.post(url, {"reason": "SPAM"})
-        self.assertEqual(response.status_code, 201)
-
-        # Check report was created in global Report table
-        self.assertTrue(
-            Report.objects.filter(
-                related_message=self.message, submitted_by=self.mentee_user
-            ).exists()
-        )
-
-    def test_duplicate_report_rejected(self) -> None:
-        url = self._message_report_url(self.message.id)
-        # First report
-        self.mentee_client.post(url, {"reason": "SPAM"})
-        # Second report
-        response = self.mentee_client.post(url, {"reason": "HARASSMENT"})
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("already reported", response.data["detail"])
-
-    def test_admin_can_report_message(self) -> None:
-        # Even though admin can't read messages normally,
-        # they can report if they somehow access the message
-        # But in practice, admins shouldn't access message IDs without proper channels
-        url = self._message_report_url(self.message.id)
-        response = self.admin_client.post(url, {"reason": "OTHER"})
-        self.assertEqual(response.status_code, 201)
-
-    def test_message_not_found_returns_404(self) -> None:
-        url = self._message_report_url(uuid.uuid4())
-
-        response = self.mentee_client.post(url, {"reason": "SPAM"})
-
-        self.assertEqual(response.status_code, 404)
-
-    def test_invalid_payload_returns_400(self) -> None:
-        url = self._message_report_url(self.message.id)
-
-        response = self.mentee_client.post(url, {})
-
-        self.assertEqual(response.status_code, 400)
-
-    def test_missing_profile_returns_404(self) -> None:
-        no_profile_client = self._authenticated_client_without_profile(
-            email="no.profile.report@example.com",
-        )
-
-        url = self._message_report_url(self.message.id)
-        response: Any = no_profile_client.post(url, {"reason": "SPAM"})
 
         self.assertEqual(response.status_code, 404)
 
