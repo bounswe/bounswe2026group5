@@ -1794,6 +1794,26 @@ def seed_violin_transition_story(profile_by_username) -> None:
     bulent = profile_by_username[VIOLIN_MENTOR_COMMUNITY_USERNAME]
     sidal = profile_by_username[VIOLIN_MENTOR_WORKSHOP_USERNAME]
 
+    violin_media_urls = [
+        "/media/post_media/ViolinPics/photo-1460036521480-ff49c08c2781.jpg",
+        "/media/post_media/ViolinPics/photo-1472312656035-eeef4726de6c.jpg",
+        "/media/post_media/ViolinPics/photo-1526142684086-7ebd69df27a5.jpg",
+        "/media/post_media/ViolinPics/photo-1585263547501-7e5a0c222010.jpg",
+        "/media/post_media/ViolinPics/photo-1590594638854-19a378b6872d.jpg",
+        "/media/post_media/ViolinPics/photo-1624367171718-14026220ee35.jpg",
+        "/media/post_media/ViolinPics/photo-1692553173440-bc496a6f5e19.jpg",
+        "/media/post_media/ViolinPics/photo-1701749059090-ac8afdba7b44.jpg",
+        "/media/post_media/ViolinPics/photo-1704961625677-dc57dcf6cef1.jpg",
+        "/media/post_media/ViolinPics/premium_photo-1661433025857-e79ad6e8bf15.jpg",
+    ]
+    media_cursor = 0
+
+    def next_violin_media() -> str:
+        nonlocal media_cursor
+        value = violin_media_urls[media_cursor % len(violin_media_urls)]
+        media_cursor += 1
+        return value
+
     beril_request = create_request(
         beril,
         barkin,
@@ -1855,6 +1875,7 @@ def seed_violin_transition_story(profile_by_username) -> None:
                     f"Barkin learned '{piece}' this cycle and showed measurable improvement in "
                     "phrase consistency and control."
                 ),
+                media_url=next_violin_media(),
                 timestamp=start + timedelta(hours=1, minutes=30),
                 show_on_profile=False,
             )
@@ -1871,6 +1892,7 @@ def seed_violin_transition_story(profile_by_username) -> None:
             "Performed in a spring concert and played Ode to Joy with stronger dynamic control "
             "than early rehearsals."
         ),
+        media_url=next_violin_media(),
         timestamp=month_3_concert,
         show_on_profile=True,
     )
@@ -1883,6 +1905,7 @@ def seed_violin_transition_story(profile_by_username) -> None:
             "Month 3 milestone: first violin concert completed. I can now perform Ode to Joy "
             "and Minuet in G with stable tempo in front of an audience."
         ),
+        media_url=next_violin_media(),
         timestamp=month_3_concert + timedelta(hours=2),
         show_on_profile=True,
     )
@@ -1899,6 +1922,7 @@ def seed_violin_transition_story(profile_by_username) -> None:
             "Completed a second concert cycle and performed Minuet in G and Gavotte in G Minor "
             "with a student quartet."
         ),
+        media_url=next_violin_media(),
         timestamp=month_6_concert,
         show_on_profile=True,
     )
@@ -1911,6 +1935,7 @@ def seed_violin_transition_story(profile_by_username) -> None:
             "Month 6 milestone: concert pressure feels manageable now, and my intonation is "
             "far more reliable than January."
         ),
+        media_url=next_violin_media(),
         timestamp=month_6_concert + timedelta(hours=2),
         show_on_profile=True,
     )
@@ -1926,6 +1951,7 @@ def seed_violin_transition_story(profile_by_username) -> None:
             "I am proud of how far Barkin has come. I will miss our weekly lessons, but due to "
             "my schedule shift I cannot continue regular sessions."
         ),
+        media_url=next_violin_media(),
         timestamp=aware_on(2025, 7, 8, 12, 0),
         show_on_profile=False,
     )
@@ -2021,6 +2047,7 @@ def seed_violin_transition_story(profile_by_username) -> None:
                     f"With Bilge's mentoring, I can now play '{piece}' with cleaner articulation "
                     "and stronger dynamic contrast."
                 ),
+                media_url=next_violin_media(),
                 timestamp=start + timedelta(hours=2),
                 show_on_profile=True,
             )
@@ -2046,6 +2073,7 @@ def seed_violin_transition_story(profile_by_username) -> None:
             event_type=TimelineEvent.MCTEEventType.PROGRESS,
             author=barkin,
             content=content,
+            media_url=next_violin_media(),
             timestamp=timestamp,
             show_on_profile=True,
         )
@@ -2101,6 +2129,7 @@ def seed_violin_transition_story(profile_by_username) -> None:
             author=author,
             community_id=violin_community.id,
             content=content,
+            media_url=next_violin_media(),
             timestamp=timestamp,
             show_on_profile=show_on_profile,
             payload={
