@@ -27,6 +27,9 @@ LEGACY_SEED_EMAILS = {
     "metin.yildiz@example.com",
     "mert.aydin@example.com",
     "ayse.demir@example.com",
+    "barkin@email.com",
+    "beril@email.com",
+    "bilge@email.com",
 }
 
 SCENARIO_MENTOR_USERNAME = "deniz-arman"
@@ -93,6 +96,82 @@ SCENARIO_MENTEE_SKILLS = [
     "Project Planning",
     "UI/UX Design",
 ]
+
+VIOLIN_MENTEE_USERNAME = "barkin-yilmaz"
+VIOLIN_MENTEE_EMAIL = "barkin@email.com"
+VIOLIN_MENTEE_PASSWORD = "Demo1234!"
+VIOLIN_MENTEE_DISPLAY_NAME = "Barkin Yilmaz"
+VIOLIN_MENTEE_TITLE = "Bogazici Student Violinist"
+VIOLIN_MENTEE_BIO = (
+    "I started violin as a beginner and document each milestone from early posture work "
+    "to orchestral rehearsal confidence. I share pieces, practice routines, and concert progress."
+)
+VIOLIN_MENTEE_INTERESTS = "Violin fundamentals, ensemble performance, disciplined practice logs."
+VIOLIN_MENTEE_SKILLS = ["Violin", "Public Speaking", "Study Habits"]
+
+VIOLIN_MENTOR_PRIMARY_USERNAME = "beril-kaya"
+VIOLIN_MENTOR_PRIMARY_EMAIL = "beril@email.com"
+VIOLIN_MENTOR_PRIMARY_PASSWORD = "Demo1234!"
+VIOLIN_MENTOR_PRIMARY_DISPLAY_NAME = "Beril Kaya"
+VIOLIN_MENTOR_PRIMARY_TITLE = "Classical Violin Mentor"
+VIOLIN_MENTOR_PRIMARY_BIO = (
+    "I mentor beginner and intermediate violin students with a focus on healthy technique, "
+    "intonation, and musical storytelling."
+)
+VIOLIN_MENTOR_PRIMARY_INTERESTS = "Violin pedagogy, chamber music, student recitals."
+VIOLIN_MENTOR_PRIMARY_SKILLS = ["Violin", "Workshop Facilitation", "Public Speaking"]
+
+VIOLIN_MENTOR_SECONDARY_USERNAME = "bilge-arslan"
+VIOLIN_MENTOR_SECONDARY_EMAIL = "bilge@email.com"
+VIOLIN_MENTOR_SECONDARY_PASSWORD = "Demo1234!"
+VIOLIN_MENTOR_SECONDARY_DISPLAY_NAME = "Bilge Arslan"
+VIOLIN_MENTOR_SECONDARY_TITLE = "Performance Violin Mentor"
+VIOLIN_MENTOR_SECONDARY_BIO = (
+    "I work with developing violinists on tone production, stage confidence, and repertoire "
+    "selection for concerts and juries."
+)
+VIOLIN_MENTOR_SECONDARY_INTERESTS = "Repertoire planning, performance preparation, practice systems."
+VIOLIN_MENTOR_SECONDARY_SKILLS = ["Violin", "Time Management", "Workshop Facilitation"]
+
+VIOLIN_COMMUNITY_NAME = "Violin Learners of Bogazici"
+VIOLIN_COMMUNITY_DESCRIPTION = (
+    "A student-led community for violin learners to share technique tips, repertoire progress, "
+    "and workshop experiences."
+)
+
+VIOLIN_MENTEE_PEER_USERNAME = "batuhan-demir"
+VIOLIN_MENTEE_PEER_EMAIL = f"{VIOLIN_MENTEE_PEER_USERNAME}@{DEMO_EMAIL_DOMAIN}"
+VIOLIN_MENTEE_PEER_DISPLAY_NAME = "Batuhan Demir"
+VIOLIN_MENTEE_PEER_TITLE = "Early-Stage Violin Learner"
+VIOLIN_MENTEE_PEER_BIO = "I am building consistency in scales, rhythm, and first recital repertoire."
+VIOLIN_MENTEE_PEER_INTERESTS = "Foundational violin technique, duet practice, beginner concerts."
+VIOLIN_MENTEE_PEER_SKILLS = ["Violin", "Study Habits"]
+
+VIOLIN_MENTOR_COMMUNITY_USERNAME = "bulent-yildiz"
+VIOLIN_MENTOR_COMMUNITY_EMAIL = f"{VIOLIN_MENTOR_COMMUNITY_USERNAME}@{DEMO_EMAIL_DOMAIN}"
+VIOLIN_MENTOR_COMMUNITY_DISPLAY_NAME = "Bulent Yildiz"
+VIOLIN_MENTOR_COMMUNITY_TITLE = "Community Violin Mentor"
+VIOLIN_MENTOR_COMMUNITY_BIO = (
+    "I help students transition from exercises to expressive pieces with stable bow control."
+)
+VIOLIN_MENTOR_COMMUNITY_INTERESTS = "Technique progression, rehearsal methods, ensemble readiness."
+VIOLIN_MENTOR_COMMUNITY_SKILLS = ["Violin", "Workshop Facilitation"]
+
+VIOLIN_MENTOR_WORKSHOP_USERNAME = "sidal-ozkan"
+VIOLIN_MENTOR_WORKSHOP_EMAIL = f"{VIOLIN_MENTOR_WORKSHOP_USERNAME}@{DEMO_EMAIL_DOMAIN}"
+VIOLIN_MENTOR_WORKSHOP_DISPLAY_NAME = "Sidal Ozkan"
+VIOLIN_MENTOR_WORKSHOP_TITLE = "Violin Workshop Mentor"
+VIOLIN_MENTOR_WORKSHOP_BIO = (
+    "I run practical workshops on intonation, ensemble listening, and confident stage delivery."
+)
+VIOLIN_MENTOR_WORKSHOP_INTERESTS = "Workshop-based learning, concert preparation, mentoring circles."
+VIOLIN_MENTOR_WORKSHOP_SKILLS = ["Violin", "Workshop Facilitation", "Public Speaking"]
+
+SPECIAL_LOGIN_PASSWORDS = {
+    VIOLIN_MENTEE_USERNAME: VIOLIN_MENTEE_PASSWORD,
+    VIOLIN_MENTOR_PRIMARY_USERNAME: VIOLIN_MENTOR_PRIMARY_PASSWORD,
+    VIOLIN_MENTOR_SECONDARY_USERNAME: VIOLIN_MENTOR_SECONDARY_PASSWORD,
+}
 
 SCENARIO_COMMUNITY_NAME = "Student Product Builders"
 SCENARIO_COMMUNITY_DESCRIPTION = (
@@ -192,6 +271,7 @@ CORE_SKILLS = [
     "Turkish Cooking",
     "TypeScript",
     "UI/UX Design",
+    "Violin",
     "Volunteering",
     "Web Accessibility",
     "Workshop Facilitation",
@@ -409,6 +489,9 @@ class PersonSeed:
 def make_login_secret(username: str) -> str:
     """Build a deterministic login secret for a demo user."""
 
+    if username in SPECIAL_LOGIN_PASSWORDS:
+        return SPECIAL_LOGIN_PASSWORDS[username]
+
     return f"{username}{TEST_SECRET_SUFFIX}"
 
 
@@ -436,10 +519,28 @@ def aware_at(day_offset: int, hour: int, minute: int = 0) -> datetime:
     return timezone.make_aware(datetime.combine(base_date, time(hour, minute)))
 
 
+def aware_on(year: int, month: int, day: int, hour: int, minute: int = 0) -> datetime:
+    """Return a timezone-aware datetime for an explicit calendar date."""
+
+    from django.utils import timezone
+
+    return timezone.make_aware(datetime(year, month, day, hour, minute))
+
+
 def infer_portrait_folder(display_name: str, username: str) -> str:
     """Choose randomuser portrait gender from the seeded first name."""
 
-    if username in {SCENARIO_MENTOR_USERNAME, BACKUP_MENTOR_USERNAME, SCENARIO_MENTEE_USERNAME}:
+    if username in {
+        SCENARIO_MENTOR_USERNAME,
+        BACKUP_MENTOR_USERNAME,
+        SCENARIO_MENTEE_USERNAME,
+        VIOLIN_MENTEE_USERNAME,
+        VIOLIN_MENTOR_PRIMARY_USERNAME,
+        VIOLIN_MENTOR_SECONDARY_USERNAME,
+        VIOLIN_MENTEE_PEER_USERNAME,
+        VIOLIN_MENTOR_COMMUNITY_USERNAME,
+        VIOLIN_MENTOR_WORKSHOP_USERNAME,
+    }:
         return "men"
 
     first_name = display_name.split(" ", 1)[0]
@@ -455,11 +556,27 @@ def infer_portrait_folder(display_name: str, username: str) -> str:
 def profile_picture(username: str, display_name: str) -> str:
     """Return deterministic but varied portrait URL for a seeded profile."""
 
-    if username in {SCENARIO_MENTOR_USERNAME, BACKUP_MENTOR_USERNAME, SCENARIO_MENTEE_USERNAME}:
+    if username in {
+        SCENARIO_MENTOR_USERNAME,
+        BACKUP_MENTOR_USERNAME,
+        SCENARIO_MENTEE_USERNAME,
+        VIOLIN_MENTEE_USERNAME,
+        VIOLIN_MENTOR_PRIMARY_USERNAME,
+        VIOLIN_MENTOR_SECONDARY_USERNAME,
+        VIOLIN_MENTEE_PEER_USERNAME,
+        VIOLIN_MENTOR_COMMUNITY_USERNAME,
+        VIOLIN_MENTOR_WORKSHOP_USERNAME,
+    }:
         demo_indices = {
             SCENARIO_MENTOR_USERNAME: 24,
             BACKUP_MENTOR_USERNAME: 55,
             SCENARIO_MENTEE_USERNAME: 2,
+            VIOLIN_MENTEE_USERNAME: 7,
+            VIOLIN_MENTOR_PRIMARY_USERNAME: 42,
+            VIOLIN_MENTOR_SECONDARY_USERNAME: 38,
+            VIOLIN_MENTEE_PEER_USERNAME: 14,
+            VIOLIN_MENTOR_COMMUNITY_USERNAME: 33,
+            VIOLIN_MENTOR_WORKSHOP_USERNAME: 46,
         }
         return f"https://randomuser.me/api/portraits/men/{demo_indices[username]}.jpg"
 
@@ -503,7 +620,51 @@ def build_people(rng: random.Random) -> list[PersonSeed]:
             interests=BACKUP_MENTOR_INTERESTS,
             skills=BACKUP_MENTOR_SKILLS,
             city="Istanbul",
-        )
+        ),
+        PersonSeed(
+            email=VIOLIN_MENTOR_PRIMARY_EMAIL,
+            username=VIOLIN_MENTOR_PRIMARY_USERNAME,
+            display_name=VIOLIN_MENTOR_PRIMARY_DISPLAY_NAME,
+            mode="MENTOR",
+            title=VIOLIN_MENTOR_PRIMARY_TITLE,
+            bio=VIOLIN_MENTOR_PRIMARY_BIO,
+            interests=VIOLIN_MENTOR_PRIMARY_INTERESTS,
+            skills=VIOLIN_MENTOR_PRIMARY_SKILLS,
+            city="Istanbul",
+        ),
+        PersonSeed(
+            email=VIOLIN_MENTOR_SECONDARY_EMAIL,
+            username=VIOLIN_MENTOR_SECONDARY_USERNAME,
+            display_name=VIOLIN_MENTOR_SECONDARY_DISPLAY_NAME,
+            mode="MENTOR",
+            title=VIOLIN_MENTOR_SECONDARY_TITLE,
+            bio=VIOLIN_MENTOR_SECONDARY_BIO,
+            interests=VIOLIN_MENTOR_SECONDARY_INTERESTS,
+            skills=VIOLIN_MENTOR_SECONDARY_SKILLS,
+            city="Istanbul",
+        ),
+        PersonSeed(
+            email=VIOLIN_MENTOR_COMMUNITY_EMAIL,
+            username=VIOLIN_MENTOR_COMMUNITY_USERNAME,
+            display_name=VIOLIN_MENTOR_COMMUNITY_DISPLAY_NAME,
+            mode="MENTOR",
+            title=VIOLIN_MENTOR_COMMUNITY_TITLE,
+            bio=VIOLIN_MENTOR_COMMUNITY_BIO,
+            interests=VIOLIN_MENTOR_COMMUNITY_INTERESTS,
+            skills=VIOLIN_MENTOR_COMMUNITY_SKILLS,
+            city="Istanbul",
+        ),
+        PersonSeed(
+            email=VIOLIN_MENTOR_WORKSHOP_EMAIL,
+            username=VIOLIN_MENTOR_WORKSHOP_USERNAME,
+            display_name=VIOLIN_MENTOR_WORKSHOP_DISPLAY_NAME,
+            mode="MENTOR",
+            title=VIOLIN_MENTOR_WORKSHOP_TITLE,
+            bio=VIOLIN_MENTOR_WORKSHOP_BIO,
+            interests=VIOLIN_MENTOR_WORKSHOP_INTERESTS,
+            skills=VIOLIN_MENTOR_WORKSHOP_SKILLS,
+            city="Istanbul",
+        ),
     ]
     mentees = [
         PersonSeed(
@@ -516,7 +677,29 @@ def build_people(rng: random.Random) -> list[PersonSeed]:
             interests=SCENARIO_MENTEE_INTERESTS,
             skills=SCENARIO_MENTEE_SKILLS,
             city="Istanbul",
-        )
+        ),
+        PersonSeed(
+            email=VIOLIN_MENTEE_EMAIL,
+            username=VIOLIN_MENTEE_USERNAME,
+            display_name=VIOLIN_MENTEE_DISPLAY_NAME,
+            mode="MENTEE",
+            title=VIOLIN_MENTEE_TITLE,
+            bio=VIOLIN_MENTEE_BIO,
+            interests=VIOLIN_MENTEE_INTERESTS,
+            skills=VIOLIN_MENTEE_SKILLS,
+            city="Istanbul",
+        ),
+        PersonSeed(
+            email=VIOLIN_MENTEE_PEER_EMAIL,
+            username=VIOLIN_MENTEE_PEER_USERNAME,
+            display_name=VIOLIN_MENTEE_PEER_DISPLAY_NAME,
+            mode="MENTEE",
+            title=VIOLIN_MENTEE_PEER_TITLE,
+            bio=VIOLIN_MENTEE_PEER_BIO,
+            interests=VIOLIN_MENTEE_PEER_INTERESTS,
+            skills=VIOLIN_MENTEE_PEER_SKILLS,
+            city="Istanbul",
+        ),
     ]
 
     mentor_titles = [
@@ -582,7 +765,17 @@ def build_people(rng: random.Random) -> list[PersonSeed]:
         ),
     ]
 
-    used_usernames = {SCENARIO_MENTOR_USERNAME, BACKUP_MENTOR_USERNAME, SCENARIO_MENTEE_USERNAME}
+    used_usernames = {
+        SCENARIO_MENTOR_USERNAME,
+        BACKUP_MENTOR_USERNAME,
+        SCENARIO_MENTEE_USERNAME,
+        VIOLIN_MENTEE_USERNAME,
+        VIOLIN_MENTOR_PRIMARY_USERNAME,
+        VIOLIN_MENTOR_SECONDARY_USERNAME,
+        VIOLIN_MENTEE_PEER_USERNAME,
+        VIOLIN_MENTOR_COMMUNITY_USERNAME,
+        VIOLIN_MENTOR_WORKSHOP_USERNAME,
+    }
     cities = list(TURKISH_LOCATIONS)
 
     while len(mentors) < 50:
@@ -1586,6 +1779,329 @@ def seed_demo_actor_networks(profile_by_username, profiles_by_mode, slots_by_use
             )
 
 
+def seed_violin_transition_story(profile_by_username) -> None:
+    """Seed Barkin's violin mentorship progression and transition to Bilge."""
+
+    from mentorship.models import MeetingSession, MentorshipRequest, Workshop, WorkshopParticipant
+    from profiles.models import CommunityTag, CommunityTagMembership
+    from timeline.models import TimelineEvent
+
+    barkin = profile_by_username[VIOLIN_MENTEE_USERNAME]
+    beril = profile_by_username[VIOLIN_MENTOR_PRIMARY_USERNAME]
+    bilge = profile_by_username[VIOLIN_MENTOR_SECONDARY_USERNAME]
+    batuhan = profile_by_username[VIOLIN_MENTEE_PEER_USERNAME]
+    bulent = profile_by_username[VIOLIN_MENTOR_COMMUNITY_USERNAME]
+    sidal = profile_by_username[VIOLIN_MENTOR_WORKSHOP_USERNAME]
+
+    beril_request = create_request(
+        beril,
+        barkin,
+        slot=None,
+        status=MentorshipRequest.Status.ACCEPTED,
+        cover_letter=(
+            "I am a beginner violin student and I want a weekly plan focused on posture, "
+            "intonation, and stable bowing technique."
+        ),
+        created_at=aware_on(2025, 1, 6, 9, 30),
+        responded_at=aware_on(2025, 1, 7, 11, 0),
+        initial_start=aware_on(2025, 1, 11, 10, 0),
+        initial_end=aware_on(2025, 1, 11, 11, 0),
+    )
+    beril_match = create_match_for_request(beril_request, active=False)
+
+    beril_piece_plan = [
+        "Twinkle, Twinkle, Little Star (Suzuki)",
+        "Lightly Row",
+        "Song of the Wind",
+        "Go Tell Aunt Rhody",
+        "Ode to Joy",
+        "Minuet in G",
+        "Gavotte in G Minor",
+        "Bourree",
+    ]
+    beril_start = aware_on(2025, 1, 11, 10, 0)
+    for week in range(26):
+        start = beril_start + timedelta(days=7 * week)
+        create_session(
+            beril_match,
+            start,
+            start + timedelta(hours=1),
+            MeetingSession.Status.COMPLETED,
+        )
+        create_timeline_event(
+            source_id=f"seed:violin:agte:beril:{week + 1}",
+            category=TimelineEvent.Category.AGTE,
+            event_type="session_completed",
+            author=beril,
+            mentorship=beril_match,
+            actor_role="system",
+            content=(
+                f"Weekly violin session {week + 1} completed with focused intonation, rhythm, "
+                "and posture checkpoints."
+            ),
+            timestamp=start + timedelta(hours=1, minutes=5),
+        )
+        if (week + 1) % 3 == 0:
+            piece = beril_piece_plan[((week + 1) // 3 - 1) % len(beril_piece_plan)]
+            create_timeline_event(
+                source_id=f"seed:violin:mcte:beril:piece:{week + 1}",
+                category=TimelineEvent.Category.MCTE,
+                event_type=TimelineEvent.MCTEEventType.PROGRESS,
+                author=beril,
+                mentorship=beril_match,
+                actor_role="mentor",
+                content=(
+                    f"Barkin learned '{piece}' this cycle and showed measurable improvement in "
+                    "phrase consistency and control."
+                ),
+                timestamp=start + timedelta(hours=1, minutes=30),
+                show_on_profile=False,
+            )
+
+    month_3_concert = aware_on(2025, 4, 12, 19, 0)
+    create_timeline_event(
+        source_id="seed:violin:mcte:barkin:concert-month3",
+        category=TimelineEvent.Category.MCTE,
+        event_type=TimelineEvent.MCTEEventType.ACHIEVEMENT,
+        author=barkin,
+        mentorship=beril_match,
+        actor_role="mentee",
+        content=(
+            "Performed in a spring concert and played Ode to Joy with stronger dynamic control "
+            "than early rehearsals."
+        ),
+        timestamp=month_3_concert,
+        show_on_profile=True,
+    )
+    create_timeline_event(
+        source_id="seed:violin:prp:barkin:concert-month3",
+        category=TimelineEvent.Category.PRP,
+        event_type=TimelineEvent.MCTEEventType.ACHIEVEMENT,
+        author=barkin,
+        content=(
+            "Month 3 milestone: first violin concert completed. I can now perform Ode to Joy "
+            "and Minuet in G with stable tempo in front of an audience."
+        ),
+        timestamp=month_3_concert + timedelta(hours=2),
+        show_on_profile=True,
+    )
+
+    month_6_concert = aware_on(2025, 7, 5, 19, 30)
+    create_timeline_event(
+        source_id="seed:violin:mcte:barkin:concert-month6",
+        category=TimelineEvent.Category.MCTE,
+        event_type=TimelineEvent.MCTEEventType.ACHIEVEMENT,
+        author=barkin,
+        mentorship=beril_match,
+        actor_role="mentee",
+        content=(
+            "Completed a second concert cycle and performed Minuet in G and Gavotte in G Minor "
+            "with a student quartet."
+        ),
+        timestamp=month_6_concert,
+        show_on_profile=True,
+    )
+    create_timeline_event(
+        source_id="seed:violin:prp:barkin:concert-month6",
+        category=TimelineEvent.Category.PRP,
+        event_type=TimelineEvent.MCTEEventType.ACHIEVEMENT,
+        author=barkin,
+        content=(
+            "Month 6 milestone: concert pressure feels manageable now, and my intonation is "
+            "far more reliable than January."
+        ),
+        timestamp=month_6_concert + timedelta(hours=2),
+        show_on_profile=True,
+    )
+
+    create_timeline_event(
+        source_id="seed:violin:agte:beril:handoff",
+        category=TimelineEvent.Category.AGTE,
+        event_type="mentorship_handoff",
+        author=beril,
+        mentorship=beril_match,
+        actor_role="system",
+        content=(
+            "Beril's schedule changed at month 6, so the mentorship concluded with a handoff "
+            "plan for Barkin's next mentor."
+        ),
+        timestamp=aware_on(2025, 7, 8, 12, 0),
+    )
+
+    bilge_request = create_request(
+        bilge,
+        barkin,
+        slot=None,
+        status=MentorshipRequest.Status.ACCEPTED,
+        cover_letter=(
+            "I want to continue weekly violin sessions and move from beginner pieces to "
+            "intermediate concert repertoire."
+        ),
+        created_at=aware_on(2025, 7, 9, 9, 0),
+        responded_at=aware_on(2025, 7, 10, 10, 45),
+        initial_start=aware_on(2025, 7, 12, 11, 0),
+        initial_end=aware_on(2025, 7, 12, 12, 0),
+    )
+    bilge_match = create_match_for_request(bilge_request, active=True)
+
+    bilge_piece_plan = [
+        "Concerto in A Minor (Vivaldi excerpt)",
+        "Meditation from Thais",
+        "Humoresque",
+        "Introduction and Rondo Capriccioso (study excerpt)",
+    ]
+    bilge_start = aware_on(2025, 7, 12, 11, 0)
+    for week in range(44):
+        start = bilge_start + timedelta(days=7 * week)
+        if start > aware_on(2026, 5, 10, 23, 0):
+            break
+        create_session(
+            bilge_match,
+            start,
+            start + timedelta(hours=1),
+            MeetingSession.Status.COMPLETED,
+        )
+        create_timeline_event(
+            source_id=f"seed:violin:agte:bilge:{week + 1}",
+            category=TimelineEvent.Category.AGTE,
+            event_type="session_completed",
+            author=bilge,
+            mentorship=bilge_match,
+            actor_role="system",
+            content=(
+                f"Bilge mentorship session {week + 1} completed with scale studies, bow "
+                "distribution drills, and interpretation refinement."
+            ),
+            timestamp=start + timedelta(hours=1, minutes=5),
+        )
+        if (week + 1) % 4 == 0:
+            piece = bilge_piece_plan[((week + 1) // 4 - 1) % len(bilge_piece_plan)]
+            create_timeline_event(
+                source_id=f"seed:violin:mcte:barkin:bilge-public:{week + 1}",
+                category=TimelineEvent.Category.MCTE,
+                event_type=TimelineEvent.MCTEEventType.PROGRESS,
+                author=barkin,
+                mentorship=bilge_match,
+                actor_role="mentee",
+                content=(
+                    f"With Bilge's mentoring, I can now play '{piece}' with cleaner articulation "
+                    "and stronger dynamic contrast."
+                ),
+                timestamp=start + timedelta(hours=2),
+                show_on_profile=True,
+            )
+
+    post_handoff_prp = [
+        (
+            aware_on(2025, 10, 20, 21, 0),
+            "Three months with Bilge: I can perform Vivaldi excerpts with steadier tone and clearer phrasing.",
+        ),
+        (
+            aware_on(2026, 1, 26, 20, 0),
+            "Winter update: joined another concert cycle and handled ensemble cues more confidently.",
+        ),
+        (
+            aware_on(2026, 5, 2, 19, 30),
+            "Current level: preparing advanced intermediate repertoire and helping section rehearsals run smoothly.",
+        ),
+    ]
+    for index, (timestamp, content) in enumerate(post_handoff_prp, start=1):
+        create_timeline_event(
+            source_id=f"seed:violin:prp:barkin:post-handoff:{index}",
+            category=TimelineEvent.Category.PRP,
+            event_type=TimelineEvent.MCTEEventType.PROGRESS,
+            author=barkin,
+            content=content,
+            timestamp=timestamp,
+            show_on_profile=True,
+        )
+
+    violin_community = CommunityTag.objects.create(
+        name=VIOLIN_COMMUNITY_NAME,
+        description=VIOLIN_COMMUNITY_DESCRIPTION,
+        created_by=barkin,
+        location=jittered_point("Istanbul", random.Random(RANDOM_SEED + 17)),
+    )
+    community_members = [barkin, batuhan, bulent, sidal, beril, bilge]
+    for member in community_members:
+        CommunityTagMembership.objects.get_or_create(profile=member, tag=violin_community)
+    CommunityTag.objects.filter(id=violin_community.id).update(member_count=len(community_members))
+
+    community_posts = [
+        (
+            barkin,
+            aware_on(2026, 4, 16, 20, 15),
+            "I can keep intonation steady in third position during slow scales. Sharing my updated practice split for feedback.",
+            True,
+        ),
+        (
+            batuhan,
+            aware_on(2026, 4, 22, 18, 20),
+            "Beginner update: still working on open-string bow control, but I can now play Lightly Row without stopping.",
+            False,
+        ),
+        (
+            bulent,
+            aware_on(2026, 4, 28, 19, 10),
+            "Intermediate learners: focus this week on vibrato consistency and phrase endings before speed.",
+            False,
+        ),
+        (
+            sidal,
+            aware_on(2026, 5, 3, 21, 0),
+            "Advanced tip: in ensemble passages, prioritize listening windows over volume to keep intonation centered.",
+            False,
+        ),
+        (
+            barkin,
+            aware_on(2026, 5, 8, 20, 45),
+            "Concert prep notes: I can now rotate between Vivaldi and Meditation blocks without losing bow stability.",
+            True,
+        ),
+    ]
+    for index, (author, timestamp, content, show_on_profile) in enumerate(community_posts, start=1):
+        create_timeline_event(
+            source_id=f"seed:violin:cop:{index}",
+            category=TimelineEvent.Category.COP,
+            event_type=TimelineEvent.MCTEEventType.PROGRESS,
+            author=author,
+            community_id=violin_community.id,
+            content=content,
+            timestamp=timestamp,
+            show_on_profile=show_on_profile,
+            payload={
+                "community_name": violin_community.name,
+                "community_slug": violin_community.slug,
+                "tagged_users": [],
+            },
+        )
+
+    workshop_start = aware_on(2026, 5, 6, 18, 30)
+    sidal_workshop = Workshop.objects.create(
+        community=violin_community,
+        author=sidal,
+        title="Ensemble Intonation Bootcamp",
+        description=(
+            "A practical workshop on section listening, coordinated bowing, and stable intonation "
+            "for mixed-skill violin groups."
+        ),
+        scheduled_at=workshop_start,
+        end_at=workshop_start + timedelta(minutes=100),
+        max_participants=20,
+        status=Workshop.Status.COMPLETED,
+    )
+    WorkshopParticipant.objects.get_or_create(
+        workshop=sidal_workshop,
+        participant=barkin,
+        defaults={"show_on_profile": True},
+    )
+    WorkshopParticipant.objects.get_or_create(
+        workshop=sidal_workshop,
+        participant=batuhan,
+        defaults={"show_on_profile": True},
+    )
+
+
 def dedupe_mentorship_began_events() -> None:
     """Keep one request_accepted AGTE per seeded match, preserving other AGTE history."""
 
@@ -1658,6 +2174,7 @@ def seed_demo_data() -> None:
     primary_match, primary_conversation = seed_primary_story(profile_by_username, slots_by_username)
     other_matches = seed_general_mentorship(profiles_by_mode, slots_by_username, rng)
     seed_demo_actor_networks(profile_by_username, profiles_by_mode, slots_by_username, rng)
+    seed_violin_transition_story(profile_by_username)
     seed_demo_profile_reviews(profile_by_username, profiles_by_mode, rng)
     communities = seed_communities(profile_by_username, profiles_by_mode, rng)
     dedupe_mentorship_began_events()
@@ -1670,6 +2187,12 @@ def seed_demo_data() -> None:
     print(f"backup_mentor_password={BACKUP_MENTOR_PASSWORD}")
     print(f"mentee_email={SCENARIO_MENTEE_EMAIL}")
     print(f"mentee_password={SCENARIO_MENTEE_PASSWORD}")
+    print(f"barkin_email={VIOLIN_MENTEE_EMAIL}")
+    print(f"barkin_password={VIOLIN_MENTEE_PASSWORD}")
+    print(f"beril_email={VIOLIN_MENTOR_PRIMARY_EMAIL}")
+    print(f"beril_password={VIOLIN_MENTOR_PRIMARY_PASSWORD}")
+    print(f"bilge_email={VIOLIN_MENTOR_SECONDARY_EMAIL}")
+    print(f"bilge_password={VIOLIN_MENTOR_SECONDARY_PASSWORD}")
     print(f"mentor_count={len(profiles_by_mode['MENTOR'])}")
     print(f"mentee_count={len(profiles_by_mode['MENTEE'])}")
     print(f"community_count={len(communities)}")
