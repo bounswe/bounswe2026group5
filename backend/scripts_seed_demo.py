@@ -8,6 +8,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 TEST_SECRET_SUFFIX = "-2026!"
 RANDOM_SEED = 20260512
@@ -1794,18 +1795,16 @@ def seed_violin_transition_story(profile_by_username) -> None:
     bulent = profile_by_username[VIOLIN_MENTOR_COMMUNITY_USERNAME]
     sidal = profile_by_username[VIOLIN_MENTOR_WORKSHOP_USERNAME]
 
+    violin_pics_dir = Path(__file__).resolve().parent / "media" / "violin_pics"
     violin_media_urls = [
-        "/media/post_media/ViolinPics/photo-1460036521480-ff49c08c2781.jpg",
-        "/media/post_media/ViolinPics/photo-1472312656035-eeef4726de6c.jpg",
-        "/media/post_media/ViolinPics/photo-1526142684086-7ebd69df27a5.jpg",
-        "/media/post_media/ViolinPics/photo-1585263547501-7e5a0c222010.jpg",
-        "/media/post_media/ViolinPics/photo-1590594638854-19a378b6872d.jpg",
-        "/media/post_media/ViolinPics/photo-1624367171718-14026220ee35.jpg",
-        "/media/post_media/ViolinPics/photo-1692553173440-bc496a6f5e19.jpg",
-        "/media/post_media/ViolinPics/photo-1701749059090-ac8afdba7b44.jpg",
-        "/media/post_media/ViolinPics/photo-1704961625677-dc57dcf6cef1.jpg",
-        "/media/post_media/ViolinPics/premium_photo-1661433025857-e79ad6e8bf15.jpg",
+        f"/media/violin_pics/{asset.name}"
+        for asset in sorted(violin_pics_dir.iterdir())
+        if asset.is_file() and asset.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
     ]
+    if not violin_media_urls:
+        violin_media_urls = [
+            "/media/violin_pics/photo-1460036521480-ff49c08c2781.jpg",
+        ]
     media_cursor = 0
 
     def next_violin_media() -> str:
