@@ -1783,6 +1783,7 @@ def seed_violin_transition_story(profile_by_username) -> None:
     """Seed Barkin's violin mentorship progression and transition to Bilge."""
 
     from mentorship.models import MeetingSession, MentorshipRequest, Workshop, WorkshopParticipant
+    from messaging.models import Conversation, Message, ReadReceipt
     from profiles.models import CommunityTag, CommunityTagMembership
     from timeline.models import TimelineEvent
 
@@ -1807,7 +1808,7 @@ def seed_violin_transition_story(profile_by_username) -> None:
         initial_start=aware_on(2025, 1, 11, 10, 0),
         initial_end=aware_on(2025, 1, 11, 11, 0),
     )
-    beril_match = create_match_for_request(beril_request, active=False)
+    beril_match = create_match_for_request(beril_request, active=True)
 
     beril_piece_plan = [
         "Twinkle, Twinkle, Little Star (Suzuki)",
@@ -1915,18 +1916,51 @@ def seed_violin_transition_story(profile_by_username) -> None:
     )
 
     create_timeline_event(
-        source_id="seed:violin:agte:beril:handoff",
-        category=TimelineEvent.Category.AGTE,
-        event_type="mentorship_handoff",
+        source_id="seed:violin:mcte:beril:handoff",
+        category=TimelineEvent.Category.MCTE,
+        event_type=TimelineEvent.MCTEEventType.SOCIAL,
         author=beril,
         mentorship=beril_match,
-        actor_role="system",
+        actor_role="mentor",
         content=(
-            "Beril's schedule changed at month 6, so the mentorship concluded with a handoff "
-            "plan for Barkin's next mentor."
+            "I am proud of how far Barkin has come. I will miss our weekly lessons, but due to "
+            "my schedule shift I cannot continue regular sessions."
         ),
         timestamp=aware_on(2025, 7, 8, 12, 0),
+        show_on_profile=False,
     )
+
+    beril_conversation, _ = Conversation.objects.get_or_create(match=beril_match)
+    handoff_messages = [
+        (
+            barkin,
+            "I am really sad we cannot continue the violin sessions. Your feedback changed my confidence a lot.",
+            aware_on(2025, 7, 8, 12, 10),
+        ),
+        (
+            beril,
+            "I feel the same, Barkin. I will miss teaching you, but my new schedule makes weekly sessions impossible.",
+            aware_on(2025, 7, 8, 12, 16),
+        ),
+        (
+            beril,
+            "I strongly recommend Bilge Arslan as your next mentor. She is excellent for intermediate repertoire and concert preparation.",
+            aware_on(2025, 7, 8, 12, 20),
+        ),
+        (
+            barkin,
+            "Thank you, I will reach out to Bilge and keep sharing progress with you.",
+            aware_on(2025, 7, 8, 12, 24),
+        ),
+    ]
+    for sender, body, created_at in handoff_messages:
+        msg = Message.objects.create(conversation=beril_conversation, sender=sender, body=body)
+        Message.objects.filter(id=msg.id).update(created_at=created_at)
+        ReadReceipt.objects.update_or_create(
+            message=msg,
+            user=beril if sender == barkin else barkin,
+            defaults={"status": ReadReceipt.Status.READ},
+        )
 
     bilge_request = create_request(
         bilge,
